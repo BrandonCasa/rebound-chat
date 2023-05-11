@@ -65,7 +65,7 @@ jobs:
 
             # Backup .env file
             if [ -f /home/ubuntu/Rebound/api/.env ]; then
-              mv /home/ubuntu/Rebound/api/.env /tmp/.env_backup
+              sudo mv /home/ubuntu/Rebound/api/.env /tmp/.env_backup
             fi
 
             sudo rm -rf /home/ubuntu/Rebound/api
@@ -75,11 +75,11 @@ jobs:
 
             # Restore .env file
             if [ -f /tmp/.env_backup ]; then
-              mv /tmp/.env_backup /home/ubuntu/Rebound/api/.env
+              sudo mv /tmp/.env_backup /home/ubuntu/Rebound/api/.env
             fi
 
             export PATH=$PATH:/usr/local/bin
-            npm install pm2@latest -g
-            pm2 restart rebound-server
+            sudo npm install pm2@latest -g
+            sudo pm2 restart rebound-server
           SSHEND
           rm private_key.pem
