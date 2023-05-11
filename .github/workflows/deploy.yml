@@ -55,10 +55,20 @@ jobs:
             sudo tar -xzvf build.tar.gz -C /var/www/html
             rm build.tar.gz
 
+            # Backup .env file
+            if [ -f /home/ubuntu/Rebound/api/.env ]; then
+              mv /home/ubuntu/Rebound/api/.env /tmp/.env_backup
+            fi
+
             sudo rm -rf /home/ubuntu/Rebound/api
             sudo mkdir -p /home/ubuntu/Rebound/api
             sudo tar -xzvf server.tar.gz -C /home/ubuntu/Rebound/api
             rm server.tar.gz
+
+            # Restore .env file
+            if [ -f /tmp/.env_backup ]; then
+              mv /tmp/.env_backup /home/ubuntu/Rebound/api/.env
+            fi
 
             export PATH=$PATH:/usr/local/bin
             npm install pm2@latest -g
