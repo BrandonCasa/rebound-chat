@@ -1,0 +1,67 @@
+name: Deploy to EC2
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          submodules: "recursive"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build React app
+        run: npm run build
+
+      - name: Install and configure AWS CLI
+        run: |
+          sudo apt-get install -y awscli
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Upload React build to EC2
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | base64 --decode > id_rsa
+          chmod 600 id_rsa
+          tar -czvf build.tar.gz build
+          scp -i id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null build.tar.gz ubuntu@${{ secrets.EC2_INSTANCE_IP }}:~/
+          rm id_rsa
+
+      - name: Upload server to EC2
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | base64 --decode > id_rsa
+          chmod 600 id_rsa
+          tar -czvf server.tar.gz server
+          scp -i id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null server.tar.gz ubuntu@${{ secrets.EC2_INSTANCE_IP }}:~/
+          rm id_rsa
+
+      - name: Deploy on EC2
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | base64 --decode > id_rsa
+          chmod 600 id_rsa
+          ssh -i id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@${{ secrets.EC2_INSTANCE_IP }} <<- 'SSHEND'
+            sudo rm -rf /var/www/html/*
+            sudo tar -xzvf build.tar.gz -C /var/www/html
+            rm build.tar.gz
+
+            sudo rm -rf /home/ubuntu/Rebound/api
+            sudo mkdir -p /home/ubuntu/Rebound/api
+            sudo tar -xzvf server.tar.gz -C /home/ubuntu/Rebound/api
+            rm server.tar.gz
+
+            export PATH=$PATH:/usr/local/bin
+            npm install pm2@latest -g
+            pm2 restart rebound-server
+          SSHEND
+          rm id_rsa
