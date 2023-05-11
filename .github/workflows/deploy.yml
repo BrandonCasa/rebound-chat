@@ -37,25 +37,28 @@ jobs:
 
       - name: Upload React build to EC2
         run: |
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" | base64 --decode > id_rsa
-          chmod 600 id_rsa
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key.pem
+          chmod 600 private_key.pem
+          export SSHPASS=""
           tar -czvf build.tar.gz build
-          sshpass -p ${{ secrets.SSH_PASSWORD }} scp -i id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null build.tar.gz ubuntu@${{ secrets.EC2_INSTANCE_IP }}:~/
-          rm id_rsa
+          scp -i private_key.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P 22 build.tar.gz ubuntu@${{ secrets.EC2_INSTANCE_IP }}:~/
+          rm private_key.pem
 
       - name: Upload server to EC2
         run: |
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" | base64 --decode > id_rsa
-          chmod 600 id_rsa
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key.pem
+          chmod 600 private_key.pem
+          export SSHPASS=""
           tar -czvf server.tar.gz server
-          sshpass -p ${{ secrets.SSH_PASSWORD }} scp -i id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null server.tar.gz ubuntu@${{ secrets.EC2_INSTANCE_IP }}:~/
-          rm id_rsa
+          scp -i private_key.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P 22 server.tar.gz ubuntu@${{ secrets.EC2_INSTANCE_IP }}:~/
+          rm private_key.pem
 
       - name: Deploy on EC2
         run: |
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" | base64 --decode > id_rsa
-          chmod 600 id_rsa
-          sshpass -p ${{ secrets.SSH_PASSWORD }} ssh -i id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@${{ secrets.EC2_INSTANCE_IP }} <<- 'SSHEND'
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key.pem
+          chmod 600 private_key.pem
+          export SSHPASS=""
+          ssh -i private_key.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P 22 ubuntu@${{ secrets.EC2_INSTANCE_IP }} <<- 'SSHEND'
             sudo rm -rf /var/www/html/*
             sudo tar -xzvf build.tar.gz -C /var/www/html
             rm build.tar.gz
@@ -79,4 +82,4 @@ jobs:
             npm install pm2@latest -g
             pm2 restart rebound-server
           SSHEND
-          rm id_rsa
+          rm private_key.pem
