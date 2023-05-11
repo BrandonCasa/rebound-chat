@@ -47,6 +47,8 @@ jobs:
           rm id_rsa
 
       - name: Deploy on EC2
+        env:
+          CI: false
         run: |
           echo "${{ secrets.SSH_PRIVATE_KEY }}" | base64 --decode > id_rsa
           chmod 600 id_rsa
