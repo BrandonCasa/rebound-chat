@@ -58,7 +58,7 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key.pem
           chmod 600 private_key.pem
           export SSHPASS=""
-          ssh -i private_key.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 22 ubuntu@${{ secrets.EC2_INSTANCE_IP }} <<- 'SSHEND'
+          ssh -i private_key.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@${{ secrets.EC2_INSTANCE_IP }} -p 22 <<- 'SSHEND'
             sudo rm -rf /var/www/html/*
             sudo tar -xzvf build.tar.gz -C /var/www/html
             rm build.tar.gz
