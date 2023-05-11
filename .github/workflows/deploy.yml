@@ -22,6 +22,8 @@ jobs:
         run: npm ci
 
       - name: Build React app
+        env:
+          CI: false
         run: npm run build
 
       - name: Install and configure AWS CLI
@@ -47,8 +49,6 @@ jobs:
           rm id_rsa
 
       - name: Deploy on EC2
-        env:
-          CI: false
         run: |
           echo "${{ secrets.SSH_PRIVATE_KEY }}" | base64 --decode > id_rsa
           chmod 600 id_rsa
