@@ -78,6 +78,9 @@ jobs:
               sudo mv /tmp/.env_backup /home/ubuntu/Rebound/api/.env
             fi
 
+            cp -r /home/ubuntu/Rebound/api/server /home/ubuntu/Rebound/api/
+            sudo rm -r /home/ubuntu/Rebound/api/server
+
             export PATH=$PATH:/usr/local/bin
             sudo npm install pm2@latest -g
             sudo pm2 restart rebound-server
