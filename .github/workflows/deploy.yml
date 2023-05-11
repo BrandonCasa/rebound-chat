@@ -61,6 +61,8 @@ jobs:
           ssh -i private_key.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 22 ubuntu@${{ secrets.EC2_INSTANCE_IP }} <<- 'SSHEND'
             sudo rm -rf /var/www/html/*
             sudo tar -xzvf build.tar.gz -C /var/www/html
+            sudo cp -r /var/www/html/build/* /var/www/html/
+            sudo rm -r /var/www/html/build
             rm build.tar.gz
 
             # Backup .env file
@@ -78,7 +80,7 @@ jobs:
               sudo mv /tmp/.env_backup /home/ubuntu/Rebound/api/.env
             fi
 
-            cp -r /home/ubuntu/Rebound/api/server /home/ubuntu/Rebound/api/
+            sudo cp -r /home/ubuntu/Rebound/api/server/* /home/ubuntu/Rebound/api/
             sudo rm -r /home/ubuntu/Rebound/api/server
 
             export PATH=$PATH:/usr/local/bin
