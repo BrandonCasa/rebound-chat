@@ -85,6 +85,5 @@ jobs:
 
             export PATH=$PATH:/usr/local/bin
             sudo npm install pm2@latest -g
-            sudo pm2 restart rebound-server
           SSHEND
           rm private_key.pem
