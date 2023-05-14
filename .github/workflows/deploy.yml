@@ -82,8 +82,5 @@ jobs:
 
             sudo cp -r /home/ubuntu/Rebound/api/server/* /home/ubuntu/Rebound/api/
             sudo rm -r /home/ubuntu/Rebound/api/server
-
-            export PATH=$PATH:/usr/local/bin
-            sudo npm install pm2@latest -g
           SSHEND
           rm private_key.pem
