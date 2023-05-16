@@ -81,6 +81,6 @@ jobs:
             fi
 
             sudo cp -r /home/ubuntu/Rebound/api/server/* /home/ubuntu/Rebound/api/
-            sudo rm -r /home/ubuntu/Rebound/api/server
+            (cd /home/ubuntu/Rebound/api/ && sudo npm install)
           SSHEND
           rm private_key.pem
