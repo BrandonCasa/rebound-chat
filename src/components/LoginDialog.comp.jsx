@@ -9,15 +9,6 @@ import { useTheme } from "@mui/material/styles";
 
 const interestsList = [{ title: "Gaming" }, { title: "Sports" }, { title: "Anime" }, { title: "Streamers" }, { title: "Memes" }];
 
-const formStyles = {
-  maxWidth: "500px",
-  justifyContent: "center",
-  display: "flex",
-  p: 3,
-  flexDirection: "column",
-  textAlign: "center",
-};
-
 const LoginDialog = () => {
   const theme = useTheme();
   const loginDialogState = useSelector((state) => state.dialogs.loginDialogOpen);
@@ -28,12 +19,30 @@ const LoginDialog = () => {
 
   return (
     <Dialog open={loginDialogState} onClose={() => dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }))}>
-      <Box sx={formStyles} component="form">
+      <Box
+        sx={{
+          maxWidth: "500px",
+          justifyContent: "center",
+          display: "flex",
+          p: 3,
+          flexDirection: "column",
+          textAlign: "center",
+        }}
+        component="form"
+      >
         <Typography variant="h4">Welcome to Rebound</Typography>
         <Typography variant="subtitle" sx={{ pb: 3 }}>
           Register to join a communication network like no other.
         </Typography>
-        <TextField sx={{ pb: 3 }} label="Email" variant="outlined" value={email} onChange={(e) => setEmail(e.target.value)} helperText="We'll never share your email." autoComplete="current-email" />
+        <TextField
+          sx={{ pb: 3 }}
+          label="Email"
+          variant="outlined"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          helperText="We'll never share your email."
+          autoComplete="current-email"
+        />
         <TextField
           label="Password"
           variant="outlined"
