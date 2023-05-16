@@ -1,6 +1,7 @@
 module.exports = {
   apps: [
     {
+      autorestart: true,
       name: 'rebound-server',
       script: './src/index.js',
       watch: ['src'],
