@@ -82,5 +82,10 @@ jobs:
 
             sudo cp -r /home/ubuntu/Rebound/api/server/* /home/ubuntu/Rebound/api/
             (cd /home/ubuntu/Rebound/api/ && sudo npm install)
+            sudo npm install pm2@latest -g
+            sudo pm2 stop rebound-server
+            sudo pm2 delete rebound-server
+            sudo pm2 update
+            sudo pm2 start /home/ubuntu/Rebound/api/ecosystem.config.js
           SSHEND
           rm private_key.pem
