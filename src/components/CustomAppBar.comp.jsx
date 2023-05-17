@@ -59,7 +59,7 @@ function CustomAppBar(props) {
   const { height, width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(true);
 
-  let drawerWidth = (width + 1000) / 60;
+  let drawerWidth = (width + 1000) / 32;
   if (drawerWidth < 32) drawerWidth = 32;
   if (drawerWidth > 48) drawerWidth = 48;
 
