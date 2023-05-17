@@ -8,3 +8,4 @@ router.post('/login', login); // (POST) /auth/login
 router.post('/logout', logout); // (POST) /auth/logout
 
 export default router;
+// test xd
