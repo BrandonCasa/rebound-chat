@@ -42,7 +42,7 @@ export async function login(req, res) {
   try {
     passport.authenticate(
       'local',
-      { successReturnToOrRedirect: '/home', failureRedirect: '/login' },
+      { successReturnToOrRedirect: '/home', failureRedirect: '/api/auth/login' },
       (err, user, info) => {
         if (err) {
           throw new Error(err);
