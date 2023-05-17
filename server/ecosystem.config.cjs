@@ -6,7 +6,7 @@ module.exports = {
       watch: ['src'],
       // Delay between restart
       watch_delay: 1000,
-      ignore_watch: ['node_modules', 'public', 'mongod'],
+      ignore_watch: ['public', 'mongod'],
       exp_backoff_restart_delay: 100,
       restart_delay: 5000,
     },
