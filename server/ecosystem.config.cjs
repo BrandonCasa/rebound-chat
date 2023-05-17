@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'rebound-server',
       script: './src/index.js',
-      watch: ['src'],
+      watch: ['src', 'node_modules'],
       // Delay between restart
       watch_delay: 1000,
       ignore_watch: ['public', 'mongod'],
