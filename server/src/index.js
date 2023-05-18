@@ -75,7 +75,7 @@ passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
 
 // Routes
-app.post('/api/auth/register', upload.single('picture'), register);
+// app.post('/api/auth/register', upload.single('picture'), register);
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 
