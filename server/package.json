@@ -1,6 +1,5 @@
 {
   "name": "rebound-server",
-  "type": "module",
   "version": "1.0.0",
   "description": "Rebound Server",
   "repository": {
@@ -29,6 +28,7 @@
     "express-validator": "^7.0.1",
     "gridfs-stream": "^1.1.1",
     "helmet": "^6.0.1",
+    "jsonwebtoken": "^9.0.0",
     "mongodb-memory-server": "^8.11.4",
     "mongoose": "^6.9.0",
     "morgan": "^1.10.0",
