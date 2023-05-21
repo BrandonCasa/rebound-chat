@@ -8,14 +8,22 @@ const winston = require('winston');
 const mongoose = require('mongoose');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const dotenv = require('dotenv');
+const bcrypt = require('bcrypt');
+
+// Require routes
+const authRoutes = require('./routes/auth');
 
 // Load environment variables
-dotenv.config();
+require('dotenv').config();
 
 // Start new MongoMemoryServer only in development environment
 let mongoServer;
 if (process.env.NODE_ENV === 'development') {
-  mongoServer = new MongoMemoryServer();
+  mongoServer = new MongoMemoryServer({
+    instance: {
+      port: 27017
+    }
+  });
 }
 
 // Setup winston logger
@@ -44,7 +52,7 @@ const app = express();
 
   if (process.env.NODE_ENV === 'development') {
     // Use in-memory mongoDB
-    await mongoServer.start()
+    await mongoServer.start(true)
     mongoUri = await mongoServer.getUri();
   } else {
     // Use local mongoDB server
@@ -72,19 +80,30 @@ app.use(express.json());
 // Apply helmet middleware to set secure HTTP headers
 app.use(helmet());
 
-// Apply Morgan middleware for logging HTTP requests
-app.use(morgan('combined', { stream: winston.stream }));
+// Create a stream object with a 'write' function that will be used by `morgan`
+logger.stream = {
+  write: function (message, encoding) {
+    // Use the 'info' log level so the output will be picked up by both transports
+    logger.info(message);
+  },
+};
+
+// Then use morgan middleware with the stream of winston
+app.use(morgan('combined', { stream: logger.stream }));
 
 // Create a test endpoint for file upload
-app.post('/upload', upload.single('file'), (req, res) => {
-  res.json({ file: req.file });
-});
+//app.post('/api/upload', upload.single('file'), (req, res) => {
+//  res.json({ file: req.file });
+//});
 
 // Test endpoint for JWT
-app.get('/jwt', (req, res) => {
-  const token = jwt.sign({ user: 'username' }, 'your_secret_key', { expiresIn: '1h' });
+app.get('/api/jwt', (req, res) => {
+  const token = jwt.sign({ user: 'username' }, process.env.SECRET, { expiresIn: '1h' });
   res.json({ token: token });
 });
+
+// Middleware for routes
+app.use('/api/auth', authRoutes);
 
 // Start server
 app.listen(process.env.PORT, () => logger.info(`Server started on port ${process.env.PORT}`));
@@ -96,3 +115,5 @@ process.on('SIGINT', async () => {
   }
   process.exit();
 });
+
+module.exports = logger;
