@@ -20,10 +20,10 @@ const darkTheme = createTheme({
       default: "#262626",
     },
     error: {
-      main: "#ad0000",
+      main: "#ab2424",
     },
     warning: {
-      main: "#ffa700",
+      main: "#c96800",
     },
     info: {
       main: "#21f3dc",

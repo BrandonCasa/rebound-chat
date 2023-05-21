@@ -4,11 +4,12 @@ const multer = require('multer');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const jwt = require('jsonwebtoken');
-const winston = require('winston');
 const mongoose = require('mongoose');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const dotenv = require('dotenv');
 const bcrypt = require('bcrypt');
+const logger = require('./logging/logger');
+const cors = require('cors');
 
 // Require routes
 const authRoutes = require('./routes/auth');
@@ -26,21 +27,13 @@ if (process.env.NODE_ENV === 'development') {
   });
 }
 
-// Setup winston logger
-const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.json(),
-  transports: [
-    new winston.transports.File({ filename: 'error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'combined.log' }),
-  ],
-});
-
 // Use Multer for file handling
 const upload = multer({ dest: 'uploads/' });
 
 // Initialize express
 const app = express();
+
+app.use(cors());
 
 // Connect to MongoDB
 (async () => {
@@ -115,5 +108,3 @@ process.on('SIGINT', async () => {
   }
   process.exit();
 });
-
-module.exports = logger;

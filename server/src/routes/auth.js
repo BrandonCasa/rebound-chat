@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const mongoose = require('mongoose');
 const { body, validationResult } = require('express-validator');
-const logger = require('../index');
+const logger = require('../logging/logger');
 
 // Create express router
 const router = express.Router();
@@ -18,9 +18,66 @@ const User = mongoose.model('User', new mongoose.Schema({
 
 // Validation rules
 const registerRules = [
-  body('username').isLength({ min: 3 }).withMessage('Username must be at least 3 characters long'),
-  body('password').isLength({ min: 5 }).withMessage('Password must be at least 5 characters long'),
-  body('displayName').isLength({ min: 1 }).withMessage('Display name is required'),
+  // Display name Rules
+  body('displayName').custom((value, { req }) => {
+    if (typeof value === 'string' && (value.toString().startsWith(' ') || value.toString().endsWith(' '))) {
+      throw new Error('Display name must not start or end with spaces.');
+    }
+    if (value === undefined || value === null || value === '') {
+      throw new Error('Display name is required.');
+    }
+    if (value.length < 3) {
+      throw new Error('Display name must be at least 3 characters long.');
+    }
+    if (value.length > 16) {
+      throw new Error('Display name cannot be longer than 16 characters.');
+    }
+    return true;
+  }),
+
+  // Username Rules
+  body('username').custom((value, { req }) => {
+    if (typeof value === 'string' && value.toString().includes(' ')) {
+      throw new Error('Username must not contain spaces.');
+    }
+    if (value === undefined || value === null || value === '') {
+      throw new Error('Username is required.');
+    }
+    if (value.length < 3) {
+      throw new Error('Username must be at least 3 characters long.');
+    }
+    if (value.length > 24) {
+      throw new Error('Username cannot be longer than 24 characters.');
+    }
+    if (value !== value.toLowerCase()) {
+      throw new Error('Username must be lowercase.');
+    }
+    return true;
+  }),
+
+  // Password Rules
+  body('password').custom((value, { req }) => {
+    if (typeof value === 'string' && value.toString().includes(' ')) {
+      throw new Error('Password must not contain spaces.');
+    }
+    if (value === undefined || value === null || value === '') {
+      throw new Error('Password is required.');
+    }
+    if (value.length < 5) {
+      throw new Error('Password must be at least 5 characters long.');
+    }
+    if (value.length > 50) {
+      throw new Error('Password cannot be longer than 50 characters.');
+    }
+    return true;
+  }),
+
+  //body('passwordConfirmation').custom((value, { req }) => {
+  //  if (value !== req.body.password) {
+  //    throw new Error('Password confirmation does not match password');
+  //  }
+  //  return true;
+  //}),
 ];
 
 const loginRules = [
@@ -48,14 +105,14 @@ router.post('/register', registerRules, async (req, res) => {
 
     // Create new user
     user = new User({
-      username: username.toLowerCase(),
+      username,
       password: hashedPassword,
-      displayName: displayName,
+      displayName,
     });
 
     // Save user
     await user.save();
-    res.send('User registered successfully.');
+    res.status(200).send('User registered successfully.');
   } catch (error) {
     logger.error(error);
     res.status(500).send('Internal Server Error');
