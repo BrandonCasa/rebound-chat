@@ -89,11 +89,12 @@ app.use(morgan('combined', { stream: logger.stream }));
 //  res.json({ file: req.file });
 //});
 
-// Test endpoint for JWT
-app.get('/api/jwt', (req, res) => {
-  const token = jwt.sign({ user: 'username' }, process.env.SECRET, { expiresIn: '1h' });
-  res.json({ token: token });
+// Verify token endpoint
+app.get('/api/auth/verify', (req, res) => {
+  const valid = jwt.verify(req.headers.authorization, process.env.SECRET);
+  res.send(valid);
 });
+
 
 // Middleware for routes
 app.use('/api/auth', authRoutes);

@@ -28,8 +28,9 @@ import { TransitionGroup } from "react-transition-group";
 import * as Icons from "@mui/icons-material";
 import useWindowDimensions from "../helpers/useWindowDimensions";
 import { useEffect, useState } from "react";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { setDialogOpened } from "../reducers/dialogReducer";
+import { setLoggedIn } from "../reducers/authReducer";
 
 const drawerStyles = (drawerWidth, iconWidth) => ({
   width: drawerWidth,
@@ -54,6 +55,7 @@ const ListItemWithTooltip = ({ title, placement, children }) => (
 );
 
 function CustomAppBar(props) {
+  const loggedInState = useSelector((state) => state.auth.loggedIn);
   const dispatch = useDispatch();
   let theme = useTheme();
   const { height, width } = useWindowDimensions();
@@ -66,7 +68,12 @@ function CustomAppBar(props) {
   let iconWidth = (drawerWidth / 3) * 2;
 
   const handleLoginDialogOpen = () => {
-    dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: true }));
+    dispatch(setDialogOpened({ dialogName: "registerDialogOpen", newState: true, conflictingDialogs: ["loginDialogOpen"] }));
+  };
+
+  const handleLogout = () => {
+    window.localStorage.removeItem("auth-token");
+    dispatch(setLoggedIn({ loggedIn: false }));
   };
 
   return (
@@ -89,8 +96,16 @@ function CustomAppBar(props) {
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             Rebound
           </Typography>
-          <Button variant="contained" color="secondary" sx={{ height: `${iconWidth}px` }} onClick={handleLoginDialogOpen}>
+          <Button
+            variant="contained"
+            color="secondary"
+            sx={{ height: `${iconWidth}px`, display: loggedInState ? "none" : "inherit" }}
+            onClick={handleLoginDialogOpen}
+          >
             Login
+          </Button>
+          <Button variant="contained" color="secondary" sx={{ height: `${iconWidth}px`, display: loggedInState ? "inherit" : "none" }} onClick={handleLogout}>
+            Logout
           </Button>
         </Toolbar>
       </AppBar>

@@ -112,7 +112,10 @@ router.post('/register', registerRules, async (req, res) => {
 
     // Save user
     await user.save();
-    res.status(200).send('User registered successfully.');
+
+    // Create and assign a token
+    const token = jwt.sign({ _id: user._id }, process.env.SECRET, { expiresIn: '1h' });
+    res.header('auth-token', token).send(token);
   } catch (error) {
     logger.error(error);
     res.status(500).send('Internal Server Error');
