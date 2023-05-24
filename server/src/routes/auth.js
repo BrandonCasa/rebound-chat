@@ -93,7 +93,7 @@ router.post('/register', registerRules, async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { username, password, displayName } = req.body;
+    const { username, password, displayName, stayLoggedIn } = req.body;
 
     // Check if user already exists
     let user = await User.findOne({ username: username });
@@ -114,7 +114,7 @@ router.post('/register', registerRules, async (req, res) => {
     await user.save();
 
     // Create and assign a token
-    const token = jwt.sign({ _id: user._id }, process.env.SECRET, { expiresIn: '1h' });
+    const token = jwt.sign({ _id: user._id }, process.env.SECRET, { expiresIn: (stayLoggedIn ? '365d' : '1s') });
     res.header('auth-token', token).send(token);
   } catch (error) {
     logger.error(error);
@@ -130,7 +130,7 @@ router.post('/login', loginRules, async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { username, password } = req.body;
+    const { username, password, stayLoggedIn } = req.body;
 
     // Find user
     const user = await User.findOne({ username: username });
@@ -141,7 +141,7 @@ router.post('/login', loginRules, async (req, res) => {
     if (!validPassword) return res.status(400).json({ errors: [{ msg: 'Invalid username or password.' }] });
 
     // Create and assign a token
-    const token = jwt.sign({ _id: user._id }, process.env.SECRET, { expiresIn: '1h' });
+    const token = jwt.sign({ _id: user._id }, process.env.SECRET, { expiresIn: (stayLoggedIn ? '365d' : '1s') });
     res.header('auth-token', token).send(token);
   } catch (error) {
     logger.error(error);

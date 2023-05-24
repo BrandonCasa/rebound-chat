@@ -1,5 +1,19 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Dialog, Box, Typography, FormControl, InputLabel, Input, FormHelperText, TextField, DialogActions, Button } from "@mui/material";
+import {
+  Dialog,
+  Box,
+  Typography,
+  FormControl,
+  InputLabel,
+  Input,
+  FormHelperText,
+  TextField,
+  DialogActions,
+  Button,
+  FormGroup,
+  FormControlLabel,
+  Checkbox,
+} from "@mui/material";
 import GoogleButton from "react-google-button";
 import { useDispatch, useSelector } from "react-redux";
 import { setDialogOpened } from "../reducers/dialogReducer";
@@ -38,6 +52,11 @@ const LoginDialog = () => {
     long: false,
   });
   const [regErrors, setRegErrors] = useState([]);
+  const [stayLoggedIn, setStayLoggedIn] = useState(false);
+
+  function inputStayLoggedIn(event) {
+    setStayLoggedIn(event.target.checked);
+  }
 
   async function handleUserRegister() {
     let requestString = "";
@@ -56,6 +75,7 @@ const LoginDialog = () => {
         displayName: displayName,
         username: username,
         password: password,
+        stayLoggedIn: stayLoggedIn,
       }),
     });
     const res = await response;
@@ -83,18 +103,18 @@ const LoginDialog = () => {
           maxWidth: "500px",
           justifyContent: "center",
           display: "flex",
-          p: 3,
+          p: 2,
           flexDirection: "column",
           textAlign: "center",
         }}
         component="form"
       >
         <Typography variant="h4">Welcome to Rebound</Typography>
-        <Typography variant="subtitle" sx={{ pb: 3 }}>
+        <Typography variant="subtitle" sx={{ pb: 2 }}>
           Register to join a communication network like no other.
         </Typography>
         <TextField
-          sx={{ pb: 3 }}
+          sx={{ pb: 2 }}
           label="Display Name"
           variant="outlined"
           value={displayName}
@@ -121,7 +141,7 @@ const LoginDialog = () => {
           autoComplete="current-displayName"
         />
         <TextField
-          sx={{ pb: 3 }}
+          sx={{ pb: 2 }}
           label="Username"
           variant="outlined"
           value={username}
@@ -177,68 +197,71 @@ const LoginDialog = () => {
           helperText="We encrypt all passwords."
           autoComplete="current-password"
         />
+        <FormGroup>
+          <FormControlLabel control={<Checkbox defaultChecked />} label="Stay Logged In" onChange={inputStayLoggedIn} />
+        </FormGroup>
         {displayNameErrors.spaces && !regErrors.includes("Display name must not start or end with spaces.") && (
-          <Typography variant="subtitle" color="#c96800" fontWeight={900}>
+          <Typography variant="subtitle" color="error" fontWeight={900}>
             - Display name must not start or end with spaces.
           </Typography>
         )}
         {displayNameErrors.undefined && !regErrors.includes("Display name is required.") && (
-          <Typography variant="subtitle" color="#c96800" fontWeight={900}>
+          <Typography variant="subtitle" color="error" fontWeight={900}>
             - Display name is required.
           </Typography>
         )}
         {displayNameErrors.short && !regErrors.includes("Display name must be at least 3 characters long.") && (
-          <Typography variant="subtitle" color="#c96800" fontWeight={900}>
+          <Typography variant="subtitle" color="error" fontWeight={900}>
             - Display name must be at least 3 characters long.
           </Typography>
         )}
         {displayNameErrors.long && !regErrors.includes("Display name cannot be longer than 16 characters.") && (
-          <Typography variant="subtitle" color="#c96800" fontWeight={900}>
+          <Typography variant="subtitle" color="error" fontWeight={900}>
             - Display name cannot be longer than 16 characters.
           </Typography>
         )}
         {usernameErrors.spaces && !regErrors.includes("Username must not contain spaces.") && (
-          <Typography variant="subtitle" color="#c96800" fontWeight={900}>
+          <Typography variant="subtitle" color="error" fontWeight={900}>
             - Username must not contain spaces.
           </Typography>
         )}
         {usernameErrors.undefined && !regErrors.includes("Username is required.") && (
-          <Typography variant="subtitle" color="#c96800" fontWeight={900}>
+          <Typography variant="subtitle" color="error" fontWeight={900}>
             - Username is required.
           </Typography>
         )}
         {usernameErrors.short && !regErrors.includes("Username must be at least 3 characters long.") && (
-          <Typography variant="subtitle" color="#c96800" fontWeight={900}>
+          <Typography variant="subtitle" color="error" fontWeight={900}>
             - Username must be at least 3 characters long.
           </Typography>
         )}
         {usernameErrors.long && !regErrors.includes("Username cannot be longer than 24 characters.") && (
-          <Typography variant="subtitle" color="#c96800" fontWeight={900}>
+          <Typography variant="subtitle" color="error" fontWeight={900}>
             - Username cannot be longer than 24 characters.
           </Typography>
         )}
         {usernameErrors.case && !regErrors.includes("Username must be lowercase.") && (
-          <Typography variant="subtitle" color="#c96800" fontWeight={900}>
+          <Typography variant="subtitle" color="error" fontWeight={900}>
             - Username must be lowercase.
           </Typography>
         )}
         {passwordErrors.spaces && !regErrors.includes("Password must not contain spaces.") && (
-          <Typography variant="subtitle" color="#c96800" fontWeight={900}>
+          <Typography variant="subtitle" color="error" fontWeight={900}>
             - Password must not contain spaces.
           </Typography>
         )}
         {passwordErrors.undefined && !regErrors.includes("Password is required.") && (
-          <Typography variant="subtitle" color="#c96800" fontWeight={900}>
+          <Typography variant="subtitle" color="error" fontWeight={900}>
             - Password is required.
           </Typography>
         )}
         {passwordErrors.short && !regErrors.includes("Password must be at least 5 characters long.") && (
-          <Typography variant="subtitle" color="#c96800" fontWeight={900}>
+          <Typography variant="subtitle" color="error" fontWeight={900}>
             - Password must be at least 5 characters long.
           </Typography>
         )}
         {passwordErrors.long && !regErrors.includes("Password cannot be longer than 50 characters.") && (
-          <Typography variant="subtitle" color="#c96800" fontWeight={900}>
+          <Typography variant="subtitle" color="error" fontWeight={900}>
             - Password cannot be longer than 50 characters.
           </Typography>
         )}

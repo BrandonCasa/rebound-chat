@@ -1,5 +1,19 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Dialog, Box, Typography, FormControl, InputLabel, Input, FormHelperText, TextField, DialogActions, Button } from "@mui/material";
+import {
+  Dialog,
+  Box,
+  Typography,
+  FormControl,
+  InputLabel,
+  Input,
+  FormHelperText,
+  TextField,
+  DialogActions,
+  Button,
+  FormGroup,
+  FormControlLabel,
+  Checkbox,
+} from "@mui/material";
 import GoogleButton from "react-google-button";
 import { useDispatch, useSelector } from "react-redux";
 import { setDialogOpened } from "../reducers/dialogReducer";
@@ -17,6 +31,11 @@ const LoginDialog = () => {
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [stayLoggedIn, setStayLoggedIn] = useState(false);
+
+  function inputStayLoggedIn(event) {
+    setStayLoggedIn(event.target.checked);
+  }
 
   async function handleUserLogin() {
     let requestString = "";
@@ -34,6 +53,7 @@ const LoginDialog = () => {
       body: JSON.stringify({
         username: username,
         password: password,
+        stayLoggedIn: stayLoggedIn,
       }),
     });
     const res = await response;
@@ -56,18 +76,18 @@ const LoginDialog = () => {
           maxWidth: "500px",
           justifyContent: "center",
           display: "flex",
-          p: 3,
+          p: 2,
           flexDirection: "column",
           textAlign: "center",
         }}
         component="form"
       >
         <Typography variant="h4">Welcome Back</Typography>
-        <Typography variant="subtitle" sx={{ pb: 3 }}>
+        <Typography variant="subtitle" sx={{ pb: 2 }}>
           Login to your existing Rebound account.
         </Typography>
         <TextField
-          sx={{ pb: 3 }}
+          sx={{ pb: 2 }}
           label="Username"
           variant="outlined"
           value={username}
@@ -86,6 +106,9 @@ const LoginDialog = () => {
           }}
           autoComplete="current-password"
         />
+        <FormGroup>
+          <FormControlLabel control={<Checkbox defaultChecked />} label="Stay Logged In" onChange={inputStayLoggedIn} />
+        </FormGroup>
       </Box>
       <DialogActions>
         <Button
