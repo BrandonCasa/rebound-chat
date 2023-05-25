@@ -31,7 +31,7 @@ const LoginDialog = () => {
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [stayLoggedIn, setStayLoggedIn] = useState(false);
+  const [stayLoggedIn, setStayLoggedIn] = useState(true);
 
   function inputStayLoggedIn(event) {
     setStayLoggedIn(event.target.checked);
@@ -107,7 +107,7 @@ const LoginDialog = () => {
           autoComplete="current-password"
         />
         <FormGroup>
-          <FormControlLabel control={<Checkbox defaultChecked />} label="Stay Logged In" onChange={inputStayLoggedIn} />
+          <FormControlLabel control={<Checkbox defaultChecked />} label="Stay Logged In" onChange={inputStayLoggedIn} value={stayLoggedIn} />
         </FormGroup>
       </Box>
       <DialogActions>

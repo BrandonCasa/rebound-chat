@@ -114,7 +114,7 @@ router.post('/register', registerRules, async (req, res) => {
     await user.save();
 
     // Create and assign a token
-    const token = jwt.sign({ _id: user._id }, process.env.SECRET, { expiresIn: (stayLoggedIn ? '365d' : '1s') });
+    const token = jwt.sign({ _id: user._id }, process.env.SECRET, { expiresIn: (stayLoggedIn ? '365d' : '1h') });
     res.header('auth-token', token).send(token);
   } catch (error) {
     logger.error(error);
@@ -141,7 +141,7 @@ router.post('/login', loginRules, async (req, res) => {
     if (!validPassword) return res.status(400).json({ errors: [{ msg: 'Invalid username or password.' }] });
 
     // Create and assign a token
-    const token = jwt.sign({ _id: user._id }, process.env.SECRET, { expiresIn: (stayLoggedIn ? '365d' : '1s') });
+    const token = jwt.sign({ _id: user._id }, process.env.SECRET, { expiresIn: (stayLoggedIn ? '365d' : '1h') });
     res.header('auth-token', token).send(token);
   } catch (error) {
     logger.error(error);

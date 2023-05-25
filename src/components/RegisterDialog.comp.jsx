@@ -52,7 +52,7 @@ const LoginDialog = () => {
     long: false,
   });
   const [regErrors, setRegErrors] = useState([]);
-  const [stayLoggedIn, setStayLoggedIn] = useState(false);
+  const [stayLoggedIn, setStayLoggedIn] = useState(true);
 
   function inputStayLoggedIn(event) {
     setStayLoggedIn(event.target.checked);
@@ -198,7 +198,7 @@ const LoginDialog = () => {
           autoComplete="current-password"
         />
         <FormGroup>
-          <FormControlLabel control={<Checkbox defaultChecked />} label="Stay Logged In" onChange={inputStayLoggedIn} />
+          <FormControlLabel control={<Checkbox defaultChecked />} label="Stay Logged In" onChange={inputStayLoggedIn} value={stayLoggedIn} />
         </FormGroup>
         {displayNameErrors.spaces && !regErrors.includes("Display name must not start or end with spaces.") && (
           <Typography variant="subtitle" color="error" fontWeight={900}>

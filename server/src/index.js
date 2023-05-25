@@ -10,6 +10,7 @@ const dotenv = require('dotenv');
 const bcrypt = require('bcrypt');
 const logger = require('./logging/logger');
 const cors = require('cors');
+const fs = require('fs');
 
 // Require routes
 const authRoutes = require('./routes/auth');
@@ -18,11 +19,16 @@ const authRoutes = require('./routes/auth');
 require('dotenv').config();
 
 // Start new MongoMemoryServer only in development environment
+
 let mongoServer;
 if (process.env.NODE_ENV === 'development') {
+  if (!fs.existsSync("./dev")) {
+    fs.mkdirSync("./dev");
+  }
   mongoServer = new MongoMemoryServer({
     instance: {
-      port: 27017
+      port: 27017,
+      dbPath: 'dev',
     }
   });
 }
