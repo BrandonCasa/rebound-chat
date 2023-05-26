@@ -115,7 +115,7 @@ router.post('/register', registerRules, async (req, res) => {
 
     // Create and assign a token
     const token = jwt.sign({ _id: user._id }, process.env.SECRET, { expiresIn: (stayLoggedIn ? '365d' : '1h') });
-    res.header('auth-token', token).send(token);
+    res.status(200).header('auth-token', token).send(token);
   } catch (error) {
     logger.error(error);
     res.status(500).send('Internal Server Error');
