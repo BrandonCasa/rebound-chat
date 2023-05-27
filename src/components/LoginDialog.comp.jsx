@@ -1,31 +1,11 @@
-import React, { useState, useRef, useEffect } from "react";
-import {
-  Dialog,
-  Box,
-  Typography,
-  FormControl,
-  InputLabel,
-  Input,
-  FormHelperText,
-  TextField,
-  DialogActions,
-  Button,
-  FormGroup,
-  FormControlLabel,
-  Checkbox,
-} from "@mui/material";
-import GoogleButton from "react-google-button";
+import React, { useState } from "react";
+import { Dialog, Box, Typography, TextField, DialogActions, Button, FormGroup, FormControlLabel, Checkbox } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
 import { setDialogOpened } from "../reducers/dialogReducer";
-import { AddCircleRounded, TagFacesRounded } from "@mui/icons-material";
-import styled from "styled-components";
-import { useTheme } from "@mui/material/styles";
 import { setAuthState, setLoggedIn } from "../reducers/authReducer";
-
-const interestsList = [{ title: "Gaming" }, { title: "Sports" }, { title: "Anime" }, { title: "Streamers" }, { title: "Memes" }];
+import axios from 'axios';
 
 const LoginDialog = () => {
-  const theme = useTheme();
   const loginDialogState = useSelector((state) => state.dialogs.loginDialogOpen);
   const dispatch = useDispatch();
 
@@ -33,40 +13,28 @@ const LoginDialog = () => {
   const [password, setPassword] = useState("");
   const [stayLoggedIn, setStayLoggedIn] = useState(true);
 
-  function inputStayLoggedIn(event) {
-    setStayLoggedIn(event.target.checked);
-  }
+  const handleUserLogin = () => {
+    const requestString = !process.env.NODE_ENV || process.env.NODE_ENV === "development" 
+    ? "http://localhost:6001/api/auth/login/"
+    : "/api/auth/login/";
 
-  async function handleUserLogin() {
-    let requestString = "";
-    if (!process.env.NODE_ENV || process.env.NODE_ENV === "development") {
-      requestString = "http://localhost:6001/api/auth/login/";
-    } else {
-      requestString = "/api/auth/login/";
-    }
-    const response = await fetch(requestString, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Allow-Control-Allow-Origin": "*",
-      },
-      body: JSON.stringify({
-        username: username,
-        password: password,
-        stayLoggedIn: stayLoggedIn,
-      }),
+    axios.post(requestString, {
+      username,
+      password,
+      stayLoggedIn,
+    })
+    .then((res) => {
+      if (res.status === 200) {
+        const authToken = res.data;
+        window.localStorage.setItem("auth-token", authToken);
+        dispatch(setAuthState({ authToken }));
+        dispatch(setLoggedIn({ loggedIn: true }));
+        dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
+      }
+    })
+    .catch((error) => {
+      console.log(error);
     });
-    const res = await response;
-    console.log(res);
-    if (res.status === 400) {
-    } else if (res.status === 500) {
-    } else if (res.status === 200) {
-      const authtoken = await res.text();
-      window.localStorage.setItem("auth-token", authtoken);
-      dispatch(setAuthState({ authToken: authtoken }));
-      dispatch(setLoggedIn({ loggedIn: true }));
-      dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
-    }
   }
 
   return (
@@ -107,7 +75,7 @@ const LoginDialog = () => {
           autoComplete="current-password"
         />
         <FormGroup>
-          <FormControlLabel control={<Checkbox defaultChecked />} label="Stay Logged In" onChange={inputStayLoggedIn} value={stayLoggedIn} />
+          <FormControlLabel control={<Checkbox defaultChecked />} label="Stay Logged In" onChange={(e) => setStayLoggedIn(e.target.checked)} value={stayLoggedIn} />
         </FormGroup>
       </Box>
       <DialogActions>

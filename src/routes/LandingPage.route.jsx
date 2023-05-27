@@ -40,7 +40,7 @@ export const useIsOverflow = (ref, callback) => {
 
   React.useLayoutEffect(() => {
     const { current } = ref;
-
+    
     const trigger = () => {
       const hasOverflow = current.scrollHeight > current.clientHeight;
 
