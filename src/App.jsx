@@ -12,6 +12,7 @@ import { useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { setLoggedIn } from "./reducers/authReducer";
 import axios from "axios";
+import ProfilePage from "routes/ProfilePage.route";
 
 function App() {
   const authTokenState = useSelector((state) => state.auth.authToken);
@@ -49,6 +50,7 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route exact path="/" element={<LandingPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
           </Routes>
         </BrowserRouter>
       </CustomAppBar>
