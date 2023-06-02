@@ -1,7 +1,9 @@
 import {
   AppBar,
+  Avatar,
   Box,
   Button,
+  ButtonBase,
   Card,
   CardContent,
   CardHeader,
@@ -96,17 +98,24 @@ function CustomAppBar(props) {
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             Rebound
           </Typography>
-          <Button
-            variant="contained"
+          <IconButton
             color="secondary"
-            sx={{ height: `${iconWidth}px`, display: loggedInState ? "none" : "inherit" }}
-            onClick={handleLoginDialogOpen}
+            sx={{ height: `${iconWidth}px`, height: drawerWidth }}
+            onClick={() => {
+              if (loggedInState) {
+                handleLogout();
+              } else {
+                handleLoginDialogOpen();
+              }
+            }}
           >
-            Login
-          </Button>
-          <Button variant="contained" color="secondary" sx={{ height: `${iconWidth}px`, display: loggedInState ? "inherit" : "none" }} onClick={handleLogout}>
-            Logout
-          </Button>
+            <Icons.AccountCircleRounded sx={{ height: drawerWidth - 16, width: drawerWidth - 16, display: loggedInState ? "none" : "inherit" }} />
+            <Avatar
+              alt="Remy Sharp"
+              src="https://mui.com/static/images/avatar/3.jpg"
+              sx={{ height: drawerWidth - 16, width: drawerWidth - 16, display: loggedInState ? "inherit" : "none" }}
+            />
+          </IconButton>
         </Toolbar>
       </AppBar>
       <Drawer sx={drawerStyles(drawerWidth, iconWidth)} anchor="left" variant="persistent" open={drawerOpen}>
