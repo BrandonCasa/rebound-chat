@@ -6,7 +6,7 @@ import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import CustomAppBar from "./components/CustomAppBar.comp";
 import darkTheme from "./helpers/darkTheme";
-import RegisterDialog from "./components/RegisterDialog.comp";
+import RegisterDialog from "./components//RegisterDialog/index";
 import LoginDialog from "./components/LoginDialog.comp";
 import { useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";

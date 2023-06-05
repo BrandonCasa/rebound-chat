@@ -25,6 +25,7 @@ import { useTheme } from "@mui/material/styles";
 import { setAuthState, setLoggedIn } from "../reducers/authReducer";
 import axios from "axios";
 import * as Icons from "@mui/icons-material";
+import useRegisterDialog from "./RegisterDialog/useRegisterDialog";
 
 const RegisterDialog = () => {
   const dispatch = useDispatch();
