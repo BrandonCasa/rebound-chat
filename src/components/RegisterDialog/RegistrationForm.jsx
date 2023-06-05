@@ -14,7 +14,7 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
           autoComplete="current-username"
         />
         <TextField
-          sx={{ pb: 0 }}
+          sx={{ pb: 1 }}
           label="Password"
           variant="outlined"
           value={formData.password}
@@ -40,7 +40,7 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
           autoComplete="current-displayName"
         />
         <TextField
-          sx={{ pb: 0 }}
+          sx={{ pb: 1 }}
           label="About Me (WIP)"
           variant="outlined"
           value={formData.displayName}
@@ -53,7 +53,7 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
   }
 
   if (activeStep === 2) {
-    return <Box sx={{ height: "173.81px" }}>Profile Preview WIP</Box>;
+    return <Box sx={{ height: "181.81px" }}>Profile Preview WIP</Box>;
   }
 
   return null;
