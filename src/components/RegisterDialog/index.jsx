@@ -33,7 +33,7 @@ const RegisterDialog = () => {
           p: 2,
           flexDirection: "column",
           textAlign: "center",
-          minHeight: "450px",
+          minHeight: "400px",
         }}
         component="form"
       >
@@ -43,7 +43,6 @@ const RegisterDialog = () => {
         </Typography>
         <StepContent activeStep={activeStep} />
         <RegistrationForm activeStep={activeStep} formData={formData} handleFormDataChange={handleFormDataChange} />
-        <ErrorMessages errorMessages={errorMessages} />
         <DialogButtons
           handleStayLoggedInChange={handleStayLoggedInChange}
           formData={formData}

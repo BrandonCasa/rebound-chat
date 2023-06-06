@@ -21,11 +21,71 @@ const useRegisterDialog = () => {
     regErrors: [],
   });
 
+  const validateUsername = (value) => {
+    let errors = {};
+
+    if (value === undefined || value === null || value === "") {
+      errors.undefined = true;
+    }
+    if (typeof value === "string" && value.toString().includes(" ")) {
+      errors.spaces = true;
+    }
+    if (value !== value.toLowerCase()) {
+      errors.case = true;
+    }
+    if (value.length < 3) {
+      errors.short = true;
+    }
+    if (value.length > 24) {
+      errors.long = true;
+    }
+    return errors;
+  };
+
+  const validatePassword = (value) => {
+    let errors = {};
+
+    if (value === undefined || value === null || value === "") {
+      errors.undefined = true;
+    }
+    if (typeof value === "string" && value.toString().includes(" ")) {
+      errors.spaces = true;
+    }
+    if (value.length < 5) {
+      errors.short = true;
+    }
+    if (value.length > 50) {
+      errors.long = true;
+    }
+    return errors;
+  };
+
+  const validateDisplayName = (value) => {
+    let errors = {};
+
+    if (value === undefined || value === null || value === "") {
+      errors.undefined = true;
+    }
+    if (typeof value === "string" && (value.toString().startsWith(" ") || value.toString().endsWith(" "))) {
+      errors.spaces = true;
+    }
+    if (value.length < 3) {
+      errors.short = true;
+    }
+    if (value.length > 16) {
+      errors.long = true;
+    }
+    return errors;
+  };
+
   const handleFormDataChange = (field, value, errors = {}) => {
     setFormData({
       ...formData,
       [field]: value,
-      [`${field}Errors`]: errors,
+      usernameErrors: field === "username" ? { ...validateUsername(value) } : { ...formData.usernameErrors },
+      passwordErrors: field === "password" ? { ...validatePassword(value) } : { ...formData.passwordErrors },
+      displayNameErrors: field === "displayName" ? { ...validateDisplayName(value) } : { ...formData.displayNameErrors },
+      regErrors: [],
     });
   };
 

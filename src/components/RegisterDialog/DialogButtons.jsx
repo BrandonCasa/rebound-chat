@@ -6,8 +6,8 @@ const DialogButtons = ({ handleStayLoggedInChange, formData, handleBackButton, h
   const theme = useTheme();
 
   return (
-    <Box sx={{ mr: -2, mb: -2, ml: -2 }}>
-      <Box sx={{ display: "flex", justifyContent: "center", ml: 1, mr: 1, mt: 2, mb: 1, height: "36px" }}>
+    <Box sx={{ mt: 1 }}>
+      <Box sx={{ display: "flex", justifyContent: "center", mb: 1, height: "36px" }}>
         <FormGroup sx={{ flexGrow: 1 }}>
           <FormControlLabel
             control={<Checkbox defaultChecked />}
@@ -28,7 +28,7 @@ const DialogButtons = ({ handleStayLoggedInChange, formData, handleBackButton, h
           {activeStep === 2 ? <Icons.DoneRounded /> : <Icons.KeyboardDoubleArrowRightRounded />}
         </Button>
       </Box>
-      <Button autoFocus variant="contained" onClick={handleToLogin} sx={{ width: "auto", height: "36px", mb: 1, backgroundColor: theme.palette.primary.dark }}>
+      <Button autoFocus variant="contained" onClick={handleToLogin} sx={{ height: "36px", backgroundColor: theme.palette.primary.dark }} fullWidth>
         Already registered?
       </Button>
     </Box>
