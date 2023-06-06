@@ -17,7 +17,11 @@ const DialogButtons = ({ handleStayLoggedInChange, formData, handleBackButton, h
             sx={{ height: "36px" }}
           />
         </FormGroup>
-        <Button variant="outlined" onClick={handleBackButton} sx={{ width: "64px", height: "36px", mr: 1 }}>
+        <Button
+          variant="outlined"
+          onClick={handleBackButton}
+          sx={{ width: "64px", height: "36px", mr: 1, opacity: activeStep < 1 ? 0 : 1, transition: "ease-in-out opacity 125ms" }}
+        >
           <Icons.KeyboardArrowLeftRounded />
         </Button>
         <Button autoFocus variant="contained" onClick={handleNextStep} sx={{ width: "64px", height: "36px" }}>
