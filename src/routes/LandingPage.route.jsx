@@ -1,121 +1,33 @@
-// Imports
-import { Box, Card, CardContent, CardHeader, Chip, Collapse, Container, Divider, Paper, Stack, Typography } from "@mui/material";
+import { Box, Chip, Divider, Stack } from "@mui/material";
 import { styled, useTheme } from "@mui/material/styles";
 import Grid from "@mui/material/Unstable_Grid2";
 import React, { useContext } from "react";
-import { TransitionGroup } from "react-transition-group";
 import { isSafari, isMobile } from "react-device-detect";
 
-// Define custom scrollbar styles
-const scrollbarStyles = {
-  "::-webkit-scrollbar": {
-    width: "14px",
-  },
-  "::-webkit-scrollbar-button": {
-    display: "none",
-  },
-  "::-webkit-scrollbar-thumb": {
-    boxShadow: "inset 0 0 14px 14px #585859",
-    border: "solid 4px transparent",
-    borderRadius: "14px",
-  },
-  "::-webkit-scrollbar-thumb:hover": {
-    background: "#262626",
-    boxShadow: "inset 0 0 14px 14px #89898B",
-    border: "solid 4px transparent",
-    borderRadius: "14px",
-  },
-  "::-webkit-scrollbar-track": {
-    boxShadow: "inset 0 0 14px 14px transparent",
-    border: "solid 4px transparent",
-  },
-  "::-webkit-scrollbar-track-piece": {},
-  "::-webkit-scrollbar-corner": {},
-  "::-webkit-resizer": {},
-};
+import FeatureCard from "components/FeatureCard";
+import LandingHeader from "components/LandingHeader";
+import { useIsOverflow } from "utils/useIsOverflow";
+import { ItemBox } from "utils/ItemBox";
+import { scrollbarStyles } from "utils/scrollbarStyles";
+import { TransitionGrid } from "utils/TransitionGrid";
 
-// Custom hook to check if an element has overflow
-export const useIsOverflow = (ref, callback) => {
-  const [isOverflow, setIsOverflow] = React.useState(undefined);
-
-  React.useLayoutEffect(() => {
-    const { current } = ref;
-    
-    const trigger = () => {
-      const hasOverflow = current.scrollHeight > current.clientHeight;
-
-      setIsOverflow(hasOverflow);
-
-      if (callback) callback(hasOverflow);
-    };
-
-    if (current) {
-      if ("ResizeObserver" in window) {
-        new ResizeObserver(trigger).observe(current);
-      }
-
-      trigger();
-    }
-  }, [callback, ref]);
-
-  return isOverflow;
-};
-
-// Define styled components for Paper and Box
-const ItemPaper = styled(Paper)(({ theme }) => ({
-  ...theme.typography.body2,
-  padding: theme.spacing(1),
-  textAlign: "center",
-  color: theme.palette.text.secondary,
-}));
-const ItemBox = styled(Box)(({ theme }) => ({
-  ...theme.typography.body2,
-  padding: theme.spacing(1),
-  textAlign: "center",
-  color: theme.palette.text.secondary,
-}));
-
-// Define styled component for Grid with transitions
-const TransitionGrid = styled(Grid)(({ theme }) => ({
-  transition: theme.transitions.create("all", {
-    easing: theme.transitions.easing.sharp,
-    duration: theme.transitions.duration.leavingScreen,
-  }),
-}));
-
-// Main LandingPage component
 function LandingPage(props) {
-  // Get the theme from Material-UI
   let theme = useTheme();
-
-  // Create a ref for overflow element
   const overflowRef = React.useRef();
-
-  // Define callback for when the overflow state changes
-  const onIsOverflowChanged = React.useCallback((isOverflowFromCallback) => {
-    // ...
-  }, []);
-
-  // Use custom hook to get the overflow state
+  const onIsOverflowChanged = React.useCallback((isOverflowFromCallback) => {}, []);
   const isOverflow = useIsOverflow(overflowRef, onIsOverflowChanged);
 
-  // Render the LandingPage component
   return (
     <Box sx={{ display: "flex", justifyContent: "center", flexGrow: 1 }}>
       <Stack spacing={2} sx={{ height: "100%", width: "100%" }}>
-        <ItemPaper>
-          <Typography variant="h4" sx={{ color: `${theme.palette.text.primary}` }}>
-            Introducing Rebound
-          </Typography>
-          <Typography variant="subtitle1" sx={{ color: `${theme.palette.text.secondary}` }} color={theme.palette.text.primary}>
-            The social hub for gamers and friends.
-          </Typography>
-        </ItemPaper>
+        <LandingHeader title="Introducing Rebound" subtitle="The social hub for gamers and friends." />
+
         <ItemBox>
           <Divider sx={{ "&::after": { borderWidth: "2px" }, "&::before": { borderWidth: "2px" }, margin: 0 }} variant="middle" textAlign="left">
             <Chip color="secondary" label="Features" />
           </Divider>
         </ItemBox>
+
         <ItemBox sx={{ height: "100%", width: "100%", flexGrow: 1, position: "relative" }}>
           <Box
             ref={overflowRef}
@@ -133,88 +45,64 @@ function LandingPage(props) {
           >
             <Grid container spacing={2} sx={{ justifyContent: "center" }}>
               <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
-                <Card sx={{ pl: 2, pr: 2, width: "100%" }}>
-                  <CardContent>
-                    <Typography variant="h5" sx={{ color: `${theme.palette.text.primary}` }}>
-                      Friend Footprints
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: `${theme.palette.text.secondary}` }}>
-                      Allows you to optionally share your activity trends with friends of your choosing.
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <FeatureCard title="Friend Footprints" description="Allows you to optionally share your activity trends with friends of your choosing." />
               </TransitionGrid>
               <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
-                <Card sx={{ pl: 2, pr: 2, width: "100%" }}>
-                  <CardContent>
-                    <Typography variant="h5" sx={{ color: `${theme.palette.text.primary}` }}>
-                      Theme Designer
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: `${theme.palette.text.secondary}` }}>
-                      Create the theme of your dreams with custom colors and more.
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <FeatureCard title="Theme Designer" description="Create the theme of your dreams with custom colors and more." />
               </TransitionGrid>
               <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
-                <Card sx={{ pl: 2, pr: 2, width: "100%" }}>
-                  <CardContent>
-                    <Typography variant="h5" sx={{ color: `${theme.palette.text.primary}` }}>
-                      The Hub
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: `${theme.palette.text.secondary}` }}>
-                      A place to view the activity of your friends and start new conversations.
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <FeatureCard title="The Hub" description="A place to view the activity of your friends and start new conversations." />
               </TransitionGrid>
               <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
-                <Card sx={{ pl: 2, pr: 2, width: "100%" }}>
-                  <CardContent>
-                    <Typography variant="h5" sx={{ color: `${theme.palette.text.primary}` }}>
-                      Noise suppression
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: `${theme.palette.text.secondary}` }}>
-                      Turn noise suppression on/off for someones mic on your end.
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <FeatureCard title="Noise Suppression" description="Turn noise suppression on/off for someones mic on your end." />
               </TransitionGrid>
               <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
-                <Card sx={{ pl: 2, pr: 2, width: "100%" }}>
-                  <CardContent>
-                    <Typography variant="h5" sx={{ color: `${theme.palette.text.primary}` }}>
-                      Unique Profiles
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: `${theme.palette.text.secondary}` }}>
-                      Profile pages where you can showcase yourself in your way.
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <FeatureCard title="Unique Profile" description="Profile pages where you can showcase yourself in your style." />
               </TransitionGrid>
               <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
-                <Card sx={{ pl: 2, pr: 2, width: "100%" }}>
-                  <CardContent>
-                    <Typography variant="h5" sx={{ color: `${theme.palette.text.primary}` }}>
-                      Alt Profiles
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: `${theme.palette.text.secondary}` }}>
-                      Instead of making a new account, join servers with template profiles of your creation.
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <FeatureCard
+                  title="Branching Profiles"
+                  description="Instead of making a new account, create a profile variant that can share specific servers and chats."
+                />
               </TransitionGrid>
-              <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center" sx={{ paddingBottom: 0 }}>
-                <Card sx={{ pl: 2, pr: 2, width: "100%" }}>
-                  <CardContent>
-                    <Typography variant="h5" sx={{ color: `${theme.palette.text.primary}` }}>
-                      Watch Together
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: `${theme.palette.text.secondary}` }}>
-                      High quality screen sharing and video chat.
-                    </Typography>
-                  </CardContent>
-                </Card>
+              <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
+                <FeatureCard title="Watch Together" description="High quality screen sharing and video chat." />
+              </TransitionGrid>
+              <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
+                <FeatureCard title="Friend Events" description="Schedule events with your friends." />
+              </TransitionGrid>
+              <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
+                <FeatureCard title="Media Interaction" description="See how many people watch your embeds and when. Like or dislike images and videos." />
+              </TransitionGrid>
+              <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
+                <FeatureCard title="Meme Archive" description="Mark images/videos as memes to allow users to save and archive them." />
+              </TransitionGrid>
+              <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
+                <FeatureCard title="Meme Deck" description="Easily access and categorize your archived memes for sharing." />
+              </TransitionGrid>
+              <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
+                <FeatureCard title="Meme Directory" description="Find memes within the global meme directory you can optionally add to." />
+              </TransitionGrid>
+              <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
+                <FeatureCard title="Forms and Polls" description="Create forms and polls with ease. Results can be public or have limited access." />
+              </TransitionGrid>
+              <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
+                <FeatureCard title="Share History" description="View the file sharing tree to see who originally uploaded a file and others who sent it again." />
+              </TransitionGrid>
+              <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
+                <FeatureCard title="Embed Tags" description="Videos, Images and files are automatically recommended tags you can modify upon upload." />
+              </TransitionGrid>
+              <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
+                <FeatureCard title="Friend Cards" description="Add information only you can see to your friends' profiles as you learn more about them." />
+              </TransitionGrid>
+              <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
+                <FeatureCard title="Friend Birthdays" description="Choose who knows your birth day, month or year and share the celebration." />
+              </TransitionGrid>
+              <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
+                <FeatureCard title="Friend Sharing" description="Send friend cards to other people with permission of the person being shared." />
+              </TransitionGrid>
+              <TransitionGrid xs={12} sm={6} md={4} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
+                <FeatureCard title="Chat Sharing" description="Share snippets of chats to other people with permission of everyone involved." />
               </TransitionGrid>
             </Grid>
           </Box>
@@ -224,5 +112,4 @@ function LandingPage(props) {
   );
 }
 
-// Export LandingPage as default
 export default LandingPage;
