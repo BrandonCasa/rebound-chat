@@ -18,6 +18,9 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  Menu,
+  MenuItem,
+  MenuList,
   Paper,
   Stack,
   Toolbar,
@@ -29,7 +32,7 @@ import Grid from "@mui/material/Unstable_Grid2";
 import { TransitionGroup } from "react-transition-group";
 import * as Icons from "@mui/icons-material";
 import useWindowDimensions from "../helpers/useWindowDimensions";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { setDialogOpened } from "../reducers/dialogReducer";
 import { setLoggedIn } from "../reducers/authReducer";
@@ -69,6 +72,15 @@ function CustomAppBar(props) {
 
   let iconWidth = (drawerWidth / 3) * 2;
 
+  const [anchorEl, setAnchorEl] = React.useState(null);
+  const open = Boolean(anchorEl);
+  const handleAvatarClick = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
   const handleLoginDialogOpen = () => {
     dispatch(setDialogOpened({ dialogName: "registerDialogOpen", newState: true, conflictingDialogs: ["loginDialogOpen"] }));
   };
@@ -101,9 +113,9 @@ function CustomAppBar(props) {
           <IconButton
             color="secondary"
             sx={{ height: `${iconWidth}px`, height: drawerWidth }}
-            onClick={() => {
+            onClick={(event) => {
               if (loggedInState) {
-                handleLogout();
+                handleAvatarClick(event);
               } else {
                 handleLoginDialogOpen();
               }
@@ -116,6 +128,48 @@ function CustomAppBar(props) {
               sx={{ height: drawerWidth - 16, width: drawerWidth - 16, display: loggedInState ? "inherit" : "none" }}
             />
           </IconButton>
+          <Menu
+            anchorEl={anchorEl}
+            open={open}
+            onClose={handleClose}
+            sx={{ mt: 1 }}
+            transformOrigin={{ horizontal: "right", vertical: "top" }}
+            anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
+          >
+            <MenuList>
+              <MenuItem>
+                <ListItemIcon>
+                  <Avatar sx={{ width: "28px", height: "28px" }} />
+                </ListItemIcon>
+                <ListItemText>Main Profile</ListItemText>
+              </MenuItem>
+              <Divider />
+              <MenuItem>
+                <ListItemIcon>
+                  <Icons.PersonAddRounded fontSize="small" sx={{ color: theme.palette.text.secondary }} />
+                </ListItemIcon>
+                <ListItemText>Add Profile</ListItemText>
+              </MenuItem>
+              <MenuItem>
+                <ListItemIcon>
+                  <Icons.PersonRemoveRounded fontSize="small" sx={{ color: theme.palette.text.secondary }} />
+                </ListItemIcon>
+                <ListItemText>Remove Profile</ListItemText>
+              </MenuItem>
+              <Divider />
+              <MenuItem
+                onClick={() => {
+                  handleLogout();
+                  handleClose();
+                }}
+              >
+                <ListItemIcon>
+                  <Icons.LogoutRounded fontSize="small" sx={{ color: theme.palette.text.secondary }} />
+                </ListItemIcon>
+                <ListItemText>Logout</ListItemText>
+              </MenuItem>
+            </MenuList>
+          </Menu>
         </Toolbar>
       </AppBar>
       <Drawer sx={drawerStyles(drawerWidth, iconWidth)} anchor="left" variant="persistent" open={drawerOpen}>
