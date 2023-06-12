@@ -1,6 +1,6 @@
 import logo from "./logo.svg";
 import "./App.css";
-import LandingPage from "./routes/LandingPage.route";
+import LandingPage from "./routes/LandingPage/LandingPage.route";
 import { CssBaseline } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { BrowserRouter, Route, Routes } from "react-router-dom";

@@ -6,10 +6,10 @@ import { isSafari, isMobile } from "react-device-detect";
 
 import FeatureCard from "components/FeatureCard";
 import LandingHeader from "components/LandingHeader";
-import { useIsOverflow } from "utils/useIsOverflow";
-import { ItemBox } from "utils/ItemBox";
-import { scrollbarStyles } from "utils/scrollbarStyles";
-import { TransitionGrid } from "utils/TransitionGrid";
+import { useIsOverflow } from "routes/LandingPage/utils/useIsOverflow";
+import { ItemBox } from "routes/LandingPage/utils/ItemBox";
+import { scrollbarStyles } from "routes/LandingPage/utils/scrollbarStyles";
+import { TransitionGrid } from "routes/LandingPage/utils/TransitionGrid";
 
 function LandingPage(props) {
   let theme = useTheme();
