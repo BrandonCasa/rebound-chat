@@ -32,7 +32,8 @@
     "build": "CI=false && react-scripts --openssl-legacy-provider build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "ssh-win": "icacls ./keys/rebound_server.pem /inheritance:r & icacls ./keys/rebound_server.pem /grant:r \"%username%\":\"(R)\" & ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@44.194.181.255"
+    "ssh-win": "icacls ./keys/rebound_server.pem /inheritance:r & icacls ./keys/rebound_server.pem /grant:r \"%username%\":\"(R)\" & ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@44.194.181.255",
+    "ssh-mac": "chmod 400 ./keys/rebound_server.pem && ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@44.194.181.255"
   },
   "eslintConfig": {
     "extends": [
