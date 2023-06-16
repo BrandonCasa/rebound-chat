@@ -4,7 +4,7 @@ import LandingPage from "./routes/LandingPage/LandingPage.route";
 import { CssBaseline } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import CustomAppBar from "./components/CustomAppBar.comp";
+import CustomAppBar from "./components/CustomAppBar/CustomAppBar";
 import darkTheme from "./helpers/darkTheme";
 import RegisterDialog from "./components//RegisterDialog/index";
 import LoginDialog from "./components/LoginDialog.comp";

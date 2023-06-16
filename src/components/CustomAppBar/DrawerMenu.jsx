@@ -1,0 +1,101 @@
+import { Toolbar, List, Divider, Drawer, Tooltip, ListItem, ListItemButton, ListItemIcon } from "@mui/material";
+import * as Icons from "@mui/icons-material";
+
+const drawerStyles = (drawerWidth, iconWidth) => ({
+  width: drawerWidth,
+  flexShrink: 0,
+  "& .MuiDrawer-paper": {
+    width: `${drawerWidth}px`,
+    boxSizing: "border-box",
+  },
+  ".MuiSvgIcon-root": {
+    width: `${iconWidth}px`,
+    height: `${iconWidth}px`,
+    margin: `${(drawerWidth - iconWidth) / 2}px`,
+  },
+});
+
+const ListItemWithTooltip = ({ title, placement, children }) => (
+  <ListItem disablePadding>
+    <Tooltip title={title} placement={placement}>
+      <ListItemButton sx={{ p: 0 }}>{children}</ListItemButton>
+    </Tooltip>
+  </ListItem>
+);
+
+const DrawerMenu = ({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }) => (
+  <Drawer sx={drawerStyles(drawerWidth, iconWidth)} anchor="left" variant="persistent" open={drawerOpen}>
+    <Toolbar
+      variant="dense"
+      disableGutters
+      sx={{
+        height: drawerWidth,
+        minHeight: drawerWidth,
+      }}
+    >
+      <ListItemWithTooltip title="Home" placement="right">
+        <ListItemIcon>
+          <Icons.HomeRounded sx={{ color: theme.palette.secondary.light }} />
+        </ListItemIcon>
+      </ListItemWithTooltip>
+    </Toolbar>
+    <Divider />
+    <List
+      sx={{
+        p: 0,
+        pb: 1,
+        ".MuiSvgIcon-root": {
+          color: theme.palette.text.primary,
+        },
+      }}
+    >
+      <ListItemWithTooltip key="FriendHub" title="Hub" placement="right">
+        <ListItemIcon>
+          <Icons.PeopleAltRounded />
+        </ListItemIcon>
+      </ListItemWithTooltip>
+      <ListItemWithTooltip key="Messages" title="Messages" placement="right">
+        <ListItemIcon>
+          <Icons.MessageRounded />
+        </ListItemIcon>
+      </ListItemWithTooltip>
+      <ListItemWithTooltip key="Servers" title="Servers" placement="right">
+        <ListItemIcon>
+          <Icons.DnsRounded />
+        </ListItemIcon>
+      </ListItemWithTooltip>
+      <ListItemWithTooltip key="Profile" title="Profile" placement="right">
+        <ListItemIcon>
+          <Icons.PersonRounded />
+        </ListItemIcon>
+      </ListItemWithTooltip>
+      <ListItemWithTooltip key="Settings" title="Settings" placement="right">
+        <ListItemIcon>
+          <Icons.SettingsRounded />
+        </ListItemIcon>
+      </ListItemWithTooltip>
+    </List>
+    <List
+      sx={{
+        p: 0,
+        mt: "auto",
+        ".MuiSvgIcon-root": {
+          color: theme.palette.text.primary,
+          width: `${iconWidth * 1.25}px`,
+          height: `${iconWidth * 1.25}px`,
+          margin: `${(drawerWidth - iconWidth * 1.25) / 2}px`,
+        },
+      }}
+    >
+      <ListItemWithTooltip key="Minimize" title="Minimize" placement="right">
+        <ListItemButton sx={{ p: 0, mt: 1 }} onClick={() => setDrawerOpen(!drawerOpen)}>
+          <ListItemIcon>
+            <Icons.ChevronLeftRounded />
+          </ListItemIcon>
+        </ListItemButton>
+      </ListItemWithTooltip>
+    </List>
+  </Drawer>
+);
+
+export default DrawerMenu;
