@@ -8,7 +8,7 @@
   },
   "main": "./src/index.js",
   "scripts": {
-    "dev": "cross-env NODE_ENV=development nodemon ./src/index.js",
+    "dev": "npx kill-port 27017 && cross-env NODE_ENV=development nodemon ./src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": {
