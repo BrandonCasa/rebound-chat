@@ -20,4 +20,4 @@ jobs:
           npm run start
           (cd ./server && npm run dev)
           sleep 2m
-          taskkill -F -IM node.exe
+          killall -9 node
