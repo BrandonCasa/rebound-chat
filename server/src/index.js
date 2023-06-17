@@ -8,6 +8,7 @@ const { MongoMemoryServer } = require("mongodb-memory-server");
 const cors = require("cors");
 const fs = require("fs");
 const rateLimit = require("express-rate-limit");
+const http = require("http");
 
 const authRoutes = require("./routes/auth.js");
 const logger = require("./logging/logger.js");
@@ -25,6 +26,17 @@ const verifyLimiter = rateLimit({
 });
 
 const app = express();
+const server = http.createServer(app);
+const { Server } = require("socket.io");
+const io = new Server(server);
+
+io.on("connection", (socket) => {
+  // receive a message from the client
+  socket.on("message", (room, msg) => {
+    logger.info(`Message received from ${room}: ${msg}`);
+    socket.emit("message", msg);
+  });
+});
 
 app.use(cors());
 
@@ -47,7 +59,7 @@ app.get("/api/auth/verify", verifyLimiter, async (req, res) => {
 
 app.use("/api/auth", authRoutes);
 
-app.listen(process.env.PORT, () => logger.info(`Server started on port ${process.env.PORT}`));
+server.listen(process.env.PORT, () => logger.info(`Server started on port ${process.env.PORT}`));
 
 process.on("SIGINT", async () => {
   MongoServer.stopServer();
