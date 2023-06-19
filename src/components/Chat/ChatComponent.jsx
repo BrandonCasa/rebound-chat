@@ -1,21 +1,19 @@
 import React, { useState, useEffect } from "react";
 import socketIOClient from "socket.io-client";
 
-let requestString = "";
-if (!process.env.NODE_ENV || process.env.NODE_ENV === "development") {
-  requestString = "http://localhost:6001/";
-} else {
-  requestString = "wss://rebound.nexus/";
-}
-
 const Chat = () => {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [socket, setSocket] = useState(null);
 
   useEffect(() => {
-    const newSocket = socketIOClient(requestString, { transports: ["websocket", "polling"], path: "/socket.io" });
-    setSocket(newSocket);
+    if (!process.env.NODE_ENV || process.env.NODE_ENV === "development") {
+      const newSocket = socketIOClient("http://localhost:6001/", { transports: ["websocket", "polling"], path: "/socket.io" });
+      setSocket(newSocket);
+    } else {
+      const newSocket = socketIOClient({ transports: ["websocket", "polling"], path: "/socket.io" });
+      setSocket(newSocket);
+    }
 
     return () => newSocket.disconnect();
   }, [setSocket]);
