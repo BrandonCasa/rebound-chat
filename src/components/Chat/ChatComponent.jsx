@@ -11,7 +11,7 @@ const Chat = () => {
       const newSocket = socketIOClient("http://localhost:6001/", { transports: ["websocket", "polling"], path: "/socket.io" });
       setSocket(newSocket);
     } else {
-      const newSocket = socketIOClient({ transports: ["websocket", "polling"], path: "/socket.io" });
+      const newSocket = socketIOClient("https://rebound.nexus/", { transports: ["websocket", "polling"], path: "/socket.io" });
       setSocket(newSocket);
     }
 
