@@ -5,7 +5,7 @@ let requestString = "";
 if (!process.env.NODE_ENV || process.env.NODE_ENV === "development") {
   requestString = "http://localhost:6001/";
 } else {
-  requestString = "http://localhost/api/";
+  requestString = "/api/";
 }
 
 const Chat = () => {
