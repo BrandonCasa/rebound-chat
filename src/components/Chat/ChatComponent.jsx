@@ -5,7 +5,7 @@ let requestString = "";
 if (!process.env.NODE_ENV || process.env.NODE_ENV === "development") {
   requestString = "http://localhost:6001/";
 } else {
-  requestString = "wss://rebound.nexus/socket.io/";
+  requestString = "wss://rebound.nexus/";
 }
 
 const Chat = () => {
@@ -14,7 +14,7 @@ const Chat = () => {
   const [socket, setSocket] = useState(null);
 
   useEffect(() => {
-    const newSocket = socketIOClient(requestString, { transports: ["websocket", "polling"] });
+    const newSocket = socketIOClient(requestString, { transports: ["websocket", "polling"], path: "/socket.io" });
     setSocket(newSocket);
 
     return () => newSocket.disconnect();

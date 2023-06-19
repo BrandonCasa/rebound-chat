@@ -28,7 +28,9 @@ const verifyLimiter = rateLimit({
 const app = express();
 const server = http.createServer(app);
 const { Server } = require("socket.io");
-const io = new Server(server);
+const io = new Server(server, {
+  path: "/socket.io",
+});
 
 io.on("connection", (socket) => {
   // receive a message from the client
