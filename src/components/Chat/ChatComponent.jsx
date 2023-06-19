@@ -15,7 +15,7 @@ const Chat = () => {
       setSocket(newSocket);
     }
 
-    return () => newSocket.disconnect();
+    return () => socket.disconnect();
   }, [setSocket]);
 
   useEffect(() => {
