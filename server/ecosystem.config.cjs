@@ -1,12 +1,11 @@
 module.exports = {
   apps: [
     {
-      name: 'rebound-server',
-      script: './src/index.js',
-      watch: ['./src', './node_modules', './.env'],
-      // Delay between restart
-      watch_delay: 1000,
-      ignore_watch: ['public', 'mongod'],
+      name: "rebound-express",
+      script: "./src/index.js",
+      watch: ["src", ".env", "package.json", "package-lock.json"],
+      watch_delay: 250,
+      ignore_watch: ["dev", "node_modules", "uploads"],
       exp_backoff_restart_delay: 100,
       restart_delay: 5000,
     },

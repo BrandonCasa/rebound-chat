@@ -1,0 +1,80 @@
+name: Deploy to AWS Ubuntu Server
+
+on:
+  workflow_dispatch:
+
+env:
+  AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
+  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+  SECRET: ${{ secrets.SECRET }}
+  DB_USER: ${{ secrets.DB_USER }}
+  DB_PASS: ${{ secrets.DB_PASS }}
+  DB_AUTH: ${{ secrets.DB_AUTH }}
+  DB_NAME: ${{ secrets.DB_NAME }}
+  PORT: ${{ secrets.PORT }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js 18.x
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18.x
+
+      - name: Install NPM Packages and Build App
+        run: |
+          npm ci
+          npm run build
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -t rsa ${{ secrets.EC2_INSTANCE_IP }} >> ~/.ssh/known_hosts
+
+      - name: Transfer build to Server
+        run: |
+          scp -r build/* ubuntu@${{ secrets.EC2_INSTANCE_IP }}:/var/www/html
+
+      - name: Setup Server and Deploy
+        run: |
+          ssh ubuntu@${{ secrets.EC2_INSTANCE_IP }} << EOF
+            # Check if ~/Rebound/Express/ exists
+            if [ ! -d ~/Rebound/Express/ ]; then
+              # Clone and setup express app
+              git clone --filter=blob:none --no-checkout --sparse https://github.com/BrandonCasa/rebound-chat.git ~/Rebound/Express/
+              cd ~/Rebound/Express/
+              git sparse-checkout set server
+              git checkout
+              npm install
+
+              # Construct .env file
+              echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
+
+              # Execute PM2 start command
+              pm2 start ecosystem.config.cjs
+            else
+              # Pull changes and setup express app
+              cd ~/Rebound/Express/
+              git pull origin master
+
+              # Construct .env file
+              echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
+
+              npm install
+            fi
+
+            # Nginx configuration
+            sudo cp /etc/nginx/sites-enabled/default /etc/nginx/sites-enabled/default.old
+            if ! cmp -s /etc/nginx/sites-enabled/default ~/Rebound/Express/nginx/default; then
+              sudo cp ~/Rebound/Express/nginx/default /etc/nginx/sites-enabled/default
+              sudo systemctl restart nginx
+            fi
+          EOF
