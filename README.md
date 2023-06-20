@@ -1,70 +1,129 @@
-# Getting Started with Create React App
+# Rebound
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Welcome to Rebound! Our website is all about bringing people together and providing a robust platform for social interaction and content sharing. We offer a wide variety of features that make the user experience unique, enjoyable, and customizable.
 
-## Available Scripts
+### Features
 
-In the project directory, you can run:
+---
 
-### `npm start`
+#### 🐾 Friend Footprints
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+Friend Footprints allows you to optionally share your activity trends with friends of your choosing. Share more, share less - you have complete control.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+---
 
-### `npm test`
+#### 🎨 Theme Designer
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Design the theme of your dreams with our Theme Designer. From custom colors to unique layouts, you have the freedom to express your individual style.
 
-### `npm run build`
+---
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+#### 🌐 The Hub
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+The Hub is the heart of the social activity on Rebound. It's a place where you can view the activity of your friends and start new conversations.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+---
 
-### `npm run eject`
+#### 🎧 Noise Suppression
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+Our Noise Suppression feature lets you turn noise suppression on or off for someone's microphone on your end. This ensures optimal audio experience in every conversation.
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+---
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+#### 🎭 Unique Profile
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+With Rebound, everyone has a Unique Profile page where you can showcase your style and interests.
 
-## Learn More
+---
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+#### 🌳 Branching Profiles
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+Instead of making a new account, you can create a profile variant that can share specific servers and chats. Manage your different social circles efficiently.
 
-### Code Splitting
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+#### 📺 Watch Together
 
-### Analyzing the Bundle Size
+Enjoy high-quality screen sharing and video chat with Watch Together. It's like being in the same room, even if you're miles apart.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+---
 
-### Making a Progressive Web App
+#### 📅 Friend Events
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+Our Friend Events feature lets you schedule events with your friends. Never miss another get-together or movie night.
 
-### Advanced Configuration
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+#### 🖼️ Media Interaction
 
-### Deployment
+With Media Interaction, you can see how many people watch your embeds and when. You can like or dislike images and videos, creating a dynamic, interactive experience.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+---
 
-### `npm run build` fails to minify
+#### 🧳 Meme Archive
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+Our Meme Archive allows users to mark images/videos as memes so they can save and archive them.
+
+---
+
+#### 🗂️ Meme Deck
+
+With the Meme Deck, you can easily access and categorize your archived memes for sharing. Bring out the right meme at the right moment!
+
+---
+
+#### 📚 Meme Directory
+
+Find memes within our global Meme Directory. You can optionally add to this directory, helping to build a vast meme resource for all.
+
+---
+
+#### ✍️ Forms and Polls
+
+Create forms and polls with ease. Results can be public or have limited access, allowing you to gather feedback or just have some fun.
+
+---
+
+#### 🌳 Share History
+
+Our Share History feature lets you view the file sharing tree to see who originally uploaded a file and others who sent it again. Keep track of content journeys.
+
+---
+
+#### 🏷️ Embed Tags
+
+Embed tags are automatically recommended when you upload videos, images, and files. You can modify these tags upon upload, ensuring your content is easily discoverable.
+
+---
+
+#### 📇 Friend Cards
+
+With Friend Cards, you can add information only you can see to your friends' profiles as you learn more about them. Personalize your interactions and remember important details.
+
+---
+
+#### 🎂 Friend Birthdays
+
+Choose who knows your birthday - day, month or year, and share the celebration. Make every birthday a special social event.
+
+---
+
+#### 👥 Friend Sharing
+
+Our Friend Sharing feature lets you send friend cards to other people with the permission of the person being shared. Share what you want, when you want, with whom you want.
+
+---
+
+#### 💬 Chat Sharing
+
+Share snippets of chats to other people with permission of everyone involved. Relive funny moments, share important discussions, all with respect to privacy.
+
+---
+
+## Visit Us
+
+Get to know more about us and explore all the fun and unique features at
+
+[Rebound](https://rebound.nexus/).
+
+Enjoy your time with Rebound, where we take social interaction to a whole new level!
