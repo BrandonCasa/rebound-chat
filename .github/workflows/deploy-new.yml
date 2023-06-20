@@ -49,14 +49,13 @@ jobs:
       - name: Setup Server and Deploy
         run: |
           ssh ubuntu@${{ secrets.EC2_INSTANCE_IP }} << EOF
-            # Check if ~/Rebound/Express/ exists
-            if [ ! -d ~/Rebound/Express/ ]; then
+            # Check if ~/Rebound/Full/ exists
+            if [ ! -d ~/Rebound/Full/ ]; then
               # Clone and setup express app
-              mkdir -p ~/Rebound/Express/
-              cd ~/Rebound/Express/
-              git clone --filter=blob:none --no-checkout --sparse https://github.com/BrandonCasa/rebound-chat.git .
-              git sparse-checkout set server
-              git checkout
+              mkdir -p ~/Rebound/Full/
+              cd ~/Rebound/Full/
+              git https://github.com/BrandonCasa/rebound-chat.git ./
+              cd ./server/
               npm install
 
               # Construct .env file
@@ -66,8 +65,9 @@ jobs:
               pm2 start ecosystem.config.cjs
             else
               # Pull changes and setup express app
-              cd ~/Rebound/Express/
+              cd ~/Rebound/Full/
               git pull origin master
+              cd ./server/
 
               # Construct .env file
               echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
@@ -80,8 +80,8 @@ jobs:
 
             # Nginx configuration
             sudo cp /etc/nginx/sites-enabled/default /etc/nginx/sites-enabled/default.old
-            if ! cmp -s /etc/nginx/sites-enabled/default ~/Rebound/Express/nginx/default; then
-              sudo cp ~/Rebound/Express/nginx/default /etc/nginx/sites-enabled/default
+            if ! cmp -s /etc/nginx/sites-enabled/default ~/Rebound/Full/server/nginx/default; then
+              sudo cp ~/Rebound/Full/server/nginx/default /etc/nginx/sites-enabled/default
               sudo systemctl restart nginx
             fi
           EOF
