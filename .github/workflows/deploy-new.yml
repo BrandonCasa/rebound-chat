@@ -63,6 +63,7 @@ jobs:
 
               # Execute PM2 start command
               pm2 start ecosystem.config.cjs
+              pm2 save
             else
               # Pull changes and setup express app
               cd ~/Rebound/Full/
@@ -79,7 +80,6 @@ jobs:
             fi
 
             # Nginx configuration
-            sudo cp /etc/nginx/sites-enabled/default /etc/nginx/sites-enabled/default.old
             if ! cmp -s /etc/nginx/sites-enabled/default ~/Rebound/Full/server/nginx/default; then
               sudo cp ~/Rebound/Full/server/nginx/default /etc/nginx/sites-enabled/default
               sudo systemctl restart nginx
