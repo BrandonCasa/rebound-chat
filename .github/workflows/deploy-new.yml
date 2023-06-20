@@ -2,6 +2,19 @@ name: Deploy to AWS Ubuntu Server
 
 on:
   workflow_dispatch:
+    inputs:
+      appDirectory:
+        description: 'Application directory path'
+        required: false
+        default: '~/Rebound/Full'
+      tmpDirectory:
+        description: 'Temporary directory path'
+        required: false
+        default: '/home/ubuntu/tmp'
+      nginxConfig:
+        description: 'Nginx config file path'
+        required: false
+        default: '/etc/nginx/sites-enabled/default'
 
 env:
   AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
@@ -20,12 +33,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v3.5.3
 
       - name: Setup Node.js 18.x
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v3.4.1
         with:
           node-version: 18.x
+
+      - name: Cache node modules
+        uses: actions/cache@v3.2.6
+        with:
+          path: '**/node_modules'
+          key: ${{ runner.os }}-modules-${{ hashFiles('**/package-lock.json') }}
 
       - name: Install NPM Packages and Build App
         run: |
@@ -39,49 +58,45 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -t rsa ${{ secrets.EC2_INSTANCE_IP }} >> ~/.ssh/known_hosts
 
+      - name: Ensure Temporary Directory Exists and is Empty on Server
+        run: |
+          ssh ubuntu@${{ secrets.EC2_INSTANCE_IP }} "mkdir -p ${{ github.event.inputs.tmpDirectory }} && rm -rf ${{ github.event.inputs.tmpDirectory }}/*"
+
       - name: Transfer build to Server
         run: |
-          ssh ubuntu@${{ secrets.EC2_INSTANCE_IP }} "sudo rm -rf /var/www/html/*"
           tar czf build.tar.gz -C build .
-          scp build.tar.gz ubuntu@${{ secrets.EC2_INSTANCE_IP }}:/home/ubuntu/tmp
-          ssh ubuntu@${{ secrets.EC2_INSTANCE_IP }} "sudo tar xzf /home/ubuntu/tmp/build.tar.gz -C /var/www/html && rm /home/ubuntu/tmp/build.tar.gz"
+          scp build.tar.gz ubuntu@${{ secrets.EC2_INSTANCE_IP }}:${{ github.event.inputs.tmpDirectory }}
+          ssh ubuntu@${{ secrets.EC2_INSTANCE_IP }} "sudo tar xzf ${{ github.event.inputs.tmpDirectory }}/build.tar.gz -C /var/www/html && rm ${{ github.event.inputs.tmpDirectory }}/build.tar.gz"
 
       - name: Setup Server and Deploy
         run: |
           ssh ubuntu@${{ secrets.EC2_INSTANCE_IP }} << EOF
-            # Check if ~/Rebound/Full/ exists
-            if [ ! -d ~/Rebound/Full/ ]; then
-              # Clone and setup express app
-              mkdir -p ~/Rebound/Full/
-              cd ~/Rebound/Full/
+            set -e
+            if [ ! -d "${{ github.event.inputs.appDirectory }}" ]; then
+              mkdir -p "${{ github.event.inputs.appDirectory }}"
+              cd "${{ github.event.inputs.appDirectory }}"
               git clone https://github.com/BrandonCasa/rebound-chat.git ./
               cd ./server/
               npm install
 
-              # Construct .env file
               echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
 
-              # Execute PM2 start command
               pm2 start ecosystem.config.cjs
               pm2 save
             else
-              # Pull changes and setup express app
-              cd ~/Rebound/Full/
-              git pull origin master
+              cd "${{ github.event.inputs.appDirectory }}"
+              git pull origin master || exit 1
               cd ./server/
 
-              # Construct .env file
               echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
 
               npm install
 
-              # Execute PM2 restart command
               pm2 restart rebound-express
             fi
 
-            # Nginx configuration
-            if ! cmp -s /etc/nginx/sites-enabled/default ~/Rebound/Full/server/nginx/default; then
-              sudo cp ~/Rebound/Full/server/nginx/default /etc/nginx/sites-enabled/default
+            if ! cmp -s "${{ github.event.inputs.nginxConfig }}" "${{ github.event.inputs.appDirectory }}/server/nginx/default"; then
+              sudo cp "${{ github.event.inputs.appDirectory }}/server/nginx/default" "${{ github.event.inputs.nginxConfig }}"
               sudo systemctl restart nginx
             fi
           EOF
