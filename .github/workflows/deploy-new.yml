@@ -53,8 +53,8 @@ jobs:
             if [ ! -d ~/Rebound/Express/ ]; then
               # Clone and setup express app
               mkdir -p ~/Rebound/Express/
-              git clone --filter=blob:none --no-checkout --sparse https://github.com/BrandonCasa/rebound-chat.git ~/Rebound/Express/
               cd ~/Rebound/Express/
+              git clone --filter=blob:none --no-checkout --sparse https://github.com/BrandonCasa/rebound-chat.git .
               git sparse-checkout set server
               git checkout
               npm install
