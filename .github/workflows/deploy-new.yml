@@ -54,7 +54,7 @@ jobs:
               # Clone and setup express app
               mkdir -p ~/Rebound/Full/
               cd ~/Rebound/Full/
-              git https://github.com/BrandonCasa/rebound-chat.git ./
+              git clone https://github.com/BrandonCasa/rebound-chat.git ./
               cd ./server/
               npm install
 
