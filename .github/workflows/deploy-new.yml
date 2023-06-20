@@ -42,7 +42,9 @@ jobs:
       - name: Transfer build to Server
         run: |
           ssh ubuntu@${{ secrets.EC2_INSTANCE_IP }} "sudo rm -rf /var/www/html/*"
-          scp -r build/* ubuntu@${{ secrets.EC2_INSTANCE_IP }}:/var/www/html
+          tar czf build.tar.gz -C build .
+          scp build.tar.gz ubuntu@${{ secrets.EC2_INSTANCE_IP }}:/home/ubuntu/tmp
+          ssh ubuntu@${{ secrets.EC2_INSTANCE_IP }} "sudo tar xzf /home/ubuntu/tmp/build.tar.gz -C /var/www/html && rm /home/ubuntu/tmp/build.tar.gz"
 
       - name: Setup Server and Deploy
         run: |
