@@ -44,7 +44,7 @@ function Chat() {
 
   return (
     <div>
-      <h1>Chat Room: {isConnected ? "Connection Established" : "No Connection"}</h1>
+      <h1>Chat: {isConnected ? "Connection Established" : "No Connection"}</h1>
       {messages.map((msg, index) => (
         <p key={index}>{msg}</p>
       ))}

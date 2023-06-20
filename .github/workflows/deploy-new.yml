@@ -41,6 +41,7 @@ jobs:
 
       - name: Transfer build to Server
         run: |
+          ssh ubuntu@${{ secrets.EC2_INSTANCE_IP }} "sudo rm -rf /var/www/html/*"
           scp -r build/* ubuntu@${{ secrets.EC2_INSTANCE_IP }}:/var/www/html
 
       - name: Setup Server and Deploy
