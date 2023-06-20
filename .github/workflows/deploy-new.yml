@@ -15,6 +15,18 @@ on:
         description: 'Nginx config file path'
         required: false
         default: '/etc/nginx/sites-enabled/default'
+      repositoryURL:
+        description: 'The HTTPS .git URL for the repository'
+        required: false
+        default: 'https://github.com/BrandonCasa/rebound-chat.git'
+      serverSubdirectory:
+        description: 'The path of the server directory within the repository'
+        required: false
+        default: 'server'
+      pm2ProcessName:
+        description: 'The name of PM2 Process to be restarted'
+        required: false
+        default: 'rebound-express'
 
 env:
   AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
@@ -75,8 +87,8 @@ jobs:
             if [ ! -d "${{ github.event.inputs.appDirectory }}" ]; then
               mkdir -p "${{ github.event.inputs.appDirectory }}"
               cd "${{ github.event.inputs.appDirectory }}"
-              git clone https://github.com/BrandonCasa/rebound-chat.git ./
-              cd ./server/
+              git clone ${{ github.event.inputs.repositoryURL }} ./
+              cd ${{ github.event.inputs.serverSubdirectory }}
               npm install
 
               echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
@@ -86,17 +98,17 @@ jobs:
             else
               cd "${{ github.event.inputs.appDirectory }}"
               git pull origin master || exit 1
-              cd ./server/
+              cd ${{ github.event.inputs.serverSubdirectory }}
 
               echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
 
               npm install
 
-              pm2 restart rebound-express
+              pm2 restart ${{ github.event.inputs.pm2ProcessName }}
             fi
 
-            if ! cmp -s "${{ github.event.inputs.nginxConfig }}" "${{ github.event.inputs.appDirectory }}/server/nginx/default"; then
-              sudo cp "${{ github.event.inputs.appDirectory }}/server/nginx/default" "${{ github.event.inputs.nginxConfig }}"
+            if ! cmp -s "${{ github.event.inputs.nginxConfig }}" "${{ github.event.inputs.appDirectory }}/${{ github.event.inputs.serverSubdirectory }}/nginx/default"; then
+              sudo cp "${{ github.event.inputs.appDirectory }}/${{ github.event.inputs.serverSubdirectory }}/nginx/default" "${{ github.event.inputs.nginxConfig }}"
               sudo systemctl restart nginx
             fi
           EOF
