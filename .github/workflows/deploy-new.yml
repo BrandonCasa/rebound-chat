@@ -65,10 +65,10 @@ jobs:
 
       - name: Setup SSH
         run: |
-          mkdir -p /home/ubuntu/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /home/ubuntu/.ssh/id_rsa
-          chmod 600 /home/ubuntu/.ssh/id_rsa
-          ssh-keyscan -t rsa ${{ secrets.EC2_INSTANCE_IP }} >> /home/ubuntu/.ssh/known_hosts
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -t rsa ${{ secrets.EC2_INSTANCE_IP }} >> ~/.ssh/known_hosts
 
       - name: Ensure Temporary Directory Exists and is Empty on Server
         run: |
