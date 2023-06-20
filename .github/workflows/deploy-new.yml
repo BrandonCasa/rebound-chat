@@ -52,6 +52,7 @@ jobs:
             # Check if ~/Rebound/Express/ exists
             if [ ! -d ~/Rebound/Express/ ]; then
               # Clone and setup express app
+              mkdir -p ~/Rebound/Express/
               git clone --filter=blob:none --no-checkout --sparse https://github.com/BrandonCasa/rebound-chat.git ~/Rebound/Express/
               cd ~/Rebound/Express/
               git sparse-checkout set server
@@ -72,6 +73,9 @@ jobs:
               echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
 
               npm install
+
+              # Execute PM2 restart command
+              pm2 restart rebound-express
             fi
 
             # Nginx configuration
