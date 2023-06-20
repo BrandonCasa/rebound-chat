@@ -36,10 +36,12 @@ const io = new Server(server, {
 });
 
 io.on("connection", (socket) => {
-  // receive a message from the client
+  logger.info(`User connected: ${socket.id}`);
+
   socket.on("message", (msg) => {
     logger.info(`Message received: ${msg}`);
     socket.emit("message", msg);
+    socket.broadcast.emit("message", msg);
   });
 });
 

@@ -4,6 +4,7 @@ import { socket } from "helpers/socket";
 function Chat() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
+  const [currentRoom, setCurrentRoom] = useState(""); // ["room1", "room2"]
   const [isConnected, setIsConnected] = useState(socket.connected);
 
   useEffect(() => {
@@ -43,7 +44,7 @@ function Chat() {
 
   return (
     <div>
-      <h1>Chat: {isConnected ? "Connection Established" : "No Connection"}</h1>
+      <h1>Chat Room: {isConnected ? "Connection Established" : "No Connection"}</h1>
       {messages.map((msg, index) => (
         <p key={index}>{msg}</p>
       ))}
