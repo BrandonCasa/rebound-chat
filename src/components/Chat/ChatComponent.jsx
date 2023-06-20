@@ -1,41 +1,49 @@
 import React, { useState, useEffect } from "react";
-import socketIOClient from "socket.io-client";
+import { socket } from "helpers/socket";
 
-const Chat = () => {
+function Chat() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
-  const [socket, setSocket] = useState(null);
-
-  useEffect(() => {
-    if (!process.env.NODE_ENV || process.env.NODE_ENV === "development") {
-      const newSocket = socketIOClient("http://localhost:6001/", { transports: ["websocket", "polling"], path: "/socket.io" });
-      setSocket(newSocket);
-    } else {
-      const newSocket = socketIOClient("https://rebound.nexus/", { transports: ["websocket", "polling"], path: "/socket.io" });
-      setSocket(newSocket);
-    }
-
-    return () => socket.disconnect();
-  }, [setSocket]);
+  const [isConnected, setIsConnected] = useState(socket.connected);
 
   useEffect(() => {
     if (!socket) return;
 
-    socket.on("message", (msg) => {
+    function onConnect() {
+      setIsConnected(true);
+    }
+
+    function onDisconnect() {
+      setIsConnected(false);
+    }
+
+    function onMessage(msg) {
       setMessages((messages) => [...messages, msg]);
-    });
-  }, [socket]);
+    }
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("message", onMessage);
+
+    socket.connect();
+    return () => {
+      socket.disconnect();
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("message", onMessage);
+    };
+  }, []);
 
   const sendMessage = () => {
     if (message) {
-      socket.emit("message", "room1", message); // replace 'room1' with your room name
+      socket.emit("message", message);
       setMessage("");
     }
   };
 
   return (
     <div>
-      <h1>Chat</h1>
+      <h1>Chat: {isConnected ? "Connection Established" : "No Connection"}</h1>
       {messages.map((msg, index) => (
         <p key={index}>{msg}</p>
       ))}
@@ -44,6 +52,6 @@ const Chat = () => {
       {message}
     </div>
   );
-};
+}
 
 export default Chat;

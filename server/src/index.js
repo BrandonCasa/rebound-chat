@@ -30,12 +30,15 @@ const server = http.createServer(app);
 const { Server } = require("socket.io");
 const io = new Server(server, {
   path: "/socket.io",
+  cors: {
+    origin: "http://localhost:3000",
+  },
 });
 
 io.on("connection", (socket) => {
   // receive a message from the client
-  socket.on("message", (room, msg) => {
-    logger.info(`Message received from ${room}: ${msg}`);
+  socket.on("message", (msg) => {
+    logger.info(`Message received: ${msg}`);
     socket.emit("message", msg);
   });
 });
