@@ -8,5 +8,7 @@
   },
   "tailwindCSS.includeLanguages": {
     "plaintext": "html"
-  }
+  },
+  "emmet.triggerExpansionOnTab": true,
+  "emmet.includeLanguages": { "javascript": "javascriptreact" }
 }

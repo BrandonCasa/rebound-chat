@@ -32,13 +32,14 @@
   },
   "scripts": {
     "start": "npm run watch:css && craco start",
-    "build": "CI=false && npm run build:css && craco --openssl-legacy-provider build",
+    "build": "export NODE_OPTIONS=--openssl-legacy-provider && export CI=false && npm run build:css && craco build",
+    "build:css": "postcss src/index.css -o src/main.css",
+    "watch:css": "postcss src/index.css -o src/main.css",
     "test": "craco test",
     "eject": "react-scripts eject",
+    "|---------|": "",
     "ssh-win": "icacls ./keys/rebound_server.pem /inheritance:r & icacls ./keys/rebound_server.pem /grant:r \"%username%\":\"(R)\" & ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@44.194.181.255",
-    "ssh-mac": "chmod 400 ./keys/rebound_server.pem && ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@44.194.181.255",
-    "build:css": "postcss src/index.css -o src/main.css",
-    "watch:css": "postcss src/index.css -o src/main.css"
+    "ssh-mac": "chmod 400 ./keys/rebound_server.pem && ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@44.194.181.255"
   },
   "eslintConfig": {
     "extends": [
