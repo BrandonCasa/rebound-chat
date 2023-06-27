@@ -12,6 +12,8 @@
 /build
 /keys
 
+main.css
+
 # misc
 .DS_Store
 .env

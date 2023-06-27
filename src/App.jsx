@@ -1,5 +1,4 @@
 import logo from "./logo.svg";
-import "./App.css";
 import LandingPage from "./routes/LandingPage/LandingPage.route";
 import { CssBaseline } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";

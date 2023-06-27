@@ -1,3 +1,12 @@
 {
-  "prettier.printWidth": 165
+  "prettier.printWidth": 165,
+  "editor.quickSuggestions": {
+    "strings": true
+  },
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
+  "tailwindCSS.includeLanguages": {
+    "plaintext": "html"
+  }
 }
