@@ -1,5 +1,5 @@
 import "./app.css";
-import SideBar from "newcomponents/Sidebar_TW/sidebar";
+import SideBar from "newcomponents/SidebarComp/sidebar";
 
 function NewApp() {
   return (

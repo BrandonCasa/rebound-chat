@@ -5,7 +5,7 @@ module.exports = {
   mode: "jit",
   purge: ["./src/**/*.{js,jsx,ts,tsx}", "./public/**/*.html"],
   content: ["./public/**/*.html", "./src/**/*.{js,ts,jsx,tsx}"],
-  darkMode: "false",
+  darkMode: "true",
   theme: {
     extend: {
       colors: {
