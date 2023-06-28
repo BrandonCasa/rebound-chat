@@ -1,3 +1,4 @@
+import "./app.css";
 import SideBar from "newcomponents/Sidebar_TW/sidebar";
 
 function NewApp() {
