@@ -97,7 +97,7 @@ jobs:
               pm2 save
             else
               cd "${{ github.event.inputs.appDirectory }}"
-              git pull origin master || exit 1
+              git pull origin dev || exit 1
               cd ${{ github.event.inputs.serverSubdirectory }}
 
               echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
