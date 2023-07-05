@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Grid } from "@mui/material";
+import { Box, Divider, Grid, Paper, Typography } from "@mui/material";
 import { socket } from "helpers/socket";
 import UserList from "components/Chat/UserList";
 import ChannelList from "components/Chat/ChannelList";
@@ -16,7 +16,7 @@ function ChatPage() {
   useEffect(() => {
     socket.connect();
 
-    socket.emit("join", { username: "User1", room: currentChannel });
+    socket.emit("join", { username: `Users${Math.round(Math.random() * 10000 + 1)}`, room: currentChannel });
 
     socket.on("message", (message) => {
       setMessages((messages) => [...messages, message]);
@@ -32,7 +32,7 @@ function ChatPage() {
   }, [currentChannel]);
 
   const sendMessage = (event) => {
-    event.preventDefault();
+    if (event) event.preventDefault();
 
     if (message) {
       socket.emit("sendMessage", message, () => setMessage(""));
@@ -40,18 +40,38 @@ function ChatPage() {
   };
 
   return (
-    <Grid container spacing={2}>
-      <Grid item xs={2}>
-        <ChannelList channels={channels} setCurrentChannel={setCurrentChannel} />
+    <Box sx={{ display: "flex", justifyContent: "center", flexGrow: 1 }}>
+      <Grid container spacing={2}>
+        <Grid item xs={2}>
+          <Paper sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+            <Typography align="center" variant="h5">
+              Chat Rooms
+            </Typography>
+            <Divider />
+            <ChannelList channels={channels} setCurrentChannel={setCurrentChannel} />
+          </Paper>
+        </Grid>
+        <Grid item xs={8} sx={{ height: "100%" }}>
+          <Paper sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+            <Typography align="center" variant="h5">
+              {currentChannel}
+            </Typography>
+            <Divider />
+            <ChatArea messages={messages} />
+            <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} />
+          </Paper>
+        </Grid>
+        <Grid item xs={2}>
+          <Paper sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+            <Typography align="center" variant="h5">
+              Room Users
+            </Typography>
+            <Divider />
+            <UserList users={users} />
+          </Paper>
+        </Grid>
       </Grid>
-      <Grid item xs={8}>
-        <ChatArea messages={messages} />
-        <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} />
-      </Grid>
-      <Grid item xs={2}>
-        <UserList users={users} />
-      </Grid>
-    </Grid>
+    </Box>
   );
 }
 

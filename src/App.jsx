@@ -1,4 +1,3 @@
-import logo from "./logo.svg";
 import "./App.css";
 import LandingPage from "./routes/LandingPage/LandingPage.route";
 import { CssBaseline } from "@mui/material";
@@ -45,18 +44,19 @@ function App() {
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
-      <RegisterDialog />
-      <LoginDialog />
-      <CustomAppBar>
-        <BrowserRouter>
+
+      <BrowserRouter>
+        <RegisterDialog />
+        <LoginDialog />
+        <CustomAppBar>
           <Routes>
             <Route exact path="/" element={<LandingPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/chat" element={<ChatPage />} />
             <Route path="*" element={<h1>404</h1>} />
           </Routes>
-        </BrowserRouter>
-      </CustomAppBar>
+        </CustomAppBar>
+      </BrowserRouter>
     </ThemeProvider>
   );
 }

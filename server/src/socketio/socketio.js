@@ -13,7 +13,7 @@ function initiateSocketIO(io) {
       io.to(room).emit("roomData", { users: usersInRoom });
 
       // broadcast a message to the room that a new user has joined
-      socket.broadcast.to(room).emit("message", { user: "admin", text: `${username} has joined the room!` });
+      socket.broadcast.to(room).emit("message", { user: `System`, text: `${username}, has entered the chat!` });
     });
 
     socket.on("sendMessage", (message, callback) => {
@@ -26,6 +26,7 @@ function initiateSocketIO(io) {
     });
 
     socket.on("disconnect", () => {
+      if (!users[socket.id]) return;
       const { username, room } = users[socket.id];
 
       // remove this user from the users object
@@ -36,7 +37,7 @@ function initiateSocketIO(io) {
       io.to(room).emit("roomData", { users: usersInRoom });
 
       // broadcast a message to the room that a user has left
-      io.to(room).emit("message", { user: "admin", text: `${username} has left the room.` });
+      io.to(room).emit("message", { user: `System`, text: `${username}, exited the chat.` });
     });
   });
 }
