@@ -13,7 +13,7 @@ function CustomAppBar(props) {
   const { drawerWidth, iconWidth, drawerOpen, setDrawerOpen, handleIconClick, loggedInState, anchorEl, open, handleClose, handleLogout } = useCustomAppBar(width);
 
   return (
-    <Box sx={{ display: "flex", height: "100%" }}>
+    <Box sx={{ display: "flex", height: "100%", width: "100%", position: "fixed", top: 0 }}>
       <AppBarContent handleIconClick={handleIconClick} iconWidth={iconWidth} drawerWidth={drawerWidth} loggedInState={loggedInState} />
       <AccountMenu anchorEl={anchorEl} open={open} handleClose={handleClose} handleLogout={handleLogout} theme={theme} />
       <DrawerMenu drawerWidth={drawerWidth} iconWidth={iconWidth} drawerOpen={drawerOpen} setDrawerOpen={setDrawerOpen} theme={theme} />

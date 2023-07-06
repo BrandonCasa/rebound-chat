@@ -3,6 +3,7 @@ import { Box, List, ListItem, ListItemAvatar, ListItemText, Avatar, IconButton, 
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { scrollbarStyles } from "routes/LandingPage/utils/scrollbarStyles";
+import { isMobile, isSafari } from "react-device-detect";
 
 const styles = {
   arrowBox: {
@@ -34,16 +35,20 @@ function ChatArea({ messages, editMessage, deleteMessage }) {
   return (
     <Box
       sx={{
+        position: "absolute",
+        left: "0px",
+        top: "0px",
+        right: "0px",
+        bottom: "0px",
         overflowX: "hidden",
         overflowY: "auto",
         padding: 1,
-        flexGrow: 1,
         display: "flex",
         flexDirection: "column-reverse",
         ...scrollbarStyles,
       }}
     >
-      <List disablePadding sx={{ height: "100%" }}>
+      <List disablePadding>
         <ConstructedMessages relevantMsgs={messages} editMessage={editMessage} deleteMessage={deleteMessage} />
       </List>
     </Box>
