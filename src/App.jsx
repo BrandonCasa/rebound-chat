@@ -32,7 +32,7 @@ function App() {
           },
         })
         .then((response) => {
-          dispatch(setLoggedIn({ loggedIn: true }));
+          dispatch(setLoggedIn({ loggedIn: true, username: response.data.user.username, displayName: response.data.user.displayName }));
         })
         .catch((error) => {
           console.log(error);

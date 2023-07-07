@@ -1,12 +1,14 @@
-import { createSlice } from '@reduxjs/toolkit';
+import { createSlice } from "@reduxjs/toolkit";
 
 const initialState = {
   authToken: window.localStorage.getItem("auth-token"),
   loggedIn: false,
+  username: "",
+  displayName: "",
 };
 
 const authSlice = createSlice({
-  name: 'auth',
+  name: "auth",
   initialState,
   reducers: {
     setAuthState: (state, action) => {
@@ -18,7 +20,13 @@ const authSlice = createSlice({
       if (action.payload.loggedIn !== undefined) {
         state.loggedIn = action.payload.loggedIn;
       }
-    }
+      if (action.payload.username !== undefined) {
+        state.username = action.payload.useranme;
+      }
+      if (action.payload.displayName !== undefined) {
+        state.displayName = action.payload.displayName;
+      }
+    },
   },
 });
 

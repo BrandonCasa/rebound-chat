@@ -9,8 +9,9 @@ const cors = require("cors");
 const fs = require("fs");
 const rateLimit = require("express-rate-limit");
 const http = require("http");
-
-const authRoutes = require("./routes/auth.js");
+const authImport = require("./routes/auth.js");
+const authRoutes = authImport.router;
+const User = authImport.User;
 const logger = require("./logging/logger.js");
 
 const dotenv = require("dotenv");
@@ -21,7 +22,7 @@ let mongoServer = MongoServer.startServer();
 
 const verifyLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 50,
   message: "Too many verification attempts from this IP, please try again after an hour",
 });
 
@@ -53,8 +54,9 @@ logger.stream = {
 app.use(morgan("combined", { stream: logger.stream }));
 
 app.get("/api/auth/verify", verifyLimiter, async (req, res) => {
-  const valid = jwt.verify(req.headers.authorization, process.env.SECRET);
-  res.send(valid);
+  const decoded = jwt.verify(req.headers.authorization, process.env.SECRET);
+  const user = await User.findById(decoded["_id"]);
+  res.send({ user });
 });
 
 app.use("/api/auth", authRoutes);
