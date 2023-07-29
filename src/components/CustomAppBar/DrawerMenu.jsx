@@ -58,7 +58,11 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
         }}
       >
         <ListItemWithTooltip key="FriendHub" title="Hub" placement="right">
-          <ListItemIcon>
+          <ListItemIcon
+            onClick={() => {
+              navigate("/hub");
+            }}
+          >
             <Icons.PeopleAltRounded />
           </ListItemIcon>
         </ListItemWithTooltip>

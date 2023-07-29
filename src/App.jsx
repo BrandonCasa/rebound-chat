@@ -13,6 +13,7 @@ import { setLoggedIn } from "./reducers/authReducer";
 import axios from "axios";
 import ProfilePage from "routes/ProfilePage.route";
 import ChatPage from "routes/FriendHubPage/ChatPage";
+import HubPage from "routes/FriendHubPage/HubPage";
 
 function App() {
   const authTokenState = useSelector((state) => state.auth.authToken);
@@ -53,6 +54,7 @@ function App() {
             <Route exact path="/" element={<LandingPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/chat" element={<ChatPage />} />
+            <Route path="/hub" element={<HubPage />} />
             <Route path="*" element={<h1>404</h1>} />
           </Routes>
         </CustomAppBar>
