@@ -39,6 +39,7 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
       >
         <ListItemWithTooltip title="Home" placement="right">
           <ListItemIcon
+            sx={{ opacity: window.location.pathname.toString() === "/" ? "0.5" : "1.0" }}
             onClick={() => {
               navigate("/");
             }}
@@ -59,6 +60,7 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
       >
         <ListItemWithTooltip key="FriendHub" title="Hub" placement="right">
           <ListItemIcon
+            sx={{ opacity: window.location.pathname.toString() === "/hub" ? "0.5" : "1.0" }}
             onClick={() => {
               navigate("/hub");
             }}
