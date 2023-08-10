@@ -20,7 +20,7 @@
     "react-dom": "^18.2.0",
     "react-google-button": "^0.7.2",
     "react-redux": "^8.0.5",
-    "react-router-dom": "^6.8.1",
+    "react-router-dom": "^6.15.0",
     "react-scripts": "5.0.1",
     "react-transition-group": "^4.4.5",
     "sass": "^1.63.6",
