@@ -1,7 +1,7 @@
-import { Grid, List, ListItem, ListItemText, ListSubheader, Paper } from "@mui/material";
+import { Grid, List, ListItem, ListItemButton, ListItemText, ListSubheader, Paper } from "@mui/material";
 import React from "react";
 
-function ChatList() {
+function ChatList({ currentChatRoom, setCurrentChatRoom }) {
   return (
     <Paper
       sx={{
@@ -27,9 +27,16 @@ function ChatList() {
             <ul>
               <ListSubheader>{`${chatGroup}`}</ListSubheader>
               {["phantompigz", "future_wizard", "Ranahan"].map((chatName) => (
-                <ListItem key={`chat-${chatGroup}-${chatName}`}>
+                <ListItemButton
+                  selected={chatName == currentChatRoom}
+                  disabled={chatName == currentChatRoom}
+                  key={`chat-${chatGroup}-${chatName}`}
+                  onClick={() => {
+                    setCurrentChatRoom(chatName);
+                  }}
+                >
                   <ListItemText sx={{ ml: 3 }} primary={`${chatName}`} />
-                </ListItem>
+                </ListItemButton>
               ))}
             </ul>
           </li>
@@ -40,13 +47,15 @@ function ChatList() {
 }
 
 function HubPage() {
+  const [currentChatRoom, setCurrentChatRoom] = React.useState("none");
+
   return (
     <Grid container spacing={2} sx={{ justifyContent: "center", display: "flex", overflow: "hidden" }} rowGap={10000}>
       <Grid item xs={12} sm={4.75} md={3} display="flex" sx={{ overflow: "hidden", height: "100%" }}>
-        <ChatList />
+        <ChatList currentChatRoom={currentChatRoom} setCurrentChatRoom={setCurrentChatRoom} />
       </Grid>
       <Grid item xs={false} sm={7.25} md={9} display="flex" sx={{ overflow: "hidden", height: "100%" }}>
-        <Paper sx={{ height: "100%", width: "100%" }}>xdd</Paper>
+        <Paper sx={{ height: "100%", width: "100%" }}>{currentChatRoom}</Paper>
       </Grid>
     </Grid>
   );
