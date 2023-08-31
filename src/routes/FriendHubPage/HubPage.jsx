@@ -1,4 +1,8 @@
-import { Grid, List, ListItem, ListItemButton, ListItemText, ListSubheader, Paper } from "@mui/material";
+import { Divider, Grid, List, ListItem, ListItemButton, ListItemText, ListSubheader, Paper, Stack, Typography } from "@mui/material";
+import ChannelList from "components/Chat/ChannelList";
+import ChatArea from "components/Chat/ChatArea";
+import ChatInput from "components/Chat/ChatInput";
+import UserList from "components/Chat/UserList";
 import React from "react";
 
 function ChatList({ currentChatRoom, setCurrentChatRoom }) {
@@ -46,6 +50,17 @@ function ChatList({ currentChatRoom, setCurrentChatRoom }) {
   );
 }
 
+// Sub-component ChatBlock
+const ChatBlock = ({ title, children }) => (
+  <Paper sx={{ height: "100%", width: "20%", flexGrow: 1, position: "relative" }}>
+    <Typography align="center" variant="h5">
+      {title}
+    </Typography>
+    <Divider />
+    {children}
+  </Paper>
+);
+
 function HubPage() {
   const [currentChatRoom, setCurrentChatRoom] = React.useState("none");
 
@@ -55,7 +70,24 @@ function HubPage() {
         <ChatList currentChatRoom={currentChatRoom} setCurrentChatRoom={setCurrentChatRoom} />
       </Grid>
       <Grid item xs={false} sm={7.25} md={9} display="flex" sx={{ overflow: "hidden", height: "100%" }}>
-        <Paper sx={{ height: "100%", width: "100%" }}>{currentChatRoom}</Paper>
+        <Paper sx={{ height: "100%", width: "100%" }}>
+          {currentChatRoom}
+          <Stack spacing={2} direction="row" sx={{ height: "100%", width: "100%" }}>
+            <ChatBlock title="Chat Rooms">
+              <ChannelList channels={channels} setCurrentChannel={setCurrentChannel} />
+            </ChatBlock>
+            <Paper sx={{ height: "100%", width: "60%", flexGrow: 1, position: "relative", display: "flex", flexDirection: "column" }}>
+              <Typography align="center" variant="h5">
+                {currentChannel}
+              </Typography>
+              <Divider />
+              <Box sx={{ width: "100%", flexGrow: 1, position: "relative", mb: 1 }}>
+                <ChatArea messages={messages} />
+              </Box>
+              <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} />
+            </Paper>
+          </Stack>
+        </Paper>
       </Grid>
     </Grid>
   );
