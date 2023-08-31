@@ -1,4 +1,6 @@
-import { Divider, Grid, List, ListItem, ListItemButton, ListItemText, ListSubheader, Paper, Stack, Typography } from "@mui/material";
+import { Box, Divider, List, ListItem, ListItemButton, ListItemText, ListSubheader, Paper, Stack, Typography } from "@mui/material";
+import { styled } from "@mui/material/styles";
+import Grid from "@mui/material/Unstable_Grid2";
 import ChannelList from "components/Chat/ChannelList";
 import ChatArea from "components/Chat/ChatArea";
 import ChatInput from "components/Chat/ChatInput";
@@ -33,7 +35,6 @@ function ChatList({ currentChatRoom, setCurrentChatRoom }) {
               {["phantompigz", "future_wizard", "Ranahan"].map((chatName) => (
                 <ListItemButton
                   selected={chatName == currentChatRoom}
-                  disabled={chatName == currentChatRoom}
                   key={`chat-${chatGroup}-${chatName}`}
                   onClick={() => {
                     setCurrentChatRoom(chatName);
@@ -61,35 +62,27 @@ const ChatBlock = ({ title, children }) => (
   </Paper>
 );
 
+const Item = styled(Paper)(({ theme }) => ({
+  ...theme.typography.body2,
+  padding: theme.spacing(1),
+  textAlign: "center",
+  color: theme.palette.text.secondary,
+}));
+
 function HubPage() {
   const [currentChatRoom, setCurrentChatRoom] = React.useState("none");
 
   return (
-    <Grid container spacing={2} sx={{ justifyContent: "center", display: "flex", overflow: "hidden" }} rowGap={10000}>
-      <Grid item xs={12} sm={4.75} md={3} display="flex" sx={{ overflow: "hidden", height: "100%" }}>
-        <ChatList currentChatRoom={currentChatRoom} setCurrentChatRoom={setCurrentChatRoom} />
+    <Box sx={{ flexGrow: 1, display: "flex" }}>
+      <Grid container spacing={2} sx={{ flexGrow: 1 }}>
+        <Grid xs={12} sm={4.75} md={3} sx={{ height: "100%" }}>
+          <ChatList currentChatRoom={currentChatRoom} setCurrentChatRoom={setCurrentChatRoom} />
+        </Grid>
+        <Grid sm={7.25} md={9}>
+          <Item sx={{ height: "100%" }}>{currentChatRoom}</Item>
+        </Grid>
       </Grid>
-      <Grid item xs={false} sm={7.25} md={9} display="flex" sx={{ overflow: "hidden", height: "100%" }}>
-        <Paper sx={{ height: "100%", width: "100%" }}>
-          {currentChatRoom}
-          <Stack spacing={2} direction="row" sx={{ height: "100%", width: "100%" }}>
-            <ChatBlock title="Chat Rooms">
-              <ChannelList channels={channels} setCurrentChannel={setCurrentChannel} />
-            </ChatBlock>
-            <Paper sx={{ height: "100%", width: "60%", flexGrow: 1, position: "relative", display: "flex", flexDirection: "column" }}>
-              <Typography align="center" variant="h5">
-                {currentChannel}
-              </Typography>
-              <Divider />
-              <Box sx={{ width: "100%", flexGrow: 1, position: "relative", mb: 1 }}>
-                <ChatArea messages={messages} />
-              </Box>
-              <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} />
-            </Paper>
-          </Stack>
-        </Paper>
-      </Grid>
-    </Grid>
+    </Box>
   );
 }
 
