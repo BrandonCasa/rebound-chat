@@ -68,7 +68,7 @@ function ChatPage() {
     <Box sx={{ display: "flex", justifyContent: "center", flexGrow: 1 }}>
       <Stack spacing={2} direction="row" sx={{ height: "100%", width: "100%" }}>
         <ChatBlock title="Chat Rooms">
-          <ChannelList channels={channels} setCurrentChannel={setCurrentChannel} />
+          <ChannelList channels={channels} setCurrentChannel={setCurrentChannel} setMessages={setMessages} />
         </ChatBlock>
         <Paper sx={{ height: "100%", width: "60%", flexGrow: 1, position: "relative", display: "flex", flexDirection: "column" }}>
           <Typography align="center" variant="h5">

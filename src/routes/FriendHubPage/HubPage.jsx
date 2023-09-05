@@ -5,9 +5,11 @@ import ChannelList from "components/Chat/ChannelList";
 import ChatArea from "components/Chat/ChatArea";
 import ChatInput from "components/Chat/ChatInput";
 import UserList from "components/Chat/UserList";
-import React from "react";
+import { socket } from "helpers/socket";
+import React, { useEffect, useState } from "react";
+import { useSelector } from "react-redux";
 
-function ChatList({ currentChatRoom, setCurrentChatRoom }) {
+function ChatList({ currentChatRoom, setCurrentChatRoom, setMessages }) {
   return (
     <Paper
       sx={{
@@ -37,6 +39,7 @@ function ChatList({ currentChatRoom, setCurrentChatRoom }) {
                   selected={chatName == currentChatRoom}
                   key={`chat-${chatGroup}-${chatName}`}
                   onClick={() => {
+                    setMessages([]);
                     setCurrentChatRoom(chatName);
                   }}
                 >
@@ -51,17 +54,6 @@ function ChatList({ currentChatRoom, setCurrentChatRoom }) {
   );
 }
 
-// Sub-component ChatBlock
-const ChatBlock = ({ title, children }) => (
-  <Paper sx={{ height: "100%", width: "20%", flexGrow: 1, position: "relative" }}>
-    <Typography align="center" variant="h5">
-      {title}
-    </Typography>
-    <Divider />
-    {children}
-  </Paper>
-);
-
 const Item = styled(Paper)(({ theme }) => ({
   ...theme.typography.body2,
   padding: theme.spacing(1),
@@ -70,16 +62,63 @@ const Item = styled(Paper)(({ theme }) => ({
 }));
 
 function HubPage() {
-  const [currentChatRoom, setCurrentChatRoom] = React.useState("none");
+  const [message, setMessage] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [currentChatRoom, setCurrentChatRoom] = useState("phantompigz");
+  const [users, setUsers] = useState([]);
+
+  const authState = useSelector((state) => state.auth);
+
+  useEffect(() => {
+    socket.connect();
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    socket.emit("join", { username: authState.loggedIn ? authState.displayName : `User-${Math.round(Math.random() * 1000 + 1)}`, room: currentChatRoom });
+
+    socket.on("message", (message) => {
+      setMessages((messages) => [...messages, message]);
+    });
+
+    socket.on("roomData", ({ users }) => {
+      setUsers(users);
+    });
+
+    return () => {
+      socket.off("message");
+      socket.off("roomData");
+    };
+  }, [currentChatRoom, authState.loggedIn]);
+
+  const sendMessage = (event) => {
+    if (event) event.preventDefault();
+
+    if (message) {
+      socket.emit("sendMessage", message, () => setMessage(""));
+    }
+  };
 
   return (
     <Box sx={{ flexGrow: 1, display: "flex" }}>
       <Grid container spacing={2} sx={{ flexGrow: 1 }}>
         <Grid xs={12} sm={4.75} md={3} sx={{ height: "100%" }}>
-          <ChatList currentChatRoom={currentChatRoom} setCurrentChatRoom={setCurrentChatRoom} />
+          <ChatList currentChatRoom={currentChatRoom} setCurrentChatRoom={setCurrentChatRoom} setMessages={setMessages} />
         </Grid>
         <Grid sm={7.25} md={9}>
-          <Item sx={{ height: "100%" }}>{currentChatRoom}</Item>
+          <Item sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+            <Typography align="center" variant="h5">
+              {currentChatRoom}
+            </Typography>
+            <Divider />
+            <Box sx={{ width: "100%", flexGrow: 1, position: "relative", mb: 1 }}>
+              <ChatArea messages={messages} />
+            </Box>
+            <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} />
+          </Item>
         </Grid>
       </Grid>
     </Box>
