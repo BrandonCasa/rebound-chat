@@ -68,8 +68,12 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
             <Icons.PeopleAltRounded />
           </ListItemIcon>
         </ListItemWithTooltip>
-        <ListItemWithTooltip key="Messages" title="Messages" placement="right">
-          <ListItemIcon>
+        <ListItemWithTooltip key="Chat" title="Chat" placement="right">
+          <ListItemIcon
+            onClick={() => {
+              navigate("/chat");
+            }}
+          >
             <Icons.MessageRounded />
           </ListItemIcon>
         </ListItemWithTooltip>
