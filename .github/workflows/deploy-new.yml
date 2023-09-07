@@ -53,7 +53,7 @@ jobs:
           node-version: 18.x
 
       - name: Cache node modules
-        uses: actions/cache@v3.2.6
+        uses: actions/cache@v3.3.2
         with:
           path: '**/node_modules'
           key: ${{ runner.os }}-modules-${{ hashFiles('**/package-lock.json') }}
