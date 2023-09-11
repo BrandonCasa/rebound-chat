@@ -70,6 +70,7 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
         </ListItemWithTooltip>
         <ListItemWithTooltip key="Chat" title="Chat" placement="right">
           <ListItemIcon
+            sx={{ opacity: window.location.pathname.toString() === "/chat" ? "0.5" : "1.0" }}
             onClick={() => {
               navigate("/chat");
             }}
