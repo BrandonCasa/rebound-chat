@@ -3,7 +3,7 @@ import { Dialog, Box, Typography, TextField, DialogActions, Button, FormGroup, F
 import { useDispatch, useSelector } from "react-redux";
 import { setDialogOpened } from "../reducers/dialogReducer";
 import { setAuthState, setLoggedIn } from "../reducers/authReducer";
-import axios from 'axios';
+import axios from "axios";
 
 const LoginDialog = () => {
   const loginDialogState = useSelector((state) => state.dialogs.loginDialogOpen);
@@ -14,28 +14,27 @@ const LoginDialog = () => {
   const [stayLoggedIn, setStayLoggedIn] = useState(true);
 
   const handleUserLogin = () => {
-    const requestString = !process.env.NODE_ENV || process.env.NODE_ENV === "development" 
-    ? "http://localhost:6001/api/auth/login/"
-    : "/api/auth/login/";
+    const requestString = !process.env.NODE_ENV || process.env.NODE_ENV === "development" ? "http://localhost:6001/api/auth/login/" : "/api/auth/login/";
 
-    axios.post(requestString, {
-      username,
-      password,
-      stayLoggedIn,
-    })
-    .then((res) => {
-      if (res.status === 200) {
-        const authToken = res.data;
-        window.localStorage.setItem("auth-token", authToken);
-        dispatch(setAuthState({ authToken }));
-        dispatch(setLoggedIn({ loggedIn: true }));
-        dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
-      }
-    })
-    .catch((error) => {
-      console.log(error);
-    });
-  }
+    axios
+      .post(requestString, {
+        username,
+        password,
+        stayLoggedIn,
+      })
+      .then((res) => {
+        if (res.status === 200) {
+          const authToken = res.data;
+          window.localStorage.setItem("auth-token", authToken);
+          dispatch(setAuthState({ authToken }));
+          dispatch(setLoggedIn({ loggedIn: true }));
+          dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
+        }
+      })
+      .catch((error) => {
+        console.log(error);
+      });
+  };
 
   return (
     <Dialog open={loginDialogState} onClose={() => dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }))}>
