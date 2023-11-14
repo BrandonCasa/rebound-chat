@@ -8,29 +8,28 @@ const logger = require("../logging/logger");
 const rateLimit = require("express-rate-limit");
 
 const registerLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  windowMs: 5 * 60 * 1000,
   max: 5,
-  message: "Too many accounts created from this IP, please try again after an hour",
+  message: "Too many accounts created from this IP, please try again after 5 minutes",
 });
 
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  windowMs: 5 * 60 * 1000,
   max: 5,
-  message: "Too many login attempts from this IP, please try again after an hour",
+  message: "Too many login attempts from this IP, please try again after 5 minutes",
 });
 
 // Create express router
 const router = express.Router();
 
 // User model
-const User = mongoose.model(
-  "User",
-  new mongoose.Schema({
-    username: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
-    displayName: { type: String, required: true },
-  })
-);
+const UserSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  displayName: { type: String, required: true },
+});
+
+const User = mongoose.model("User", UserSchema);
 
 // Validation rules
 const registerRules = [
@@ -162,4 +161,4 @@ router.post("/login", loginLimiter, loginRules, async (req, res) => {
   }
 });
 
-module.exports = { router, User };
+module.exports = { router, User, UserSchema };

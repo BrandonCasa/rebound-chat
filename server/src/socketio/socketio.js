@@ -1,3 +1,6 @@
+const chatRoomSuite = require("../routes/chatroom.js");
+const ChatRoom = chatRoomSuite.ChatRoom;
+
 function initiateSocketIO(io) {
   let users = {};
 
@@ -9,6 +12,8 @@ function initiateSocketIO(io) {
     socket.on("join", ({ loggedIn, username, displayName, room }) => {
       socket.join(room);
 
+      chatRoomSuite.addRoom(room);
+
       // store the username and room associated with this client
       users[socket.id] = { loggedIn, username, displayName, room };
 
@@ -19,6 +24,7 @@ function initiateSocketIO(io) {
       // broadcast a message to the room that a new user has joined
       // socket.broadcast.to(room).emit("message", { user: `System`, text: `${username}, entered the room!` });
       emitMessage(room, false, "System", "System", `${displayName}, entered the room.`);
+      // chatRoomSuite.addMessage(room, "System", `${displayName}, entered the room.`); // move to use future system user
     });
 
     socket.on("sendMessage", (message, callback) => {
@@ -26,6 +32,10 @@ function initiateSocketIO(io) {
 
       // send the message to all clients in the room
       emitMessage(room, loggedIn, username, displayName, message);
+      if (loggedIn) {
+        // Should do it regardless but i need a way to fix anon and system users
+        chatRoomSuite.addMessage(room, username, message);
+      }
 
       callback(); // acknowledge that the message was sent
     });
@@ -43,6 +53,7 @@ function initiateSocketIO(io) {
 
       // broadcast a message to the room that a user has left
       emitMessage(room, false, "System", "System", `${displayName}, left the room.`);
+      // chatRoomSuite.addMessage(room, "System", `${displayName}, left the room.`); // move to use future system user
     });
   });
 }
