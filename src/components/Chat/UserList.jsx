@@ -6,7 +6,7 @@ function UserList({ users }) {
     <List>
       {users.map((user, index) => (
         <ListItem key={index}>
-          <ListItemText primary={user.username} />
+          <ListItemText primary={user.displayName} />
         </ListItem>
       ))}
     </List>

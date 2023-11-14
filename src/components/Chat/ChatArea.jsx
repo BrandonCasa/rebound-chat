@@ -12,20 +12,21 @@ const styles = {
 };
 
 const ConstructedMessages = memo(function ConstructedMessages({ relevantMsgs, editMessage, deleteMessage }) {
+  console.log(relevantMsgs);
   let lastSender = null;
 
   return relevantMsgs.map((msg, index) => {
-    const shouldDisplayAvatar = lastSender !== msg.user;
-    lastSender = msg.user;
+    const shouldDisplayAvatar = lastSender !== msg.username;
+    lastSender = msg.username;
 
     return (
       <ListItem key={msg.id} disablePadding>
         {shouldDisplayAvatar && (
           <ListItemAvatar>
-            <Avatar>{msg.user[0]}</Avatar>
+            <Avatar>{msg.loggedIn ? msg.displayName[0] : msg.displayName.split("-")[1]}</Avatar>
           </ListItemAvatar>
         )}
-        <ListItemText primary={shouldDisplayAvatar ? msg.user : ""} secondary={msg.text} sx={shouldDisplayAvatar ? {} : styles.arrowBox} />
+        <ListItemText primary={shouldDisplayAvatar ? msg.displayName : ""} secondary={msg.messageText} sx={shouldDisplayAvatar ? {} : styles.arrowBox} />
       </ListItem>
     );
   });

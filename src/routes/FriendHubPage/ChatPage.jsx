@@ -40,9 +40,17 @@ function ChatPage() {
   }, []);
 
   useEffect(() => {
-    socket.emit("join", { username: authState.loggedIn ? authState.displayName : `User-${Math.round(Math.random() * 1000 + 1)}`, room: currentChannel });
+    let randomId = Math.round(Math.random() * 100 + 1);
+
+    socket.emit("join", {
+      loggedIn: authState.loggedIn,
+      username: authState.loggedIn ? authState.username : `User-${randomId}`,
+      displayName: authState.loggedIn ? authState.displayName : `Anon-${randomId}`,
+      room: currentChannel,
+    });
 
     socket.on("message", (message) => {
+      console.log(message);
       setMessages((messages) => [...messages, message]);
     });
 

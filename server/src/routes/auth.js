@@ -1,7 +1,7 @@
 // Required packages
 const express = require("express");
 const jwt = require("jsonwebtoken");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
 const { body, validationResult } = require("express-validator");
 const logger = require("../logging/logger");
