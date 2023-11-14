@@ -4,5 +4,6 @@
     "strings": true
   },
   "emmet.triggerExpansionOnTab": true,
-  "emmet.includeLanguages": { "javascript": "javascriptreact" }
+  "emmet.includeLanguages": { "javascript": "javascriptreact" },
+  "bun.debugTerminal.enabled": true
 }
