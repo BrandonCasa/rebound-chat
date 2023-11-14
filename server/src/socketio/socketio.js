@@ -2,7 +2,7 @@ function initiateSocketIO(io) {
   let users = {};
 
   const emitMessage = (room, loggedIn, username, displayName, messageText) => {
-    io.to(room).emit("message", { username, displayName, messageText });
+    io.to(room).emit("message", { loggedIn, username, displayName, messageText });
   };
 
   io.on("connection", (socket) => {

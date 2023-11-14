@@ -21,7 +21,7 @@ const authSlice = createSlice({
         state.loggedIn = action.payload.loggedIn;
       }
       if (action.payload.username !== undefined) {
-        state.username = action.payload.useranme;
+        state.username = action.payload.username;
       }
       if (action.payload.displayName !== undefined) {
         state.displayName = action.payload.displayName;
