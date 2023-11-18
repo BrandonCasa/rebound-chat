@@ -4,15 +4,15 @@ const ChatRoom = chatRoomSuite.ChatRoom;
 function initiateSocketIO(io) {
   let users = {};
 
-  const emitMessage = (room, loggedIn, username, displayName, messageText) => {
-    io.to(room).emit("message", { loggedIn, username, displayName, messageText });
+  const emitMessage = (room, loggedIn, username, displayName, messageText, messageId) => {
+    io.to(room).emit("message", { loggedIn, username, displayName, messageText, messageId });
   };
 
   io.on("connection", (socket) => {
-    socket.on("join", ({ loggedIn, username, displayName, room }) => {
+    socket.on("join", async ({ loggedIn, username, displayName, room }) => {
       socket.join(room);
 
-      chatRoomSuite.addRoom(room);
+      await chatRoomSuite.addRoom(room);
 
       // store the username and room associated with this client
       users[socket.id] = { loggedIn, username, displayName, room };
@@ -21,26 +21,34 @@ function initiateSocketIO(io) {
       const usersInRoom = Object.values(users).filter((user) => user.room === room);
       io.to(room).emit("roomData", { users: usersInRoom });
 
-      // broadcast a message to the room that a new user has joined
-      // socket.broadcast.to(room).emit("message", { user: `System`, text: `${username}, entered the room!` });
-      emitMessage(room, false, "System", "System", `${displayName}, entered the room.`);
-      // chatRoomSuite.addMessage(room, "System", `${displayName}, entered the room.`); // move to use future system user
+      let messageId = await chatRoomSuite.addMessage(room, "System", `${displayName}, entered the room.`);
+      emitMessage(room, false, "System", "System", `${displayName}, entered the room.`, messageId);
     });
 
-    socket.on("sendMessage", (message, callback) => {
+    socket.on("sendMessage", async (message, callback) => {
+      if (users[socket.id] === undefined) return;
       const { loggedIn, username, displayName, room } = users[socket.id];
 
       // send the message to all clients in the room
-      emitMessage(room, loggedIn, username, displayName, message);
-      if (loggedIn) {
-        // Should do it regardless but i need a way to fix anon and system users
-        chatRoomSuite.addMessage(room, username, message);
-      }
+      let messageId = await chatRoomSuite.addMessage(room, username, message);
+      emitMessage(room, loggedIn, username, displayName, message, messageId);
 
       callback(); // acknowledge that the message was sent
     });
 
-    socket.on("disconnect", () => {
+    socket.on("loadMessages", async (startFromId, callback) => {
+      if (users[socket.id] === undefined) return;
+      const { loggedIn, username, displayName, room } = users[socket.id];
+
+
+      let messages = await chatRoomSuite.retrieveMessages(room, startFromId);
+
+      socket.emit("messagesRetrieved", { messages: messages, mergeOn: startFromId });
+
+      callback(); // acknowledge that the message was sent
+    });
+
+    socket.on("disconnect", async () => {
       if (!users[socket.id]) return;
       const { loggedIn, username, displayName, room } = users[socket.id];
 
@@ -51,9 +59,23 @@ function initiateSocketIO(io) {
       const usersInRoom = Object.values(users).filter((user) => user.room === room);
       io.to(room).emit("roomData", { users: usersInRoom });
 
-      // broadcast a message to the room that a user has left
-      emitMessage(room, false, "System", "System", `${displayName}, left the room.`);
-      // chatRoomSuite.addMessage(room, "System", `${displayName}, left the room.`); // move to use future system user
+      let messageId = await chatRoomSuite.addMessage(room, "System", `${displayName}, left the room.`);
+      emitMessage(room, false, "System", "System", `${displayName}, left the room.`, messageId);
+    });
+
+    socket.on("close", async (reason) => {
+      if (!users[socket.id]) return;
+      const { loggedIn, username, displayName, room } = users[socket.id];
+
+      // remove this user from the users object
+      delete users[socket.id];
+
+      // send users list to all clients in the room
+      const usersInRoom = Object.values(users).filter((user) => user.room === room);
+      io.to(room).emit("roomData", { users: usersInRoom });
+
+      let messageId = await chatRoomSuite.addMessage(room, "System", `${displayName}, left the room.`);
+      emitMessage(room, false, "System", "System", `${displayName}, left the room.`, messageId);
     });
   });
 }

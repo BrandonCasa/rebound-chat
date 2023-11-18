@@ -16,11 +16,11 @@ const ConstructedMessages = memo(function ConstructedMessages({ relevantMsgs, ed
   let lastSender = null;
 
   return relevantMsgs.map((msg, index) => {
-    const shouldDisplayAvatar = lastSender !== msg.username;
-    lastSender = msg.username;
+    const shouldDisplayAvatar = lastSender !== msg.displayName;
+    lastSender = msg.displayName;
 
     return (
-      <ListItem key={msg.id || `${msg.username}-${Math.floor(Math.random() * 10000)}`} disablePadding>
+      <ListItem key={index} disablePadding>
         {shouldDisplayAvatar && (
           <ListItemAvatar>
             <Avatar>{msg.loggedIn ? msg.displayName[0] : msg.displayName.split("-")[1]}</Avatar>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Box, Divider, Paper, Stack, Typography } from "@mui/material";
+import { Box, Button, Divider, Paper, Stack, Typography } from "@mui/material";
 import { socket } from "helpers/socket";
 import UserList from "components/Chat/UserList";
 import ChannelList from "components/Chat/ChannelList";
@@ -29,15 +29,71 @@ function ChatPage() {
   const [currentChannel, setCurrentChannel] = useState(INITIAL_CHANNEL);
   const [users, setUsers] = useState([]);
 
+  const [retrieved, setRetrieved] = useState(false);
+
   const authState = useSelector((state) => state.auth);
+
+  const retrieveMessages = () => {
+    socket.emit("loadMessages", messages[messages.length - 1].messageId, () => {});
+  };
 
   useEffect(() => {
     socket.connect();
 
+    socket.on("message", (message) => {
+      setMessages((messages) => [...messages, ...[message]]);
+      console.log(messages);
+    });
+
+    socket.on("roomData", ({ users }) => {
+      setUsers(users);
+    });
+
+    socket.on("messagesRetrieved", (retrievedContents) => {
+      let newMessages = [];
+
+      retrievedContents.messages.forEach((val, ind) => {
+        if (val.userSenderRef !== undefined) {
+          newMessages.push({
+            displayName: val.userSenderRef.displayName,
+            loggedIn: true,
+            messageText: val.messageContents,
+            messageId: val._id,
+            username: val.userSenderRef.username,
+          });
+        } else {
+          newMessages.push({
+            displayName: val.bot ? "System" : `Anon-${val.altSenderRef.split("-")[1]}`,
+            loggedIn: false,
+            messageText: val.messageContents,
+            messageId: val._id,
+            username: val.altSenderRef.username,
+          });
+        }
+      });
+
+      setMessages((messages) => {
+        return [...newMessages, ...messages];
+      });
+    });
+
+    //retrieveMessages();
+
     return () => {
+      socket.off("message");
+      socket.off("roomData");
+      socket.off("messagesRetrieved");
       socket.disconnect();
     };
   }, []);
+
+  useEffect(() => {
+    if (messages.length === 1 && !retrieved) {
+      retrieveMessages();
+      setRetrieved(true);
+    }
+    return () => {};
+  }, [messages]);
 
   useEffect(() => {
     let randomId = Math.round(Math.random() * 100 + 1);
@@ -49,18 +105,7 @@ function ChatPage() {
       room: currentChannel,
     });
 
-    socket.on("message", (message) => {
-      setMessages((messages) => [...messages, message]);
-    });
-
-    socket.on("roomData", ({ users }) => {
-      setUsers(users);
-    });
-
-    return () => {
-      socket.off("message");
-      socket.off("roomData");
-    };
+    return () => {};
   }, [currentChannel, authState.loggedIn]);
 
   const sendMessage = (event) => {

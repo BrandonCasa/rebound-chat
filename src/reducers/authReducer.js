@@ -5,6 +5,7 @@ const initialState = {
   loggedIn: false,
   username: "",
   displayName: "",
+  loggingIn: true,
 };
 
 const authSlice = createSlice({
@@ -19,6 +20,7 @@ const authSlice = createSlice({
     setLoggedIn: (state, action) => {
       if (action.payload.loggedIn !== undefined) {
         state.loggedIn = action.payload.loggedIn;
+        state.loggingIn = false;
       }
       if (action.payload.username !== undefined) {
         state.username = action.payload.username;
@@ -27,8 +29,11 @@ const authSlice = createSlice({
         state.displayName = action.payload.displayName;
       }
     },
+    setLoggingIn: (state, action) => {
+      state.loggingIn = action.payload.loggingIn;
+    },
   },
 });
 
-export const { setAuthState, setLoggedIn } = authSlice.actions;
+export const { setAuthState, setLoggedIn, setLoggingIn } = authSlice.actions;
 export default authSlice.reducer;
