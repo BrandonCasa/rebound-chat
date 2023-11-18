@@ -12,7 +12,7 @@ const styles = {
 };
 
 const ConstructedMessages = memo(function ConstructedMessages({ relevantMsgs, editMessage, deleteMessage }) {
-  console.log(relevantMsgs);
+  // console.log(relevantMsgs);
   let lastSender = null;
 
   return relevantMsgs.map((msg, index) => {
@@ -20,7 +20,7 @@ const ConstructedMessages = memo(function ConstructedMessages({ relevantMsgs, ed
     lastSender = msg.username;
 
     return (
-      <ListItem key={msg.id} disablePadding>
+      <ListItem key={msg.id || `${msg.username}-${Math.floor(Math.random() * 10000)}`} disablePadding>
         {shouldDisplayAvatar && (
           <ListItemAvatar>
             <Avatar>{msg.loggedIn ? msg.displayName[0] : msg.displayName.split("-")[1]}</Avatar>

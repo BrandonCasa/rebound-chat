@@ -3,33 +3,21 @@ import * as Icons from "@mui/icons-material";
 import PropTypes from "prop-types";
 import { styled } from "@mui/material/styles";
 
-const MainBox = styled(Box)(({ theme, drawerOpen, drawerWidth }) => ({
+const MainBox = styled(Box)(({ theme }) => ({
   position: "absolute",
   flexGrow: 1,
   padding: 2,
   height: "100%",
   display: "flex",
   flexDirection: "column",
-  left: `${drawerOpen ? drawerWidth : 0}px`,
-  width: `calc(100% - ${drawerOpen ? drawerWidth : 0}px)`,
-  transition: `left ${drawerOpen ? theme.transitions.duration.leavingScreen : theme.transitions.duration.enteringScreen}ms, width ${
-    drawerOpen ? theme.transitions.duration.leavingScreen : theme.transitions.duration.enteringScreen
-  }ms`,
 }));
 
-const IconBox = styled(Box)(({ theme, drawerWidth, iconWidth }) => ({
+const IconBox = styled(Box)(({ theme }) => ({
   backgroundColor: theme.palette.primary.main,
   position: "fixed",
-  width: `${drawerWidth}px`,
-  height: `${drawerWidth}px`,
   left: 0,
   p: 0,
   top: 0,
-  ".MuiSvgIcon-root": {
-    color: theme.palette.text.primary,
-    width: `${iconWidth * 1.25}px`,
-    height: `${iconWidth * 1.25}px`,
-  },
 }));
 
 function MainContent({ drawerWidth, drawerOpen, theme, iconWidth, setDrawerOpen, children }) {
@@ -38,7 +26,16 @@ function MainContent({ drawerWidth, drawerOpen, theme, iconWidth, setDrawerOpen,
   };
 
   return (
-    <MainBox drawerOpen={drawerOpen} drawerWidth={drawerWidth} theme={theme}>
+    <MainBox
+      theme={theme}
+      sx={{
+        left: `${drawerOpen ? drawerWidth : 0}px`,
+        width: `calc(100% - ${drawerOpen ? drawerWidth : 0}px)`,
+        transition: `left ${drawerOpen ? theme.transitions.duration.leavingScreen : theme.transitions.duration.enteringScreen}ms, width ${
+          drawerOpen ? theme.transitions.duration.leavingScreen : theme.transitions.duration.enteringScreen
+        }ms`,
+      }}
+    >
       <Toolbar
         variant="dense"
         sx={{
@@ -46,7 +43,18 @@ function MainContent({ drawerWidth, drawerOpen, theme, iconWidth, setDrawerOpen,
           minHeight: drawerWidth,
         }}
       />
-      <IconBox drawerWidth={drawerWidth} theme={theme} iconWidth={iconWidth}>
+      <IconBox
+        theme={theme}
+        sx={{
+          width: `${drawerWidth}px`,
+          height: `${drawerWidth}px`,
+          ".MuiSvgIcon-root": {
+            color: theme.palette.text.primary,
+            width: `${iconWidth * 1.25}px`,
+            height: `${iconWidth * 1.25}px`,
+          },
+        }}
+      >
         <Tooltip title="Maximize" placement="right">
           <IconButton
             sx={{
