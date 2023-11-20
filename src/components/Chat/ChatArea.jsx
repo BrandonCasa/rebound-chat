@@ -1,7 +1,10 @@
-import React, { useState, memo } from "react";
+import React, { useState, memo, Component } from "react";
 import { Box, List, ListItem, ListItemAvatar, ListItemText, Avatar, IconButton, Menu, MenuItem } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import SecurityIcon from "@mui/icons-material/Security";
+import UserIcon from "@mui/icons-material/Person";
+import AnonIcon from "@mui/icons-material/QuestionMark";
 import { scrollbarStyles } from "routes/LandingPage/utils/scrollbarStyles";
 import { isMobile, isSafari } from "react-device-detect";
 
@@ -15,15 +18,39 @@ const ConstructedMessages = memo(function ConstructedMessages({ relevantMsgs, ed
   // console.log(relevantMsgs);
   let lastSender = null;
 
+  const avatarIcons = {
+    system: SecurityIcon,
+    user: UserIcon,
+    anon: AnonIcon,
+  };
+
   return relevantMsgs.map((msg, index) => {
     const shouldDisplayAvatar = lastSender !== msg.displayName;
     lastSender = msg.displayName;
+
+    let avatar = "";
+    let displayedName = "";
+
+    if (msg.username === "System") {
+      avatar = "system";
+      displayedName = "System";
+    } else if (msg.loggedIn) {
+      avatar = "user";
+      displayedName = msg.displayName;
+    } else {
+      avatar = "anon";
+      displayedName = msg.displayName;
+    }
+
+    const AvatarIcon = avatarIcons[avatar];
 
     return (
       <ListItem key={index} disablePadding>
         {shouldDisplayAvatar && (
           <ListItemAvatar>
-            <Avatar>{msg.loggedIn ? msg.displayName[0] : msg.displayName.split("-")[1]}</Avatar>
+            <Avatar>
+              <AvatarIcon />
+            </Avatar>
           </ListItemAvatar>
         )}
         <ListItemText primary={shouldDisplayAvatar ? msg.displayName : ""} secondary={msg.messageText} sx={shouldDisplayAvatar ? {} : styles.arrowBox} />

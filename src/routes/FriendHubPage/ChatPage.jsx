@@ -1,18 +1,19 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Box, Button, Divider, Paper, Stack, Typography } from "@mui/material";
-import { socket } from "helpers/socket";
+import { socket } from "helpers/socket"; // Assuming socket is a default export
 import UserList from "components/Chat/UserList";
 import ChannelList from "components/Chat/ChannelList";
 import ChatArea from "components/Chat/ChatArea";
 import ChatInput from "components/Chat/ChatInput";
 import { useSelector } from "react-redux";
 
-// Defined Constants
+// Constants moved outside the component, to avoid re-declaration on re-renders
 const INITIAL_CHANNELS = ["General", "Tech", "Random"];
 const INITIAL_CHANNEL = "General";
 
-// Sub-component ChatBlock
-const ChatBlock = ({ title, children }) => (
+// Refactoring ChatBlock into a separate component file is recommended if it's used outside ChatPage.
+// Memoized to prevent unnecessary re-renders
+const ChatBlock = React.memo(({ title, children }) => (
   <Paper sx={{ height: "100%", width: "20%", flexGrow: 1, position: "relative" }}>
     <Typography align="center" variant="h5">
       {title}
@@ -20,68 +21,61 @@ const ChatBlock = ({ title, children }) => (
     <Divider />
     {children}
   </Paper>
-);
+));
 
 function ChatPage() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
-  const [channels, setChannels] = useState(INITIAL_CHANNELS);
+  const [channels] = useState(INITIAL_CHANNELS); // Channels array is static, no need for a setter
   const [currentChannel, setCurrentChannel] = useState(INITIAL_CHANNEL);
   const [users, setUsers] = useState([]);
-
   const [retrieved, setRetrieved] = useState(false);
-
   const authState = useSelector((state) => state.auth);
 
-  const retrieveMessages = () => {
-    socket.emit("loadMessages", messages[messages.length - 1].messageId, () => {});
-  };
+  // useCallback to memoize the function and prevent infinite loops in useEffect
+  const retrieveMessages = useCallback(() => {
+    socket.emit("loadMessages", messages[messages.length - 1]?.messageId, () => {});
+  }, [messages]);
 
+  // Handle socket connections and events
   useEffect(() => {
     socket.connect();
 
-    socket.on("message", (message) => {
-      setMessages((messages) => [...messages, ...[message]]);
-    });
+    const handleNewMessage = (message) => setMessages((prevMessages) => [...prevMessages, message]);
 
-    socket.on("roomData", ({ users }) => {
-      setUsers(users);
-    });
+    const updateRoomData = ({ users }) => setUsers(users);
 
-    socket.on("messagesRetrieved", (retrievedContents) => {
-      let newMessages = [];
-
-      retrievedContents.messages.forEach((val, ind) => {
-        if (val.userSenderRef !== undefined) {
-          newMessages.push({
-            displayName: val.userSenderRef.displayName,
-            loggedIn: true,
-            messageText: val.messageContents,
-            messageId: val._id,
-            username: val.userSenderRef.username,
-          });
+    const handleMessagesRetrieved = (retrievedContents) => {
+      const newMessages = retrievedContents.messages.map((val) => {
+        let displayedName = "";
+        if (val.bot) {
+          displayedName = "System";
+        } else if (val.anonymous) {
+          displayedName = `Anon-${val.altSenderRef.split("-")[1]}`;
         } else {
-          newMessages.push({
-            displayName: val.bot ? "System" : `Anon-${val.altSenderRef.split("-")[1]}`,
-            loggedIn: false,
-            messageText: val.messageContents,
-            messageId: val._id,
-            username: val.altSenderRef.username,
-          });
+          displayedName = val.userSenderRef?.displayName || "Error";
         }
+
+        return {
+          displayName: displayedName,
+          loggedIn: !!val.userSenderRef,
+          messageText: val.messageContents,
+          messageId: val._id,
+          username: val.userSenderRef?.username || val.altSenderRef,
+        };
       });
 
-      setMessages((messages) => {
-        return [...newMessages, ...messages];
-      });
-    });
+      setMessages((prevMessages) => [...newMessages, ...prevMessages]);
+    };
 
-    //retrieveMessages();
+    socket.on("message", handleNewMessage);
+    socket.on("roomData", updateRoomData);
+    socket.on("messagesRetrieved", handleMessagesRetrieved);
 
     return () => {
-      socket.off("message");
-      socket.off("roomData");
-      socket.off("messagesRetrieved");
+      socket.off("message", handleNewMessage);
+      socket.off("roomData", updateRoomData);
+      socket.off("messagesRetrieved", handleMessagesRetrieved);
       socket.disconnect();
     };
   }, []);
@@ -91,28 +85,31 @@ function ChatPage() {
       retrieveMessages();
       setRetrieved(true);
     }
-    return () => {};
-  }, [messages]);
+  }, [messages, retrieved, retrieveMessages]);
+
+  // Changed to useMemo to avoid new object creation on every render
+  const joinData = useMemo(
+    () => ({
+      loggedIn: authState.loggedIn,
+      username: authState.loggedIn ? authState.username : `User-${Math.round(Math.random() * 100 + 1)}`,
+      displayName: authState.loggedIn ? authState.displayName : `Anon-${Math.round(Math.random() * 100 + 1)}`,
+      room: currentChannel,
+    }),
+    [authState, currentChannel]
+  );
 
   useEffect(() => {
-    let randomId = Math.round(Math.random() * 100 + 1);
-
-    socket.emit("join", {
-      loggedIn: authState.loggedIn,
-      username: authState.loggedIn ? authState.username : `User-${randomId}`,
-      displayName: authState.loggedIn ? authState.displayName : `Anon-${randomId}`,
-      room: currentChannel,
-    });
+    socket.emit("join", joinData);
 
     return () => {
       socket.emit("leave", currentChannel, () => {
         setRetrieved(false);
       });
     };
-  }, [currentChannel, authState.loggedIn]);
+  }, [currentChannel, joinData]);
 
   const sendMessage = (event) => {
-    if (event) event.preventDefault();
+    event?.preventDefault(); // Optional chaining
 
     if (message) {
       socket.emit("sendMessage", message, () => setMessage(""));
@@ -143,4 +140,4 @@ function ChatPage() {
   );
 }
 
-export default ChatPage;
+export default React.memo(ChatPage); // Memoize the entire component to prevent unnecessary re-renders
