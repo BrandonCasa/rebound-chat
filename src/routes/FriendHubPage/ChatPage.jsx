@@ -42,7 +42,6 @@ function ChatPage() {
 
     socket.on("message", (message) => {
       setMessages((messages) => [...messages, ...[message]]);
-      console.log(messages);
     });
 
     socket.on("roomData", ({ users }) => {
@@ -105,7 +104,11 @@ function ChatPage() {
       room: currentChannel,
     });
 
-    return () => {};
+    return () => {
+      socket.emit("leave", currentChannel, () => {
+        setRetrieved(false);
+      });
+    };
   }, [currentChannel, authState.loggedIn]);
 
   const sendMessage = (event) => {

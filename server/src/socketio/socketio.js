@@ -1,7 +1,16 @@
+const { Server } = require("socket.io");
 const chatRoomSuite = require("../routes/chatroom.js");
+
 const ChatRoom = chatRoomSuite.ChatRoom;
 
-function initiateSocketIO(io) {
+function initiateSocketIO(server) {
+  const io = new Server(server, {
+    path: "/socket.io",
+    cors: {
+      origin: "http://localhost:3000",
+    },
+  });
+
   let users = {};
 
   const emitMessage = (room, loggedIn, username, displayName, messageText, messageId) => {
@@ -11,7 +20,6 @@ function initiateSocketIO(io) {
   io.on("connection", (socket) => {
     socket.on("join", async ({ loggedIn, username, displayName, room }) => {
       socket.join(room);
-
       await chatRoomSuite.addRoom(room);
 
       // store the username and room associated with this client
@@ -23,6 +31,23 @@ function initiateSocketIO(io) {
 
       let messageId = await chatRoomSuite.addMessage(room, "System", `${displayName}, entered the room.`);
       emitMessage(room, false, "System", "System", `${displayName}, entered the room.`, messageId);
+    });
+
+    socket.on("leave", (room, callback) => {
+      socket.leave(room);
+
+      delete users[socket.id];
+
+      const usersInRoom = Object.values(users).filter((user) => user.room === room);
+      io.to(room).emit("roomData", { users: usersInRoom });
+
+      callback();
+    });
+
+    socket.on("disconnecting", () => {
+      socket.rooms.forEach((room) => {
+        socket.leave(room);
+      })
     });
 
     socket.on("sendMessage", async (message, callback) => {

@@ -154,7 +154,7 @@ router.post("/login", loginLimiter, loginRules, async (req, res) => {
 
     // Create and assign a token
     const token = jwt.sign({ _id: user._id }, process.env.SECRET, { expiresIn: stayLoggedIn ? "365d" : "1h" });
-    res.header("auth-token", token).send(token);
+    res.send({ token, user });
   } catch (error) {
     logger.error(error);
     res.status(500).send("Internal Server Error");

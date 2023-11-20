@@ -58,7 +58,7 @@ function App() {
               <Route exact path="/" element={<LandingPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/chat" element={<ChatPage />} />
-              <Route path="/hub" element={<HubPage />} />
+              {false && <Route path="/hub" element={<HubPage />} />}
               <Route path="/test" element={<h1>{loggingInState.toString()}</h1>} />
               <Route path="*" element={<h1>404</h1>} />
             </Routes>

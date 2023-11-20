@@ -28,16 +28,9 @@ const verifyLimiter = rateLimit({
 
 const app = express();
 const server = http.createServer(app);
-const { Server } = require("socket.io");
 const { initiateSocketIO } = require("./socketio/socketio.js");
-const io = new Server(server, {
-  path: "/socket.io",
-  cors: {
-    origin: "http://localhost:3000",
-  },
-});
 
-initiateSocketIO(io);
+initiateSocketIO(server);
 
 app.use(cors());
 

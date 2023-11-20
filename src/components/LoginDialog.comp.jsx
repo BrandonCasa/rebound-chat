@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Dialog, Box, Typography, TextField, DialogActions, Button, FormGroup, FormControlLabel, Checkbox } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
 import { setDialogOpened } from "../reducers/dialogReducer";
-import { setAuthState, setLoggedIn } from "../reducers/authReducer";
+import { setAuthState, setLoggedIn, setLoggingIn } from "../reducers/authReducer";
 import axios from "axios";
 
 const LoginDialog = () => {
@@ -24,10 +24,11 @@ const LoginDialog = () => {
       })
       .then((res) => {
         if (res.status === 200) {
-          const authToken = res.data;
-          window.localStorage.setItem("auth-token", authToken);
-          dispatch(setAuthState({ authToken }));
+          const { token, user } = res.data;
+          window.localStorage.setItem("auth-token", token);
+          dispatch(setAuthState({ token }));
           dispatch(setLoggedIn({ loggedIn: true }));
+          dispatch(setLoggedIn({ loggedIn: true, username: user.username, displayName: user.displayName }));
           dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
         }
       })
