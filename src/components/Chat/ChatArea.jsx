@@ -1,51 +1,55 @@
-import React, { useState, memo, Component } from "react";
-import { Box, List, ListItem, ListItemAvatar, ListItemText, Avatar, IconButton, Menu, MenuItem } from "@mui/material";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
+import React, { useMemo } from "react";
+import { Box, List, ListItem, ListItemAvatar, ListItemText, Avatar, Typography } from "@mui/material";
 import SecurityIcon from "@mui/icons-material/Security";
 import UserIcon from "@mui/icons-material/Person";
 import AnonIcon from "@mui/icons-material/QuestionMark";
 import { scrollbarStyles } from "routes/LandingPage/utils/scrollbarStyles";
-import { isMobile, isSafari } from "react-device-detect";
 
-const styles = {
-  arrowBox: {
-    paddingLeft: "56px",
-  },
+const avatarIcons = {
+  system: SecurityIcon,
+  user: UserIcon,
+  anon: AnonIcon,
 };
 
-const ConstructedMessages = memo(function ConstructedMessages({ relevantMsgs, editMessage, deleteMessage }) {
-  // console.log(relevantMsgs);
+const getAvatarIcon = (msg) => {
+  if (msg.username === "System") {
+    return avatarIcons.system;
+  } else if (msg.loggedIn) {
+    return avatarIcons.user;
+  } else {
+    return avatarIcons.anon;
+  }
+};
+
+const formatDate = (timestamp) => {
+  const messageDate = new Date(timestamp);
+  const today = new Date();
+  const messageDateString = messageDate.toLocaleDateString();
+  const todayString = today.toLocaleDateString();
+  const timeString = messageDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+  return todayString === messageDateString ? `Today at ${timeString}` : `${messageDateString} at ${timeString}`;
+};
+
+const timeStampStyle = {
+  marginLeft: "8px",
+  display: "block",
+  color: "gray",
+  fontWeight: "normal",
+  fontSize: "0.8rem",
+};
+
+const ConstructedMessages = React.memo(function ConstructedMessages({ relevantMsgs }) {
   let lastSender = null;
 
-  const avatarIcons = {
-    system: SecurityIcon,
-    user: UserIcon,
-    anon: AnonIcon,
-  };
-
-  return relevantMsgs.map((msg, index) => {
+  return relevantMsgs.map((msg) => {
     const shouldDisplayAvatar = lastSender !== msg.displayName;
     lastSender = msg.displayName;
-
-    let avatar = "";
-    let displayedName = "";
-
-    if (msg.username === "System") {
-      avatar = "system";
-      displayedName = "System";
-    } else if (msg.loggedIn) {
-      avatar = "user";
-      displayedName = msg.displayName;
-    } else {
-      avatar = "anon";
-      displayedName = msg.displayName;
-    }
-
-    const AvatarIcon = avatarIcons[avatar];
+    const AvatarIcon = getAvatarIcon(msg);
+    const sendTimeFormatted = formatDate(msg.sendTime);
 
     return (
-      <ListItem key={index} disablePadding>
+      <ListItem key={msg.id || msg.sendTime} disablePadding sx={{ alignItems: "flex-start" }}>
         {shouldDisplayAvatar && (
           <ListItemAvatar>
             <Avatar>
@@ -53,31 +57,49 @@ const ConstructedMessages = memo(function ConstructedMessages({ relevantMsgs, ed
             </Avatar>
           </ListItemAvatar>
         )}
-        <ListItemText primary={shouldDisplayAvatar ? msg.displayName : ""} secondary={msg.messageText} sx={shouldDisplayAvatar ? {} : styles.arrowBox} />
+        <ListItemText
+          primary={
+            shouldDisplayAvatar && (
+              <>
+                <Typography component="span" style={{ display: "inline-block" }}>
+                  {msg.displayName}
+                </Typography>
+                <Typography component="span" style={{ display: "inline-block" }} sx={timeStampStyle}>
+                  {sendTimeFormatted}
+                </Typography>
+              </>
+            )
+          }
+          secondary={msg.messageText}
+          sx={{ paddingLeft: shouldDisplayAvatar ? "" : "56px", marginTop: "4px" }} // Adjust paddingLeft based on avatar display
+        />
       </ListItem>
     );
   });
 });
 
-function ChatArea({ messages, editMessage, deleteMessage }) {
+function ChatArea({ messages }) {
+  const boxStyles = useMemo(
+    () => ({
+      position: "absolute",
+      left: "0px",
+      top: "0px",
+      right: "0px",
+      bottom: "0px",
+      overflowX: "hidden",
+      overflowY: "auto",
+      padding: 1,
+      display: "flex",
+      flexDirection: "column-reverse",
+      ...scrollbarStyles,
+    }),
+    []
+  );
+
   return (
-    <Box
-      sx={{
-        position: "absolute",
-        left: "0px",
-        top: "0px",
-        right: "0px",
-        bottom: "0px",
-        overflowX: "hidden",
-        overflowY: "auto",
-        padding: 1,
-        display: "flex",
-        flexDirection: "column-reverse",
-        ...scrollbarStyles,
-      }}
-    >
+    <Box sx={boxStyles}>
       <List disablePadding>
-        <ConstructedMessages relevantMsgs={messages} editMessage={editMessage} deleteMessage={deleteMessage} />
+        <ConstructedMessages relevantMsgs={messages} />
       </List>
     </Box>
   );

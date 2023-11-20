@@ -13,8 +13,8 @@ function initiateSocketIO(server) {
 
   let users = {};
 
-  const emitMessage = (room, loggedIn, username, displayName, messageText, messageId) => {
-    io.to(room).emit("message", { loggedIn, username, displayName, messageText, messageId });
+  const emitMessage = (room, loggedIn, username, displayName, messageText, messageId, sendTime) => {
+    io.to(room).emit("message", { loggedIn, username, displayName, messageText, messageId, sendTime });
   };
 
   io.on("connection", (socket) => {
@@ -29,8 +29,11 @@ function initiateSocketIO(server) {
       const usersInRoom = Object.values(users).filter((user) => user.room === room);
       io.to(room).emit("roomData", { users: usersInRoom });
 
+      const d = new Date();
+      let sendTime = d.getTime();
+
       let messageId = await chatRoomSuite.addMessage(room, "System", `${displayName}, entered the room.`);
-      emitMessage(room, false, "System", "System", `${displayName}, entered the room.`, messageId);
+      emitMessage(room, false, "System", "System", `${displayName}, entered the room.`, messageId, sendTime);
     });
 
     socket.on("leave", (room, callback) => {
@@ -54,9 +57,12 @@ function initiateSocketIO(server) {
       if (users[socket.id] === undefined) return;
       const { loggedIn, username, displayName, room } = users[socket.id];
 
+      const d = new Date();
+      let sendTime = d.getTime();
+
       // send the message to all clients in the room
       let messageId = await chatRoomSuite.addMessage(room, username, message);
-      emitMessage(room, loggedIn, username, displayName, message, messageId);
+      emitMessage(room, loggedIn, username, displayName, message, messageId, sendTime);
 
       callback(); // acknowledge that the message was sent
     });
@@ -83,9 +89,6 @@ function initiateSocketIO(server) {
       // send users list to all clients in the room
       const usersInRoom = Object.values(users).filter((user) => user.room === room);
       io.to(room).emit("roomData", { users: usersInRoom });
-
-      let messageId = await chatRoomSuite.addMessage(room, "System", `${displayName}, left the room.`);
-      emitMessage(room, false, "System", "System", `${displayName}, left the room.`, messageId);
     });
 
     socket.on("close", async (reason) => {
@@ -98,9 +101,6 @@ function initiateSocketIO(server) {
       // send users list to all clients in the room
       const usersInRoom = Object.values(users).filter((user) => user.room === room);
       io.to(room).emit("roomData", { users: usersInRoom });
-
-      let messageId = await chatRoomSuite.addMessage(room, "System", `${displayName}, left the room.`);
-      emitMessage(room, false, "System", "System", `${displayName}, left the room.`, messageId);
     });
   });
 }

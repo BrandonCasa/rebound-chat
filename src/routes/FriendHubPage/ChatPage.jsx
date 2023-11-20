@@ -61,6 +61,7 @@ function ChatPage() {
           loggedIn: !!val.userSenderRef,
           messageText: val.messageContents,
           messageId: val._id,
+          sendTime: val.sendTime,
           username: val.userSenderRef?.username || val.altSenderRef,
         };
       });
