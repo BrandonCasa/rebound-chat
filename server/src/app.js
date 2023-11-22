@@ -1,28 +1,38 @@
 import express from "express";
-import helmet from "helmet";
 import morgan from "morgan";
 import cors from "cors";
 import logger from "./logger.js";
-import dotenv from "dotenv";
+import { configDotenv } from "dotenv";
 import http from "http";
+import bodyParser from "body-parser";
+import methodOverride from "method-override";
+import session from "express-session";
 
 import databaseServer from "./mongoServer.js";
+import customPassport from "./config/passport.js";
+import routes from "./routes/index.js";
 
-dotenv.config();
+configDotenv();
 
 class ServerBackend {
   constructor() {
     this.app = express();
     this.initializeMiddleware();
+    customPassport.setupPassport();
+    this.initializeRoutes();
     this.server = http.createServer(this.app);
   }
 
   initializeMiddleware() {
     this.app.use(cors({ optionsSuccessStatus: 200 }));
-    this.app.use(express.json());
-    this.app.use(helmet());
-
     this.configureLogger();
+
+    this.app.use(bodyParser.urlencoded({ extended: false }));
+    this.app.use(bodyParser.json());
+
+    this.app.use(methodOverride());
+
+    this.app.use(session({ secret: "conduit", cookie: { maxAge: 60000 }, resave: false, saveUninitialized: false }));
   }
 
   configureLogger() {
@@ -33,6 +43,10 @@ class ServerBackend {
     };
 
     this.app.use(morgan("combined", morganOption));
+  }
+
+  initializeRoutes() {
+    this.app.use(routes);
   }
 
   async startBackend() {

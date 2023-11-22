@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: "rebound-express",
-      script: "./src/index.js",
+      script: "./src/app.js",
       watch: ["src", ".env", "package.json", "package-lock.json"],
       watch_delay: 250,
       ignore_watch: ["dev", "node_modules", "uploads"],

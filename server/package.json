@@ -6,7 +6,7 @@
     "type": "git",
     "url": "git+https://github.com/BrandonCasa/rebound-electron.git"
   },
-  "main": "./src/index.js",
+  "main": "./src/app.js",
   "scripts": {
     "dev": "npx kill-port 6001 && cross-env NODE_ENV=development nodemon ./src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -24,12 +24,14 @@
     "cross-env": "^7.0.3",
     "dotenv": "^16.0.3",
     "express": "^4.18.2",
+    "express-jwt": "^8.4.1",
     "express-rate-limit": "^6.7.0",
     "express-session": "^1.17.3",
     "express-validator": "^7.0.1",
     "gridfs-stream": "^1.1.1",
     "helmet": "^7.0.0",
     "jsonwebtoken": "^9.0.0",
+    "method-override": "^3.0.0",
     "mongodb-memory-server": "^8.11.4",
     "mongoose": "^6.12.2",
     "mongoose-unique-validator": "^3.1.0",
