@@ -2,7 +2,7 @@ import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
 import cors from "cors";
-import logger from "./logging/logger.js";
+import logger from "./logger.js";
 import dotenv from "dotenv";
 import http from "http";
 

@@ -4,7 +4,7 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
 const { body, validationResult } = require("express-validator");
-const logger = require("../logging/logger");
+const logger = require("../logger");
 const rateLimit = require("express-rate-limit");
 
 const registerLimiter = rateLimit({

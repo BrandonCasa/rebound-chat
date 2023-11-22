@@ -4,7 +4,7 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
 const { body, validationResult } = require("express-validator");
-const logger = require("../logging/logger");
+const logger = require("../logger");
 const rateLimit = require("express-rate-limit");
 const authImport = require("./auth.js");
 
@@ -20,14 +20,16 @@ const router = express.Router();
 // Chat Room model
 const chatRoomSchema = new mongoose.Schema({
   roomName: { type: String, required: true, unique: true },
-  roomMessages: [{
-    bot: { type: Boolean, default: false },
-    anonymous: { type: Boolean, default: false },
-    userSenderRef: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: false },
-    altSenderRef: { type: String, required: false },
-    messageContents: { type: String, required: true },
-    sendTime: { type: Number, required: true },
-  }],
+  roomMessages: [
+    {
+      bot: { type: Boolean, default: false },
+      anonymous: { type: Boolean, default: false },
+      userSenderRef: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: false },
+      altSenderRef: { type: String, required: false },
+      messageContents: { type: String, required: true },
+      sendTime: { type: Number, required: true },
+    },
+  ],
 });
 
 const ChatRoom = mongoose.model("ChatRoom", chatRoomSchema);
@@ -59,7 +61,7 @@ const addMessage = async (roomName, username, message) => {
       anonymous: username !== "System",
       altSenderRef: username,
       messageContents: message,
-      sendTime: time
+      sendTime: time,
     });
   } else {
     room.roomMessages.push({
@@ -67,7 +69,7 @@ const addMessage = async (roomName, username, message) => {
       anonymous: false,
       userSenderRef: authorRef._id,
       messageContents: message,
-      sendTime: time
+      sendTime: time,
     });
   }
 
@@ -88,16 +90,16 @@ const retrieveMessages = async (roomName, startFromId) => {
     { $match: { "roomMessages._id": { $lt: mongoose.Types.ObjectId(startFromId) } } },
     {
       $group: {
-        _id: '$_id',
-        roomMessages: { $push: '$roomMessages' }
-      }
-    }
+        _id: "$_id",
+        roomMessages: { $push: "$roomMessages" },
+      },
+    },
   ]);
 
   let populatedResults = await ChatRoom.populate(messagesResults, {
-    path: 'roomMessages.userSenderRef',
-    select: 'username displayName -_id', // select only username and displayName, exclude _id
-    match: { bot: { $ne: true }, anonymous: { $ne: true } } // only populate if not bot or anonymous
+    path: "roomMessages.userSenderRef",
+    select: "username displayName -_id", // select only username and displayName, exclude _id
+    match: { bot: { $ne: true }, anonymous: { $ne: true } }, // only populate if not bot or anonymous
   });
 
   //let messages = messagesResults[0] ? messagesResults[0].roomMessages : [];
