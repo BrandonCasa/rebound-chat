@@ -41,6 +41,11 @@ router.post("/users/login", function (req, res, next) {
 });
 
 router.post("/users/register", function (req, res, next) {
+  var password = req.body.user.password;
+  if (!password || password.trim().length < 8) {
+    return res.json({ errors: { password: "is invalid" } });
+  }
+
   var user = new UserModel();
   console.log(req.body);
 
