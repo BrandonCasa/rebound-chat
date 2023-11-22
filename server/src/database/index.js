@@ -1,5 +1,5 @@
 import fs from "fs";
-import logger from "./logger.js";
+import logger from "../logger.js";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import mongoose from "mongoose";
 

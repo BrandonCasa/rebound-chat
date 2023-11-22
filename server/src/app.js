@@ -8,7 +8,7 @@ import bodyParser from "body-parser";
 import methodOverride from "method-override";
 import session from "express-session";
 
-import databaseServer from "./mongoServer.js";
+import databaseServer from "./database/index.js";
 import customPassport from "./config/passport.js";
 import routes from "./routes/index.js";
 
