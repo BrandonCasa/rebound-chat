@@ -7,36 +7,43 @@ import logger from "./logging/logger.js";
 import dotenv from "dotenv";
 import http from "http";
 
-import * as mongoServer from "./mongoose/mongoServer.js";
-// import { initiateSocketIO } from "socketio/socketio.js";
+import databaseServer from "./mongoServer.js";
 
 dotenv.config();
-mongoServer.startServer();
 
-const app = express();
-const server = http.createServer(app);
+class ServerBackend {
+  constructor() {
+    this.app = express();
+    this.server = http.createServer(this.app);
+    this.app.use(cors());
+    this.app.use(express.json());
+    this.app.use(helmet());
 
-// initiateSocketIO(server);
+    logger.stream = {
+      write: function (message) {
+        logger.info(message);
+      },
+    };
 
-app.use(cors());
+    this.app.use(morgan("combined", { stream: logger.stream }));
+  }
 
-app.use(express.json());
+  async startBackend() {
+    await databaseServer.startServer();
+    this.server.listen(process.env.PORT, () => logger.info(`Server started on port ${process.env.PORT}`));
+  }
 
-app.use(helmet());
+  async stopBackend() {
+    await databaseServer.stopServer();
+    this.server.close();
+  }
+}
 
-logger.stream = {
-  write: function (message) {
-    logger.info(message);
-  },
-};
-
-app.use(morgan("combined", { stream: logger.stream }));
-
-server.listen(process.env.PORT, () => logger.info(`Server started on port ${process.env.PORT}`));
+const serverBackend = new ServerBackend();
 
 process.on("SIGINT", async () => {
-  mongoServer.stopServer();
+  await serverBackend.stopBackend();
   process.exit();
 });
 
-mongoose.set("strictQuery", false);
+serverBackend.startBackend();
