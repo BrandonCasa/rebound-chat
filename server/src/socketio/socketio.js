@@ -50,7 +50,7 @@ function initiateSocketIO(server) {
     socket.on("disconnecting", () => {
       socket.rooms.forEach((room) => {
         socket.leave(room);
-      })
+      });
     });
 
     socket.on("sendMessage", async (message, callback) => {
@@ -70,7 +70,6 @@ function initiateSocketIO(server) {
     socket.on("loadMessages", async (startFromId, callback) => {
       if (users[socket.id] === undefined) return;
       const { loggedIn, username, displayName, room } = users[socket.id];
-
 
       let messages = await chatRoomSuite.retrieveMessages(room, startFromId);
 
@@ -105,4 +104,4 @@ function initiateSocketIO(server) {
   });
 }
 
-module.exports = { initiateSocketIO };
+export { initiateSocketIO };

@@ -1,7 +1,7 @@
-const fs = require("fs");
-const mongoose = require("mongoose");
-const { MongoMemoryServer } = require("mongodb-memory-server");
-const logger = require("../logging/logger.js");
+import fs from "fs";
+import logger from "../logging/logger.js";
+import { MongoMemoryServer } from "mongodb-memory-server";
+import mongoose from "mongoose";
 
 let mongoServer;
 
@@ -14,7 +14,7 @@ async function startServer() {
       instance: {
         port: 27017,
         dbPath: "dev",
-        storageEngine: 'wiredTiger'
+        storageEngine: "wiredTiger",
       },
     });
   }
@@ -28,7 +28,7 @@ async function startServer() {
   if (process.env.NODE_ENV === "development") {
     await mongoServer.start(true);
     mongoUri = await mongoServer.getUri();
-    logger.info(mongoUri)
+    logger.info(mongoUri);
   } else {
     mongoUri = `mongodb://${process.env.DB_USER}:${process.env.DB_PASS}@localhost:27017/${process.env.DB_NAME}?authSource=${process.env.DB_AUTH}`;
   }
@@ -57,4 +57,4 @@ async function stopServer() {
   }
 }
 
-module.exports = { startServer, stopServer };
+export { startServer, stopServer };
