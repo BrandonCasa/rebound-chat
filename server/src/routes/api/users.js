@@ -5,14 +5,14 @@ import passport from "passport";
 
 const router = Router();
 
-router.get("/users", auth.required, function (req, res, next) {
+router.get("/users/profile", auth.required, function (req, res, next) {
   UserModel.findById(req.payload.id)
     .then(function (user) {
       if (!user) {
         return res.sendStatus(401);
       }
 
-      return res.json({ user: user.toAuthJSON() });
+      return res.json({ user: user.toProfileJSON() });
     })
     .catch(next);
 });
