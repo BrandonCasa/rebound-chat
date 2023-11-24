@@ -50,6 +50,8 @@ router.post("/users/register", function (req, res, next) {
 
   user.username = req.body.user.username;
   user.email = req.body.user.email;
+  user.displayName = req.body.user.displayName;
+  user.bio = req.body.user.bio;
   user.setPassword(req.body.user.password);
 
   user

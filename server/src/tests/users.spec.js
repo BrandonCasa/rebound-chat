@@ -22,6 +22,8 @@ describe("Test '/users' api", () => {
           user: {
             username: "testusername",
             email: "test@email.com",
+            displayName: "Test Display Name",
+            bio: "I am the tester.",
             password: "test_password",
           },
         })
