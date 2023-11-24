@@ -86,7 +86,6 @@ describe("Test '/users' api", () => {
               assert.fail(`Status code is ${res.status}, not 200`);
             }
             done();
-            console.log(res.body);
           } catch (e) {
             done(e);
           }
