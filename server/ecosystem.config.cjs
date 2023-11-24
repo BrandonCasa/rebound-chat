@@ -8,6 +8,9 @@ module.exports = {
       ignore_watch: ["dev", "node_modules", "uploads"],
       exp_backoff_restart_delay: 100,
       restart_delay: 5000,
+      env: {
+        NODE_ENV: "production",
+      },
     },
   ],
 };

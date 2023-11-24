@@ -9,7 +9,7 @@
   "main": "./src/app.js",
   "scripts": {
     "dev": "npx kill-port 6001 && cross-env NODE_ENV=development nodemon ./src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha"
   },
   "author": {
     "name": "Brandon Casamichana",
@@ -46,5 +46,10 @@
     "prettier": "^3.1.0",
     "socket.io": "^4.6.2",
     "winston": "^3.8.2"
+  },
+  "devDependencies": {
+    "chai": "^4.3.10",
+    "chai-http": "^4.4.0",
+    "mocha": "^10.2.0"
   }
 }
