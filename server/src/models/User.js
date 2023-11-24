@@ -50,6 +50,7 @@ UserSchema.methods.toAuthJSON = function () {
     displayName: this.displayName,
     token: this.generateJWT(),
     bio: this.bio,
+    id: this._id,
   };
 };
 

@@ -6,7 +6,7 @@ import passport from "passport";
 const router = Router();
 
 router.get("/users/profile", auth.required, function (req, res, next) {
-  UserModel.findById(req.payload.id)
+  UserModel.findById(req.body.id)
     .then(function (user) {
       if (!user) {
         return res.sendStatus(401);
