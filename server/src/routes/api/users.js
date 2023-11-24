@@ -58,7 +58,6 @@ router.post("/users/register", function (req, res, next) {
       return res.json({ user: user.toAuthJSON() });
     })
     .catch((err) => {
-      console.log(err);
       next(err);
     });
 });
