@@ -47,7 +47,6 @@ router.post("/users/register", function (req, res, next) {
   }
 
   var user = new UserModel();
-  console.log(req.body);
 
   user.username = req.body.user.username;
   user.email = req.body.user.email;
@@ -58,7 +57,10 @@ router.post("/users/register", function (req, res, next) {
     .then(function () {
       return res.json({ user: user.toAuthJSON() });
     })
-    .catch(next);
+    .catch((err) => {
+      console.log(err);
+      next(err);
+    });
 });
 
 router.put("/users/modify", auth.required, function (req, res, next) {

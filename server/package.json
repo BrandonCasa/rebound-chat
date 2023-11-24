@@ -8,13 +8,18 @@
   },
   "main": "./src/app.js",
   "scripts": {
-    "dev": "npx kill-port 6001 && cross-env NODE_ENV=development nodemon ./src/index.js",
-    "test": "mocha"
+    "dev": "npx kill-port 6001 && cross-env NODE_ENV=development nodemon ./src/app.js",
+    "test": "cross-env NODE_ENV=test mocha ./src/tests/users.spec.js --reporter spec --timeout 60000 --exit"
   },
   "author": {
     "name": "Brandon Casamichana",
     "email": "brandoncasawork8@gmail.com",
     "url": "https://github.com/BrandonCasa"
+  },
+  "nodemonConfig": {
+    "ignore": [
+      "tests/**/*.*"
+    ]
   },
   "license": "GNU AFFERO GPLV3",
   "type": "module",

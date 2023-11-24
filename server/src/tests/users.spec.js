@@ -1,41 +1,31 @@
-import mocha from "mocha";
 import chai from "chai";
 import chaiHttp from "chai-http";
-import UserModel from "../models/User.js";
-
-process.env.NODE_ENV = "test";
-let should = chai.should();
 
 chai.use(chaiHttp);
 
-describe("Test '/users' api", () => {
-  //Before each test we empty the database
-  beforeEach((done) => {
-    UserModel.remove({}, (err) => {
-      done();
-    });
-  });
-
+describe("Test '/users' api", function () {
   // Test Routes
-  describe("(GET) '/users/profile'", () => {
-    it("should GET a user's public profile", (done) => {
+  describe("(POST) '/users/register'", function () {
+    it("Should register a new user", function (done) {
       chai
-        .request(server)
-        .get("/book")
-        .end((err, res) => {
-          res.should.have.status(200);
-          res.body.should.be.a("array");
-          res.body.length.should.be.eql(0);
-          done();
+        .request("http://127.0.0.1:6001")
+        .post("/api/users/register")
+        .set("content-type", "application/json")
+        .set("Allow-Control-Allow-Origin", "*")
+        .send({
+          user: {
+            username: "testusername",
+            email: "test@email.com",
+            password: "test_password",
+          },
+        })
+        .end(function (error, response, body) {
+          if (error) {
+            done(error);
+          } else {
+            done();
+          }
         });
     });
-  });
-});
-
-describe("Retrieve a user profile '/users/profile'", function () {
-  it("idk lol", function (done) {
-    const actualResult = healthCheckSync();
-    expect(actualResult).to.equal("OK");
-    done();
   });
 });

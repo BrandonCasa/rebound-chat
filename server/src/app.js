@@ -68,10 +68,6 @@ class ServerBackend {
       throw error;
     }
   }
-
-  async runTests() {
-    console.log("xd");
-  }
 }
 
 // Initiate the server

@@ -7,10 +7,10 @@ const UserSchema = new mongoose.Schema(
   {
     username: { type: String, lowercase: true, unique: true, required: [true, "is required"], match: [/^[a-zA-Z0-9]+$/, "is invalid"], index: true },
     email: { type: String, lowercase: true, unique: true, required: [true, "is required"], match: [/\S+@\S+\.\S+/, "is invalid"], index: true },
-    displayName: String,
-    bio: String,
-    hash: String,
-    salt: String,
+    displayName: { type: String, default: "" },
+    bio: { type: String, default: "" },
+    hash: { type: String, default: "" },
+    salt: { type: String, default: "" },
     following: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
   { timestamps: true }
