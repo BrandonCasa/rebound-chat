@@ -1,7 +1,10 @@
 import { Router } from "express";
-import auth from "../auth.js";
+import { auth, getTokenFromHeader } from "../auth.js";
 import UserModel from "../../models/User.js";
 import passport from "passport";
+import jwt from "jsonwebtoken";
+import logger from "../../logger.js";
+import "dotenv/config";
 
 const router = Router();
 
@@ -17,7 +20,7 @@ router.get("/users/profile", auth.required, function (req, res, next) {
     .catch(next);
 });
 
-router.post("/users/login", function (req, res, next) {
+router.get("/users/login", function (req, res, next) {
   if (!req.body.user.email) {
     return res.status(422).json({ errors: { email: "is required" } });
   }
@@ -65,10 +68,16 @@ router.post("/users/register", function (req, res, next) {
 });
 
 router.put("/users/modify", auth.required, function (req, res, next) {
-  UserModel.findById(req.payload.id)
+  const currentUserJwt = jwt.verify(getTokenFromHeader(req), process.env.SECRET, { algorithms: ["HS256"] });
+
+  if (!currentUserJwt || !currentUserJwt?.id) {
+    return res.sendStatus(404);
+  }
+
+  UserModel.findById(currentUserJwt.id)
     .then(function (user) {
       if (!user) {
-        return res.sendStatus(401);
+        return res.sendStatus(404);
       }
 
       // only update fields that were actually passed...
@@ -95,18 +104,8 @@ router.put("/users/modify", auth.required, function (req, res, next) {
     .catch(next);
 });
 
-router.put("/users/follow", auth.required, function (req, res, next) {
-  UserModel.findById(req.payload.id)
-    .then(function (user) {
-      if (!user) {
-        return res.sendStatus(401);
-      }
-
-      return user.save().then(function () {
-        return res.json({ user: user.toAuthJSON() });
-      });
-    })
-    .catch(next);
+router.put("/users/addFriend", auth.required, function (req, res, next) {
+  console.log(getTokenFromHeader(req));
 });
 
 export default router;

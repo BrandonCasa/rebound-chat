@@ -6,25 +6,24 @@ import chaiHttp from "chai-http";
 chai.use(chaiHttp);
 
 describe("Test '/users' api", () => {
-  let theId = "";
-  let theToken = "";
+  var agent = chai.request.agent("http://127.0.0.1:6001");
+  let billyId = "";
+  let billyToken = "";
 
   // Test Routes
   describe("(POST) '/users/register'", () => {
-    var agent = chai.request.agent("http://127.0.0.1:6001");
-
-    it("Should register a new user", (done) => {
+    it("Register User Billy", (done) => {
       agent
         .post("/api/users/register")
         .set("Content-Type", "application/json")
         .set("Allow-Control-Allow-Origin", "*")
         .send({
           user: {
-            username: "testusername",
-            email: "test@email.com",
-            displayName: "Test Display Name",
-            bio: "I am the tester.",
-            password: "test_password",
+            username: "billy",
+            email: "billy@email.com",
+            displayName: "Billy Bob",
+            bio: "I am Billy Bob!!!",
+            password: "billyabc1[",
           },
         })
         .end((err, res) => {
@@ -33,7 +32,7 @@ describe("Test '/users' api", () => {
               assert.fail(JSON.stringify(res.body.errors));
             }
             if (res.status !== 200) {
-              assert.fail(`Status code is ${res.status}, not 200`);
+              assert.fail(`Status code is ${res.status}, not 200.`);
             }
             done();
           } catch (e) {
@@ -41,16 +40,18 @@ describe("Test '/users' api", () => {
           }
         });
     });
+  });
 
-    it("Should login", (done) => {
+  describe("(GET) '/users/login' (A)", () => {
+    it("Login", (done) => {
       agent
-        .post("/api/users/login")
+        .get("/api/users/login")
         .set("Content-Type", "application/json")
         .set("Allow-Control-Allow-Origin", "*")
         .send({
           user: {
-            email: "test@email.com",
-            password: "test_password",
+            email: "billy@email.com",
+            password: "billyabc1[",
           },
         })
         .end((err, res) => {
@@ -59,25 +60,27 @@ describe("Test '/users' api", () => {
               assert.fail(JSON.stringify(res.body.errors));
             }
             if (res.status !== 200) {
-              assert.fail(`Status code is ${res.status}, not 200`);
+              assert.fail(`Status code is ${res.status}, not 200.`);
             }
-            theId = res.body.user.id;
-            theToken = res.body.user.token;
+            billyId = res.body.user.id;
+            billyToken = res.body.user.token;
             done();
           } catch (e) {
             done(e);
           }
         });
     });
+  });
 
-    it("Should get profile", (done) => {
+  describe("(GET) '/users/profile'", () => {
+    it("Get Public Profile", (done) => {
       agent
         .get("/api/users/profile")
         .set("Content-Type", "application/json")
         .set("Allow-Control-Allow-Origin", "*")
-        .set("authorization", `Token ${theToken}`)
+        .set("authorization", `Bearer ${billyToken}`)
         .send({
-          id: theId,
+          id: billyId,
         })
         .end((err, res) => {
           try {
@@ -85,7 +88,37 @@ describe("Test '/users' api", () => {
               assert.fail(JSON.stringify(res.body.errors));
             }
             if (res.status !== 200) {
-              assert.fail(`Status code is ${res.status}, not 200`);
+              assert.fail(`Status code is ${res.status}, not 200.`);
+            }
+            done();
+          } catch (e) {
+            done(e);
+          }
+        });
+    });
+  });
+
+  describe("(PUT) '/users/modify'", () => {
+    it("Modify Profile", (done) => {
+      agent
+        .put("/api/users/modify")
+        .set("Content-Type", "application/json")
+        .set("Allow-Control-Allow-Origin", "*")
+        .set("authorization", `Bearer ${billyToken}`)
+        .send({
+          user: {
+            displayName: "Billy Joe",
+            bio: "I am Billy Joe!!!",
+            password: "billyabc2[",
+          },
+        })
+        .end((err, res) => {
+          try {
+            if (res.body.hasOwnProperty("errors")) {
+              assert.fail(JSON.stringify(res.body.errors));
+            }
+            if (res.status !== 200) {
+              assert.fail(`Status code is ${res.status}, not 200.`);
             }
             done();
           } catch (e) {
