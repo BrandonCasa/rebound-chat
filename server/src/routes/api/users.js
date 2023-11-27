@@ -95,4 +95,18 @@ router.put("/users/modify", auth.required, function (req, res, next) {
     .catch(next);
 });
 
+router.put("/users/follow", auth.required, function (req, res, next) {
+  UserModel.findById(req.payload.id)
+    .then(function (user) {
+      if (!user) {
+        return res.sendStatus(401);
+      }
+
+      return user.save().then(function () {
+        return res.json({ user: user.toAuthJSON() });
+      });
+    })
+    .catch(next);
+});
+
 export default router;

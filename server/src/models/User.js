@@ -1,9 +1,9 @@
-import mongoose from "mongoose";
+import mongoose, { Schema } from "mongoose";
 import mongooseUniqueValidator from "mongoose-unique-validator";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 
-const UserSchema = new mongoose.Schema(
+const UserSchema = new Schema(
   {
     username: { type: String, lowercase: true, unique: true, required: [true, "is required"], match: [/^[a-zA-Z0-9]+$/, "is invalid"], index: true },
     email: { type: String, lowercase: true, unique: true, required: [true, "is required"], match: [/\S+@\S+\.\S+/, "is invalid"], index: true },
@@ -11,7 +11,7 @@ const UserSchema = new mongoose.Schema(
     bio: { type: String, default: "" },
     hash: { type: String, default: "" },
     salt: { type: String, default: "" },
-    following: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    friends: [{ type: Schema.Types.ObjectId, ref: "Friend" }],
   },
   { timestamps: true }
 );
