@@ -314,4 +314,6 @@ describe("Test '/users' api", () => {
         });
     });
   });
+
+  describe("(PUT) '/users/removefriend'", () => {});
 });
