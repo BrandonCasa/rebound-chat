@@ -185,7 +185,7 @@ describe("Test '/users' api", () => {
   });
 
   describe("(PUT) '/users/modify'", () => {
-    it("Modify Profile", (done) => {
+    it("Modify Billy's Profile", (done) => {
       agent
         .put("/api/users/modify")
         .set("Content-Type", "application/json")
