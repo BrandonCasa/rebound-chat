@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { auth, getTokenFromHeader } from "../auth.js";
 import UserModel from "../../models/User.js";
+import FriendModel from "../../models/Friend.js";
 import passport from "passport";
 import jwt from "jsonwebtoken";
 import logger from "../../logger.js";
@@ -17,7 +18,10 @@ router.get("/users/profile", auth.required, function (req, res, next) {
 
       return res.json({ user: user.toProfileJSON() });
     })
-    .catch(next);
+    .catch((err) => {
+      next(err);
+      return res.sendStatus(500);
+    });
 });
 
 router.get("/users/login", function (req, res, next) {
@@ -64,6 +68,7 @@ router.post("/users/register", function (req, res, next) {
     })
     .catch((err) => {
       next(err);
+      return res.sendStatus(500);
     });
 });
 
@@ -101,11 +106,42 @@ router.put("/users/modify", auth.required, function (req, res, next) {
         return res.json({ user: user.toAuthJSON() });
       });
     })
-    .catch(next);
+    .catch((err) => {
+      next(err);
+      return res.sendStatus(500);
+    });
 });
 
-router.put("/users/addFriend", auth.required, function (req, res, next) {
+router.put("/users/addfriend", auth.required, async function (req, res, next) {
   const currentUserJwt = jwt.verify(getTokenFromHeader(req), process.env.SECRET, { algorithms: ["HS256"] });
+
+  if (currentUserJwt.id === req.body.recipientId) {
+    return res.sendStatus(403);
+  }
+
+  const sender = await UserModel.findById(currentUserJwt.id);
+  if (!sender) {
+    return res.sendStatus(404);
+  }
+
+  const recipient = await UserModel.findById(req.body.recipientId);
+  if (!recipient) {
+    return res.sendStatus(404);
+  }
+
+  var friend = new FriendModel();
+
+  friend.requester = sender;
+  friend.recipient = recipient;
+
+  await friend.save();
+
+  sender.friends.push(friend);
+  await sender.save();
+  recipient.friends.push(friend);
+  await recipient.save();
+
+  return res.sendStatus(200);
 });
 
 export default router;
