@@ -129,20 +129,14 @@ router.put("/users/addfriend", auth.required, async function (req, res, next) {
     return res.sendStatus(404);
   }
 
-  let alreadyFriends = await FriendModel.exists({ requester: sender, recipient: recipient });
-  if (alreadyFriends !== null) {
+  let alreadySent = await FriendModel.exists({ requester: sender, recipient: recipient });
+  if (alreadySent !== null) {
     return res.sendStatus(403);
   }
 
-  let alreadyPending = await FriendModel.exists({ requester: recipient, recipient: sender });
-  if (alreadyPending !== null) {
-    let existingFriend = await FriendModel.findById(alreadyPending._id);
-    if (existingFriend.confirmed) {
-      return res.sendStatus(403);
-    }
-    existingFriend.confirmed = true;
-    await existingFriend.save();
-    return res.sendStatus(200);
+  let alreadyReceived = await FriendModel.exists({ requester: recipient, recipient: sender });
+  if (alreadyReceived !== null) {
+    return res.sendStatus(403);
   }
 
   var friend = new FriendModel();
@@ -156,6 +150,32 @@ router.put("/users/addfriend", auth.required, async function (req, res, next) {
   await sender.save();
   recipient.friends.push(friend);
   await recipient.save();
+
+  return res.json({ friendId: friend._id.toString() });
+});
+
+router.put("/users/acceptfriend", auth.required, async function (req, res, next) {
+  const currentUserJwt = jwt.verify(getTokenFromHeader(req), process.env.SECRET, { algorithms: ["HS256"] });
+
+  if (!currentUserJwt || !currentUserJwt?.id) {
+    return res.sendStatus(404);
+  }
+
+  const friend = await FriendModel.findById(req.body.friendId);
+  if (!friend) {
+    return res.sendStatus(404);
+  }
+
+  if (friend.confirmed) {
+    return res.sendStatus(403);
+  }
+
+  if (friend.recipient._id.toString() !== currentUserJwt.id) {
+    return res.sendStatus(401);
+  }
+
+  friend.confirmed = true;
+  await friend.save();
 
   return res.sendStatus(200);
 });
