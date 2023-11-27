@@ -136,7 +136,13 @@ router.put("/users/addfriend", auth.required, async function (req, res, next) {
 
   let alreadyPending = await FriendModel.exists({ requester: recipient, recipient: sender });
   if (alreadyPending !== null) {
-    return res.sendStatus(403);
+    let existingFriend = await FriendModel.findById(alreadyPending._id);
+    if (existingFriend.confirmed) {
+      return res.sendStatus(403);
+    }
+    existingFriend.confirmed = true;
+    await existingFriend.save();
+    return res.sendStatus(200);
   }
 
   var friend = new FriendModel();
