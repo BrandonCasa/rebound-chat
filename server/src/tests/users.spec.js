@@ -191,7 +191,7 @@ describe("Test '/users' api", () => {
   });
 
   describe("(PUT) '/users/addfriend' (1)", () => {
-    it("Add Friend", (done) => {
+    it("Add Friend Pass", (done) => {
       agent
         .put("/api/users/addfriend")
         .set("Content-Type", "application/json")
@@ -207,6 +207,30 @@ describe("Test '/users' api", () => {
             }
             if (res.status !== 200) {
               assert.fail(`Status code is ${res.status}, not 200.`);
+            }
+            done();
+          } catch (e) {
+            done(e);
+          }
+        });
+    });
+
+    it("Add Friend Fail", (done) => {
+      agent
+        .put("/api/users/addfriend")
+        .set("Content-Type", "application/json")
+        .set("Allow-Control-Allow-Origin", "*")
+        .set("authorization", `Bearer ${billyToken}`)
+        .send({
+          recipientId: jonesId,
+        })
+        .end((err, res) => {
+          try {
+            if (res.body.hasOwnProperty("errors")) {
+              assert.fail(JSON.stringify(res.body.errors));
+            }
+            if (res.status !== 403) {
+              assert.fail(`Status code is ${res.status}, not 403.`);
             }
             done();
           } catch (e) {
