@@ -10,8 +10,11 @@ describe("Test '/users' api", () => {
   let billyId = "";
   let billyToken = "";
 
+  let jonesId = "";
+  let jonesToken = "";
+
   // Test Routes
-  describe("(POST) '/users/register'", () => {
+  describe("(POST) '/users/register' (1)", () => {
     it("Register User Billy", (done) => {
       agent
         .post("/api/users/register")
@@ -42,7 +45,40 @@ describe("Test '/users' api", () => {
     });
   });
 
-  describe("(GET) '/users/login' (A)", () => {
+  describe("(POST) '/users/register' (2)", () => {
+    it("Register User Jones", (done) => {
+      agent
+        .post("/api/users/register")
+        .set("Content-Type", "application/json")
+        .set("Allow-Control-Allow-Origin", "*")
+        .send({
+          user: {
+            username: "jones",
+            email: "jones@email.com",
+            displayName: "Jones Junior",
+            bio: "I am Jones Junior!!!",
+            password: "jonesabc1[",
+          },
+        })
+        .end((err, res) => {
+          try {
+            if (res.body.hasOwnProperty("errors")) {
+              assert.fail(JSON.stringify(res.body.errors));
+            }
+            if (res.status !== 200) {
+              assert.fail(`Status code is ${res.status}, not 200.`);
+            }
+            jonesId = res.body.user.id;
+            jonesToken = res.body.user.token;
+            done();
+          } catch (e) {
+            done(e);
+          }
+        });
+    });
+  });
+
+  describe("(GET) '/users/login' (1)", () => {
     it("Login", (done) => {
       agent
         .get("/api/users/login")
@@ -72,7 +108,7 @@ describe("Test '/users' api", () => {
     });
   });
 
-  describe("(GET) '/users/profile'", () => {
+  describe("(GET) '/users/profile' (1)", () => {
     it("Get Public Profile", (done) => {
       agent
         .get("/api/users/profile")
@@ -98,7 +134,33 @@ describe("Test '/users' api", () => {
     });
   });
 
-  describe("(PUT) '/users/modify'", () => {
+  describe("(GET) '/users/profile' (2)", () => {
+    it("Get Public Profile", (done) => {
+      agent
+        .get("/api/users/profile")
+        .set("Content-Type", "application/json")
+        .set("Allow-Control-Allow-Origin", "*")
+        .set("authorization", `Bearer ${billyToken}`)
+        .send({
+          id: jonesId,
+        })
+        .end((err, res) => {
+          try {
+            if (res.body.hasOwnProperty("errors")) {
+              assert.fail(JSON.stringify(res.body.errors));
+            }
+            if (res.status !== 200) {
+              assert.fail(`Status code is ${res.status}, not 200.`);
+            }
+            done();
+          } catch (e) {
+            done(e);
+          }
+        });
+    });
+  });
+
+  describe("(PUT) '/users/modify' (1)", () => {
     it("Modify Profile", (done) => {
       agent
         .put("/api/users/modify")

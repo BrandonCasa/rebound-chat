@@ -105,7 +105,7 @@ router.put("/users/modify", auth.required, function (req, res, next) {
 });
 
 router.put("/users/addFriend", auth.required, function (req, res, next) {
-  console.log(getTokenFromHeader(req));
+  const currentUserJwt = jwt.verify(getTokenFromHeader(req), process.env.SECRET, { algorithms: ["HS256"] });
 });
 
 export default router;
