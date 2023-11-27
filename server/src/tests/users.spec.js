@@ -215,7 +215,7 @@ describe("Test '/users' api", () => {
   });
 
   describe("(PUT) '/users/addfriend'", () => {
-    it("Add Friend Pass", (done) => {
+    it("Add Friend Correct", (done) => {
       agent
         .put("/api/users/addfriend")
         .set("Content-Type", "application/json")
@@ -240,7 +240,7 @@ describe("Test '/users' api", () => {
         });
     });
 
-    it("Add Friend Duplicate", (done) => {
+    it("Add Friend Wrong", (done) => {
       agent
         .put("/api/users/addfriend")
         .set("Content-Type", "application/json")
