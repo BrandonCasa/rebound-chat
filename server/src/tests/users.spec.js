@@ -315,5 +315,29 @@ describe("Test '/users' api", () => {
     });
   });
 
-  describe("(PUT) '/users/removefriend'", () => {});
+  describe("(PUT) '/users/removefriend'", () => {
+    it("Remove Friend", (done) => {
+      agent
+        .put("/api/users/removefriend")
+        .set("Content-Type", "application/json")
+        .set("Allow-Control-Allow-Origin", "*")
+        .set("authorization", `Bearer ${billyToken}`)
+        .send({
+          friendId: friendId,
+        })
+        .end((err, res) => {
+          try {
+            if (res.body.hasOwnProperty("errors")) {
+              assert.fail(JSON.stringify(res.body.errors));
+            }
+            if (res.status !== 200) {
+              assert.fail(`Status code is ${res.status}, not 200.`);
+            }
+            done();
+          } catch (e) {
+            done(e);
+          }
+        });
+    });
+  });
 });

@@ -220,4 +220,44 @@ router.put("/users/declinefriend", auth.required, async function (req, res, next
   return res.sendStatus(200);
 });
 
+router.put("/users/removefriend", auth.required, async function (req, res, next) {
+  const currentUserJwt = jwt.verify(getTokenFromHeader(req), process.env.SECRET, { algorithms: ["HS256"] });
+
+  if (!currentUserJwt || !currentUserJwt?.id) {
+    return res.sendStatus(404);
+  }
+
+  const friend = await FriendModel.findById(req.body.friendId);
+  if (!friend) {
+    return res.sendStatus(404);
+  }
+
+  if (friend.recipient._id.toString() !== currentUserJwt.id && friend.requester._id.toString() !== currentUserJwt.id) {
+    return res.sendStatus(401);
+  }
+
+  if (!friend.confirmed) {
+    return res.sendStatus(403);
+  }
+
+  const sender = await UserModel.findById(friend.requester._id);
+  if (!sender) {
+    return res.sendStatus(404);
+  }
+
+  const recipient = await UserModel.findById(friend.recipient._id);
+  if (!recipient) {
+    return res.sendStatus(404);
+  }
+
+  sender.friends.pull(req.body.friendId);
+  await sender.save();
+  recipient.friends.pull(req.body.friendId);
+  await recipient.save();
+
+  await friend.remove();
+
+  return res.sendStatus(200);
+});
+
 export default router;
