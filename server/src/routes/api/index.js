@@ -1,9 +1,12 @@
 import { Router } from "express";
 import usersApi from "./users.js";
+import devApi from "./dev.js";
 
 const router = Router();
 
 router.use("/", usersApi);
+
+router.use("/", devApi);
 
 router.use(function (err, req, res, next) {
   if (err.name === "ValidationError") {

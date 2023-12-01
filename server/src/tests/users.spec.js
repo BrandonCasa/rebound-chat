@@ -5,8 +5,32 @@ import chaiHttp from "chai-http";
 
 chai.use(chaiHttp);
 
+const chaiAgent = chai.request.agent("http://127.0.0.1:6001");
+
+describe("Test '/dev' api", () => {
+  // Test Routes
+  describe("(PUT) '/dev/database/wipe'", () => {
+    it("Wipe MongoDB", (done) => {
+      chaiAgent
+        .put("/api/dev/database/wipe")
+        .set("Content-Type", "application/json")
+        .set("Allow-Control-Allow-Origin", "*")
+        .send()
+        .end((err, res) => {
+          try {
+            if (res.status !== 200) {
+              assert.fail(`Status code is ${res.status}, not 200.`);
+            }
+            done();
+          } catch (e) {
+            done(e);
+          }
+        });
+    });
+  });
+});
+
 describe("Test '/users' api", () => {
-  var agent = chai.request.agent("http://127.0.0.1:6001");
   let billyId = "";
   let billyToken = "";
 
@@ -18,7 +42,7 @@ describe("Test '/users' api", () => {
   // Test Routes
   describe("(POST) '/users/register'", () => {
     it("Register Billy", (done) => {
-      agent
+      chaiAgent
         .post("/api/users/register")
         .set("Content-Type", "application/json")
         .set("Allow-Control-Allow-Origin", "*")
@@ -49,7 +73,7 @@ describe("Test '/users' api", () => {
     });
 
     it("Register Jones", (done) => {
-      agent
+      chaiAgent
         .post("/api/users/register")
         .set("Content-Type", "application/json")
         .set("Allow-Control-Allow-Origin", "*")
@@ -82,7 +106,7 @@ describe("Test '/users' api", () => {
 
   describe("(GET) '/users/login'", () => {
     it("Login Billy", (done) => {
-      agent
+      chaiAgent
         .get("/api/users/login")
         .set("Content-Type", "application/json")
         .set("Allow-Control-Allow-Origin", "*")
@@ -108,7 +132,7 @@ describe("Test '/users' api", () => {
     });
 
     it("Login Jones", (done) => {
-      agent
+      chaiAgent
         .get("/api/users/login")
         .set("Content-Type", "application/json")
         .set("Allow-Control-Allow-Origin", "*")
@@ -136,7 +160,7 @@ describe("Test '/users' api", () => {
 
   describe("(GET) '/users/profile'", () => {
     it("Get Billy's Profile (Billy)", (done) => {
-      agent
+      chaiAgent
         .get("/api/users/profile")
         .set("Content-Type", "application/json")
         .set("Allow-Control-Allow-Origin", "*")
@@ -160,7 +184,7 @@ describe("Test '/users' api", () => {
     });
 
     it("Get Jones's Profile (Billy)", (done) => {
-      agent
+      chaiAgent
         .get("/api/users/profile")
         .set("Content-Type", "application/json")
         .set("Allow-Control-Allow-Origin", "*")
@@ -186,7 +210,7 @@ describe("Test '/users' api", () => {
 
   describe("(PUT) '/users/modify'", () => {
     it("Modify Billy's Profile", (done) => {
-      agent
+      chaiAgent
         .put("/api/users/modify")
         .set("Content-Type", "application/json")
         .set("Allow-Control-Allow-Origin", "*")
@@ -216,7 +240,7 @@ describe("Test '/users' api", () => {
 
   describe("(PUT) '/users/addfriend'", () => {
     it("Add Friend Correct", (done) => {
-      agent
+      chaiAgent
         .put("/api/users/addfriend")
         .set("Content-Type", "application/json")
         .set("Allow-Control-Allow-Origin", "*")
@@ -241,7 +265,7 @@ describe("Test '/users' api", () => {
     });
 
     it("Add Friend Wrong", (done) => {
-      agent
+      chaiAgent
         .put("/api/users/addfriend")
         .set("Content-Type", "application/json")
         .set("Allow-Control-Allow-Origin", "*")
@@ -267,7 +291,7 @@ describe("Test '/users' api", () => {
 
   describe("(PUT) '/users/acceptfriend'", () => {
     it("Accept Friend Wrong", (done) => {
-      agent
+      chaiAgent
         .put("/api/users/acceptfriend")
         .set("Content-Type", "application/json")
         .set("Allow-Control-Allow-Origin", "*")
@@ -291,7 +315,7 @@ describe("Test '/users' api", () => {
     });
 
     it("Accept Friend Correct", (done) => {
-      agent
+      chaiAgent
         .put("/api/users/acceptfriend")
         .set("Content-Type", "application/json")
         .set("Allow-Control-Allow-Origin", "*")
@@ -317,7 +341,7 @@ describe("Test '/users' api", () => {
 
   describe("(PUT) '/users/removefriend'", () => {
     it("Remove Friend", (done) => {
-      agent
+      chaiAgent
         .put("/api/users/removefriend")
         .set("Content-Type", "application/json")
         .set("Allow-Control-Allow-Origin", "*")
