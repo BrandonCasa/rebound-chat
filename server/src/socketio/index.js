@@ -51,6 +51,9 @@ class SocketBackend {
     socket.emit("connected");
   }
 }
+// TODO:
+// add chat room database stuff
+// add chat room socketio logic
 
 const socketBackend = new SocketBackend();
 
