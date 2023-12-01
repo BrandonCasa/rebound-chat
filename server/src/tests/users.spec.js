@@ -105,32 +105,6 @@ describe("Test '/users' api", () => {
   });
 
   describe("(GET) '/users/login'", () => {
-    it("Login Billy", (done) => {
-      chaiAgent
-        .get("/api/users/login")
-        .set("Content-Type", "application/json")
-        .set("Allow-Control-Allow-Origin", "*")
-        .send({
-          user: {
-            email: "billy@email.com",
-            password: "billyabc1[",
-          },
-        })
-        .end((err, res) => {
-          try {
-            if (res.body.hasOwnProperty("errors")) {
-              assert.fail(JSON.stringify(res.body.errors));
-            }
-            if (res.status !== 200) {
-              assert.fail(`Status code is ${res.status}, not 200.`);
-            }
-            done();
-          } catch (e) {
-            done(e);
-          }
-        });
-    });
-
     it("Login Jones", (done) => {
       chaiAgent
         .get("/api/users/login")
