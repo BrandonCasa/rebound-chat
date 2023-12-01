@@ -9,6 +9,7 @@ import methodOverride from "method-override";
 import session from "express-session";
 
 import databaseServer from "./database/index.js";
+import socketBackend from "./socketio/index.js";
 import customPassport from "./config/passport.js";
 import routes from "./routes/index.js";
 
@@ -16,6 +17,8 @@ configDotenv();
 
 class ServerBackend {
   constructor() {
+    this.sessionMiddleware = null;
+
     this.app = express();
     this.initializeMiddleware();
     customPassport.setupPassport();
@@ -32,7 +35,19 @@ class ServerBackend {
 
     this.app.use(methodOverride());
 
-    this.app.use(session({ secret: "conduit", cookie: { maxAge: 60000 }, resave: false, saveUninitialized: false }));
+    const sessionMiddleware = session({
+      name: "reboundCookie",
+      secret: process.env.SECRET,
+      cookie: {
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+      },
+      resave: false,
+      saveUninitialized: false,
+    });
+
+    this.app.use(sessionMiddleware);
+
+    this.sessionMiddleware = sessionMiddleware;
   }
 
   configureLogger() {
@@ -52,6 +67,7 @@ class ServerBackend {
   async startBackend() {
     try {
       await databaseServer.startServer();
+      socketBackend.startListening(this.sessionMiddleware);
       const PORT = process.env.PORT || 3000; // Define a default port
       this.server.listen(PORT, () => logger.info(`Server started on port ${PORT}`));
     } catch (error) {
@@ -61,6 +77,7 @@ class ServerBackend {
 
   async stopBackend() {
     try {
+      socketBackend.stopListening();
       await databaseServer.stopServer();
       this.server.close(() => logger.info("Server gracefully stopped"));
     } catch (error) {
