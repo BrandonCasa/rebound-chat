@@ -6,7 +6,7 @@ class SocketBackend {
     this.io = null;
   }
 
-  startListening(sessionMiddleware) {
+  startListening() {
     this.io = new Server({
       path: "/socket.io",
       cors: {
@@ -14,7 +14,6 @@ class SocketBackend {
       },
     });
 
-    this.initializeMiddleware(sessionMiddleware);
     this.initializeIoEvents();
 
     this.io.listen(3000);
@@ -24,12 +23,6 @@ class SocketBackend {
     this.io.close();
   }
 
-  initializeMiddleware(sessionMiddleware) {
-    this.io.use(function (socket, next) {
-      sessionMiddleware(socket.request, {}, next);
-    });
-  }
-
   initializeIoEvents() {
     this.io.on("connection", (socket) => {
       this.onConnection(socket);
@@ -37,8 +30,6 @@ class SocketBackend {
   }
 
   onConnection(socket) {
-    const userId = socket.request.session.passport;
-    logger.info(`New Connection (ID): ${userId}`);
     socket.emit("connected");
   }
 }
