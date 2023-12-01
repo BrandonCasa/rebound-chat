@@ -31,12 +31,15 @@ class SocketBackend {
   }
 
   initializeIoEvents() {
-    this.io.on("connection", this.onConnection);
+    this.io.on("connection", (socket) => {
+      this.onConnection(socket);
+    });
   }
 
   onConnection(socket) {
-    const userId = socket.request.session.passport.user;
+    const userId = socket.request.session.passport;
     logger.info(`New Connection (ID): ${userId}`);
+    socket.emit("connected");
   }
 }
 
