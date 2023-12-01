@@ -4,6 +4,12 @@ import chai, { assert, expect } from "chai";
 import chaiHttp from "chai-http";
 import { io } from "socket.io-client";
 
+const URL = process.env.NODE_ENV === "production" ? undefined : "http://localhost:3000";
+
+const socket = io(URL, {
+  autoConnect: false,
+});
+
 chai.use(chaiHttp);
 
 const chaiAgent = chai.request.agent("http://127.0.0.1:6001");
@@ -458,12 +464,6 @@ describe("Test SocketIO", () => {
   });
 
   it("Connect Jones", (done) => {
-    const URL = process.env.NODE_ENV === "production" ? undefined : "http://localhost:3000";
-
-    const socket = io(URL, {
-      autoConnect: false,
-    });
-
     socket.on("connected", () => {
       socket.off("connected");
       done();
