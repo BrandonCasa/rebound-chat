@@ -1,5 +1,7 @@
 import { Server } from "socket.io";
 import logger from "../logger.js";
+import jwt from "jsonwebtoken";
+import "dotenv/config";
 
 class SocketBackend {
   constructor() {
@@ -14,6 +16,7 @@ class SocketBackend {
       },
     });
 
+    this.initializeMiddleware();
     this.initializeIoEvents();
 
     this.io.listen(3000);
@@ -23,6 +26,20 @@ class SocketBackend {
     this.io.close();
   }
 
+  initializeMiddleware() {
+    this.io.use(function (socket, next) {
+      if (socket.handshake.query && socket.handshake.query.token) {
+        jwt.verify(socket.handshake.query.token, process.env.SECRET, function (err, decoded) {
+          if (err) return next(new Error("Authentication error"));
+          socket.user = decoded;
+          next();
+        });
+      } else {
+        next(new Error("Authentication error"));
+      }
+    });
+  }
+
   initializeIoEvents() {
     this.io.on("connection", (socket) => {
       this.onConnection(socket);
@@ -30,6 +47,7 @@ class SocketBackend {
   }
 
   onConnection(socket) {
+    logger.info(`New connection from '${socket.user.username}'.`);
     socket.emit("connected");
   }
 }

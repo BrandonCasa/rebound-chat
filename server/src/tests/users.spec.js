@@ -4,12 +4,6 @@ import chai, { assert, expect } from "chai";
 import chaiHttp from "chai-http";
 import { io } from "socket.io-client";
 
-const URL = process.env.NODE_ENV === "production" ? undefined : "http://localhost:3000";
-
-const socket = io(URL, {
-  autoConnect: false,
-});
-
 chai.use(chaiHttp);
 
 const chaiAgent = chai.request.agent("http://127.0.0.1:6001");
@@ -355,7 +349,7 @@ describe("Test '/users' api", () => {
 
 describe("Test SocketIO", () => {
   let billyId, billyToken, jonesId, jonesToken;
-  let clientSocket;
+  let clientSocket = io();
 
   it("Wipe MongoDB", (done) => {
     chaiAgent
@@ -464,11 +458,14 @@ describe("Test SocketIO", () => {
   });
 
   it("Connect Jones", (done) => {
-    socket.on("connected", () => {
-      socket.off("connected");
-      done();
+    const URL = process.env.NODE_ENV === "production" ? undefined : "http://localhost:3000";
+    clientSocket = io.connect(URL, {
+      query: { token: jonesToken },
     });
 
-    socket.connect();
+    clientSocket.on("connected", () => {
+      clientSocket.off("connected");
+      done();
+    });
   });
 });
