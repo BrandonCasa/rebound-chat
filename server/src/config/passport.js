@@ -1,6 +1,7 @@
 import UserModel from "../models/User.js";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
+import { Strategy as AnonymousStrategy } from "passport-anonymous";
 
 class CustomPassport {
   setupPassport() {
@@ -22,6 +23,11 @@ class CustomPassport {
             .catch(done);
         }
       )
+    );
+    passport.use(
+      new AnonymousStrategy(function authenticate() {
+        console.log("lol");
+      })
     );
   }
 }
