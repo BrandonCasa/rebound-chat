@@ -23,18 +23,18 @@ function App() {
 
   useEffect(() => {
     if (authTokenState && authTokenState !== "" && !loggedInState) {
-      // verify at /api/auth/verify
-      const requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/auth/verify/" : "/api/auth/verify/";
+      const requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/verify" : "/api/users/verify";
       axios
         .get(requestString, {
           headers: {
             "Content-Type": "application/json",
             "Allow-Control-Allow-Origin": "*",
-            Authorization: authTokenState,
+            authorization: `Bearer ${authTokenState}`,
           },
         })
         .then((response) => {
-          dispatch(setLoggedIn({ loggedIn: true, username: response.data.user.username, displayName: response.data.user.displayName }));
+          console.log(response.data.user);
+          // dispatch(setLoggedIn({ loggedIn: true, username: response.data.user.username, displayName: response.data.user.displayName }));
         })
         .catch((error) => {
           console.log(error);
