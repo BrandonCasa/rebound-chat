@@ -11,15 +11,49 @@ const useRegisterDialog = () => {
   const [activeStep, setActiveStep] = useState(0);
 
   const [formData, setFormData] = useState({
+    bio: "",
+    email: "",
     displayName: "",
     username: "",
     password: "",
     stayLoggedIn: true,
+    bioErrors: {},
+    emailErrors: {},
     displayNameErrors: {},
     usernameErrors: {},
     passwordErrors: {},
     regErrors: [],
   });
+
+  const validateBio = (value) => {
+    let errors = {};
+
+    if (value.length > 256) {
+      errors.long = true;
+    }
+    return errors;
+  };
+
+  const validateEmail = (value) => {
+    let errors = {};
+
+    if (value === undefined || value === null || value === "") {
+      errors.undefined = true;
+    }
+    if (typeof value === "string" && value.toString().includes(" ")) {
+      errors.spaces = true;
+    }
+    if (!value.toString().includes("@") || !value.toString().split("@")[1].includes(".")) {
+      errors.emailFormat = true;
+    }
+    if (value !== value.toLowerCase()) {
+      errors.case = true;
+    }
+    if (value.length > 128) {
+      errors.long = true;
+    }
+    return errors;
+  };
 
   const validateUsername = (value) => {
     let errors = {};
@@ -82,6 +116,8 @@ const useRegisterDialog = () => {
     setFormData({
       ...formData,
       [field]: value,
+      bioErrors: field === "bio" ? { ...validateBio(value) } : { ...formData.bioErrors },
+      emailErrors: field === "email" ? { ...validateEmail(value) } : { ...formData.emailErrors },
       usernameErrors: field === "username" ? { ...validateUsername(value) } : { ...formData.usernameErrors },
       passwordErrors: field === "password" ? { ...validatePassword(value) } : { ...formData.passwordErrors },
       displayNameErrors: field === "displayName" ? { ...validateDisplayName(value) } : { ...formData.displayNameErrors },
@@ -105,9 +141,9 @@ const useRegisterDialog = () => {
       const response = await axios.post(requestString, {
         user: {
           username: formData.username,
-          email: "empty@email.com",
+          email: formData.email,
           displayName: formData.displayName,
-          bio: "empty",
+          bio: formData.bio,
           password: formData.password,
           //formData.stayLoggedIn,
         },
@@ -143,10 +179,14 @@ const useRegisterDialog = () => {
     if (activeStep === 0) {
       dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: true, conflictingDialogs: ["registerDialogOpen"] }));
       setFormData({
+        bio: formData.bio,
+        email: formData.email,
         displayName: formData.displayName,
         username: formData.username,
         password: formData.password,
         stayLoggedIn: formData.stayLoggedIn,
+        bioErrors: {},
+        emailErrors: {},
         displayNameErrors: {},
         usernameErrors: {},
         passwordErrors: {},
@@ -161,10 +201,14 @@ const useRegisterDialog = () => {
   const handleDialogClose = () => {
     dispatch(setDialogOpened({ dialogName: "registerDialogOpen", newState: false }));
     setFormData({
+      bio: formData.bio,
+      email: formData.email,
       displayName: formData.displayName,
       username: formData.username,
       password: formData.password,
       stayLoggedIn: formData.stayLoggedIn,
+      bioErrors: {},
+      emailErrors: {},
       displayNameErrors: {},
       usernameErrors: {},
       passwordErrors: {},
@@ -176,10 +220,14 @@ const useRegisterDialog = () => {
   const handleToLogin = () => {
     dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: true, conflictingDialogs: ["registerDialogOpen"] }));
     setFormData({
+      bio: formData.bio,
+      email: formData.email,
       displayName: formData.displayName,
       username: formData.username,
       password: formData.password,
       stayLoggedIn: formData.stayLoggedIn,
+      bioErrors: {},
+      emailErrors: {},
       displayNameErrors: {},
       usernameErrors: {},
       passwordErrors: {},
@@ -189,15 +237,25 @@ const useRegisterDialog = () => {
   };
 
   const errorMessages = [
+    formData.bioErrors.long && "Bio is too long.",
+
+    formData.emailErrors.spaces && "Email must not contain spaces.",
+    formData.emailErrors.undefined && "Email is required.",
+    formData.emailErrors.emailFormat && "Email has invalid format.",
+    formData.emailErrors.long && "Email is too long.",
+    formData.emailErrors.case && "Email must be lowercase.",
+
     formData.displayNameErrors.spaces && "Display name must not start or end with spaces.",
     formData.displayNameErrors.undefined && "Display name is required.",
     formData.displayNameErrors.short && "Display name must be at least 3 characters long.",
     formData.displayNameErrors.long && "Display name cannot be longer than 16 characters.",
+
     formData.usernameErrors.spaces && "Username must not contain spaces.",
     formData.usernameErrors.undefined && "Username is required.",
     formData.usernameErrors.short && "Username must be at least 3 characters long.",
     formData.usernameErrors.long && "Username cannot be longer than 24 characters.",
     formData.usernameErrors.case && "Username must be lowercase.",
+
     formData.passwordErrors.spaces && "Password must not contain spaces.",
     formData.passwordErrors.undefined && "Password is required.",
     formData.passwordErrors.short && "Password must be at least 5 characters long.",
