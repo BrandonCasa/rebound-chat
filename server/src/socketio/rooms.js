@@ -1,12 +1,21 @@
 import { Server } from "socket.io";
 import logger from "../logger.js";
+import RoomModel from "models/Room.js";
 import "dotenv/config";
 
 class ServerRooms {
   constructor() {
-    this.roomList = {
-      0: "General",
-    };
+    this.refreshRooms();
+  }
+
+  async getRoomList() {
+    let roomList = {};
+
+    const rooms = RoomModel.find({}).toArray();
+    await rooms.forEach((room) => {
+      roomList[room._id] = room.name;
+    });
+    return roomList;
   }
 
   startListeners(sockets) {
@@ -21,10 +30,16 @@ class ServerRooms {
     });
   }
 
-  attachListeners(socket) {
+  async attachListeners(socket) {
     socket.on("join_room", (roomId) => {
       try {
-        socket.join(this.roomList[roomId] || "General");
+        let roomList = this.getRoomList();
+
+        if (roomList[roomId] === undefined) {
+          throw Error("Room not found by ID.");
+        }
+
+        socket.join(roomList[roomId]);
       } catch (error) {
         logger.error(error);
       }
@@ -32,14 +47,32 @@ class ServerRooms {
 
     socket.on("leave_room", (roomId) => {
       try {
-        socket.leave(this.roomList[roomId]);
+        let roomList = this.getRoomList();
+
+        if (roomList[roomId] === undefined) {
+          throw Error("Room not found by ID.");
+        }
+
+        socket.leave(roomList[roomId]);
       } catch (error) {
         logger.error(error);
       }
     });
 
-    socket.on("message_room", (roomId, msg) => {
-      socket.to(this.roomList[roomId] || "General").emit();
+    socket.on("message_room", async (roomId, msg) => {
+      try {
+        let roomList = this.getRoomList();
+
+        if (roomList[roomId] === undefined) {
+          throw Error("Room not found by ID.");
+        }
+
+        const roomName = roomList[roomId];
+        socket.to(roomName).emit("new_message", { roomId, msg, sender: socket.id });
+        // Save message to MongoDB if necessary
+      } catch (error) {
+        logger.error(error);
+      }
     });
   }
 }
