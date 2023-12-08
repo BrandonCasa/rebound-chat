@@ -3,6 +3,7 @@ import { auth, getTokenFromHeader } from "../auth.js";
 import UserModel from "../../models/User.js";
 import FriendModel from "../../models/Friend.js";
 import RoomModel from "../../models/Room.js";
+import MessageModel from "../../models/Message.js";
 import passport from "passport";
 import jwt from "jsonwebtoken";
 import logger from "../../logger.js";
@@ -18,6 +19,7 @@ router.put("/dev/database/wipe", async function (req, res, next) {
   await FriendModel.deleteMany({});
   await UserModel.deleteMany({});
   await RoomModel.deleteMany({});
+  await MessageModel.deleteMany({});
 
   logger.info("Development Database Wiped.");
 

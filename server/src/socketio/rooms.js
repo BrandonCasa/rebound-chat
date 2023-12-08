@@ -37,8 +37,10 @@ class ServerRooms {
           throw Error("Room not found by ID.");
         }
 
+        const joinedRoom = await RoomModel.findById(roomId);
+
         socket.join(roomList[roomId]);
-        socket.emit("joined_room", roomId);
+        socket.emit("joined_room", roomId, joinedRoom.messages);
         logger.info(`User '${socket.user.username}' joined room '${roomId}'.`);
       } catch (error) {
         logger.error(error);

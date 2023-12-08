@@ -491,7 +491,7 @@ describe("Test SocketIO", () => {
   it("Join Room Jones", (done) => {
     clientSocket.emit("join_room", testRoomId);
 
-    clientSocket.on("joined_room", (roomId) => {
+    clientSocket.on("joined_room", (roomId, roomMessages) => {
       done();
     });
   });
@@ -513,6 +513,70 @@ describe("Test SocketIO", () => {
   });
 
   it("On Disconnect Jones", (done) => {
+    clientSocket.on("disconnect", () => {
+      clientSocket.off("disconnect");
+      done();
+    });
+
+    clientSocket.disconnect();
+  });
+
+  it("Login Billy", (done) => {
+    chaiAgent
+      .get("/api/users/login")
+      .set("Content-Type", "application/json")
+      .set("Allow-Control-Allow-Origin", "*")
+      .send({
+        user: {
+          email: "billy@email.com",
+          password: "billyabc1[",
+        },
+      })
+      .end((err, res) => {
+        try {
+          if (res.body.hasOwnProperty("errors")) {
+            assert.fail(JSON.stringify(res.body.errors));
+          }
+          if (res.status !== 200) {
+            assert.fail(`Status code is ${res.status}, not 200.`);
+          }
+          done();
+        } catch (e) {
+          done(e);
+        }
+      });
+  });
+
+  it("Connect Billy", (done) => {
+    const URL = process.env.NODE_ENV === "production" ? undefined : "http://localhost:3000";
+    clientSocket = io.connect(URL, {
+      query: { token: billyToken },
+    });
+
+    clientSocket.on("connected", () => {
+      clientSocket.off("connected");
+      done();
+    });
+  });
+
+  it("Join Room Billy", (done) => {
+    clientSocket.emit("join_room", testRoomId);
+
+    clientSocket.on("joined_room", (roomId, roomMessages) => {
+      console.log(roomMessages);
+      done();
+    });
+  });
+
+  it("Leave Room Billy", (done) => {
+    clientSocket.emit("leave_room", testRoomId);
+
+    clientSocket.on("left_room", (roomId) => {
+      done();
+    });
+  });
+
+  it("On Disconnect Billy", (done) => {
     clientSocket.on("disconnect", () => {
       clientSocket.off("disconnect");
       done();
