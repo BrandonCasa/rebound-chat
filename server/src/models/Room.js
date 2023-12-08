@@ -4,7 +4,7 @@ const RoomSchema = new mongoose.Schema(
   {
     name: { type: String, required: [true, "is required"] },
     description: { type: String, default: "" },
-    group: { type: Schema.Types.ObjectId, ref: "RoomGroup", required: [true, "is required"] },
+    group: { type: Schema.Types.ObjectId, ref: "RoomGroup" },
     settings: [{ type: Schema.Types.ObjectId, ref: "RoomSetting" }],
     messages: [{ type: Schema.Types.ObjectId, ref: "RoomMessage" }],
   },

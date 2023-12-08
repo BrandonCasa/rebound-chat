@@ -348,7 +348,7 @@ describe("Test '/users' api", () => {
 });
 
 describe("Test SocketIO", () => {
-  let billyId, billyToken, jonesId, jonesToken;
+  let billyId, billyToken, jonesId, jonesToken, testRoomId;
   let clientSocket = io();
 
   it("Wipe MongoDB", (done) => {
@@ -457,6 +457,25 @@ describe("Test SocketIO", () => {
       });
   });
 
+  it("Make Test Room", (done) => {
+    chaiAgent
+      .post("/api/dev/database/testroom")
+      .set("Content-Type", "application/json")
+      .set("Allow-Control-Allow-Origin", "*")
+      .send()
+      .end((err, res) => {
+        try {
+          if (res.status !== 200) {
+            assert.fail(`Status code is ${res.status}, not 200.`);
+          }
+          testRoomId = res.body.roomId;
+          done();
+        } catch (e) {
+          done(e);
+        }
+      });
+  });
+
   it("Connect Jones", (done) => {
     const URL = process.env.NODE_ENV === "production" ? undefined : "http://localhost:3000";
     clientSocket = io.connect(URL, {
@@ -465,12 +484,32 @@ describe("Test SocketIO", () => {
 
     clientSocket.on("connected", () => {
       clientSocket.off("connected");
-      clientSocket.disconnect();
+      done();
     });
+  });
 
+  it("Join Room Jones", (done) => {
+    clientSocket.emit("join_room", testRoomId);
+
+    clientSocket.on("joined_room", (roomId) => {
+      done();
+    });
+  });
+
+  it("Leave Room Jones", (done) => {
+    clientSocket.emit("leave_room", testRoomId);
+
+    clientSocket.on("left_room", (roomId) => {
+      done();
+    });
+  });
+
+  it("On Disconnect Jones", (done) => {
     clientSocket.on("disconnect", () => {
       clientSocket.off("disconnect");
       done();
     });
+
+    clientSocket.disconnect();
   });
 });
