@@ -499,7 +499,7 @@ describe("Test SocketIO", () => {
   it("Send Message Jones", (done) => {
     clientSocket.emit("message_room", testRoomId, "hello!");
 
-    clientSocket.on("message_sent", (roomId) => {
+    clientSocket.on("message_sent", (roomId, msgId) => {
       done();
     });
   });
