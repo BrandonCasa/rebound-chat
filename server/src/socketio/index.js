@@ -62,9 +62,6 @@ class SocketBackend {
     socket.removeAllListeners();
   }
 }
-// TODO:
-// add chat room database stuff
-// add chat room socketio logic
 
 const socketBackend = new SocketBackend();
 
