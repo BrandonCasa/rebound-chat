@@ -496,6 +496,14 @@ describe("Test SocketIO", () => {
     });
   });
 
+  it("Send Message Jones", (done) => {
+    clientSocket.emit("message_room", testRoomId, "hello!");
+
+    clientSocket.on("message_sent", (roomId) => {
+      done();
+    });
+  });
+
   it("Leave Room Jones", (done) => {
     clientSocket.emit("leave_room", testRoomId);
 

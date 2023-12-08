@@ -6,17 +6,10 @@ const RoomSchema = new mongoose.Schema(
     description: { type: String, default: "" },
     group: { type: Schema.Types.ObjectId, ref: "RoomGroup" },
     settings: [{ type: Schema.Types.ObjectId, ref: "RoomSetting" }],
-    messages: [{ type: Schema.Types.ObjectId, ref: "RoomMessage" }],
+    messages: [{ type: Schema.Types.ObjectId, ref: "Message" }],
   },
   { timestamps: true }
 );
-
-RoomSchema.methods.addMessage = function (message) {
-  console.log(this.messages);
-  console.log(message);
-
-  return this.save();
-};
 
 const RoomModel = mongoose.model("Room", RoomSchema);
 

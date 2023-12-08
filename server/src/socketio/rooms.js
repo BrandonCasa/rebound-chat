@@ -1,6 +1,8 @@
 import { Server } from "socket.io";
 import logger from "../logger.js";
 import RoomModel from "../models/Room.js";
+import MessageModel from "../models/Message.js";
+import UserModel from "../models/User.js";
 import "dotenv/config";
 
 class ServerRooms {
@@ -67,9 +69,25 @@ class ServerRooms {
           throw Error("Room not found by ID.");
         }
 
-        const roomName = roomList[roomId];
-        socket.to(roomName).emit("new_message", { roomId, msg, sender: socket.id });
-        // Save message to MongoDB if necessary
+        const sender = await UserModel.findById(socket.user.id);
+        if (!sender) {
+          throw Error("Couldn't find sender user by ID.");
+        }
+        let newMessage = new MessageModel();
+        newMessage.sender = sender;
+        newMessage.content = msg;
+        await newMessage.save();
+
+        const messageRoom = await RoomModel.findById(roomId);
+        if (!messageRoom) {
+          throw Error("Room not found by ID.");
+        }
+        messageRoom.messages.push(newMessage);
+        await messageRoom.save();
+
+        socket.to(roomList[roomId]).emit("new_message", { roomId, msgId: newMessage._id });
+        socket.emit("message_sent", roomId, newMessage._id);
+        logger.info(`User '${socket.user.username}' sent a message with id '${newMessage._id}' to room '${roomId}'.`);
       } catch (error) {
         logger.error(error);
       }
