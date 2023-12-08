@@ -465,7 +465,11 @@ describe("Test SocketIO", () => {
 
     clientSocket.on("connected", () => {
       clientSocket.off("connected");
-      clientSocket.close();
+      clientSocket.disconnect();
+    });
+
+    clientSocket.on("disconnect", () => {
+      clientSocket.off("disconnect");
       done();
     });
   });

@@ -60,7 +60,6 @@ class SocketBackend {
   onDisconnect(socket) {
     logger.info(`User disconnected: '${socket.user.username}'.`);
     socket.removeAllListeners();
-    socket.emit("disconnected");
   }
 }
 // TODO:
