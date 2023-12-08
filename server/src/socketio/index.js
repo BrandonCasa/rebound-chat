@@ -13,14 +13,14 @@ class SocketBackend {
     this.io = new Server({
       path: "/socket.io",
       cors: {
-        origin: "http://localhost:3000",
+        origin: "http://localhost:6002",
       },
     });
 
     this.initializeMiddleware();
     this.initializeIoEvents();
 
-    this.io.listen(3000);
+    this.io.listen(6002);
   }
 
   stopListening() {

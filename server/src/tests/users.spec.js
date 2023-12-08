@@ -351,7 +351,7 @@ describe("Test SocketIO", () => {
   let billyId, billyToken, jonesId, jonesToken, testRoomId;
   let clientSocket = io();
 
-  it("Wipe MongoDB", (done) => {
+  it("Wipe MongoDB 1", (done) => {
     chaiAgent
       .put("/api/dev/database/wipe")
       .set("Content-Type", "application/json")
@@ -477,7 +477,7 @@ describe("Test SocketIO", () => {
   });
 
   it("Connect Jones", (done) => {
-    const URL = process.env.NODE_ENV === "production" ? undefined : "http://localhost:3000";
+    const URL = process.env.NODE_ENV === "production" ? undefined : "http://localhost:6002";
     clientSocket = io.connect(URL, {
       query: { token: jonesToken },
     });
@@ -548,7 +548,7 @@ describe("Test SocketIO", () => {
   });
 
   it("Connect Billy", (done) => {
-    const URL = process.env.NODE_ENV === "production" ? undefined : "http://localhost:3000";
+    const URL = process.env.NODE_ENV === "production" ? undefined : "http://localhost:6002";
     clientSocket = io.connect(URL, {
       query: { token: billyToken },
     });
@@ -583,5 +583,23 @@ describe("Test SocketIO", () => {
     });
 
     clientSocket.disconnect();
+  });
+
+  it("Wipe MongoDB 2", (done) => {
+    chaiAgent
+      .put("/api/dev/database/wipe")
+      .set("Content-Type", "application/json")
+      .set("Allow-Control-Allow-Origin", "*")
+      .send()
+      .end((err, res) => {
+        try {
+          if (res.status !== 200) {
+            assert.fail(`Status code is ${res.status}, not 200.`);
+          }
+          done();
+        } catch (e) {
+          done(e);
+        }
+      });
   });
 });

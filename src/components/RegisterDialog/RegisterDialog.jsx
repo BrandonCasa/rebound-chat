@@ -58,21 +58,25 @@ const RegisterDialog = () => {
   const handleUserRegister = async () => {
     let requestString = "";
     if (!process.env.NODE_ENV || process.env.NODE_ENV === "development") {
-      requestString = "http://localhost:6001/api/auth/register/";
+      requestString = "http://localhost:6001/api/users/register";
     } else {
-      requestString = "/api/auth/register/";
+      requestString = "/api/users/register";
     }
 
     try {
       const response = await axios.post(requestString, {
-        displayName: formData.displayName,
-        username: formData.username,
-        password: formData.password,
-        stayLoggedIn: formData.stayLoggedIn,
+        user: {
+          username: formData.username,
+          email: "empty@email.com",
+          displayName: formData.displayName,
+          bio: "empty",
+          password: formData.password,
+          //formData.stayLoggedIn,
+        },
       });
 
       if (response.status === 200) {
-        const authToken = response.data;
+        const authToken = response.body.user.token;
         window.localStorage.setItem("auth-token", authToken);
         dispatch(setAuthState({ authToken }));
         dispatch(setLoggedIn({ loggedIn: true }));
@@ -80,9 +84,11 @@ const RegisterDialog = () => {
         setFormData({ ...formData, regErrors: [] });
       }
     } catch (error) {
-      if (error.response && error.response.status === 400) {
-        let regErrors = error.response.data.errors.map((error) => error.msg);
-        setFormData({ ...formData, regErrors });
+      if (error.response) {
+        console.log(error.response);
+        console.log(response.body.errors);
+        //let regErrors = error.response.data.errors.map((error) => error.msg);
+        //setFormData({ ...formData, regErrors });
         setActiveStep(0);
       }
     }
@@ -184,7 +190,7 @@ const RegisterDialog = () => {
           </Step>
           <Step key={2} completed={activeStep > 2}>
             <StepLabel>
-              <Typography variant="caption">Preview</Typography>
+              <Typography variant="caption">redf</Typography>
             </StepLabel>
           </Step>
         </Stepper>

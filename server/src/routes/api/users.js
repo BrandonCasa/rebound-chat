@@ -9,16 +9,28 @@ import "dotenv/config";
 
 const router = Router();
 
-router.get("/users/verify", function (req, res, next) {
+router.get("/users/verify", async function (req, res, next) {
   const token = getTokenFromHeader(req);
-  const decoded = jwt.verify(token, process.env.SECRET, function (err, decoded) {
+  const decoded = await jwt.verify(token, process.env.SECRET, function (err, decoded) {
     if (err) {
-      next(new Error("Couldn't Verify Token."));
+      next(err);
       return res.sendStatus(500);
     }
-
-    return res.json({ user: decoded });
+    return decoded;
   });
+
+  UserModel.findById(decoded.id)
+    .then(function (user) {
+      if (!user) {
+        return res.sendStatus(401);
+      }
+
+      return res.json({ user: user.toAuthJSON() });
+    })
+    .catch((err) => {
+      next(err);
+      return res.sendStatus(500);
+    });
 });
 
 router.get("/users/profile", auth.required, function (req, res, next) {

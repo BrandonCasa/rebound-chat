@@ -67,7 +67,7 @@ class ServerBackend {
     try {
       await databaseServer.startServer();
       socketBackend.startListening();
-      const PORT = process.env.PORT || 3000; // Define a default port
+      const PORT = process.env.PORT || 6001; // Define a default port
       this.server.listen(PORT, () => logger.info(`Server started on port ${PORT}`));
     } catch (error) {
       logger.error("Failed to start the server:", error);

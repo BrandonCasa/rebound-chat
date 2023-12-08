@@ -96,21 +96,25 @@ const useRegisterDialog = () => {
   const handleUserRegister = async () => {
     let requestString = "";
     if (!process.env.NODE_ENV || process.env.NODE_ENV === "development") {
-      requestString = "http://localhost:6001/api/auth/register/";
+      requestString = "http://localhost:6001/api/users/register";
     } else {
-      requestString = "/api/auth/register/";
+      requestString = "/api/users/register";
     }
 
     try {
       const response = await axios.post(requestString, {
-        displayName: formData.displayName,
-        username: formData.username,
-        password: formData.password,
-        stayLoggedIn: formData.stayLoggedIn,
+        user: {
+          username: formData.username,
+          email: "empty@email.com",
+          displayName: formData.displayName,
+          bio: "empty",
+          password: formData.password,
+          //formData.stayLoggedIn,
+        },
       });
 
       if (response.status === 200) {
-        const authToken = response.data;
+        const authToken = response.data.user.token;
         window.localStorage.setItem("auth-token", authToken);
         dispatch(setAuthState({ authToken }));
         dispatch(setLoggedIn({ loggedIn: true }));
@@ -118,9 +122,10 @@ const useRegisterDialog = () => {
         setFormData({ ...formData, regErrors: [] });
       }
     } catch (error) {
-      if (error.response && error.response.status === 400) {
-        let regErrors = error.response.data.errors.map((error) => error.msg);
-        setFormData({ ...formData, regErrors });
+      if (error.response) {
+        console.log(error.response.data.errors);
+        //let regErrors = error.response.data.errors.map((error) => error.msg);
+        //setFormData({ ...formData, regErrors });
         setActiveStep(0);
       }
     }
