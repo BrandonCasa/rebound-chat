@@ -1,13 +1,9 @@
 import { Server } from "socket.io";
 import logger from "../logger.js";
-import RoomModel from "models/Room.js";
+import RoomModel from "../models/Room.js";
 import "dotenv/config";
 
 class ServerRooms {
-  constructor() {
-    this.refreshRooms();
-  }
-
   async getRoomList() {
     let roomList = {};
 
@@ -30,7 +26,7 @@ class ServerRooms {
     });
   }
 
-  async attachListeners(socket) {
+  attachListeners(socket) {
     socket.on("join_room", (roomId) => {
       try {
         let roomList = this.getRoomList();

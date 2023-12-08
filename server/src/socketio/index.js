@@ -2,6 +2,7 @@ import { Server } from "socket.io";
 import logger from "../logger.js";
 import jwt from "jsonwebtoken";
 import "dotenv/config";
+import serverRooms from "./rooms.js";
 
 class SocketBackend {
   constructor() {
@@ -43,12 +44,23 @@ class SocketBackend {
   initializeIoEvents() {
     this.io.on("connection", (socket) => {
       this.onConnection(socket);
+
+      socket.on("disconnect", () => {
+        this.onDisconnect(socket);
+      });
     });
   }
 
   onConnection(socket) {
-    logger.info(`New connection from '${socket.user.username}'.`);
+    logger.info(`User connected: '${socket.user.username}'.`);
+    serverRooms.attachListeners(socket);
     socket.emit("connected");
+  }
+
+  onDisconnect(socket) {
+    logger.info(`User disconnected: '${socket.user.username}'.`);
+    socket.removeAllListeners();
+    socket.emit("disconnected");
   }
 }
 // TODO:

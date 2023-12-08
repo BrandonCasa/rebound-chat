@@ -465,6 +465,7 @@ describe("Test SocketIO", () => {
 
     clientSocket.on("connected", () => {
       clientSocket.off("connected");
+      clientSocket.close();
       done();
     });
   });
