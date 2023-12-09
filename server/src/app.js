@@ -18,8 +18,6 @@ configDotenv();
 
 class ServerBackend {
   constructor() {
-    this.sessionMiddleware = null;
-
     this.app = express();
     customPassport.setupPassport();
     this.initializeMiddleware();
@@ -35,18 +33,6 @@ class ServerBackend {
     this.app.use(bodyParser.json());
 
     this.app.use(methodOverride());
-
-    this.app.use(
-      session({
-        name: "reboundCookie",
-        secret: process.env.SECRET,
-        cookie: {
-          maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
-        },
-        resave: false,
-        saveUninitialized: false,
-      })
-    );
   }
 
   configureLogger() {}
