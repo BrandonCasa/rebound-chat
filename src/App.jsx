@@ -56,7 +56,7 @@ function App() {
             <Routes>
               <Route exact path="/" element={<LandingPage />} />
               <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/chat" element={<ChatPage />} />
+              <Route path="/chat" element={<h1>Page Under Maintenance</h1>} />
               {false && <Route path="/hub" element={<HubPage />} />}
               <Route path="/test" element={<h1>{loggingInState.toString()}</h1>} />
               <Route path="*" element={<h1>404</h1>} />
@@ -69,3 +69,4 @@ function App() {
 }
 
 export default App;
+// <Route path="/chat" element={<ChatPage />} />

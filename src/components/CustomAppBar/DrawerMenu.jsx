@@ -84,7 +84,12 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
           </ListItemIcon>
         </ListItemWithTooltip>
         <ListItemWithTooltip key="Profile" title="Profile" placement="right">
-          <ListItemIcon>
+          <ListItemIcon
+            sx={{ opacity: window.location.pathname.toString() === "/profile" ? "0.5" : "1.0" }}
+            onClick={() => {
+              navigate("/profile");
+            }}
+          >
             <Icons.PersonRounded />
           </ListItemIcon>
         </ListItemWithTooltip>
