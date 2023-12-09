@@ -49,15 +49,7 @@ class ServerBackend {
     );
   }
 
-  configureLogger() {
-    const morganOptionTiny = {
-      stream: {
-        write: (message) => logger.info(message.trim()),
-      },
-    };
-
-    this.app.use(morgan("tiny", morganOptionTiny));
-  }
+  configureLogger() {}
 
   initializeRoutes() {
     this.app.use(routes);

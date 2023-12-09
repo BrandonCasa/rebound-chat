@@ -9,31 +9,33 @@ const LoginDialog = () => {
   const loginDialogState = useSelector((state) => state.dialogs.loginDialogOpen);
   const dispatch = useDispatch();
 
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [stayLoggedIn, setStayLoggedIn] = useState(true);
 
   const handleUserLogin = () => {
-    const requestString = !process.env.NODE_ENV || process.env.NODE_ENV === "development" ? "http://localhost:6001/api/auth/login/" : "/api/auth/login/";
-
+    const requestString = !process.env.NODE_ENV || process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/login" : "/api/users/login";
     axios
-      .post(requestString, {
-        username,
-        password,
-        stayLoggedIn,
+      .get(requestString, {
+        params: {
+          user: {
+            email: email,
+            password: password,
+            //stayLoggedIn
+          },
+        },
       })
       .then((res) => {
         if (res.status === 200) {
-          const { token, user } = res.data;
+          const { token, username, displayName, id } = res.data.user;
           window.localStorage.setItem("auth-token", token);
           dispatch(setAuthState({ token }));
-          dispatch(setLoggedIn({ loggedIn: true }));
-          dispatch(setLoggedIn({ loggedIn: true, username: user.username, displayName: user.displayName }));
+          dispatch(setLoggedIn({ loggedIn: true, id, username, displayName }));
           dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
         }
       })
       .catch((error) => {
-        console.log(error);
+        console.log(error.response.data.errors);
       });
   };
 
@@ -56,13 +58,14 @@ const LoginDialog = () => {
         </Typography>
         <TextField
           sx={{ pb: 2 }}
-          label="Username"
+          label="Email"
           variant="outlined"
-          value={username}
+          value={email}
+          type="email"
           onChange={(e) => {
-            setUsername(e.target.value);
+            setEmail(e.target.value);
           }}
-          autoComplete="current-username"
+          autoComplete="current-email"
         />
         <TextField
           label="Password"

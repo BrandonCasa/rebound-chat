@@ -49,6 +49,7 @@ router.get("/users/profile", auth.required, function (req, res, next) {
 });
 
 router.get("/users/login", function (req, res, next) {
+  req.body = req.query;
   if (!req.body?.user?.email) {
     return res.status(422).json({ errors: { email: "is required" } });
   }
