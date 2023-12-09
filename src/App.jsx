@@ -23,18 +23,17 @@ function App() {
 
   useEffect(() => {
     if (authTokenState && authTokenState !== "" && !loggedInState) {
-      // verify at /api/auth/verify
-      const requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/auth/verify/" : "/api/auth/verify/";
+      const requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/verify" : "/api/users/verify";
       axios
         .get(requestString, {
           headers: {
             "Content-Type": "application/json",
             "Allow-Control-Allow-Origin": "*",
-            Authorization: authTokenState,
+            authorization: `Bearer ${authTokenState}`,
           },
         })
         .then((response) => {
-          dispatch(setLoggedIn({ loggedIn: true, username: response.data.user.username, displayName: response.data.user.displayName }));
+          dispatch(setLoggedIn({ loggedIn: true, id: response.data.user.id, username: response.data.user.username, displayName: response.data.user.displayName }));
         })
         .catch((error) => {
           console.log(error);
@@ -57,7 +56,7 @@ function App() {
             <Routes>
               <Route exact path="/" element={<LandingPage />} />
               <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/chat" element={<ChatPage />} />
+              <Route path="/chat" element={<h1>Page Under Maintenance</h1>} />
               {false && <Route path="/hub" element={<HubPage />} />}
               <Route path="/test" element={<h1>{loggingInState.toString()}</h1>} />
               <Route path="*" element={<h1>404</h1>} />
@@ -70,3 +69,4 @@ function App() {
 }
 
 export default App;
+// <Route path="/chat" element={<ChatPage />} />

@@ -27,7 +27,7 @@ function ProfilePage(props) {
       <Stack spacing={2} sx={{ height: "100%", width: "100%" }}>
         <ItemPaper>
           <Typography variant="h4" sx={{ color: `${theme.palette.text.primary}` }}>
-            My Profile
+            My Profile (WIP)
           </Typography>
         </ItemPaper>
         <ItemBox>

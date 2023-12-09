@@ -3,6 +3,32 @@ import * as Icons from "@mui/icons-material";
 import { useState } from "react";
 
 const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
+  const bioErrorMessages = [formData.bioErrors.long && "Bio is too long."].map((message, index) => {
+    if (message) {
+      return (
+        <Typography key={index} variant="subtitle2" fontWeight={900}>
+          - {message}
+        </Typography>
+      );
+    }
+  });
+
+  const emailErrorMessages = [
+    formData.emailErrors.spaces && "Email must not contain spaces.",
+    formData.emailErrors.undefined && "Email is required.",
+    formData.emailErrors.emailFormat && "Email has invalid format.",
+    formData.emailErrors.long && "Email is too long.",
+    formData.emailErrors.case && "Email must be lowercase.",
+  ].map((message, index) => {
+    if (message) {
+      return (
+        <Typography key={index} variant="subtitle2" fontWeight={900}>
+          - {message}
+        </Typography>
+      );
+    }
+  });
+
   const usernameErrorMessages = [
     formData.usernameErrors.spaces && "Username must not contain spaces.",
     formData.usernameErrors.undefined && "Username is required.",
@@ -53,6 +79,7 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
     return (
       <>
         <TextField
+          id="current-username"
           sx={{ pb: 2 }}
           error={Object.keys(formData.usernameErrors).length > 0}
           label="Login Name"
@@ -80,6 +107,36 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
           }}
         />
         <TextField
+          id="current-email"
+          sx={{ pb: 2 }}
+          error={Object.keys(formData.emailErrors).length > 0}
+          label="Email"
+          variant="outlined"
+          value={formData.email}
+          onChange={(e) => handleFormDataChange("email", e.target.value, {})}
+          helperText="Your email address."
+          autoComplete="current-email"
+          type="email"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Tooltip title={emailErrorMessages} arrow placement="bottom-start" open={Object.keys(formData.emailErrors).length > 0}>
+                  <span>
+                    <IconButton disableTouchRipple disabled={Object.keys(formData.emailErrors).length <= 0} style={{ color: "rgba(0, 0, 0, 0.26)" }}>
+                      {Object.keys(formData.emailErrors).length > 0 ? (
+                        <Icons.PriorityHighRounded style={{ color: "rgba(255, 0, 0, 0.52)" }} />
+                      ) : (
+                        <Icons.EmailRounded />
+                      )}
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </InputAdornment>
+            ),
+          }}
+        />
+        <TextField
+          id="current-password"
           sx={{ pb: 1 }}
           error={Object.keys(formData.passwordErrors).length > 0}
           label="Password"
@@ -115,6 +172,7 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
     return (
       <>
         <TextField
+          id="current-displayName"
           sx={{ pb: 2 }}
           error={Object.keys(formData.displayNameErrors).length > 0}
           label="Display Name"
@@ -142,12 +200,28 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
           }}
         />
         <TextField
+          id="current-aboutMe"
           sx={{ pb: 1 }}
-          label="About Me (WIP)"
-          value=""
+          error={Object.keys(formData.bioErrors).length > 0}
+          label="About Me"
+          value={formData.bio}
+          onChange={(e) => handleFormDataChange("bio", e.target.value, {})}
           variant="outlined"
-          helperText="A brief description of yourself. (wont save)"
+          helperText="Your public bio."
           autoComplete="current-aboutMe"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Tooltip title={bioErrorMessages} arrow placement="bottom-start" open={Object.keys(formData.bioErrors).length > 0}>
+                  <span>
+                    <IconButton disableTouchRipple disabled={Object.keys(formData.bioErrors).length <= 0} style={{ color: "rgba(0, 0, 0, 0.26)" }}>
+                      {Object.keys(formData.bioErrors).length > 0 ? <Icons.PriorityHighRounded style={{ color: "rgba(255, 0, 0, 0.52)" }} /> : <Icons.NoteRounded />}
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </InputAdornment>
+            ),
+          }}
         />
       </>
     );
