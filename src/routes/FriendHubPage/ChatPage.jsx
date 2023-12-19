@@ -1,18 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Box, Button, Divider, Paper, Stack, Typography } from "@mui/material";
-import socketIoHelper from "helpers/socket"; // Assuming socket is a default export
+import socketIoHelper from "helpers/socket";
 import UserList from "components/Chat/UserList";
 import ChannelList from "components/Chat/ChannelList";
 import ChatArea from "components/Chat/ChatArea";
 import ChatInput from "components/Chat/ChatInput";
 import { useSelector } from "react-redux";
 
-// Constants moved outside the component, to avoid re-declaration on re-renders
-const INITIAL_CHANNELS = ["General", "Tech", "Random"];
-const INITIAL_CHANNEL = "General";
-
-// Refactoring ChatBlock into a separate component file is recommended if it's used outside ChatPage.
-// Memoized to prevent unnecessary re-renders
 const ChatBlock = React.memo(({ title, children }) => (
   <Paper sx={{ height: "100%", width: "20%", flexGrow: 1, position: "relative" }}>
     <Typography align="center" variant="h5">
@@ -26,90 +20,24 @@ const ChatBlock = React.memo(({ title, children }) => (
 function ChatPage() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
-  const [channels] = useState(INITIAL_CHANNELS); // Channels array is static, no need for a setter
-  const [currentChannel, setCurrentChannel] = useState(INITIAL_CHANNEL);
+  const [channels, setChannels] = useState([]);
+  const [currentChannel, setCurrentChannel] = useState(null);
   const [users, setUsers] = useState([]);
-  const [retrieved, setRetrieved] = useState(false);
   const authState = useSelector((state) => state.auth);
 
-  // useCallback to memoize the function and prevent infinite loops in useEffect
-  const retrieveMessages = useCallback(() => {
-    //socket.emit("loadMessages", messages[messages.length - 1]?.messageId, () => {});
-  }, [messages]);
-
-  // Handle socket connections and events
   useEffect(() => {
-    //socket.connect();
-
-    const handleNewMessage = (message) => setMessages((prevMessages) => [...prevMessages, message]);
-
-    const updateRoomData = ({ users }) => setUsers(users);
-
-    const handleMessagesRetrieved = (retrievedContents) => {
-      const newMessages = retrievedContents.messages.map((val) => {
-        let displayedName = "";
-        if (val.bot) {
-          displayedName = "System";
-        } else if (val.anonymous) {
-          displayedName = `Anon-${val.altSenderRef.split("-")[1]}`;
-        } else {
-          displayedName = val.userSenderRef?.displayName || "Error";
-        }
-
-        return {
-          displayName: displayedName,
-          loggedIn: !!val.userSenderRef,
-          messageText: val.messageContents,
-          messageId: val._id,
-          sendTime: val.sendTime,
-          username: val.userSenderRef?.username || val.altSenderRef,
-        };
+    if (authState.loggedIn === true && socketIoHelper.getSocket() !== null) {
+      socketIoHelper.getSocket().on("room_list", (roomList) => {
+        console.log(roomList);
       });
 
-      setMessages((prevMessages) => [...newMessages, ...prevMessages]);
-    };
-
-    //socket.on("message", handleNewMessage);
-    //socket.on("roomData", updateRoomData);
-    //socket.on("messagesRetrieved", handleMessagesRetrieved);
+      socketIoHelper.getSocket().emit("list_rooms");
+    }
 
     return () => {
-      //socket.off("message", handleNewMessage);
-      //socket.off("roomData", updateRoomData);
-      //socket.off("messagesRetrieved", handleMessagesRetrieved);
-      //socket.disconnect();
+      socketIoHelper.getSocket().off("room_list");
     };
   }, []);
-
-  useEffect(() => {
-    if (messages.length === 1 && !retrieved) {
-      retrieveMessages();
-      setRetrieved(true);
-    }
-  }, [messages, retrieved, retrieveMessages]);
-
-  // Changed to useMemo to avoid new object creation on every render
-  const joinData = useMemo(
-    () => ({
-      loggedIn: authState.loggedIn,
-      username: authState.loggedIn ? authState.username : `User-${Math.round(Math.random() * 100 + 1)}`,
-      displayName: authState.loggedIn ? authState.displayName : `Anon-${Math.round(Math.random() * 100 + 1)}`,
-      room: currentChannel,
-    }),
-    [authState, currentChannel]
-  );
-
-  useEffect(() => {
-    //socket.emit("join", joinData);
-
-    return () => {
-      /*
-      socket.emit("leave", currentChannel, () => {
-        setRetrieved(false);
-      });
-      */
-    };
-  }, [currentChannel, joinData]);
 
   const sendMessage = (event) => {
     event?.preventDefault(); // Optional chaining

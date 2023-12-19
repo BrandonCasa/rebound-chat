@@ -29,6 +29,32 @@ class ServerRooms {
   }
 
   attachListeners(socket) {
+    socket.on("list_rooms", async (roomName, roomDescription) => {
+      try {
+        let roomList = await this.getRoomList();
+
+        socket.emit("room_list", roomList);
+      } catch (error) {
+        logger.error(error);
+      }
+    });
+
+    socket.on("make_room", async (roomName, roomDescription) => {
+      try {
+        let newRoom = new RoomModel();
+        newRoom.name = roomName;
+        newRoom.description = roomDescription;
+
+        await newRoom.save();
+
+        socket.emit("room_created", newRoom._id);
+
+        logger.info(`New Room Created by '${socket.user.username}'.`);
+      } catch (error) {
+        logger.error(error);
+      }
+    });
+
     socket.on("join_room", async (roomId) => {
       try {
         let roomList = await this.getRoomList();
