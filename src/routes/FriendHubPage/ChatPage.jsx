@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Box, Button, Divider, Paper, Stack, Typography } from "@mui/material";
-import { socket } from "helpers/socket"; // Assuming socket is a default export
+import socketIoHelper from "helpers/socket"; // Assuming socket is a default export
 import UserList from "components/Chat/UserList";
 import ChannelList from "components/Chat/ChannelList";
 import ChatArea from "components/Chat/ChatArea";
@@ -34,12 +34,12 @@ function ChatPage() {
 
   // useCallback to memoize the function and prevent infinite loops in useEffect
   const retrieveMessages = useCallback(() => {
-    socket.emit("loadMessages", messages[messages.length - 1]?.messageId, () => {});
+    //socket.emit("loadMessages", messages[messages.length - 1]?.messageId, () => {});
   }, [messages]);
 
   // Handle socket connections and events
   useEffect(() => {
-    socket.connect();
+    //socket.connect();
 
     const handleNewMessage = (message) => setMessages((prevMessages) => [...prevMessages, message]);
 
@@ -69,15 +69,15 @@ function ChatPage() {
       setMessages((prevMessages) => [...newMessages, ...prevMessages]);
     };
 
-    socket.on("message", handleNewMessage);
-    socket.on("roomData", updateRoomData);
-    socket.on("messagesRetrieved", handleMessagesRetrieved);
+    //socket.on("message", handleNewMessage);
+    //socket.on("roomData", updateRoomData);
+    //socket.on("messagesRetrieved", handleMessagesRetrieved);
 
     return () => {
-      socket.off("message", handleNewMessage);
-      socket.off("roomData", updateRoomData);
-      socket.off("messagesRetrieved", handleMessagesRetrieved);
-      socket.disconnect();
+      //socket.off("message", handleNewMessage);
+      //socket.off("roomData", updateRoomData);
+      //socket.off("messagesRetrieved", handleMessagesRetrieved);
+      //socket.disconnect();
     };
   }, []);
 
@@ -100,12 +100,14 @@ function ChatPage() {
   );
 
   useEffect(() => {
-    socket.emit("join", joinData);
+    //socket.emit("join", joinData);
 
     return () => {
+      /*
       socket.emit("leave", currentChannel, () => {
         setRetrieved(false);
       });
+      */
     };
   }, [currentChannel, joinData]);
 
@@ -113,7 +115,7 @@ function ChatPage() {
     event?.preventDefault(); // Optional chaining
 
     if (message) {
-      socket.emit("sendMessage", message, () => setMessage(""));
+      //socket.emit("sendMessage", message, () => setMessage(""));
     }
   };
 

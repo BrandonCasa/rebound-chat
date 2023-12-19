@@ -5,7 +5,7 @@ import ChannelList from "components/Chat/ChannelList";
 import ChatArea from "components/Chat/ChatArea";
 import ChatInput from "components/Chat/ChatInput";
 import UserList from "components/Chat/UserList";
-import { socket } from "helpers/socket";
+import socketIoHelper from "helpers/socket";
 import React, { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 
@@ -69,14 +69,7 @@ function HubPage() {
 
   const authState = useSelector((state) => state.auth);
 
-  useEffect(() => {
-    socket.connect();
-
-    return () => {
-      socket.disconnect();
-    };
-  }, []);
-
+  /* 
   useEffect(() => {
     socket.emit("join", { username: authState.loggedIn ? authState.displayName : `User-${Math.round(Math.random() * 1000 + 1)}`, room: currentChatRoom });
 
@@ -90,15 +83,16 @@ function HubPage() {
 
     return () => {
       socket.off("message");
-      socket.off("roomData");
+      //socket.off("roomData");
     };
   }, [currentChatRoom, authState.loggedIn]);
+  */
 
   const sendMessage = (event) => {
     if (event) event.preventDefault();
 
     if (message) {
-      socket.emit("sendMessage", message, () => setMessage(""));
+      //socket.emit("sendMessage", message, () => setMessage(""));
     }
   };
 

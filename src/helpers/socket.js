@@ -1,8 +1,27 @@
 import { io } from "socket.io-client";
 
-// "undefined" means the URL will be computed from the `window.location` object
-const URL = process.env.NODE_ENV === "production" ? undefined : "http://localhost:6001";
+class SocketIoHelper {
+  constructor() {
+    this.socketURL = process.env.NODE_ENV === "production" ? undefined : "http://localhost:6002";
+    this.socketClient = null;
+  }
 
-export const socket = io(URL, {
-  autoConnect: false,
-});
+  connectSocket(userToken) {
+    this.socketClient = io(this.socketURL, {
+      autoConnect: true,
+      query: { token: userToken },
+    });
+  }
+
+  disconnectSocket() {
+    this.socketClient.disconnect();
+  }
+
+  getSocket() {
+    return this.socketClient;
+  }
+}
+
+const socketIoHelper = new SocketIoHelper();
+
+export { socketIoHelper as default };

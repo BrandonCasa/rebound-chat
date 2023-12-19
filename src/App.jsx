@@ -14,22 +14,37 @@ import axios from "axios";
 import ProfilePage from "routes/ProfilePage.route";
 import ChatPage from "routes/FriendHubPage/ChatPage";
 import HubPage from "routes/FriendHubPage/HubPage";
+import socketIoHelper from "./helpers/socket";
 
 function App() {
-  const authTokenState = useSelector((state) => state.auth.authToken);
-  const loggedInState = useSelector((state) => state.auth.loggedIn);
-  const loggingInState = useSelector((state) => state.auth.loggingIn);
+  const authState = useSelector((state) => state.auth);
   const dispatch = useDispatch();
 
   useEffect(() => {
-    if (authTokenState && authTokenState !== "" && !loggedInState) {
+    if (authState.loggedIn === true) {
+      if (socketIoHelper.getSocket() === null || !socketIoHelper.getSocket().connected) {
+        socketIoHelper.connectSocket(authState.authToken);
+      }
+    }
+
+    return () => {
+      if (socketIoHelper.getSocket() !== null && socketIoHelper.getSocket().connected) {
+        socketIoHelper.disconnectSocket();
+      }
+    };
+  }, [authState.loggedIn, authState.authToken]);
+
+  useEffect(() => {
+    if (authState.authToken && authState.authToken !== "" && !authState.loggedIn) {
+      dispatch(setLoggingIn({ loggedIn: true }));
+
       const requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/verify" : "/api/users/verify";
       axios
         .get(requestString, {
           headers: {
             "Content-Type": "application/json",
             "Allow-Control-Allow-Origin": "*",
-            authorization: `Bearer ${authTokenState}`,
+            authorization: `Bearer ${authState.authToken}`,
           },
         })
         .then((response) => {
@@ -38,6 +53,7 @@ function App() {
         .catch((error) => {
           console.log(error);
           window.localStorage.removeItem("auth-token");
+          dispatch(setLoggedIn({ loggedIn: false, token: null }));
         });
     } else {
       dispatch(setLoggingIn({ loggingIn: false }));
@@ -52,13 +68,13 @@ function App() {
         <RegisterDialog />
         <LoginDialog />
         <CustomAppBar>
-          {!loggingInState && (
+          {!authState.loggingIn && (
             <Routes>
               <Route exact path="/" element={<LandingPage />} />
               <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/chat" element={<h1>Page Under Maintenance</h1>} />
+              <Route path="/chat" element={<ChatPage />} />
               {false && <Route path="/hub" element={<HubPage />} />}
-              <Route path="/test" element={<h1>{loggingInState.toString()}</h1>} />
+              <Route path="/test" element={<h1>{authState.loggingIn?.toString()}</h1>} />
               <Route path="*" element={<h1>404</h1>} />
             </Routes>
           )}

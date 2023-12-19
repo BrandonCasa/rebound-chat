@@ -13,7 +13,7 @@ class SocketBackend {
     this.io = new Server({
       path: "/socket.io",
       cors: {
-        origin: "http://localhost:6002",
+        origin: "*",
       },
     });
 
