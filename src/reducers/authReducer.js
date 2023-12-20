@@ -45,12 +45,23 @@ const authSlice = createSlice({
     },
     setSocketRoom: (state, action) => {
       if (action.payload.currentRoom === null) {
-        const socketClient = socketIoHelper.getSocket();
+        if (action.payload.lastRoom !== null) {
+          const socketClient = socketIoHelper.getSocket();
 
-        socketClient.emit("leave_room", state.socketInfo.currentRoom);
-        state.socketInfo.currentRoom = null;
+          socketClient.emit("leave_room", action.payload.lastRoom);
+          state.socketInfo.currentRoom = null;
+        }
       } else {
-        state.socketInfo.currentRoom = action.payload.currentRoom;
+        if (action.payload.lastRoom !== action.payload.currentRoom) {
+          const socketClient = socketIoHelper.getSocket();
+
+          if (action.payload.lastRoom !== null) {
+            socketClient.emit("leave_room", action.payload.lastRoom);
+          }
+
+          socketClient.emit("join_room", action.payload.currentRoom);
+          state.socketInfo.currentRoom = action.payload.currentRoom;
+        }
       }
     },
   },

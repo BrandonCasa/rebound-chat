@@ -23,11 +23,9 @@ function ChatPage() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [channels, setChannels] = useState({});
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState([{ displayName: "list broken lol" }]);
   const authState = useSelector((state) => state.auth);
   const dispatch = useDispatch();
-  const currentRoomRef = React.createRef();
-  currentRoomRef.current = authState.socketInfo.currentRoom;
 
   useEffect(() => {
     const socketClient = socketIoHelper.getSocket();
@@ -40,13 +38,18 @@ function ChatPage() {
         setChannels(rooms);
 
         if (authState.socketInfo.currentRoom === null) {
-          socketClient.emit("join_room", Object.keys(roomList)[0]);
+          dispatch(setSocketRoom({ lastRoom: authState.socketInfo.currentRoom, currentRoom: Object.keys(roomList)[0] }));
         }
       });
 
       // Joined Room
       socketClient.on("joined_room", (roomId, roomMessages) => {
-        dispatch(setSocketRoom({ currentRoom: roomId }));
+        setMessages(roomMessages);
+      });
+
+      // Message Sent
+      socketClient.on("message_sent", (roomId, roomMessages) => {
+        setMessages(roomMessages);
       });
 
       // Render Emits
@@ -59,6 +62,7 @@ function ChatPage() {
       if (socketClient !== null) {
         socketClient.off("room_list");
         socketClient.off("joined_room");
+        socketClient.off("message_sent");
       }
     };
   }, [authState.loggedIn, authState.socketInfo.connected]);
@@ -72,8 +76,10 @@ function ChatPage() {
   const sendMessage = (event) => {
     event?.preventDefault();
 
-    if (message) {
-      //socket.emit("sendMessage", message, () => setMessage(""));
+    if (message && authState.socketInfo.currentRoom !== null) {
+      const socketClient = socketIoHelper.getSocket();
+      socketClient.emit("message_room", [authState.socketInfo.currentRoom, message]);
+      setMessage("");
     }
   };
 

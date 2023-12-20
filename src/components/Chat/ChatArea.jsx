@@ -43,13 +43,13 @@ const ConstructedMessages = React.memo(function ConstructedMessages({ relevantMs
   let lastSender = null;
 
   return relevantMsgs.map((msg) => {
-    const shouldDisplayAvatar = lastSender !== msg.displayName;
-    lastSender = msg.displayName;
+    const shouldDisplayAvatar = lastSender !== msg.sender.displayName;
+    lastSender = msg.sender.displayName;
     const AvatarIcon = getAvatarIcon(msg);
-    const sendTimeFormatted = formatDate(msg.sendTime);
+    const sendTimeFormatted = formatDate(msg.createdAt);
 
     return (
-      <ListItem key={msg.id || msg.sendTime} disablePadding sx={{ alignItems: "flex-start" }}>
+      <ListItem key={msg.id || msg.createdAt} disablePadding sx={{ alignItems: "flex-start" }}>
         {shouldDisplayAvatar && (
           <ListItemAvatar>
             <Avatar>
@@ -62,7 +62,7 @@ const ConstructedMessages = React.memo(function ConstructedMessages({ relevantMs
             shouldDisplayAvatar && (
               <>
                 <Typography component="span" style={{ display: "inline-block" }}>
-                  {msg.displayName}
+                  {msg.sender.displayName}
                 </Typography>
                 <Typography component="span" style={{ display: "inline-block" }} sx={timeStampStyle}>
                   {sendTimeFormatted}
@@ -70,7 +70,7 @@ const ConstructedMessages = React.memo(function ConstructedMessages({ relevantMs
               </>
             )
           }
-          secondary={msg.messageText}
+          secondary={msg.content}
           sx={{ paddingLeft: shouldDisplayAvatar ? "" : "56px", marginTop: "4px" }} // Adjust paddingLeft based on avatar display
         />
       </ListItem>

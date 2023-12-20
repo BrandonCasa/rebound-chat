@@ -15,7 +15,7 @@ function ChannelList({ channels, setMessages }) {
           selected={authState.socketInfo.currentRoom === channel}
           onClick={() => {
             setMessages([]);
-            dispatch(setSocketRoom(channel));
+            dispatch(setSocketRoom({ lastRoom: authState.socketInfo.currentRoom, currentRoom: channel }));
           }}
         >
           <ListItemText primary={channels[channel].name} />

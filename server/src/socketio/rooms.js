@@ -36,16 +36,22 @@ class ServerRooms {
         let [roomList, rooms] = await this.getRoomList();
 
         if (JSON.stringify(roomList) === JSON.stringify({})) {
-          let defaultRoom = new RoomModel();
-          defaultRoom.name = "All Chat";
-          defaultRoom.description = "Public chat for everyone.";
-          await defaultRoom.save();
+          let defaultARoom = new RoomModel();
+          defaultARoom.name = "All Chat 1";
+          defaultARoom.description = "Public chat for everyone.";
+          await defaultARoom.save();
+
+          let defaultBRoom = new RoomModel();
+          defaultBRoom.name = "All Chat 2";
+          defaultBRoom.description = "Public chat for everyone.";
+          await defaultBRoom.save();
         }
 
         [roomList, rooms] = await this.getRoomList();
 
         socket.emit("room_list", [roomList, rooms]);
       } catch (error) {
+        console.log(error);
         logger.error(error);
       }
     });
@@ -62,6 +68,7 @@ class ServerRooms {
 
         logger.info(`New Room Created by '${socket.user.username}'.`);
       } catch (error) {
+        console.log(error);
         logger.error(error);
       }
     });
@@ -74,12 +81,18 @@ class ServerRooms {
           throw Error("Room not found by ID.");
         }
 
-        const joinedRoom = await RoomModel.findById(roomId);
+        const joinedRoom = await RoomModel.findById(roomId).populate([
+          {
+            path: "messages",
+            populate: [{ path: "sender", select: "displayName" }],
+          },
+        ]);
 
         socket.join(roomId);
         socket.emit("joined_room", roomId, joinedRoom.messages);
         logger.info(`User '${socket.user.username}' joined room '${roomId}'.`);
       } catch (error) {
+        console.log(error);
         logger.error(error);
       }
     });
@@ -96,11 +109,12 @@ class ServerRooms {
         socket.emit("left_room", roomId);
         logger.info(`User '${socket.user.username}' left room '${roomId}'.`);
       } catch (error) {
+        console.log(error);
         logger.error(error);
       }
     });
 
-    socket.on("message_room", async (roomId, msg) => {
+    socket.on("message_room", async ([roomId, msg]) => {
       try {
         let [roomList, rooms] = await this.getRoomList();
 
@@ -124,10 +138,18 @@ class ServerRooms {
         messageRoom.messages.push(newMessage);
         await messageRoom.save();
 
-        socket.to(roomList[roomId]).emit("new_message", { roomId, msgId: newMessage._id });
-        socket.emit("message_sent", roomId, newMessage._id);
+        await messageRoom.populate([
+          {
+            path: "messages",
+            populate: [{ path: "sender", select: "displayName" }],
+          },
+        ]);
+
+        socket.to(roomList[roomId]).emit("new_message", roomId, messageRoom.messages);
+        socket.emit("message_sent", roomId, messageRoom.messages);
         logger.info(`User '${socket.user.username}' sent a message with id '${newMessage._id}' to room '${roomId}'.`);
       } catch (error) {
+        console.log(error);
         logger.error(error);
       }
     });
