@@ -34,7 +34,6 @@ class ServerRooms {
     socket.on("list_rooms", async (roomName, roomDescription) => {
       try {
         let [roomList, rooms] = await this.getRoomList();
-        console.log(rooms);
 
         if (JSON.stringify(roomList) === JSON.stringify({})) {
           let defaultRoom = new RoomModel();
@@ -45,7 +44,7 @@ class ServerRooms {
 
         [roomList, rooms] = await this.getRoomList();
 
-        socket.emit("room_list", rooms);
+        socket.emit("room_list", [roomList, rooms]);
       } catch (error) {
         logger.error(error);
       }
@@ -77,7 +76,7 @@ class ServerRooms {
 
         const joinedRoom = await RoomModel.findById(roomId);
 
-        socket.join(roomList[roomId]);
+        socket.join(roomId);
         socket.emit("joined_room", roomId, joinedRoom.messages);
         logger.info(`User '${socket.user.username}' joined room '${roomId}'.`);
       } catch (error) {

@@ -1,20 +1,20 @@
 import React from "react";
-import { List, ListItem, ListItemText, Card } from "@mui/material";
+import { List, ListItem, ListItemText, Card, ListItemButton } from "@mui/material";
 
-function ChannelList({ channels, setCurrentChannel, setMessages }) {
+function ChannelList({ channels, currentChannel, setCurrentChannel, setMessages }) {
   return (
-    <List sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      {channels.map((channel, index) => (
-        <ListItem
-          button
-          key={index}
+    <List sx={{ display: "flex", flexDirection: "column" }}>
+      {Object.keys(channels).map((channel) => (
+        <ListItemButton
+          key={channel}
+          selected={currentChannel === channel}
           onClick={() => {
             setMessages([]);
             setCurrentChannel(channel);
           }}
         >
-          <ListItemText primary={channel} />
-        </ListItem>
+          <ListItemText primary={channels[channel].name} />
+        </ListItemButton>
       ))}
     </List>
   );
