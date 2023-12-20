@@ -1,4 +1,5 @@
 import { createSlice } from "@reduxjs/toolkit";
+import socketIoHelper from "helpers/socket";
 
 const initialState = {
   authToken: window.localStorage.getItem("auth-token"),
@@ -6,7 +7,10 @@ const initialState = {
   username: "",
   displayName: "",
   loggingIn: true,
-  socketConnected: false,
+  socketInfo: {
+    connected: false,
+    currentRoom: null,
+  },
 };
 
 const authSlice = createSlice({
@@ -37,10 +41,20 @@ const authSlice = createSlice({
       state.loggingIn = action.payload.loggingIn;
     },
     setSocketStatus: (state, action) => {
-      state.socketConnected = action.payload.connected;
+      state.socketInfo.connected = action.payload.connected;
+    },
+    setSocketRoom: (state, action) => {
+      if (action.payload.currentRoom === null) {
+        const socketClient = socketIoHelper.getSocket();
+
+        socketClient.emit("leave_room", state.socketInfo.currentRoom);
+        state.socketInfo.currentRoom = null;
+      } else {
+        state.socketInfo.currentRoom = action.payload.currentRoom;
+      }
     },
   },
 });
 
-export const { setAuthState, setLoggedIn, setLoggingIn, setSocketStatus } = authSlice.actions;
+export const { setAuthState, setLoggedIn, setLoggingIn, setSocketStatus, setSocketRoom } = authSlice.actions;
 export default authSlice.reducer;
