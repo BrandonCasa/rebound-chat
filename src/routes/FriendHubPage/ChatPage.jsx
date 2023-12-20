@@ -40,7 +40,7 @@ function ChatPage() {
   }, []);
 
   const sendMessage = (event) => {
-    event?.preventDefault(); // Optional chaining
+    event?.preventDefault();
 
     if (message) {
       //socket.emit("sendMessage", message, () => setMessage(""));

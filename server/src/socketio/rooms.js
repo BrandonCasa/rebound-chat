@@ -7,13 +7,15 @@ import "dotenv/config";
 
 class ServerRooms {
   async getRoomList() {
+    let roomIdList = {};
     let roomList = {};
 
     const rooms = await RoomModel.find({});
     await rooms.forEach((room) => {
-      roomList[room._id] = room.name;
+      roomIdList[room._id] = room.name;
+      roomList[room._id] = room;
     });
-    return roomList;
+    return [roomIdList, roomList];
   }
 
   startListeners(sockets) {
@@ -31,9 +33,19 @@ class ServerRooms {
   attachListeners(socket) {
     socket.on("list_rooms", async (roomName, roomDescription) => {
       try {
-        let roomList = await this.getRoomList();
+        let [roomList, rooms] = await this.getRoomList();
+        console.log(rooms);
 
-        socket.emit("room_list", roomList);
+        if (JSON.stringify(roomList) === JSON.stringify({})) {
+          let defaultRoom = new RoomModel();
+          defaultRoom.name = "All Chat";
+          defaultRoom.description = "Public chat for everyone.";
+          await defaultRoom.save();
+        }
+
+        [roomList, rooms] = await this.getRoomList();
+
+        socket.emit("room_list", rooms);
       } catch (error) {
         logger.error(error);
       }
@@ -57,7 +69,7 @@ class ServerRooms {
 
     socket.on("join_room", async (roomId) => {
       try {
-        let roomList = await this.getRoomList();
+        let [roomList, rooms] = await this.getRoomList();
 
         if (roomList[roomId] === undefined) {
           throw Error("Room not found by ID.");
@@ -75,7 +87,7 @@ class ServerRooms {
 
     socket.on("leave_room", async (roomId) => {
       try {
-        let roomList = await this.getRoomList();
+        let [roomList, rooms] = await this.getRoomList();
 
         if (roomList[roomId] === undefined) {
           throw Error("Room not found by ID.");
@@ -91,7 +103,7 @@ class ServerRooms {
 
     socket.on("message_room", async (roomId, msg) => {
       try {
-        let roomList = await this.getRoomList();
+        let [roomList, rooms] = await this.getRoomList();
 
         if (roomList[roomId] === undefined) {
           throw Error("Room not found by ID.");
