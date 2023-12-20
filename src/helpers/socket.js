@@ -11,6 +11,8 @@ class SocketIoHelper {
       autoConnect: true,
       query: { token: userToken },
     });
+
+    return this.socketClient;
   }
 
   disconnectSocket() {

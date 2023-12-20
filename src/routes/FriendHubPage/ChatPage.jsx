@@ -28,17 +28,17 @@ function ChatPage() {
   useEffect(() => {
     // Logged In Listeners
     if (authState.loggedIn === true && socketIoHelper.getSocket() !== null) {
+      socketIoHelper.getSocket().on("room_list", (roomList) => {
+        console.log(roomList);
+      });
+
+      socketIoHelper.getSocket().emit("list_rooms");
     }
     // Logged Out Listeners
     if (authState.loggedIn === false && socketIoHelper.getSocket() !== null) {
     }
     // Logged In or Out Listeners
     if (socketIoHelper.getSocket() !== null) {
-      socketIoHelper.getSocket().on("room_list", (roomList) => {
-        console.log(roomList);
-      });
-
-      socketIoHelper.getSocket().emit("list_rooms");
     }
 
     return () => {
@@ -46,7 +46,7 @@ function ChatPage() {
         socketIoHelper.getSocket().off("room_list");
       }
     };
-  }, []);
+  }, [authState.loggedIn, authState.socketConnected]);
 
   const sendMessage = (event) => {
     event?.preventDefault();

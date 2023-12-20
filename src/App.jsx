@@ -9,7 +9,7 @@ import RegisterDialog from "./components//RegisterDialog/index";
 import LoginDialog from "./components/LoginDialog.comp";
 import { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { setLoggedIn, setLoggingIn } from "./reducers/authReducer";
+import { setLoggedIn, setLoggingIn, setSocketStatus } from "./reducers/authReducer";
 import axios from "axios";
 import ProfilePage from "routes/ProfilePage.route";
 import ChatPage from "routes/FriendHubPage/ChatPage";
@@ -20,10 +20,26 @@ function App() {
   const authState = useSelector((state) => state.auth);
   const dispatch = useDispatch();
 
+  const connectSocket = (token) => {
+    let socketClient = socketIoHelper.connectSocket(token);
+
+    socketClient.on("connected", () => {
+      socketClient.off("connected");
+      dispatch(setSocketStatus({ connected: true }));
+    });
+
+    socketClient.on("disconnect", () => {
+      socketClient.off("disconnect");
+      dispatch(setSocketStatus({ connected: false }));
+    });
+  };
+
   useEffect(() => {
-    if (authState.loggedIn === true) {
-      if (socketIoHelper.getSocket() === null || !socketIoHelper.getSocket().connected) {
-        socketIoHelper.connectSocket(authState.authToken);
+    if (socketIoHelper.getSocket() === null || !socketIoHelper.getSocket().connected) {
+      if (authState.loggedIn === true) {
+        connectSocket(authState.authToken);
+      } else {
+        // Fix when anonymous temporary users are implemented
       }
     }
 

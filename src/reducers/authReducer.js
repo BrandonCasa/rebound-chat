@@ -6,6 +6,7 @@ const initialState = {
   username: "",
   displayName: "",
   loggingIn: true,
+  socketConnected: false,
 };
 
 const authSlice = createSlice({
@@ -35,8 +36,11 @@ const authSlice = createSlice({
     setLoggingIn: (state, action) => {
       state.loggingIn = action.payload.loggingIn;
     },
+    setSocketStatus: (state, action) => {
+      state.socketConnected = action.payload.connected;
+    },
   },
 });
 
-export const { setAuthState, setLoggedIn, setLoggingIn } = authSlice.actions;
+export const { setAuthState, setLoggedIn, setLoggingIn, setSocketStatus } = authSlice.actions;
 export default authSlice.reducer;
