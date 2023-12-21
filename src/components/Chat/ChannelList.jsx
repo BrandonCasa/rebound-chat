@@ -14,7 +14,9 @@ function ChannelList({ channels, setMessages }) {
           key={channel}
           selected={authState.socketInfo.currentRoom === channel}
           onClick={() => {
-            setMessages([]);
+            if (authState.socketInfo.currentRoom !== channel) {
+              setMessages([]);
+            }
             dispatch(setSocketRoom({ lastRoom: authState.socketInfo.currentRoom, currentRoom: channel }));
           }}
         >
