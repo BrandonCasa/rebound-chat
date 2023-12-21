@@ -24,7 +24,7 @@ server {
         proxy_set_header Host $http_host;
         proxy_set_header X-NginX-Proxy false;
       
-        proxy_pass http://localhost:6001;
+        proxy_pass http://localhost:6002;
         proxy_redirect off;
       
         proxy_http_version 1.1;
@@ -65,7 +65,7 @@ server {
         proxy_set_header Host $http_host;
         proxy_set_header X-NginX-Proxy false;
       
-        proxy_pass http://localhost:6001;
+        proxy_pass http://localhost:6002;
         proxy_redirect off;
       
         proxy_http_version 1.1;
