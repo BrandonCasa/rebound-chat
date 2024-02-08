@@ -102,6 +102,8 @@ class ServerRooms {
         let [roomList, rooms] = await this.getRoomList();
 
         if (roomList[roomId] === undefined) {
+          console.log(socket.user);
+          logger.error(`User '${socket.user.username}' attempted to leave room with ID '${roomId}', but it does not exist.`);
           throw Error("Room not found by ID.");
         }
 

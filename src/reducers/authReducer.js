@@ -44,24 +44,19 @@ const authSlice = createSlice({
       state.socketInfo.connected = action.payload.connected;
     },
     setSocketRoom: (state, action) => {
-      if (action.payload.currentRoom === null) {
-        if (action.payload.lastRoom !== null) {
-          const socketClient = socketIoHelper.getSocket();
+      const socketClient = socketIoHelper.getSocket();
 
-          socketClient.emit("leave_room", action.payload.lastRoom);
-          state.socketInfo.currentRoom = null;
-        }
-      } else {
-        if (action.payload.lastRoom !== action.payload.currentRoom) {
-          const socketClient = socketIoHelper.getSocket();
+      const roomToLeave = action.payload.lastRoom || state.socketInfo.currentRoom;
+      const roomToJoin = action.payload.currentRoom;
 
-          if (action.payload.lastRoom !== null) {
-            socketClient.emit("leave_room", action.payload.lastRoom);
-          }
+      if (roomToLeave) {
+        socketClient.emit("leave_room", roomToLeave);
+        state.socketInfo.currentRoom = null;
+      }
 
-          socketClient.emit("join_room", action.payload.currentRoom);
-          state.socketInfo.currentRoom = action.payload.currentRoom;
-        }
+      if (roomToJoin) {
+        socketClient.emit("join_room", roomToJoin);
+        state.socketInfo.currentRoom = roomToJoin;
       }
     },
   },
