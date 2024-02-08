@@ -52,6 +52,11 @@ function ChatPage() {
         setMessages(roomMessages);
       });
 
+      // New Message
+      socketClient.on("new_message", (roomId, roomMessages) => {
+        setMessages(roomMessages);
+      });
+
       // User List
       socketClient.on("user_list", (roomId, roomUsers) => {
         console.log(roomUsers);
@@ -72,6 +77,7 @@ function ChatPage() {
         socketClient.off("room_list");
         socketClient.off("joined_room");
         socketClient.off("message_sent");
+        socketClient.off("new_message");
         socketClient.off("user_list");
       }
     };

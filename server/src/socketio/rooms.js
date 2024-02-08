@@ -172,8 +172,15 @@ class ServerRooms {
           },
         ]);
 
-        socket.to(roomList[roomId]).emit("new_message", roomId, messageRoom.messages);
-        socket.emit("message_sent", roomId, messageRoom.messages);
+        const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
+        socketsInRoom.forEach((newSocket) => {
+          if (newSocket.user.id !== socket.user.id) {
+            newSocket.emit("new_message", roomId, messageRoom.messages);
+          } else {
+            socket.emit("message_sent", roomId, messageRoom.messages);
+          }
+        });
+
         logger.info(`User '${socket.user.username}' sent a message with id '${newMessage._id}' to room '${roomId}'.`);
       } catch (error) {
         console.log(error);
