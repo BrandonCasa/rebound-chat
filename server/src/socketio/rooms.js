@@ -31,6 +31,32 @@ class ServerRooms {
     });
   }
 
+  async leaveRooms(socket) {
+    let promises = Array.from(socket.rooms).map(async (room) => {
+      socket.leave(room);
+      socket.emit("left_room", room);
+      logger.info(`User '${socket.user.username}' left room '${room}'.`);
+
+      const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(room);
+      socketsInRoom.forEach((socket) => {
+        socket.emit("user_list", room, usersInRoom);
+      });
+    });
+    await Promise.all(promises);
+  }
+
+  async joinRoom(socket, newRoom, joinedRoom) {
+    socket.join(newRoom);
+    socket.emit("joined_room", newRoom, joinedRoom.messages);
+
+    const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(newRoom);
+    socketsInRoom.forEach((socket) => {
+      socket.emit("user_list", newRoom, usersInRoom);
+    });
+
+    logger.info(`User '${socket.user.username}' joined room '${newRoom}'.`);
+  }
+
   attachListeners(socket) {
     socket.on("list_rooms", async (roomName, roomDescription) => {
       try {
@@ -89,14 +115,9 @@ class ServerRooms {
           },
         ]);
 
-        socket.join(roomId);
-        socket.emit("joined_room", roomId, joinedRoom.messages);
+        await this.leaveRooms(socket);
 
-        const usersInRoom = await socketio.getSocketsInRoom(roomId);
-        socket.emit("user_list", roomId, usersInRoom);
-        socket.to(roomList[roomId]).emit("user_list", roomId, usersInRoom);
-
-        logger.info(`User '${socket.user.username}' joined room '${roomId}'.`);
+        await this.joinRoom(socket, roomId, joinedRoom);
       } catch (error) {
         console.log(error);
         logger.error(error);
@@ -113,9 +134,7 @@ class ServerRooms {
           throw Error("Room not found by ID.");
         }
 
-        socket.leave(roomList[roomId]);
-        socket.emit("left_room", roomId);
-        logger.info(`User '${socket.user.username}' left room '${roomId}'.`);
+        await this.leaveRooms(socket);
       } catch (error) {
         console.log(error);
         logger.error(error);

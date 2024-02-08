@@ -79,6 +79,12 @@ function ChatPage() {
 
   useEffect(() => {
     return () => {
+      setUsers([]);
+    };
+  }, [authState.socketInfo.currentRoom]);
+
+  useEffect(() => {
+    return () => {
       dispatch(setSocketRoom({ currentRoom: null }));
     };
   }, []);

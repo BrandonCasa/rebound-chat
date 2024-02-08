@@ -65,12 +65,13 @@ class SocketBackend {
 
   async getSocketsInRoom(roomId) {
     const roomSockets = await this.io.in(roomId).fetchSockets();
-    const outUsers = roomSockets.map(async (socket) => {
+    let outUsers = roomSockets.map(async (socket) => {
       const user = await UserModel.findById(socket.user.id);
       return await user.toProfilePubJSON();
     });
+    outUsers = await Promise.all(outUsers);
 
-    return await Promise.all(outUsers);
+    return [outUsers, roomSockets];
   }
 }
 
