@@ -63,6 +63,14 @@ UserSchema.methods.toProfileJSON = function (user) {
   };
 };
 
+UserSchema.methods.toProfilePubJSON = function () {
+  return {
+    username: this.username,
+    displayName: this.displayName,
+    bio: this.bio,
+  };
+};
+
 UserSchema.methods.follow = function (id) {
   if (this.following.indexOf(id) === -1) {
     this.following.push(id);

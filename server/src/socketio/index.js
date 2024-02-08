@@ -3,6 +3,7 @@ import logger from "../logger.js";
 import jwt from "jsonwebtoken";
 import "dotenv/config";
 import serverRooms from "./rooms.js";
+import UserModel from "../models/User.js";
 
 class SocketBackend {
   constructor() {
@@ -60,6 +61,16 @@ class SocketBackend {
   onDisconnect(socket) {
     logger.info(`User disconnected: '${socket.user.username}'.`);
     socket.removeAllListeners();
+  }
+
+  async getSocketsInRoom(roomId) {
+    const roomSockets = await this.io.in(roomId).fetchSockets();
+    const outUsers = roomSockets.map(async (socket) => {
+      const user = await UserModel.findById(socket.user.id);
+      return await user.toProfilePubJSON();
+    });
+
+    return await Promise.all(outUsers);
   }
 }
 

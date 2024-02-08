@@ -3,6 +3,7 @@ import logger from "../logger.js";
 import RoomModel from "../models/Room.js";
 import MessageModel from "../models/Message.js";
 import UserModel from "../models/User.js";
+import socketio from "./index.js";
 import "dotenv/config";
 
 class ServerRooms {
@@ -90,6 +91,11 @@ class ServerRooms {
 
         socket.join(roomId);
         socket.emit("joined_room", roomId, joinedRoom.messages);
+
+        const usersInRoom = await socketio.getSocketsInRoom(roomId);
+        socket.emit("user_list", roomId, usersInRoom);
+        socket.to(roomList[roomId]).emit("user_list", roomId, usersInRoom);
+
         logger.info(`User '${socket.user.username}' joined room '${roomId}'.`);
       } catch (error) {
         console.log(error);

@@ -23,7 +23,7 @@ function ChatPage() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [channels, setChannels] = useState({});
-  const [users, setUsers] = useState([{ displayName: "list broken lol" }]);
+  const [users, setUsers] = useState([]);
   const authState = useSelector((state) => state.auth);
   const dispatch = useDispatch();
 
@@ -52,6 +52,15 @@ function ChatPage() {
         setMessages(roomMessages);
       });
 
+      // User List
+      socketClient.on("user_list", (roomId, roomUsers) => {
+        console.log(roomUsers);
+        const usersInRoom = roomUsers.map((roomUser) => {
+          return roomUser;
+        });
+        setUsers(usersInRoom);
+      });
+
       // Render Emits
       socketClient.emit("list_rooms");
     }
@@ -63,6 +72,7 @@ function ChatPage() {
         socketClient.off("room_list");
         socketClient.off("joined_room");
         socketClient.off("message_sent");
+        socketClient.off("user_list");
       }
     };
   }, [authState.loggedIn, authState.socketInfo.connected]);
