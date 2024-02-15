@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { setLoggedIn, setLoggingIn, setSocketStatus } from "./reducers/authReducer";
 import axios from "axios";
-import ProfilePage from "routes/ProfilePage.route";
+import ProfilePage from "routes/ProfilePage/ProfilePage";
 import ChatPage from "routes/FriendHubPage/ChatPage";
 import HubPage from "routes/FriendHubPage/HubPage";
 import socketIoHelper from "./helpers/socket";

@@ -2,9 +2,10 @@
 import { Box, Card, CardContent, CardHeader, Chip, Collapse, Container, Divider, Paper, Stack, Typography } from "@mui/material";
 import { styled, useTheme } from "@mui/material/styles";
 import Grid from "@mui/material/Unstable_Grid2";
-import React, { useContext } from "react";
+import React, { useContext, useEffect } from "react";
 import { TransitionGroup } from "react-transition-group";
 import { isSafari, isMobile } from "react-device-detect";
+import { useSelector } from "react-redux";
 
 const ItemPaper = styled(Paper)(({ theme }) => ({
   ...theme.typography.body2,
@@ -21,13 +22,22 @@ const ItemBox = styled(Box)(({ theme }) => ({
 
 function ProfilePage(props) {
   let theme = useTheme();
+  const authState = useSelector((state) => state.auth);
+
+  useEffect(() => {
+    // finish this later
+    if (authState.loggedIn === true) {
+    }
+
+    return () => {};
+  }, [authState.loggedIn]);
 
   return (
     <Box sx={{ display: "flex", justifyContent: "center", flexGrow: 1 }}>
       <Stack spacing={2} sx={{ height: "100%", width: "100%" }}>
         <ItemPaper>
           <Typography variant="h4" sx={{ color: `${theme.palette.text.primary}` }}>
-            My Profile (WIP)
+            Your Profile
           </Typography>
         </ItemPaper>
         <ItemBox>
