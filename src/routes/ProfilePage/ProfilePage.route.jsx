@@ -34,19 +34,23 @@ function ProfilePage(props) {
   }, [authState.loggedIn]);
 
   return (
-    <Box sx={{ display: "flex", justifyContent: "center", flexGrow: 1 }}>
+    <Box sx={{ display: "flex", justifyContent: "center", flexGrow: 1, overflow: "hidden" }}>
       <Stack spacing={2} sx={{ height: "100%", width: "100%" }}>
         <ItemPaper>
           <Typography variant="h4" sx={{ color: `${theme.palette.text.primary}` }}>
             Your Profile
           </Typography>
         </ItemPaper>
+
         <ItemBox>
           <Divider sx={{ "&::after": { borderWidth: "3px" }, "&::before": { borderWidth: "3px" }, margin: 0 }} variant="middle" textAlign="left">
             <Chip color="secondary" label="Preview" />
           </Divider>
         </ItemBox>
-        <ProfileCard />
+
+        <Paper sx={{ padding: theme.spacing(1) }}>
+          <ProfileCard type="full" />
+        </Paper>
       </Stack>
     </Box>
   );

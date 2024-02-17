@@ -18,7 +18,7 @@ function LandingPage(props) {
   const isOverflow = useIsOverflow(overflowRef, onIsOverflowChanged);
 
   return (
-    <Box sx={{ display: "flex", justifyContent: "center", flexGrow: 1 }}>
+    <Box sx={{ display: "flex", justifyContent: "center", flexGrow: 1, overflow: "hidden" }}>
       <Stack spacing={2} sx={{ height: "100%", width: "100%" }}>
         <LandingHeader title="Introducing Rebound" subtitle="The social hub for gamers and friends." />
 

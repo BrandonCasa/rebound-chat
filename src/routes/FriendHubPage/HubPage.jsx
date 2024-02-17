@@ -97,7 +97,7 @@ function HubPage() {
   };
 
   return (
-    <Box sx={{ flexGrow: 1, display: "flex" }}>
+    <Box sx={{ display: "flex", justifyContent: "center", flexGrow: 1, overflow: "hidden" }}>
       <Grid container spacing={2} sx={{ flexGrow: 1 }}>
         <Grid xs={12} sm={4.75} md={3} sx={{ height: "100%" }}>
           <ChatList currentChatRoom={currentChatRoom} setCurrentChatRoom={setCurrentChatRoom} setMessages={setMessages} />

@@ -106,7 +106,7 @@ function ChatPage() {
   };
 
   return (
-    <Box sx={{ display: "flex", justifyContent: "center", flexGrow: 1 }}>
+    <Box sx={{ display: "flex", justifyContent: "center", flexGrow: 1, overflow: "hidden" }}>
       <Stack spacing={2} direction="row" sx={{ height: "100%", width: "100%" }}>
         <ChatBlock title="Chat Rooms">
           <ChannelList channels={channels} setMessages={setMessages} />
