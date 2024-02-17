@@ -23,7 +23,7 @@ function LandingPage(props) {
         <LandingHeader title="Introducing Rebound" subtitle="The social hub for gamers and friends." />
 
         <ItemBox>
-          <Divider sx={{ "&::after": { borderWidth: "2px" }, "&::before": { borderWidth: "2px" }, margin: 0 }} variant="middle" textAlign="left">
+          <Divider sx={{ "&::after": { borderWidth: "3px" }, "&::before": { borderWidth: "3px" }, margin: 0 }} variant="middle" textAlign="left">
             <Chip color="secondary" label="Features" />
           </Divider>
         </ItemBox>

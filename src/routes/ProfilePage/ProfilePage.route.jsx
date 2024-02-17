@@ -6,6 +6,7 @@ import React, { useContext, useEffect } from "react";
 import { TransitionGroup } from "react-transition-group";
 import { isSafari, isMobile } from "react-device-detect";
 import { useSelector } from "react-redux";
+import ProfileCard from "components/User/ProfileCard";
 
 const ItemPaper = styled(Paper)(({ theme }) => ({
   ...theme.typography.body2,
@@ -41,10 +42,11 @@ function ProfilePage(props) {
           </Typography>
         </ItemPaper>
         <ItemBox>
-          <Divider sx={{ "&::after": { borderWidth: "2px" }, "&::before": { borderWidth: "2px" }, margin: 0 }} variant="middle" textAlign="left">
+          <Divider sx={{ "&::after": { borderWidth: "3px" }, "&::before": { borderWidth: "3px" }, margin: 0 }} variant="middle" textAlign="left">
             <Chip color="secondary" label="Preview" />
           </Divider>
         </ItemBox>
+        <ProfileCard />
       </Stack>
     </Box>
   );
