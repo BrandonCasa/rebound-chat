@@ -6,7 +6,7 @@ import React, { useContext, useEffect } from "react";
 import { useSelector } from "react-redux";
 
 function FullProfile(props) {
-  return `${JSON.stringify(props)}`;
+  return "xd1";
 }
 
 function PopoutProfile(props) {
@@ -20,10 +20,27 @@ function MiniProfile(props) {
 function ProfileCard(props) {
   let theme = useTheme();
 
-  if (props?.type === "full") return <FullProfile {...props} theme={theme} />;
-  if (props?.type === "popout") return <PopoutProfile {...props} theme={theme} />;
-  if (props?.type === "mini") return <MiniProfile {...props} theme={theme} />;
-  return <MiniProfile {...props} theme={theme} />;
+  let cardWidth = "auto";
+  let cardHeight = "auto";
+
+  if (props.width && props?.type === "full") {
+    cardWidth = props.width;
+    cardHeight = props.width;
+  } else if (props.width && props?.type === "popout") {
+    cardWidth = props.width;
+    cardHeight = `calc(${props.width} * 1.6667)`;
+  } else if (props.width && props?.type === "mini") {
+    cardWidth = props.width;
+    cardHeight = `calc(${props.width} / 4)`;
+  }
+
+  return (
+    <Paper sx={{ padding: theme.spacing(1), width: cardWidth, height: cardHeight }}>
+      {props?.type === "full" && <FullProfile {...props} theme={theme} />}
+      {props?.type === "popout" && <PopoutProfile {...props} theme={theme} />}
+      {props?.type === "mini" && <MiniProfile {...props} theme={theme} />}
+    </Paper>
+  );
 }
 
 export default ProfileCard;

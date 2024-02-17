@@ -48,9 +48,7 @@ function ProfilePage(props) {
           </Divider>
         </ItemBox>
 
-        <Paper sx={{ padding: theme.spacing(1) }}>
-          <ProfileCard type="full" />
-        </Paper>
+        <ProfileCard type="full" width="300px" />
       </Stack>
     </Box>
   );
