@@ -2,12 +2,27 @@
 import { Avatar, Box, Button, ButtonGroup, Chip, Divider, Paper, Stack, Typography } from "@mui/material";
 import { styled, useTheme } from "@mui/material/styles";
 import Grid from "@mui/material/Unstable_Grid2";
-import React, { useContext, useEffect } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import * as Icons from "@mui/icons-material";
 
 function FullProfile(props) {
   let theme = useTheme();
+  const authState = useSelector((state) => state.auth);
+  const [displayName, setDisplayName] = useState("Display Name");
+  const [username, setUsername] = useState("Username");
+  const [bio, setBio] = useState("what about me? you tell me.");
+
+  useEffect(() => {
+    if (authState.loggedIn === true) {
+      //console.log(authState);
+      setBio(authState.bio);
+      setDisplayName(authState.displayName);
+      setUsername(authState.username);
+    }
+
+    return () => {};
+  }, [authState.loggedIn]);
 
   let cardWidth = props?.width || "auto";
   let cardHeight = props?.width || "auto";
@@ -20,10 +35,10 @@ function FullProfile(props) {
           <Avatar sx={{ width: "64px", height: "64px" }} />
           <Stack spacing={0} sx={{ padding: 0, height: "64px" }}>
             <Typography variant="h5" height={"32px"}>
-              Kannatronics
+              {displayName}
             </Typography>
-            <Typography variant="subtitle1" height={"32px"} sx={{ color: `${theme.palette.text.secondary}` }}>
-              kannatron
+            <Typography variant="subtitle2" height={"32px"} sx={{ color: `${theme.palette.text.secondary}` }}>
+              {username}
             </Typography>
           </Stack>
           <Stack spacing={0} sx={{ padding: 0, height: "64px", flexGrow: 1, paddingRight: theme.spacing(0.5) }}>
@@ -37,7 +52,7 @@ function FullProfile(props) {
             About Me:
           </Typography>
           <Typography variant="subtitle2" sx={{ color: `${theme.palette.text.secondary}` }}>
-            what about me? you tell me.
+            {bio}
           </Typography>
           <Typography variant="subtitle1" sx={{ color: `${theme.palette.text.primary}` }}>
             Interests:

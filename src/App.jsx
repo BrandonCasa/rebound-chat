@@ -64,7 +64,15 @@ function App() {
           },
         })
         .then((response) => {
-          dispatch(setLoggedIn({ loggedIn: true, id: response.data.user.id, username: response.data.user.username, displayName: response.data.user.displayName }));
+          dispatch(
+            setLoggedIn({
+              loggedIn: true,
+              id: response.data.user.id,
+              username: response.data.user.username,
+              displayName: response.data.user.displayName,
+              bio: response.data.user.bio,
+            })
+          );
         })
         .catch((error) => {
           console.log(error);

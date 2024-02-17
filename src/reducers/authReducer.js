@@ -6,6 +6,7 @@ const initialState = {
   loggedIn: false,
   username: "",
   displayName: "",
+  bio: "",
   loggingIn: true,
   socketInfo: {
     connected: false,
@@ -35,6 +36,9 @@ const authSlice = createSlice({
       }
       if (action.payload.displayName !== undefined) {
         state.displayName = action.payload.displayName;
+      }
+      if (action.payload.bio !== undefined) {
+        state.bio = action.payload.bio;
       }
     },
     setLoggingIn: (state, action) => {
