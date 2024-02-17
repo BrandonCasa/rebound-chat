@@ -48,7 +48,7 @@ function ProfilePage(props) {
           </Divider>
         </ItemBox>
 
-        <ProfileCard type="full" width="300px" />
+        <ProfileCard type="full" width="400px" />
       </Stack>
     </Box>
   );
