@@ -79,6 +79,10 @@ function ChatPage() {
         socketClient.off("message_sent");
         socketClient.off("new_message");
         socketClient.off("user_list");
+        setChannels({});
+        setMessage("");
+        setMessages([]);
+        setUsers([]);
       }
     };
   }, [authState.loggedIn, authState.socketInfo.connected]);
