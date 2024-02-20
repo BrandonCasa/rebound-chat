@@ -28,8 +28,8 @@ const authSlice = createSlice({
         state.loggedIn = action.payload.loggedIn;
         state.loggingIn = false;
       }
-      if (action.payload.token !== undefined) {
-        state.authTokenState = action.payload.token;
+      if (action.payload.authToken !== undefined) {
+        state.authToken = action.payload.authToken;
       }
       if (action.payload.username !== undefined) {
         state.username = action.payload.username;

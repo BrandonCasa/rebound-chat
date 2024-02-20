@@ -12,7 +12,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { setLoggedIn, setLoggingIn, setSocketStatus } from "./reducers/authReducer";
 import axios from "axios";
 import ProfilePage from "routes/ProfilePage/ProfilePage.route";
-import ChatPage from "routes/FriendHubPage/ChatPage";
+import ChatPage from "routes/ChatPage/ChatPage";
 import HubPage from "routes/HubPage/HubPage";
 import socketIoHelper from "./helpers/socket";
 
@@ -52,7 +52,7 @@ function App() {
 
   useEffect(() => {
     if (authState.authToken && authState.authToken !== "" && !authState.loggedIn) {
-      dispatch(setLoggingIn({ loggedIn: true }));
+      dispatch(setLoggingIn({ loggingIn: true }));
 
       const requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/verify" : "/api/users/verify";
       axios
@@ -71,6 +71,7 @@ function App() {
               username: response.data.user.username,
               displayName: response.data.user.displayName,
               bio: response.data.user.bio,
+              authToken: authState.authToken,
             })
           );
         })

@@ -27,10 +27,17 @@ const LoginDialog = () => {
       })
       .then((res) => {
         if (res.status === 200) {
-          const { token, username, displayName, id } = res.data.user;
-          window.localStorage.setItem("auth-token", token);
-          dispatch(setAuthState({ token }));
-          dispatch(setLoggedIn({ loggedIn: true, id, username, displayName }));
+          window.localStorage.setItem("auth-token", res.data.user.token);
+          dispatch(
+            setLoggedIn({
+              loggedIn: true,
+              id: res.data.user.id,
+              username: res.data.user.username,
+              displayName: res.data.user.displayName,
+              bio: res.data.user.bio,
+              authToken: res.data.user.token,
+            })
+          );
           dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
         }
       })
