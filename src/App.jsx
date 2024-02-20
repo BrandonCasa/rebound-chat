@@ -13,7 +13,7 @@ import { setLoggedIn, setLoggingIn, setSocketStatus } from "./reducers/authReduc
 import axios from "axios";
 import ProfilePage from "routes/ProfilePage/ProfilePage.route";
 import ChatPage from "routes/FriendHubPage/ChatPage";
-import HubPage from "routes/FriendHubPage/HubPage";
+import HubPage from "routes/HubPage/HubPage";
 import socketIoHelper from "./helpers/socket";
 
 function App() {
