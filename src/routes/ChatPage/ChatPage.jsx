@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Box, Button, Divider, Paper, Stack, Typography } from "@mui/material";
+import { Box, Button, Divider, IconButton, Paper, Stack, Typography } from "@mui/material";
 import socketIoHelper from "helpers/socket";
 import UserList from "components/Chat/UserList";
 import ChannelList from "components/Chat/ChannelList";
@@ -8,6 +8,7 @@ import ChatInput from "components/Chat/ChatInput";
 import { useDispatch, useSelector } from "react-redux";
 import { setSocketRoom } from "reducers/authReducer";
 import { useLocation } from "react-router-dom";
+import * as Icons from "@mui/icons-material";
 
 const ChatBlock = React.memo(({ title, children }) => (
   <Paper sx={{ height: "100%", width: "20%", flexGrow: 1, position: "relative" }}>
@@ -111,26 +112,32 @@ function ChatPage() {
 
   return (
     <Box sx={{ display: "flex", justifyContent: "center", flexGrow: 1, overflow: "hidden" }}>
-      <Stack spacing={2} direction="row" sx={{ height: "100%", width: "100%" }}>
-        <ChatBlock title="Chat Rooms">
-          <ChannelList channels={channels} setMessages={setMessages} />
-        </ChatBlock>
-        <Paper sx={{ height: "100%", width: "60%", flexGrow: 1, position: "relative", display: "flex", flexDirection: "column" }}>
-          <Typography align="center" variant="h5">
-            - {channels[authState.socketInfo.currentRoom]?.name} -
-          </Typography>
-          <Divider />
-          <Box sx={{ width: "100%", flexGrow: 1, position: "relative", mb: 1 }}>
-            <ChatArea messages={messages} />
-          </Box>
-          <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} />
-        </Paper>
-        <ChatBlock title="Room Users">
-          <UserList users={users} />
-        </ChatBlock>
-      </Stack>
+      <Paper sx={{ height: "100%", width: "100%", flexGrow: 1, position: "relative", display: "flex", flexDirection: "column" }}>
+        <Box sx={{ width: "100%", position: "relative", display: "flex", padding: 0.5, height: "48px" }}>
+          <Button color="secondary" component="label" variant="outlined" startIcon={<Icons.MenuRounded />}>
+            <Typography align="center" variant="h6">
+              {channels[authState.socketInfo.currentRoom]?.name || "No Room"}
+            </Typography>
+          </Button>
+        </Box>
+        <Divider />
+        <Box sx={{ width: "100%", flexGrow: 1, position: "relative", mb: 1 }}>
+          <ChatArea messages={messages} />
+        </Box>
+        <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} />
+      </Paper>
     </Box>
   );
 }
 
 export default React.memo(ChatPage); // Memoize the entire component to prevent unnecessary re-renders
+
+/*
+<ChatBlock title="Chat Rooms">
+  <ChannelList channels={channels} setMessages={setMessages} />
+</ChatBlock>
+
+<ChatBlock title="Room Users">
+  <UserList users={users} />
+</ChatBlock>
+*/
