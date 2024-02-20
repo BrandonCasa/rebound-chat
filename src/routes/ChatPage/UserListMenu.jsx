@@ -13,11 +13,11 @@ const StyledMenu = styled((props) => (
     elevation={5}
     anchorOrigin={{
       vertical: "bottom",
-      horizontal: "left",
+      horizontal: "right",
     }}
     transformOrigin={{
       vertical: "top",
-      horizontal: "left",
+      horizontal: "right",
     }}
     {...props}
   />
@@ -45,7 +45,7 @@ const StyledMenu = styled((props) => (
   },
 }));
 
-export default function ChatRoomMenu({ anchorEl, setAnchorEl, channels, setMessages }) {
+export default function UserListMenu({ anchorEl, setAnchorEl, users }) {
   const open = Boolean(anchorEl);
   const authState = useSelector((state) => state.auth);
   const dispatch = useDispatch();
@@ -54,20 +54,12 @@ export default function ChatRoomMenu({ anchorEl, setAnchorEl, channels, setMessa
     setAnchorEl(null);
   };
 
-  const handleChannelSelect = (channel) => {
-    if (authState.socketInfo.currentRoom !== channel) {
-      setMessages([]);
-    }
-    dispatch(setSocketRoom({ lastRoom: authState.socketInfo.currentRoom, currentRoom: channel }));
-    handleClose();
-  };
-
   return (
-    <StyledMenu id="chat-room-menu" anchorEl={anchorEl} open={open} onClose={handleClose}>
-      {Object.keys(channels).map((channel, index) => (
-        <MenuItem key={index} onClick={() => handleChannelSelect(channel)} disableRipple selected={authState.socketInfo.currentRoom === channel}>
-          <Icons.DnsRounded />
-          {channels[channel].name}
+    <StyledMenu id="user-list-menu" anchorEl={anchorEl} open={open} onClose={handleClose}>
+      {Object.keys(users).map((user, index) => (
+        <MenuItem key={index} disableRipple selected={users[user].username === authState.username}>
+          <Icons.PersonRounded />
+          {users[user].displayName}
         </MenuItem>
       ))}
     </StyledMenu>

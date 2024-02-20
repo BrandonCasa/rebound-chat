@@ -10,6 +10,7 @@ import { setSocketRoom } from "reducers/authReducer";
 import { useLocation } from "react-router-dom";
 import * as Icons from "@mui/icons-material";
 import ChatRoomMenu from "./ChatRoomMenu";
+import UserListMenu from "./UserListMenu";
 
 const ChatBlock = React.memo(({ title, children }) => (
   <Paper sx={{ height: "100%", width: "20%", flexGrow: 1, position: "relative" }}>
@@ -27,6 +28,7 @@ function ChatPage() {
   const [channels, setChannels] = useState({});
   const [users, setUsers] = useState([]);
   const [roomAnchorEl, setRoomAnchorEl] = React.useState(null);
+  const [userListAnchorEl, setUserListAnchorEl] = React.useState(null);
   const authState = useSelector((state) => state.auth);
   const dispatch = useDispatch();
 
@@ -62,7 +64,6 @@ function ChatPage() {
 
       // User List
       socketClient.on("user_list", (roomId, roomUsers) => {
-        console.log(roomUsers);
         const usersInRoom = roomUsers.map((roomUser) => {
           return roomUser;
         });
@@ -114,16 +115,36 @@ function ChatPage() {
 
   const clickRoomSelect = (event) => {
     setRoomAnchorEl(event.currentTarget);
+    setUserListAnchorEl(null);
+  };
+
+  const clickUserList = (event) => {
+    setUserListAnchorEl(event.currentTarget);
+    setRoomAnchorEl(null);
   };
 
   return (
     <Box sx={{ display: "flex", justifyContent: "center", flexGrow: 1, overflow: "hidden" }}>
       <ChatRoomMenu anchorEl={roomAnchorEl} setAnchorEl={setRoomAnchorEl} channels={channels} setMessages={setMessages} />
+      <UserListMenu anchorEl={userListAnchorEl} setAnchorEl={setUserListAnchorEl} users={users} />
       <Paper sx={{ height: "100%", width: "100%", flexGrow: 1, position: "relative", display: "flex", flexDirection: "column" }}>
         <Box sx={{ width: "100%", position: "relative", display: "flex", padding: 0.5, height: "48px" }}>
-          <Button color="secondary" component="label" variant="outlined" startIcon={<Icons.MenuRounded />} onClick={clickRoomSelect}>
+          <Button
+            sx={{ textTransform: "initial" }}
+            color="secondary"
+            component="label"
+            variant="outlined"
+            startIcon={<Icons.MenuRounded />}
+            onClick={clickRoomSelect}
+          >
             <Typography align="center" variant="h6">
               {channels[authState.socketInfo.currentRoom]?.name || "No Room"}
+            </Typography>
+          </Button>
+          <div style={{ flexGrow: 1 }} />
+          <Button sx={{ textTransform: "initial" }} color="secondary" component="label" variant="outlined" endIcon={<Icons.PeopleRounded />} onClick={clickUserList}>
+            <Typography align="center" variant="h6">
+              {users.length}
             </Typography>
           </Button>
         </Box>
