@@ -1,5 +1,5 @@
 // Imports
-import { Box, Card, CardContent, CardHeader, Chip, Collapse, Container, Divider, Paper, Stack, Typography } from "@mui/material";
+import { Box, Button, Card, CardContent, CardHeader, Chip, Collapse, Container, Divider, Paper, Stack, Typography } from "@mui/material";
 import { styled, useTheme } from "@mui/material/styles";
 import Grid from "@mui/material/Unstable_Grid2";
 import React, { useContext, useEffect } from "react";
@@ -42,13 +42,12 @@ function ProfilePage(props) {
           </Typography>
         </ItemPaper>
 
-        <ItemBox>
-          <Divider sx={{ "&::after": { borderWidth: "3px" }, "&::before": { borderWidth: "3px" }, margin: 0 }} variant="middle" textAlign="left">
-            <Chip color="secondary" label="Preview" />
-          </Divider>
-        </ItemBox>
-
-        <ProfileCard type="full" width="100%" passStyle={{ maxHeight: "500px", maxWidth: "500px" }} />
+        <Box sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
+          <ProfileCard type="full" width="100%" passStyle={{ maxHeight: "500px", maxWidth: "500px", marginLeft: "auto", marginRight: "auto", marginBottom: 2 }} />
+          <Button disabled variant="contained" sx={{ maxWidth: "275px", marginLeft: "auto", marginRight: "auto", width: "100%" }}>
+            Edit
+          </Button>
+        </Box>
       </Stack>
     </Box>
   );
