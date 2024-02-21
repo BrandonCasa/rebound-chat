@@ -35,7 +35,7 @@ function FullProfile(props) {
       <Stack spacing={0.5} sx={{ flexGrow: 1, padding: theme.spacing(0.5) }}>
         <img style={{ borderRadius: theme.spacing(0.5) }} src="banner.png" alt="no_banner" />
         <Stack direction="row" spacing={2} sx={{ padding: theme.spacing(0.5) }}>
-          <Avatar sx={{ width: "64px", height: "64px" }} />
+          <Avatar alt="User" src="defaultpfp.png" sx={{ width: "64px", height: "64px" }} />
           <Stack spacing={0} sx={{ padding: 0, height: "64px" }}>
             <Typography variant="h5" height={"32px"}>
               {displayName}

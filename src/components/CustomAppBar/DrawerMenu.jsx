@@ -58,13 +58,8 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
           },
         }}
       >
-        <ListItemWithTooltip key="FriendHub" title="Hub" placement="right">
-          <ListItemIcon
-            sx={{ opacity: window.location.pathname.toString() === "/hub" ? "0.5" : "1.0" }}
-            onClick={() => {
-              navigate("/hub");
-            }}
-          >
+        <ListItemWithTooltip key="FriendHub" title="Friends" placement="right">
+          <ListItemIcon sx={{ opacity: window.location.pathname.toString() === "/friends" ? "0.5" : "1.0" }}>
             <Icons.PeopleAltRounded />
           </ListItemIcon>
         </ListItemWithTooltip>
@@ -79,7 +74,7 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
           </ListItemIcon>
         </ListItemWithTooltip>
         <ListItemWithTooltip key="Servers" title="Servers" placement="right">
-          <ListItemIcon>
+          <ListItemIcon sx={{ opacity: window.location.pathname.toString() === "/servers" ? "0.5" : "1.0" }}>
             <Icons.DnsRounded />
           </ListItemIcon>
         </ListItemWithTooltip>
@@ -94,7 +89,7 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
           </ListItemIcon>
         </ListItemWithTooltip>
         <ListItemWithTooltip key="Settings" title="Settings" placement="right">
-          <ListItemIcon>
+          <ListItemIcon sx={{ opacity: window.location.pathname.toString() === "/settings" ? "0.5" : "1.0" }}>
             <Icons.SettingsRounded />
           </ListItemIcon>
         </ListItemWithTooltip>

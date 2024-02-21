@@ -22,11 +22,7 @@ const AppBarContent = ({ handleIconClick, iconWidth, drawerWidth, loggedInState 
       </Typography>
       <IconButton color="secondary" sx={{ height: `${iconWidth}px`, height: drawerWidth }} onClick={handleIconClick}>
         <Icons.AccountCircleRounded sx={{ height: drawerWidth - 16, width: drawerWidth - 16, display: loggedInState ? "none" : "inherit" }} />
-        <Avatar
-          alt="Remy Sharp"
-          src="https://mui.com/static/images/avatar/3.jpg"
-          sx={{ height: drawerWidth - 16, width: drawerWidth - 16, display: loggedInState ? "inherit" : "none" }}
-        />
+        <Avatar alt="User" src="defaultpfp.png" sx={{ height: drawerWidth - 16, width: drawerWidth - 16, display: loggedInState ? "inherit" : "none" }} />
       </IconButton>
     </Toolbar>
   </AppBar>

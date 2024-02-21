@@ -5,22 +5,6 @@ import UserIcon from "@mui/icons-material/Person";
 import AnonIcon from "@mui/icons-material/QuestionMark";
 import { scrollbarStyles } from "routes/LandingPage/utils/scrollbarStyles";
 
-const avatarIcons = {
-  system: SecurityIcon,
-  user: UserIcon,
-  anon: AnonIcon,
-};
-
-const getAvatarIcon = (msg) => {
-  if (msg.username === "System") {
-    return avatarIcons.system;
-  } else if (msg.loggedIn) {
-    return avatarIcons.user;
-  } else {
-    return avatarIcons.anon;
-  }
-};
-
 const formatDate = (timestamp) => {
   const messageDate = new Date(timestamp);
   const today = new Date();
@@ -43,7 +27,6 @@ const timeStampStyle = {
 
 function IndividualMessage({ msg, shouldDisplayAvatar }) {
   const theme = useTheme();
-  const AvatarIcon = getAvatarIcon(msg);
   const [sendTimeFull, sendTimeTime] = formatDate(msg.createdAt);
   const [isHovered, setIsHovered] = React.useState(false);
 
@@ -57,9 +40,7 @@ function IndividualMessage({ msg, shouldDisplayAvatar }) {
   return (
     <ListItem disablePadding sx={{ alignItems: "flex-start", display: "flex", flexDirection: "column", width: "100%" }}>
       <Box sx={{ display: shouldDisplayAvatar ? "inherit" : "none", marginBottom: "-12px", width: "100%" }}>
-        <Avatar sx={{ height: "40px", width: "40px" }}>
-          <AvatarIcon />
-        </Avatar>
+        <Avatar alt="User" src="defaultpfp.png" sx={{ height: "40px", width: "40px" }} />
         <Typography fontSize={20} sx={{ marginLeft: 1, marginRight: 1 }} variant="h6">
           {msg.sender.displayName}
         </Typography>
