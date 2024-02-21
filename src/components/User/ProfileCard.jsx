@@ -28,7 +28,10 @@ function FullProfile(props) {
   let cardHeight = props?.width || "auto";
 
   return (
-    <Paper sx={{ padding: 0, width: cardWidth, height: cardHeight, overflow: "hidden", display: "flex", flexDirection: "column" }} elevation={3}>
+    <Paper
+      sx={{ padding: 0, width: cardWidth, height: cardHeight, overflow: "hidden", display: "flex", flexDirection: "column", ...props?.passStyle }}
+      elevation={3}
+    >
       <Stack spacing={0.5} sx={{ flexGrow: 1, padding: theme.spacing(0.5) }}>
         <img style={{ borderRadius: theme.spacing(0.5) }} src="banner.png" alt="no_banner" />
         <Stack direction="row" spacing={2} sx={{ padding: theme.spacing(0.5) }}>

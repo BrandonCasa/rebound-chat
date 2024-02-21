@@ -48,7 +48,7 @@ function ProfilePage(props) {
           </Divider>
         </ItemBox>
 
-        <ProfileCard type="full" width="400px" />
+        <ProfileCard type="full" width="100%" passStyle={{ maxHeight: "500px", maxWidth: "500px" }} />
       </Stack>
     </Box>
   );
