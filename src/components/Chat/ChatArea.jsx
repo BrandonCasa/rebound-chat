@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Box, List, ListItem, ListItemAvatar, ListItemText, Avatar, Typography } from "@mui/material";
+import { Box, List, ListItem, ListItemAvatar, ListItemText, Avatar, Typography, Paper, useTheme } from "@mui/material";
 import SecurityIcon from "@mui/icons-material/Security";
 import UserIcon from "@mui/icons-material/Person";
 import AnonIcon from "@mui/icons-material/QuestionMark";
@@ -26,9 +26,11 @@ const formatDate = (timestamp) => {
   const today = new Date();
   const messageDateString = messageDate.toLocaleDateString();
   const todayString = today.toLocaleDateString();
-  const timeString = messageDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-  return todayString === messageDateString ? `Today at ${timeString}` : `${messageDateString} at ${timeString}`;
+  const outStringTime = messageDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const outStringFull = todayString === messageDateString ? `Today at ${outStringTime}` : `${messageDateString} at ${outStringTime}`;
+
+  return [outStringFull, outStringTime];
 };
 
 const timeStampStyle = {
@@ -39,42 +41,66 @@ const timeStampStyle = {
   fontSize: "0.8rem",
 };
 
+function IndividualMessage({ msg, shouldDisplayAvatar }) {
+  const theme = useTheme();
+  const AvatarIcon = getAvatarIcon(msg);
+  const [sendTimeFull, sendTimeTime] = formatDate(msg.createdAt);
+  const [isHovered, setIsHovered] = React.useState(false);
+
+  const onHoverStart = (event) => {
+    setIsHovered(true);
+  };
+  const onHoverEnd = (event) => {
+    setIsHovered(false);
+  };
+
+  return (
+    <ListItem disablePadding sx={{ alignItems: "flex-start", display: "flex", flexDirection: "column", width: "100%" }}>
+      <Box sx={{ display: shouldDisplayAvatar ? "inherit" : "none", marginBottom: "-12px", width: "100%" }}>
+        <Avatar sx={{ height: "40px", width: "40px" }}>
+          <AvatarIcon />
+        </Avatar>
+        <Typography fontSize={20} sx={{ marginLeft: 1, marginRight: 1 }} variant="h6">
+          {msg.sender.displayName}
+        </Typography>
+        <Typography fontSize={11} sx={{ color: theme.palette.text.secondary }} variant="overline" textTransform="initial">
+          {sendTimeFull}
+        </Typography>
+      </Box>
+      <Box
+        sx={{
+          width: "100%",
+          paddingLeft: "48px",
+        }}
+        onMouseEnter={onHoverStart}
+        onMouseLeave={onHoverEnd}
+      >
+        <Box
+          sx={{
+            paddingLeft: isHovered ? 1 : 0,
+            background: isHovered ? `${theme.palette.text.secondary}20` : "inherit",
+            borderRadius: 1,
+            transition: "padding-left 0.1s ease-in-out, background 0.05s ease-in-out",
+            display: "flex",
+            justifyContent: "space-between",
+          }}
+        >
+          <Typography variant="subtitle1" sx={{ color: theme.palette.text.secondary }}>
+            {msg.content}
+          </Typography>
+        </Box>
+      </Box>
+    </ListItem>
+  );
+}
 const ConstructedMessages = React.memo(function ConstructedMessages({ relevantMsgs }) {
   let lastSender = null;
 
   return relevantMsgs.map((msg) => {
     const shouldDisplayAvatar = lastSender !== msg.sender.displayName;
     lastSender = msg.sender.displayName;
-    const AvatarIcon = getAvatarIcon(msg);
-    const sendTimeFormatted = formatDate(msg.createdAt);
 
-    return (
-      <ListItem key={msg.id || msg.createdAt} disablePadding sx={{ alignItems: "flex-start" }}>
-        {shouldDisplayAvatar && (
-          <ListItemAvatar>
-            <Avatar>
-              <AvatarIcon />
-            </Avatar>
-          </ListItemAvatar>
-        )}
-        <ListItemText
-          primary={
-            shouldDisplayAvatar && (
-              <>
-                <Typography component="span" style={{ display: "inline-block" }}>
-                  {msg.sender.displayName}
-                </Typography>
-                <Typography component="span" style={{ display: "inline-block" }} sx={timeStampStyle}>
-                  {sendTimeFormatted}
-                </Typography>
-              </>
-            )
-          }
-          secondary={msg.content}
-          sx={{ paddingLeft: shouldDisplayAvatar ? "" : "56px", marginTop: "4px" }} // Adjust paddingLeft based on avatar display
-        />
-      </ListItem>
-    );
+    return <IndividualMessage key={msg.id || msg.createdAt} msg={msg} shouldDisplayAvatar={shouldDisplayAvatar} />;
   });
 });
 
