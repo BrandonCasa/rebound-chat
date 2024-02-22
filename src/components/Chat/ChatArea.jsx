@@ -14,7 +14,7 @@ const formatDate = (timestamp) => {
   const outStringTime = messageDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   const outStringFull = todayString === messageDateString ? `Today at ${outStringTime}` : `${messageDateString} at ${outStringTime}`;
 
-  return [outStringFull, outStringTime];
+  return outStringFull;
 };
 
 const timeStampStyle = {
@@ -25,16 +25,15 @@ const timeStampStyle = {
   fontSize: "0.8rem",
 };
 
-function IndividualMessage({ msg, shouldDisplayAvatar }) {
+function IndividualMessage({ msg, shouldDisplayAvatar, currentBlock, currentMsg, hoveredBlock, hoveredMessage, onHoverMessage, requestedTime }) {
   const theme = useTheme();
-  const [sendTimeFull, sendTimeTime] = formatDate(msg.createdAt);
-  const [isHovered, setIsHovered] = React.useState(false);
+  let sendTimeText = requestedTime ? formatDate(requestedTime) : formatDate(msg.createdAt);
 
   const onHoverStart = (event) => {
-    setIsHovered(true);
+    onHoverMessage(currentMsg);
   };
   const onHoverEnd = (event) => {
-    setIsHovered(false);
+    onHoverMessage(-1);
   };
 
   return (
@@ -45,7 +44,7 @@ function IndividualMessage({ msg, shouldDisplayAvatar }) {
           {msg.sender.displayName}
         </Typography>
         <Typography fontSize={11} sx={{ color: theme.palette.text.secondary }} variant="overline" textTransform="initial">
-          {sendTimeFull}
+          {sendTimeText}
         </Typography>
       </Box>
       <Box
@@ -58,8 +57,8 @@ function IndividualMessage({ msg, shouldDisplayAvatar }) {
       >
         <Box
           sx={{
-            paddingLeft: isHovered ? 1 : 0,
-            background: isHovered ? `${theme.palette.text.secondary}20` : "inherit",
+            paddingLeft: hoveredMessage === currentMsg && hoveredBlock === currentBlock ? 1 : 0,
+            background: hoveredMessage === currentMsg && hoveredBlock === currentBlock ? `${theme.palette.text.secondary}20` : "inherit",
             borderRadius: 1,
             transition: "padding-left 0.1s ease-in-out, background 0.05s ease-in-out",
             display: "flex",
@@ -74,14 +73,79 @@ function IndividualMessage({ msg, shouldDisplayAvatar }) {
     </ListItem>
   );
 }
+
+const divideMessages = (messages) => {
+  let outputMessages = [];
+
+  let previousSenderId = undefined;
+  messages.forEach((message) => {
+    if (message.sender["_id"] !== previousSenderId) {
+      outputMessages.push([message]);
+      previousSenderId = message.sender["_id"];
+    } else {
+      outputMessages[outputMessages.length - 1].push(message);
+    }
+  });
+
+  return outputMessages;
+};
+
+function GetMessageBlock({ messageBlock, blockIndex, hoveredBlock, setHoveredBlock }) {
+  const [requestedTime, setRequestedTime] = React.useState(null);
+  const [hoveredMessage, setHoveredMessage] = React.useState(-1);
+
+  const onHoverMessage = (msgIndex) => {
+    if (msgIndex !== -1) {
+      setHoveredMessage(msgIndex);
+      setHoveredBlock(blockIndex);
+      setRequestedTime(messageBlock[msgIndex].createdAt);
+    } else {
+      setHoveredMessage(-1);
+      setHoveredBlock(-1);
+      setRequestedTime(null);
+    }
+  };
+
+  return messageBlock.map((msg, msgIndex) => {
+    const shouldDisplayAvatar = msgIndex === 0;
+
+    return (
+      <IndividualMessage
+        key={msgIndex}
+        msg={msg}
+        shouldDisplayAvatar={shouldDisplayAvatar}
+        currentBlock={blockIndex}
+        currentMsg={msgIndex}
+        hoveredBlock={hoveredBlock}
+        hoveredMessage={hoveredMessage}
+        onHoverMessage={onHoverMessage}
+        requestedTime={requestedTime}
+      />
+    );
+  });
+}
+
 const ConstructedMessages = React.memo(function ConstructedMessages({ relevantMsgs }) {
-  let lastSender = null;
+  const theme = useTheme();
+  const [hoveredBlock, setHoveredBlock] = React.useState(-1);
 
-  return relevantMsgs.map((msg) => {
-    const shouldDisplayAvatar = lastSender !== msg.sender.displayName;
-    lastSender = msg.sender.displayName;
+  const dividedMessages = divideMessages(relevantMsgs);
 
-    return <IndividualMessage key={msg.id || msg.createdAt} msg={msg} shouldDisplayAvatar={shouldDisplayAvatar} />;
+  return dividedMessages.map((messageBlock, blockIndex) => {
+    return (
+      <Box
+        key={blockIndex}
+        sx={{
+          background: hoveredBlock === blockIndex ? `${theme.palette.text.secondary}10` : "inherit",
+          borderRadius: 1,
+          padding: 1,
+          marginBottom: blockIndex === divideMessages.length ? 0 : 1,
+          transition: `background ${hoveredBlock !== blockIndex ? "0.3s" : "0.1s"} ease-in-out`,
+        }}
+      >
+        <GetMessageBlock messageBlock={messageBlock} blockIndex={blockIndex} hoveredBlock={hoveredBlock} setHoveredBlock={setHoveredBlock} />
+      </Box>
+    );
   });
 });
 

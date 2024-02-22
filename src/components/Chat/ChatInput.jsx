@@ -7,7 +7,7 @@ function ChatInput({ message, setMessage, sendMessage }) {
   const theme = useTheme();
 
   return (
-    <Paper sx={{ display: "flex", padding: 1 }}>
+    <Paper sx={{ display: "flex", padding: 1, paddingTop: 1, marginTop: 1 }}>
       <form
         style={{ display: "flex", flexGrow: 1 }}
         onSubmit={(event) => {

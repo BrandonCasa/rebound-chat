@@ -124,11 +124,11 @@ function ChatPage() {
   };
 
   return (
-    <Box sx={{ display: "flex", justifyContent: "center", flexGrow: 1, overflow: "hidden" }}>
+    <Box sx={{ display: "flex", justifyContent: "center", flexGrow: 1, overflow: "hidden", flexDirection: "column" }}>
       <ChatRoomMenu anchorEl={roomAnchorEl} setAnchorEl={setRoomAnchorEl} channels={channels} setMessages={setMessages} />
       <UserListMenu anchorEl={userListAnchorEl} setAnchorEl={setUserListAnchorEl} users={users} />
       <Paper sx={{ height: "100%", width: "100%", flexGrow: 1, position: "relative", display: "flex", flexDirection: "column" }}>
-        <Box sx={{ width: "100%", position: "relative", display: "flex", padding: 0.5, height: "48px" }}>
+        <Box sx={{ width: "100%", position: "relative", display: "flex", padding: 1, height: "56px" }}>
           <Button
             sx={{ textTransform: "initial" }}
             color="secondary"
@@ -149,11 +149,11 @@ function ChatPage() {
           </Button>
         </Box>
         <Divider />
-        <Box sx={{ width: "100%", flexGrow: 1, position: "relative", mb: 1 }}>
+        <Box sx={{ width: "100%", flexGrow: 1, position: "relative" }}>
           <ChatArea messages={messages} />
         </Box>
-        <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} />
       </Paper>
+      <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} />
     </Box>
   );
 }
