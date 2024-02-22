@@ -139,7 +139,7 @@ const ConstructedMessages = React.memo(function ConstructedMessages({ relevantMs
           background: hoveredBlock === blockIndex ? `${theme.palette.text.secondary}10` : "inherit",
           borderRadius: 1,
           padding: 1,
-          marginBottom: blockIndex === divideMessages.length ? 0 : 1,
+          marginBottom: blockIndex === dividedMessages.length - 1 ? 0 : 1,
           transition: `background ${hoveredBlock !== blockIndex ? "0.3s" : "0.1s"} ease-in-out`,
         }}
       >
