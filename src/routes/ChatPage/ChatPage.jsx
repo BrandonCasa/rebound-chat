@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Box, Button, Divider, IconButton, Paper, Stack, Typography } from "@mui/material";
+import { Box, Button, Divider, IconButton, Menu, Paper, Popover, Stack, Typography } from "@mui/material";
 import socketIoHelper from "helpers/socket";
 import UserList from "components/Chat/UserList";
 import ChannelList from "components/Chat/ChannelList";
@@ -9,8 +9,34 @@ import { useDispatch, useSelector } from "react-redux";
 import { setSocketRoom } from "reducers/authReducer";
 import { useLocation } from "react-router-dom";
 import * as Icons from "@mui/icons-material";
-import ChatRoomMenu from "./ChatRoomMenu";
-import UserListMenu from "./UserListMenu";
+import ChatRoomMenu from "../../components/Chat/ChatRoomMenu";
+import UserListMenu from "../../components/Chat/UserListMenu";
+import ProfileCard from "components/User/ProfileCard";
+import axios from "axios";
+
+async function getUserInfo(userId, authToken) {
+  const requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/profile" : "/api/users/profile";
+  return await axios
+    .get(requestString, {
+      headers: {
+        "Content-Type": "application/json",
+        "Allow-Control-Allow-Origin": "*",
+        authorization: `Bearer ${authToken}`,
+      },
+      params: {
+        id: userId,
+      },
+    })
+    .then((response) => {
+      return response.data.user;
+    })
+    .catch((error) => {
+      console.log(error);
+    })
+    .finally(() => {
+      return null;
+    });
+}
 
 const ChatBlock = React.memo(({ title, children }) => (
   <Paper sx={{ height: "100%", width: "20%", flexGrow: 1, position: "relative" }}>
@@ -28,6 +54,8 @@ function ChatPage() {
   const [channels, setChannels] = useState({});
   const [users, setUsers] = useState([]);
   const [roomAnchorEl, setRoomAnchorEl] = React.useState(null);
+  const [userPreviewEl, setUserPreviewEl] = React.useState(null);
+  const [userPreviewUser, setUserPreviewUser] = React.useState(null);
   const [userListAnchorEl, setUserListAnchorEl] = React.useState(null);
   const authState = useSelector((state) => state.auth);
   const dispatch = useDispatch();
@@ -123,8 +151,40 @@ function ChatPage() {
     setRoomAnchorEl(null);
   };
 
+  const previewUser = async (chatElement, user) => {
+    if (!chatElement?.current) {
+      setUserPreviewEl(null);
+      setUserPreviewUser(null);
+      return;
+    }
+    let userInfo = null;
+    if (user?.["_id"]) {
+      userInfo = await getUserInfo(user["_id"], authState.authToken);
+    }
+    if (userInfo) {
+      setUserPreviewEl(chatElement?.current);
+      setUserPreviewUser(userInfo);
+    }
+  };
+
   return (
     <Box sx={{ display: "flex", justifyContent: "center", flexGrow: 1, overflow: "hidden", flexDirection: "column" }}>
+      <Popover
+        anchorOrigin={{
+          vertical: "top",
+          horizontal: "left",
+        }}
+        transformOrigin={{
+          vertical: "bottom",
+          horizontal: "left",
+        }}
+        anchorEl={userPreviewEl}
+        open={Boolean(userPreviewEl)}
+        onClose={() => previewUser(null)}
+        sx={{ marginBottom: 2 }}
+      >
+        <ProfileCard self={false} type="full" width="100%" passStyle={{ maxHeight: "400px", maxWidth: "400px" }} user={userPreviewUser} />
+      </Popover>
       <ChatRoomMenu anchorEl={roomAnchorEl} setAnchorEl={setRoomAnchorEl} channels={channels} setMessages={setMessages} />
       <UserListMenu anchorEl={userListAnchorEl} setAnchorEl={setUserListAnchorEl} users={users} />
       <Paper sx={{ height: "100%", width: "100%", flexGrow: 1, position: "relative", display: "flex", flexDirection: "column" }}>
@@ -150,7 +210,7 @@ function ChatPage() {
         </Box>
         <Divider />
         <Box sx={{ width: "100%", flexGrow: 1, position: "relative" }}>
-          <ChatArea messages={messages} />
+          <ChatArea messages={messages} previewUser={previewUser} />
         </Box>
       </Paper>
       <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} />

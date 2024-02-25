@@ -9,19 +9,27 @@ import * as Icons from "@mui/icons-material";
 function FullProfile(props) {
   let theme = useTheme();
   const authState = useSelector((state) => state.auth);
-  const [displayName, setDisplayName] = useState("Display Name");
-  const [username, setUsername] = useState("Username");
-  const [bio, setBio] = useState("what about me? you tell me.");
+  const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
+  const [bio, setBio] = useState("");
 
   useEffect(() => {
-    if (authState.loggedIn === true) {
+    if (props?.self && authState.loggedIn === true) {
       //console.log(authState);
       setBio(authState.bio);
       setDisplayName(authState.displayName);
       setUsername(authState.username);
+    } else if (props?.user) {
+      setBio(props?.user?.bio);
+      setDisplayName(props?.user?.displayName);
+      setUsername(props?.user?.username);
     }
 
-    return () => {};
+    return () => {
+      setBio("");
+      setDisplayName("");
+      setUsername("");
+    };
   }, [authState.loggedIn]);
 
   let cardWidth = props?.width || "auto";

@@ -34,7 +34,7 @@ router.get("/users/verify", async function (req, res, next) {
 });
 
 router.get("/users/profile", auth.required, function (req, res, next) {
-  UserModel.findById(req.body.id)
+  UserModel.findById(req?.body?.id || req?.query?.id)
     .then(function (user) {
       if (!user) {
         return res.sendStatus(401);

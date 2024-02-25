@@ -43,7 +43,12 @@ function ProfilePage(props) {
         </ItemPaper>
 
         <Box sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
-          <ProfileCard type="full" width="100%" passStyle={{ maxHeight: "500px", maxWidth: "500px", marginLeft: "auto", marginRight: "auto", marginBottom: 2 }} />
+          <ProfileCard
+            self={true}
+            type="full"
+            width="100%"
+            passStyle={{ maxHeight: "500px", maxWidth: "500px", marginLeft: "auto", marginRight: "auto", marginBottom: 2 }}
+          />
           <Button disabled variant="contained" sx={{ maxWidth: "275px", marginLeft: "auto", marginRight: "auto", width: "100%" }}>
             Edit
           </Button>
