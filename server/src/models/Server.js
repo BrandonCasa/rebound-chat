@@ -10,7 +10,7 @@ const ServerSchema = new mongoose.Schema(
     events: [{ type: Schema.Types.ObjectId, ref: "ServerEvent" }],
     followers: [{ type: Schema.Types.ObjectId, ref: "User" }],
     banned: [{ type: Schema.Types.ObjectId, ref: "User" }],
-    invites: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    invites: [{ type: Schema.Types.ObjectId, ref: "ServerInvite" }],
   },
   { timestamps: true }
 );
