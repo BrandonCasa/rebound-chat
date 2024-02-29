@@ -4,8 +4,8 @@ const ServerSchema = new mongoose.Schema(
   {
     name: { type: String, required: [true, "is required"] },
     owner: { type: Schema.Types.ObjectId, ref: "User", required: [true, "is required"] },
-    tags: [{ type: Schema.Types.ObjectId, ref: "RoomTag", required: [true, "is required"] }],
-    settings: [{ type: Schema.Types.ObjectId, ref: "ServerSetting" }],
+    tags: [{ type: String }],
+    settings: [{ type: Schema.Types.ObjectId, ref: "Setting" }],
     groups: [{ type: Schema.Types.ObjectId, ref: "RoomGroup" }],
     events: [{ type: Schema.Types.ObjectId, ref: "ServerEvent" }],
     followers: [{ type: Schema.Types.ObjectId, ref: "User" }],
