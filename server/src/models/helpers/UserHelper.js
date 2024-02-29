@@ -1,8 +1,11 @@
 import FriendModel from "../Friend.js";
 import UserModel from "../User.js";
 
-const getUserById = async (userId) => {
+const validateUserById = async (userId, res) => {
   const user = await UserModel.findById(userId);
+  if (!user) {
+    return res.sendStatus(404);
+  }
   return user;
 };
 
@@ -36,4 +39,4 @@ const sendFriendRequest = async (sender, recipient, res) => {
   return res.json({ friendId: newFriend._id.toString() });
 };
 
-export { getUserById, sendFriendRequest };
+export { validateUserById, sendFriendRequest };

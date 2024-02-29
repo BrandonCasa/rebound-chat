@@ -6,7 +6,7 @@ import passport from "passport";
 import jwt from "jsonwebtoken";
 import logger from "../../logger.js";
 import "dotenv/config";
-import { sendFriendRequest } from "../../models/helpers/UserHelper.js";
+import { sendFriendRequest, validateUserById } from "../../models/helpers/UserHelper.js";
 
 const router = Router();
 
@@ -145,15 +145,8 @@ router.put("/users/addfriend", auth.required, async function (req, res, next) {
     return res.sendStatus(403);
   }
 
-  const sender = await UserModel.findById(currentUserJwt.id);
-  if (!sender) {
-    return res.sendStatus(404);
-  }
-
-  const recipient = await UserModel.findById(req.body.recipientId);
-  if (!recipient) {
-    return res.sendStatus(404);
-  }
+  const sender = await validateUserById(currentUserJwt.id, res);
+  const recipient = await validateUserById(req.body.recipientId, res);
 
   return await sendFriendRequest(sender, recipient, res);
 });
