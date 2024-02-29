@@ -6,7 +6,7 @@ import passport from "passport";
 import jwt from "jsonwebtoken";
 import logger from "../../logger.js";
 import "dotenv/config";
-import { sendFriendRequest, validateUserById } from "../../models/helpers/UserHelper.js";
+import { sendFriendRequest, validateFriendById, validateUserById } from "../../models/helpers/UserHelper.js";
 
 const router = Router();
 
@@ -158,10 +158,7 @@ router.put("/users/acceptfriend", auth.required, async function (req, res, next)
     return res.sendStatus(404);
   }
 
-  const friend = await FriendModel.findById(req.body.friendId);
-  if (!friend) {
-    return res.sendStatus(404);
-  }
+  const friend = await validateFriendById(req.body.friendId);
 
   if (friend.confirmed) {
     return res.sendStatus(403);
@@ -184,10 +181,7 @@ router.put("/users/declinefriend", auth.required, async function (req, res, next
     return res.sendStatus(404);
   }
 
-  const friend = await FriendModel.findById(req.body.friendId);
-  if (!friend) {
-    return res.sendStatus(404);
-  }
+  const friend = await validateFriendById(req.body.friendId);
 
   if (friend.confirmed) {
     return res.sendStatus(403);
@@ -197,15 +191,8 @@ router.put("/users/declinefriend", auth.required, async function (req, res, next
     return res.sendStatus(401);
   }
 
-  const sender = await UserModel.findById(friend.requester._id);
-  if (!sender) {
-    return res.sendStatus(404);
-  }
-
-  const recipient = await UserModel.findById(friend.recipient._id);
-  if (!recipient) {
-    return res.sendStatus(404);
-  }
+  const sender = await validateUserById(friend.requester._id, res);
+  const recipient = await validateUserById(friend.recipient._id, res);
 
   sender.friends.pull(req.body.friendId);
   await sender.save();
@@ -224,10 +211,7 @@ router.put("/users/removefriend", auth.required, async function (req, res, next)
     return res.sendStatus(404);
   }
 
-  const friend = await FriendModel.findById(req.body.friendId);
-  if (!friend) {
-    return res.sendStatus(404);
-  }
+  const friend = await validateFriendById(req.body.friendId);
 
   if (friend.recipient._id.toString() !== currentUserJwt.id && friend.requester._id.toString() !== currentUserJwt.id) {
     return res.sendStatus(401);
@@ -237,15 +221,8 @@ router.put("/users/removefriend", auth.required, async function (req, res, next)
     return res.sendStatus(403);
   }
 
-  const sender = await UserModel.findById(friend.requester._id);
-  if (!sender) {
-    return res.sendStatus(404);
-  }
-
-  const recipient = await UserModel.findById(friend.recipient._id);
-  if (!recipient) {
-    return res.sendStatus(404);
-  }
+  const sender = await validateUserById(friend.requester._id, res);
+  const recipient = await validateUserById(friend.recipient._id, res);
 
   sender.friends.pull(req.body.friendId);
   await sender.save();

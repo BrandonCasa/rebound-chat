@@ -9,6 +9,14 @@ const validateUserById = async (userId, res) => {
   return user;
 };
 
+const validateFriendById = async (friendId, res) => {
+  const friend = await FriendModel.findById(friendId);
+  if (!friend) {
+    return res.sendStatus(404);
+  }
+  return friend;
+};
+
 const sendFriendRequest = async (sender, recipient, res) => {
   if (recipient.isBlocked(sender)) {
     return res.sendStatus(403);
@@ -39,4 +47,4 @@ const sendFriendRequest = async (sender, recipient, res) => {
   return res.json({ friendId: newFriend._id.toString() });
 };
 
-export { validateUserById, sendFriendRequest };
+export { validateUserById, validateFriendById, sendFriendRequest };
