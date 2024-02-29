@@ -5,6 +5,7 @@ import Grid from "@mui/material/Unstable_Grid2";
 import React, { useContext, useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import * as Icons from "@mui/icons-material";
+import axios from "axios";
 
 function FullProfile(props) {
   let theme = useTheme();
@@ -38,9 +39,12 @@ function FullProfile(props) {
 
   let cardWidth = props?.width || "auto";
   let cardHeight = props?.width || "auto";
-  console.log(props?.user);
 
-  const sendFriendRequest = () => {};
+  const sendFriendRequest = () => {
+    if (userId !== authState.userId) {
+      // send friend request to api
+    }
+  };
 
   if (!userId) {
     return (
@@ -93,7 +97,7 @@ function FullProfile(props) {
           </Stack>
         </Paper>
         <Stack direction="row" justifyContent="space-between" spacing={1} sx={{ padding: theme.spacing(0.5) }}>
-          <Button variant="contained" color="success" disabled={userId === authState.userId}>
+          <Button variant="contained" color="success" disabled={userId === authState.userId} onClick={sendFriendRequest}>
             Add Friend
           </Button>
           <Button variant="contained" color="primary" disabled={userId === authState.userId}>
