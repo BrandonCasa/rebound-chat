@@ -12,6 +12,7 @@ const UserSchema = new Schema(
     hash: { type: String, default: "" },
     salt: { type: String, default: "" },
     friends: [{ type: Schema.Types.ObjectId, ref: "Friend" }],
+    blocked: [{ type: Schema.Types.ObjectId, ref: "User" }],
     serverInvites: [{ type: Schema.Types.ObjectId, ref: "ServerInvite" }],
   },
   { timestamps: true }
@@ -70,6 +71,10 @@ UserSchema.methods.toProfilePubJSON = function () {
     displayName: this.displayName,
     bio: this.bio,
   };
+};
+
+UserSchema.methods.isBlocked = function (user) {
+  return this.blocked.includes(user._id);
 };
 
 const UserModel = mongoose.model("User", UserSchema);
