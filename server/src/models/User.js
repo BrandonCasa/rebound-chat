@@ -12,6 +12,7 @@ const UserSchema = new Schema(
     hash: { type: String, default: "" },
     salt: { type: String, default: "" },
     friends: [{ type: Schema.Types.ObjectId, ref: "Friend" }],
+    serverInvites: [{ type: Schema.Types.ObjectId, ref: "ServerInvite" }],
   },
   { timestamps: true }
 );
@@ -59,7 +60,7 @@ UserSchema.methods.toProfileJSON = function (user) {
     username: this.username,
     displayName: this.displayName,
     bio: this.bio,
-    following: user ? user.isFollowing(this._id) : false,
+    //friends: user ? user.isFriends(this._id) : false,
   };
 };
 
@@ -69,25 +70,6 @@ UserSchema.methods.toProfilePubJSON = function () {
     displayName: this.displayName,
     bio: this.bio,
   };
-};
-
-UserSchema.methods.follow = function (id) {
-  if (this.following.indexOf(id) === -1) {
-    this.following.push(id);
-  }
-
-  return this.save();
-};
-
-UserSchema.methods.unfollow = function (id) {
-  this.following.remove(id);
-  return this.save();
-};
-
-UserSchema.methods.isFollowing = function (id) {
-  return this.following.some(function (followId) {
-    return followId.toString() === id.toString();
-  });
 };
 
 const UserModel = mongoose.model("User", UserSchema);
