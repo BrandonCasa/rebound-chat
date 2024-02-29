@@ -1,5 +1,5 @@
 // Imports
-import { Avatar, Box, Button, ButtonGroup, Chip, Divider, Paper, Stack, Typography } from "@mui/material";
+import { Avatar, Box, Button, ButtonGroup, Chip, CircularProgress, Divider, Paper, Stack, Typography } from "@mui/material";
 import { styled, useTheme } from "@mui/material/styles";
 import Grid from "@mui/material/Unstable_Grid2";
 import React, { useContext, useEffect, useState } from "react";
@@ -9,6 +9,7 @@ import * as Icons from "@mui/icons-material";
 function FullProfile(props) {
   let theme = useTheme();
   const authState = useSelector((state) => state.auth);
+  const [userId, setUserId] = useState(null);
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
@@ -19,21 +20,38 @@ function FullProfile(props) {
       setBio(authState.bio);
       setDisplayName(authState.displayName);
       setUsername(authState.username);
+      setUserId(authState.userId);
     } else if (props?.user) {
       setBio(props?.user?.bio);
       setDisplayName(props?.user?.displayName);
       setUsername(props?.user?.username);
+      setUserId(props?.user?.id);
     }
 
     return () => {
       setBio("");
       setDisplayName("");
       setUsername("");
+      setUserId(null);
     };
   }, [authState.loggedIn]);
 
   let cardWidth = props?.width || "auto";
   let cardHeight = props?.width || "auto";
+  console.log(props?.user);
+
+  const sendFriendRequest = () => {};
+
+  if (!userId) {
+    return (
+      <Paper
+        sx={{ padding: 0, width: cardWidth, height: cardHeight, overflow: "hidden", display: "flex", flexDirection: "column", ...props?.passStyle }}
+        elevation={3}
+      >
+        <CircularProgress size={96} sx={{ margin: "auto" }} />
+      </Paper>
+    );
+  }
 
   return (
     <Paper
@@ -75,10 +93,10 @@ function FullProfile(props) {
           </Stack>
         </Paper>
         <Stack direction="row" justifyContent="space-between" spacing={1} sx={{ padding: theme.spacing(0.5) }}>
-          <Button variant="contained" color="success">
+          <Button variant="contained" color="success" disabled={userId === authState.userId}>
             Add Friend
           </Button>
-          <Button variant="contained" color="primary">
+          <Button variant="contained" color="primary" disabled={userId === authState.userId}>
             Block
           </Button>
         </Stack>

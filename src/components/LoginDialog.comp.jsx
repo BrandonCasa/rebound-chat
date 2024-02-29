@@ -31,7 +31,7 @@ const LoginDialog = () => {
           dispatch(
             setLoggedIn({
               loggedIn: true,
-              id: res.data.user.id,
+              userId: res.data.user.id,
               username: res.data.user.username,
               displayName: res.data.user.displayName,
               bio: res.data.user.bio,

@@ -61,6 +61,7 @@ UserSchema.methods.toProfileJSON = function (user) {
     username: this.username,
     displayName: this.displayName,
     bio: this.bio,
+    id: this._id,
     //friends: user ? user.isFriends(this._id) : false,
   };
 };
@@ -70,6 +71,7 @@ UserSchema.methods.toProfilePubJSON = function () {
     username: this.username,
     displayName: this.displayName,
     bio: this.bio,
+    id: this._id,
   };
 };
 

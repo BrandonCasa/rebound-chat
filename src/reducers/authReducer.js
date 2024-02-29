@@ -4,6 +4,7 @@ import socketIoHelper from "helpers/socket";
 const initialState = {
   authToken: window.localStorage.getItem("auth-token"),
   loggedIn: false,
+  userId: null,
   username: "",
   displayName: "",
   bio: "",
@@ -30,6 +31,9 @@ const authSlice = createSlice({
       }
       if (action.payload.authToken !== undefined) {
         state.authToken = action.payload.authToken;
+      }
+      if (action.payload.userId !== undefined) {
+        state.userId = action.payload.userId;
       }
       if (action.payload.username !== undefined) {
         state.username = action.payload.username;

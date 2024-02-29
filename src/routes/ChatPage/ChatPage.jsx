@@ -183,7 +183,7 @@ function ChatPage() {
         onClose={() => previewUser(null)}
         sx={{ marginBottom: 2 }}
       >
-        <ProfileCard self={false} type="full" width="100%" passStyle={{ maxHeight: "400px", maxWidth: "400px" }} user={userPreviewUser} />
+        <ProfileCard self={false} type="full" width="400px" passStyle={{ maxHeight: "400px", maxWidth: "400px" }} user={userPreviewUser} />
       </Popover>
       <ChatRoomMenu anchorEl={roomAnchorEl} setAnchorEl={setRoomAnchorEl} channels={channels} setMessages={setMessages} />
       <UserListMenu anchorEl={userListAnchorEl} setAnchorEl={setUserListAnchorEl} users={users} />

@@ -67,7 +67,7 @@ function App() {
           dispatch(
             setLoggedIn({
               loggedIn: true,
-              id: response.data.user.id,
+              userId: response.data.user.id,
               username: response.data.user.username,
               displayName: response.data.user.displayName,
               bio: response.data.user.bio,
