@@ -53,16 +53,21 @@ UserSchema.methods.toAuthJSON = function () {
     token: this.generateJWT(),
     bio: this.bio,
     id: this._id,
+    friends: this.friends,
+    blocked: this.blocked,
+    serverInvites: this.serverInvites,
   };
 };
 
-UserSchema.methods.toProfileJSON = function (user) {
+UserSchema.methods.toProfileJSON = async function () {
+  const outFriends = (await this.populate("friends")).friends;
+
   return {
     username: this.username,
     displayName: this.displayName,
     bio: this.bio,
     id: this._id,
-    //friends: user ? user.isFriends(this._id) : false,
+    friends: outFriends,
   };
 };
 

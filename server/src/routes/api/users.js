@@ -34,14 +34,25 @@ router.get("/users/verify", async function (req, res, next) {
     });
 });
 
-router.get("/users/profile", auth.required, function (req, res, next) {
-  UserModel.findById(req?.body?.id || req?.query?.id)
-    .then(function (user) {
+router.get("/users/profile", auth.required, async function (req, res, next) {
+  const token = getTokenFromHeader(req);
+  const decoded = await jwt.verify(token, process.env.SECRET, function (err, decoded) {
+    if (err) {
+      next(err);
+      return res.sendStatus(500);
+    }
+    return decoded;
+  });
+
+  return await UserModel.findById(req?.body?.id || req?.query?.id)
+    .then(async function (user) {
       if (!user) {
         return res.sendStatus(401);
       }
 
-      return res.json({ user: user.toProfileJSON() });
+      const userOut = await user.toProfileJSON(decoded.id);
+
+      return res.json({ user: userOut });
     })
     .catch((err) => {
       next(err);

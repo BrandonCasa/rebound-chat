@@ -72,6 +72,7 @@ function App() {
               displayName: response.data.user.displayName,
               bio: response.data.user.bio,
               authToken: authState.authToken,
+              friends: response.data.user.friends,
             })
           );
         })
@@ -100,7 +101,16 @@ function App() {
               <Route path="/chat" element={<ChatPage />} />
               {false && <Route path="/hub" element={<HubPage />} />}
               <Route path="/test" element={<h1>{authState.loggingIn?.toString()}</h1>} />
-              <Route path="*" element={<h1>404</h1>} />
+              <Route
+                path="*"
+                element={
+                  <div style={{ maxWidth: "100%" }}>
+                    PAGE NOT FOUND :(
+                    <br />
+                    <img style={{ maxWidth: "100%" }} src="./404.gif" alt="oops" />
+                  </div>
+                }
+              />
             </Routes>
           )}
         </CustomAppBar>

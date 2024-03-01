@@ -3,9 +3,10 @@ import { Avatar, Box, Button, ButtonGroup, Chip, CircularProgress, Divider, Pape
 import { styled, useTheme } from "@mui/material/styles";
 import Grid from "@mui/material/Unstable_Grid2";
 import React, { useContext, useEffect, useState } from "react";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import * as Icons from "@mui/icons-material";
 import axios from "axios";
+import { setLoggedIn } from "reducers/authReducer";
 
 function FullProfile(props) {
   let theme = useTheme();
@@ -14,19 +15,43 @@ function FullProfile(props) {
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
+  const [isPending, setIsPending] = useState(false);
+  const [isSender, setIsSender] = useState(false);
+  const [isFriends, setIsFriends] = useState(false);
+  const [friendId, setFriendId] = useState("");
+  const dispatch = useDispatch();
 
   useEffect(() => {
-    if (props?.self && authState.loggedIn === true) {
+    if ((props?.self || props?.user?.id === authState.userId) && authState.loggedIn === true) {
       //console.log(authState);
       setBio(authState.bio);
       setDisplayName(authState.displayName);
       setUsername(authState.username);
       setUserId(authState.userId);
+      setIsPending(false);
+      setIsFriends(false);
+      setFriendId("");
+      setIsSender(false);
     } else if (props?.user) {
       setBio(props?.user?.bio);
       setDisplayName(props?.user?.displayName);
       setUsername(props?.user?.username);
       setUserId(props?.user?.id);
+
+      for (let friend in props?.user?.friends) {
+        friend = props?.user?.friends[friend];
+        if (friend.requester !== authState.userId && friend.recipient !== authState.userId) {
+          continue;
+        }
+        setIsSender(friend.requester === authState.userId);
+        setFriendId(friend._id);
+
+        if (!friend.confirmed) {
+          setIsPending(true);
+          break;
+        }
+        setIsFriends(true);
+      }
     }
 
     return () => {
@@ -34,6 +59,10 @@ function FullProfile(props) {
       setDisplayName("");
       setUsername("");
       setUserId(null);
+      setIsPending(false);
+      setIsFriends(false);
+      setFriendId("");
+      setIsSender(false);
     };
   }, [authState.loggedIn]);
 
@@ -42,7 +71,52 @@ function FullProfile(props) {
 
   const sendFriendRequest = () => {
     if (userId !== authState.userId) {
-      // send friend request to api
+      const requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/addfriend" : "/api/users/addfriend";
+      axios
+        .put(
+          requestString,
+          { recipientId: userId },
+          {
+            headers: {
+              "Content-Type": "application/json",
+              "Allow-Control-Allow-Origin": "*",
+              authorization: `Bearer ${authState.authToken}`,
+            },
+          }
+        )
+        .then((response) => {
+          dispatch(setLoggedIn({ friends: [response?.data?.friendId, ...authState.friends] }));
+        })
+        .catch((error) => {
+          console.log(error);
+        });
+    }
+  };
+
+  const acceptFriendRequest = () => {
+    if (isPending && !isFriends && userId !== authState.userId) {
+      const requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/acceptfriend" : "/api/users/acceptfriend";
+      axios
+        .put(
+          requestString,
+          { friendId: friendId },
+          {
+            headers: {
+              "Content-Type": "application/json",
+              "Allow-Control-Allow-Origin": "*",
+              authorization: `Bearer ${authState.authToken}`,
+            },
+          }
+        )
+        .then((response) => {
+          if (response.status === 200) {
+            setIsPending(false);
+            setIsFriends(true);
+          }
+        })
+        .catch((error) => {
+          console.log(error);
+        });
     }
   };
 
@@ -76,7 +150,7 @@ function FullProfile(props) {
           </Stack>
           <Stack spacing={0} sx={{ padding: 0, height: "64px", flexGrow: 1, paddingRight: theme.spacing(0.5) }}>
             <Typography textAlign="end" variant="subtitle1" height={"32px"} sx={{ color: `${theme.palette.text.secondary}` }}>
-              Troller
+              Title
             </Typography>
           </Stack>
         </Stack>
@@ -97,9 +171,26 @@ function FullProfile(props) {
           </Stack>
         </Paper>
         <Stack direction="row" justifyContent="space-between" spacing={1} sx={{ padding: theme.spacing(0.5) }}>
-          <Button variant="contained" color="success" disabled={userId === authState.userId} onClick={sendFriendRequest}>
-            Add Friend
-          </Button>
+          {!isPending && !isFriends && (
+            <Button variant="contained" color="secondary" disabled={userId === authState.userId} onClick={sendFriendRequest}>
+              Add Friend
+            </Button>
+          )}
+          {!isPending && isFriends && (
+            <Button variant="contained" color="error" disabled>
+              Remove Friend
+            </Button>
+          )}
+          {isPending && !isFriends && isSender && (
+            <Button variant="outlined" color="info">
+              Request Sent
+            </Button>
+          )}
+          {isPending && !isFriends && !isSender && (
+            <Button variant="contained" color="success" disabled={userId === authState.userId} onClick={acceptFriendRequest}>
+              Accept Friend
+            </Button>
+          )}
           <Button variant="contained" color="primary" disabled={userId === authState.userId}>
             Block
           </Button>

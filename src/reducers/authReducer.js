@@ -3,6 +3,7 @@ import socketIoHelper from "helpers/socket";
 
 const initialState = {
   authToken: window.localStorage.getItem("auth-token"),
+  friends: [],
   loggedIn: false,
   userId: null,
   username: "",
@@ -43,6 +44,9 @@ const authSlice = createSlice({
       }
       if (action.payload.bio !== undefined) {
         state.bio = action.payload.bio;
+      }
+      if (action.payload.friends !== undefined) {
+        state.friends = action.payload.friends;
       }
     },
     setLoggingIn: (state, action) => {
