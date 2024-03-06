@@ -3,6 +3,7 @@ import logger from "../logger.js";
 import jwt from "jsonwebtoken";
 import "dotenv/config";
 import serverRooms from "./rooms.js";
+import serverWatchers from "./watchers.js";
 import UserModel from "../models/User.js";
 
 class SocketBackend {
@@ -54,13 +55,15 @@ class SocketBackend {
 
   onConnection(socket) {
     logger.info(`User connected: '${socket.user.username}'.`);
-    serverRooms.attachListeners(socket);
+    serverRooms.startListeners(socket);
+    serverWatchers.startListeners(socket);
     socket.emit("connected");
   }
 
   onDisconnect(socket) {
     logger.info(`User disconnected: '${socket.user.username}'.`);
-    socket.removeAllListeners();
+    serverRooms.removeListeners(socket);
+    serverWatchers.removeListeners(socket);
   }
 
   async getSocketsInRoom(roomId) {
@@ -72,6 +75,10 @@ class SocketBackend {
     outUsers = await Promise.all(outUsers);
 
     return [outUsers, roomSockets];
+  }
+
+  emitToSocketById(socketId, eventName, eventData) {
+    this.io.sockets.sockets.get(socketId).emit(eventName, eventData);
   }
 }
 

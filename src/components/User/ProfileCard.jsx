@@ -7,6 +7,7 @@ import { useDispatch, useSelector } from "react-redux";
 import * as Icons from "@mui/icons-material";
 import axios from "axios";
 import { setLoggedIn } from "reducers/authReducer";
+import socketIoHelper from "helpers/socket";
 
 function FullProfile(props) {
   let theme = useTheme();
@@ -15,15 +16,15 @@ function FullProfile(props) {
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
+  const [friends, setFriends] = useState(null);
   const [isPending, setIsPending] = useState(false);
   const [isSender, setIsSender] = useState(false);
   const [isFriends, setIsFriends] = useState(false);
   const [friendId, setFriendId] = useState("");
   const dispatch = useDispatch();
 
-  useEffect(() => {
-    if ((props?.self || props?.user?.id === authState.userId) && authState.loggedIn === true) {
-      //console.log(authState);
+  const updateDataOther = (data) => {
+    if ((props?.self || data?.id === authState.userId) && authState.loggedIn === true) {
       setBio(authState.bio);
       setDisplayName(authState.displayName);
       setUsername(authState.username);
@@ -32,39 +33,73 @@ function FullProfile(props) {
       setIsFriends(false);
       setFriendId("");
       setIsSender(false);
-    } else if (props?.user) {
-      setBio(props?.user?.bio);
-      setDisplayName(props?.user?.displayName);
-      setUsername(props?.user?.username);
-      setUserId(props?.user?.id);
+      stopListeningChanges();
+    } else if ((data && userId === null) || (data && data.id === userId)) {
+      if (bio !== data.bio) setBio(data.bio);
+      if (displayName !== data.displayName) setDisplayName(data.displayName);
+      if (username !== data.username) setUsername(data.username);
+      if (userId !== data.id) setUserId(data.id);
 
-      for (let friend in props?.user?.friends) {
-        friend = props?.user?.friends[friend];
-        if (friend.requester !== authState.userId && friend.recipient !== authState.userId) {
-          continue;
-        }
-        setIsSender(friend.requester === authState.userId);
-        setFriendId(friend._id);
+      if (friends !== data.friends) {
+        for (let friend in data.friends) {
+          friend = data.friends[friend];
+          if (friend.requester !== authState.userId && friend.recipient !== authState.userId) {
+            continue;
+          }
+          setIsSender(friend.requester === authState.userId);
+          setFriendId(friend._id);
 
-        if (!friend.confirmed) {
-          setIsPending(true);
-          break;
+          if (!friend.confirmed) {
+            setIsPending(true);
+            break;
+          }
+          setIsFriends(true);
         }
-        setIsFriends(true);
+        setFriends(data.friends);
       }
     }
+  };
+
+  function startListeningChanges(userIdIn) {
+    if (socketIoHelper.getSocket() !== null && socketIoHelper.getSocket().connected) {
+      const socketClient = socketIoHelper.getSocket();
+      socketClient.on("watched_user_saved", ([watchedId, watchedData]) => {
+        console.log(watchedId, userIdIn);
+        if (watchedId === userIdIn) {
+          updateDataOther(watchedData);
+        }
+      });
+    }
+  }
+
+  const stopListeningChanges = () => {
+    if (socketIoHelper.getSocket() !== null && socketIoHelper.getSocket().connected) {
+      const socketClient = socketIoHelper.getSocket();
+      socketClient.off("watched_user_saved");
+    }
+  };
+
+  useEffect(() => {
+    if (!props?.self && props?.user.id !== authState.userId && socketIoHelper.getSocket() !== null && socketIoHelper.getSocket().connected) {
+      const socketClient = socketIoHelper.getSocket();
+      socketClient.emit("watch_user", props?.user.id);
+      startListeningChanges(props?.user.id);
+    }
+    updateDataOther(props?.user);
 
     return () => {
       setBio("");
       setDisplayName("");
       setUsername("");
       setUserId(null);
+      setFriends(null);
       setIsPending(false);
       setIsFriends(false);
       setFriendId("");
       setIsSender(false);
+      stopListeningChanges();
     };
-  }, [authState.loggedIn]);
+  }, [authState.loggedIn, authState.socketInfo.connected]);
 
   let cardWidth = props?.width || "auto";
   let cardHeight = props?.width || "auto";
@@ -120,7 +155,7 @@ function FullProfile(props) {
     }
   };
 
-  if (!userId) {
+  if (userId === null) {
     return (
       <Paper
         sx={{ padding: 0, width: cardWidth, height: cardHeight, overflow: "hidden", display: "flex", flexDirection: "column", ...props?.passStyle }}
@@ -145,7 +180,7 @@ function FullProfile(props) {
               {displayName}
             </Typography>
             <Typography variant="subtitle2" height={"32px"} sx={{ color: `${theme.palette.text.secondary}` }}>
-              {username}
+              {userId}
             </Typography>
           </Stack>
           <Stack spacing={0} sx={{ padding: 0, height: "64px", flexGrow: 1, paddingRight: theme.spacing(0.5) }}>

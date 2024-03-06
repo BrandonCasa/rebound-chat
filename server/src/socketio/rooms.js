@@ -19,16 +19,12 @@ class ServerRooms {
     return [roomIdList, roomList];
   }
 
-  startListeners(sockets) {
-    sockets.forEach((socket) => {
-      this.attachListeners(socket);
-    });
+  startListeners(socket) {
+    this.attachListeners(socket);
   }
 
-  stopAllListeners(sockets) {
-    sockets.forEach((socket) => {
-      socket.removeAllListeners();
-    });
+  removeListeners(socket) {
+    socket.removeAllListeners();
   }
 
   async leaveRooms(socket) {

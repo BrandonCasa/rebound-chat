@@ -2,6 +2,7 @@ import mongoose, { Schema } from "mongoose";
 import mongooseUniqueValidator from "mongoose-unique-validator";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
+import serverWatchers from "../socketio/watchers.js";
 
 const UserSchema = new Schema(
   {
@@ -61,6 +62,7 @@ UserSchema.methods.toAuthJSON = function () {
 
 UserSchema.methods.toProfileJSON = async function () {
   const outFriends = (await this.populate("friends")).friends;
+  //const outInvites = (await this.populate("serverInvites")).serverInvites;
 
   return {
     username: this.username,
@@ -68,6 +70,8 @@ UserSchema.methods.toProfileJSON = async function () {
     bio: this.bio,
     id: this._id,
     friends: outFriends,
+    blocked: this.blocked,
+    serverInvites: this.serverInvites,
   };
 };
 
@@ -83,6 +87,13 @@ UserSchema.methods.toProfilePubJSON = function () {
 UserSchema.methods.isBlocked = function (user) {
   return this.blocked.includes(user._id);
 };
+
+UserSchema.post("save", async function (doc) {
+  const publicInfo = await doc.toProfileJSON();
+  const privateInfo = doc.toAuthJSON();
+
+  serverWatchers.onUserSaved(doc._id.toString(), publicInfo, privateInfo);
+});
 
 const UserModel = mongoose.model("User", UserSchema);
 

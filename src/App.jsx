@@ -20,24 +20,30 @@ function App() {
   const authState = useSelector((state) => state.auth);
   const dispatch = useDispatch();
 
-  const connectSocket = (token) => {
+  function connectSocket(token, onConnected, onDisconnected) {
     let socketClient = socketIoHelper.connectSocket(token);
 
     socketClient.on("connected", () => {
+      onConnected(socketClient);
       socketClient.off("connected");
       dispatch(setSocketStatus({ connected: true }));
     });
 
     socketClient.on("disconnect", () => {
+      onDisconnected(socketClient);
       socketClient.off("disconnect");
       dispatch(setSocketStatus({ connected: false }));
     });
-  };
+  }
+
+  function startListeners(socketClient) {}
+
+  function stopListeners(socketClient) {}
 
   useEffect(() => {
     if (socketIoHelper.getSocket() === null || !socketIoHelper.getSocket().connected) {
       if (authState.loggedIn === true) {
-        connectSocket(authState.authToken);
+        connectSocket(authState.authToken, startListeners, stopListeners);
       } else {
         // Fix when anonymous temporary users are implemented
       }
@@ -63,7 +69,7 @@ function App() {
             authorization: `Bearer ${authState.authToken}`,
           },
         })
-        .then((response) => {
+        .then(async (response) => {
           dispatch(
             setLoggedIn({
               loggedIn: true,
