@@ -1,4 +1,5 @@
 import mongoose, { Schema } from "mongoose";
+import UserModel from "./User.js";
 
 const FriendSchema = new mongoose.Schema(
   {
@@ -8,6 +9,11 @@ const FriendSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+FriendSchema.post("save", async function (doc) {
+  await (await UserModel.findById(this.requester._id)).save();
+  await (await UserModel.findById(this.recipient._id)).save();
+});
 
 const FriendModel = mongoose.model("Friend", FriendSchema);
 

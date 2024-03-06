@@ -16,7 +16,6 @@ function FullProfile(props) {
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
-  const [friends, setFriends] = useState(null);
   const [isPending, setIsPending] = useState(false);
   const [isSender, setIsSender] = useState(false);
   const [isFriends, setIsFriends] = useState(false);
@@ -35,27 +34,33 @@ function FullProfile(props) {
       setIsSender(false);
       stopListeningChanges();
     } else if ((data && userId === null) || (data && data.id === userId)) {
+      setBio("");
+      setDisplayName("");
+      setUsername("");
+      setUserId(null);
+      setIsPending(false);
+      setIsFriends(false);
+      setFriendId("");
+      setIsSender(false);
       if (bio !== data.bio) setBio(data.bio);
       if (displayName !== data.displayName) setDisplayName(data.displayName);
       if (username !== data.username) setUsername(data.username);
       if (userId !== data.id) setUserId(data.id);
+      console.log(data.friends);
 
-      if (friends !== data.friends) {
-        for (let friend in data.friends) {
-          friend = data.friends[friend];
-          if (friend.requester !== authState.userId && friend.recipient !== authState.userId) {
-            continue;
-          }
-          setIsSender(friend.requester === authState.userId);
-          setFriendId(friend._id);
-
-          if (!friend.confirmed) {
-            setIsPending(true);
-            break;
-          }
-          setIsFriends(true);
+      for (let friend in data.friends) {
+        friend = data.friends[friend];
+        if (friend.requester !== authState.userId && friend.recipient !== authState.userId) {
+          continue;
         }
-        setFriends(data.friends);
+        setIsSender(friend.requester === authState.userId);
+        setFriendId(friend._id);
+
+        if (!friend.confirmed) {
+          setIsPending(true);
+          break;
+        }
+        setIsFriends(true);
       }
     }
   };
@@ -92,7 +97,6 @@ function FullProfile(props) {
       setDisplayName("");
       setUsername("");
       setUserId(null);
-      setFriends(null);
       setIsPending(false);
       setIsFriends(false);
       setFriendId("");
