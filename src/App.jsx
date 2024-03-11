@@ -101,7 +101,6 @@ const App = () => {
               <Route path="/" element={<LandingPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/chat" element={<ChatPage />} />
-              {/* Conditional rendering example, false && syntax removed for clarity */}
               <Route path="/test" element={<h1>{String(authState.loggingIn)}</h1>} />
               <Route
                 path="*"

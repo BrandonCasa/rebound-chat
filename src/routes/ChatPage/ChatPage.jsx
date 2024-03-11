@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Box, Button, Divider, IconButton, Menu, Paper, Popover, Stack, Typography } from "@mui/material";
+import { Box, Button, Divider, IconButton, Menu, Paper, Popover, Stack, Typography, useTheme } from "@mui/material";
 import socketIoHelper from "helpers/socket";
 import UserList from "components/Chat/UserList";
 import ChannelList from "components/Chat/ChannelList";
@@ -59,6 +59,7 @@ function ChatPage() {
   const [userListAnchorEl, setUserListAnchorEl] = React.useState(null);
   const authState = useSelector((state) => state.auth);
   const dispatch = useDispatch();
+  const theme = useTheme();
 
   useEffect(() => {
     const socketClient = socketIoHelper.getSocket();
@@ -188,7 +189,7 @@ function ChatPage() {
       <ChatRoomMenu anchorEl={roomAnchorEl} setAnchorEl={setRoomAnchorEl} channels={channels} setMessages={setMessages} />
       <UserListMenu anchorEl={userListAnchorEl} setAnchorEl={setUserListAnchorEl} users={users} />
       <Paper sx={{ height: "100%", width: "100%", flexGrow: 1, position: "relative", display: "flex", flexDirection: "column" }}>
-        <Box sx={{ width: "100%", position: "relative", display: "flex", padding: 1, height: "56px" }}>
+        <Box sx={{ width: "100%", position: "relative", display: "flex", padding: 1, height: `calc(56px * ${theme.spacingMult(2)})` }}>
           <Button
             sx={{ textTransform: "initial" }}
             color="secondary"
@@ -212,8 +213,8 @@ function ChatPage() {
         <Box sx={{ width: "100%", flexGrow: 1, position: "relative" }}>
           <ChatArea messages={messages} previewUser={previewUser} />
         </Box>
+        <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} />
       </Paper>
-      <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} />
     </Box>
   );
 }

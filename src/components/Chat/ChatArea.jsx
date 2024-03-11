@@ -40,7 +40,7 @@ function IndividualMessage({ msg, shouldDisplayAvatar, currentBlock, currentMsg,
   return (
     <ListItem disablePadding sx={{ alignItems: "flex-start", display: "flex", flexDirection: "column", width: "100%" }}>
       <Box sx={{ display: shouldDisplayAvatar ? "inherit" : "none", marginBottom: "-12px", width: "100%" }}>
-        <Avatar alt="User" src="defaultpfp.png" sx={{ height: "40px", width: "40px" }} />
+        <Avatar alt="User" src="defaultpfp.png" sx={{ height: "40px", width: "40px" }} onClick={() => onClickMessage(messageRef, msg.sender)} />
         <Link
           component={Typography}
           fontSize={20}

@@ -1,31 +1,49 @@
-import React from "react";
-import { TextField, Button, Card, CardContent, Grid, Paper, IconButton } from "@mui/material";
+import React, { useEffect, useRef, useState } from "react";
+import { TextField, Button, Card, CardContent, Grid, Paper, IconButton, useTheme, Box } from "@mui/material";
 import * as Icons from "@mui/icons-material";
-import { useTheme } from "styled-components";
 
 function ChatInput({ message, setMessage, sendMessage }) {
   const theme = useTheme();
 
   return (
-    <Paper sx={{ display: "flex", padding: 1, paddingTop: 1, marginTop: 1 }}>
-      <form
-        style={{ display: "flex", flexGrow: 1 }}
-        onSubmit={(event) => {
-          event.preventDefault();
-          sendMessage();
-        }}
-      >
-        <TextField fullWidth label="Type your message" value={message} onChange={(e) => setMessage(e.target.value)} sx={{ mr: 1 }} />
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={sendMessage}
-          endIcon={<Icons.Send sx={{ color: "rgba(0, 0, 0, 0.52)" }} style={{ fontSize: "26px" }} />}
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "row",
+        padding: 1 / theme.spacingMultFull,
+        mt: -1 / theme.spacingMultFull,
+      }}
+    >
+      <div style={{ width: "100%" }}>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            sendMessage();
+          }}
         >
-          Send
-        </Button>
-      </form>
-    </Paper>
+          <TextField
+            multiline
+            variant="outlined"
+            size="small"
+            fullWidth
+            label="Type your message"
+            value={message}
+            onChange={(e) => {
+              setMessage(e.currentTarget.value);
+            }}
+          />
+        </form>
+      </div>
+      <Button
+        sx={{ height: "40px", margin: "auto", ml: 1 / theme.spacingMultFull }}
+        variant="contained"
+        color="primary"
+        onClick={sendMessage}
+        endIcon={<Icons.Send sx={{ color: "rgba(0, 0, 0, 0.52)" }} style={{ fontSize: "26px" }} />}
+      >
+        Send
+      </Button>
+    </Box>
   );
 }
 

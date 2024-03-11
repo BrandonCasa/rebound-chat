@@ -31,7 +31,9 @@ const darkThemeBase = createTheme({
       main: "#21f3dc",
     },
   },
-  spacing: 0,
+  spacing: 8,
+  spacingMultFull: 1,
+  spacingMult: (factor) => 1,
   shape: {
     borderRadius: 8,
   },
@@ -71,8 +73,14 @@ function useDarkTheme() {
   }
 
   useEffect(() => {
+    const spacings = [8, 6];
+    const chosenSpacing = spacings[Number(!spacingMatch)];
+    const spacingMult = chosenSpacing / Math.max(...spacings);
+
     const newSpacingStyles = {
-      spacing: spacingMatch ? 8 : 4,
+      spacing: chosenSpacing,
+      spacingMultFull: spacingMult,
+      spacingMult: (factor) => (1 - spacingMult) / factor + spacingMult,
     };
 
     setDarkTheme(modifyTheme(newSpacingStyles));
