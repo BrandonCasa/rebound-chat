@@ -22,7 +22,7 @@ function ChatInput({ message, setMessage, sendMessage }) {
           }}
         >
           <TextField
-            multiline
+            //multiline
             variant="outlined"
             size="small"
             fullWidth
