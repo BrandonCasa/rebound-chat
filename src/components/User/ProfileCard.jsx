@@ -24,6 +24,7 @@ function FullProfile(props) {
 
   const updateDataOther = (data) => {
     if ((props?.self || data?.id === authState.userId) && authState.loggedIn === true) {
+      console.log(authState.userId);
       setBio(authState.bio);
       setDisplayName(authState.displayName);
       setUsername(authState.username);

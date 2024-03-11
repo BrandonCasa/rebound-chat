@@ -72,8 +72,12 @@ const App = () => {
           dispatch(
             setLoggedIn({
               loggedIn: true,
-              ...response.data.user,
+              userId: response.data.user.id,
+              username: response.data.user.username,
+              displayName: response.data.user.displayName,
+              bio: response.data.user.bio,
               authToken: authState.authToken,
+              friends: response.data.user.friends,
             })
           );
         } catch (error) {
