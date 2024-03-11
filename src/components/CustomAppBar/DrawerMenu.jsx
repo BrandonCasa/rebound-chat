@@ -68,7 +68,9 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
             sx={{ opacity: window.location.pathname.toString() === "/chat" ? "0.5" : "1.0" }}
             onClick={() => {
               navigate("/chat");
-              setDrawerOpen(false);
+              setTimeout(() => {
+                setDrawerOpen(false);
+              }, 500);
             }}
           >
             <Icons.MessageRounded />
@@ -84,7 +86,9 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
             sx={{ opacity: window.location.pathname.toString() === "/profile" ? "0.5" : "1.0" }}
             onClick={() => {
               navigate("/profile");
-              setDrawerOpen(false);
+              setTimeout(() => {
+                setDrawerOpen(false);
+              }, 500);
             }}
           >
             <Icons.PersonRounded />
