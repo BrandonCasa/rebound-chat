@@ -1,6 +1,8 @@
 import { createTheme, ThemeProvider } from "@mui/material/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useEffect, useState } from "react";
 
-const darkTheme = createTheme({
+const darkThemeBase = createTheme({
   palette: {
     type: "dark",
     text: {
@@ -29,7 +31,7 @@ const darkTheme = createTheme({
       main: "#21f3dc",
     },
   },
-  spacing: 8,
+  spacing: 0,
   shape: {
     borderRadius: 8,
   },
@@ -37,12 +39,12 @@ const darkTheme = createTheme({
     MuiInputBase: {
       styleOverrides: {
         input: {
-          '&:-webkit-autofill': {
-            transitionDelay: '999999s',
-            transitionProperty: 'background-color, color',
+          "&:-webkit-autofill": {
+            transitionDelay: "999999s",
+            transitionProperty: "background-color, color",
           },
         },
-      }
+      },
     },
     MuiDrawer: {
       styleOverrides: {
@@ -51,10 +53,36 @@ const darkTheme = createTheme({
         },
         paper: {
           overflow: "hidden",
-        }
-      }
-    }
+        },
+      },
+    },
   },
 });
 
-export default darkTheme;
+function useDarkTheme() {
+  const spacingMatch = useMediaQuery(darkThemeBase.breakpoints.up("sm"));
+  const [darkTheme, setDarkTheme] = useState(darkThemeBase);
+
+  function modifyTheme(newStyles) {
+    return createTheme({
+      ...darkTheme,
+      ...newStyles,
+    });
+  }
+
+  useEffect(() => {
+    const newSpacingStyles = {
+      spacing: spacingMatch ? 8 : 4,
+    };
+
+    setDarkTheme(modifyTheme(newSpacingStyles));
+
+    return () => {
+      return;
+    };
+  }, [spacingMatch]);
+
+  return darkTheme;
+}
+
+export default useDarkTheme;
