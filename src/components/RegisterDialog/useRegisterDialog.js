@@ -2,8 +2,8 @@ import { Typography } from "@mui/material";
 import axios from "axios";
 import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { setAuthState, setLoggedIn } from "reducers/authReducer";
-import { setDialogOpened } from "reducers/dialogReducer";
+import { setAuthState, setLoggedIn } from "slices/authSlice";
+import { setDialogOpened } from "slices/dialogSlice";
 
 const useRegisterDialog = () => {
   const dispatch = useDispatch();

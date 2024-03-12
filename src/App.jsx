@@ -15,7 +15,7 @@ import RegisterDialog from "./components/RegisterDialog";
 import LoginDialog from "./components/LoginDialog.comp";
 import useDarkTheme from "./helpers/darkTheme";
 import socketIoHelper from "./helpers/socket";
-import { setLoggedIn, setLoggingIn, setSocketStatus } from "./reducers/authReducer";
+import { setLoggedIn, setLoggingIn, setSocketStatus } from "./slices/authSlice";
 
 const App = () => {
   const authState = useSelector((state) => state.auth);

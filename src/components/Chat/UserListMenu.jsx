@@ -6,7 +6,7 @@ import MenuItem from "@mui/material/MenuItem";
 import Divider from "@mui/material/Divider";
 import * as Icons from "@mui/icons-material";
 import { useDispatch, useSelector } from "react-redux";
-import { setSocketRoom } from "reducers/authReducer";
+import { setSocketRoom } from "slices/authSlice";
 
 const StyledMenu = styled((props) => (
   <Menu

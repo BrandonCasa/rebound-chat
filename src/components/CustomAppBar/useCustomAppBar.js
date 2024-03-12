@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { setLoggedIn } from "reducers/authReducer";
-import { setDialogOpened } from "reducers/dialogReducer";
+import { setLoggedIn } from "slices/authSlice";
+import { setDialogOpened } from "slices/dialogSlice";
 
 export default function useCustomAppBar(width) {
   const loggedInState = useSelector((state) => state.auth.loggedIn);

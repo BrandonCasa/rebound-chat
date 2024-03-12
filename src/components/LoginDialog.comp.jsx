@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { Dialog, Box, Typography, TextField, DialogActions, Button, FormGroup, FormControlLabel, Checkbox } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
-import { setDialogOpened } from "../reducers/dialogReducer";
-import { setAuthState, setLoggedIn, setLoggingIn } from "../reducers/authReducer";
+import { setDialogOpened } from "../slices/dialogSlice";
+import { setAuthState, setLoggedIn, setLoggingIn } from "../slices/authSlice";
 import axios from "axios";
 
 const LoginDialog = () => {

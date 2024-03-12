@@ -6,7 +6,7 @@ import React, { useContext, useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import * as Icons from "@mui/icons-material";
 import axios from "axios";
-import { setLoggedIn } from "reducers/authReducer";
+import { setLoggedIn } from "slices/authSlice";
 import socketIoHelper from "helpers/socket";
 
 function FullProfile(props) {

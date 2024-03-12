@@ -6,7 +6,7 @@ import ChannelList from "components/Chat/ChannelList";
 import ChatArea from "components/Chat/ChatArea";
 import ChatInput from "components/Chat/ChatInput";
 import { useDispatch, useSelector } from "react-redux";
-import { setSocketRoom } from "reducers/authReducer";
+import { setSocketRoom } from "slices/authSlice";
 import { useLocation } from "react-router-dom";
 import * as Icons from "@mui/icons-material";
 import ChatRoomMenu from "../../components/Chat/ChatRoomMenu";

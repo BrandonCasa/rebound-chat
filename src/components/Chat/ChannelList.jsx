@@ -1,7 +1,7 @@
 import React from "react";
 import { List, ListItem, ListItemText, Card, ListItemButton } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
-import { setSocketRoom } from "reducers/authReducer";
+import { setSocketRoom } from "slices/authSlice";
 
 function ChannelList({ channels, setMessages }) {
   const authState = useSelector((state) => state.auth);
