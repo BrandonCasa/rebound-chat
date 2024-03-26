@@ -95,6 +95,10 @@ const divideMessages = (messages) => {
 
   let previousSenderId = undefined;
   messages.forEach((message) => {
+    if (message?.sender?._id === undefined) {
+      return;
+    }
+
     if (message.sender["_id"] !== previousSenderId) {
       outputMessages.push([message]);
       previousSenderId = message.sender["_id"];
