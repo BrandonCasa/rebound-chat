@@ -26,26 +26,35 @@ const authSlice = createSlice({
       }
     },
     setLoggedIn: (state, action) => {
-      if (action.payload.loggedIn !== undefined) {
-        state.loggedIn = action.payload.loggedIn;
+      if (action.payload.hasOwnProperty("loggedIn")) {
         state.loggingIn = false;
+        state.loggedIn = action.payload.loggedIn;
+
+        if (action.payload.loggedIn === false) {
+          action.payload.authToken = null;
+          action.payload.userId = null;
+          action.payload.username = "";
+          action.payload.displayName = "";
+          action.payload.bio = "";
+          action.payload.friends = [];
+        }
       }
-      if (action.payload.authToken !== undefined) {
+      if (action.payload.hasOwnProperty("authToken")) {
         state.authToken = action.payload.authToken;
       }
-      if (action.payload.userId !== undefined) {
+      if (action.payload.hasOwnProperty("userId")) {
         state.userId = action.payload.userId;
       }
-      if (action.payload.username !== undefined) {
+      if (action.payload.hasOwnProperty("username")) {
         state.username = action.payload.username;
       }
-      if (action.payload.displayName !== undefined) {
+      if (action.payload.hasOwnProperty("displayName")) {
         state.displayName = action.payload.displayName;
       }
-      if (action.payload.bio !== undefined) {
+      if (action.payload.hasOwnProperty("bio")) {
         state.bio = action.payload.bio;
       }
-      if (action.payload.friends !== undefined) {
+      if (action.payload.hasOwnProperty("friends")) {
         state.friends = action.payload.friends;
       }
     },

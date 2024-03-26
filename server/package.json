@@ -24,6 +24,7 @@
   "license": "GNU AFFERO GPLV3",
   "type": "module",
   "dependencies": {
+    "body-parser": "^1.20.2",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "cross-env": "^7.0.3",
