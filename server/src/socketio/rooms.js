@@ -61,14 +61,16 @@ class ServerRooms {
 				let [roomList, rooms] = await this.getRoomList();
 
 				if (Object.keys(roomList).length === 0) {
-					let defaultARoom = new RoomModel();
-					defaultARoom.name = "All Chat 1";
-					defaultARoom.description = "Public chat for everyone.";
+					let defaultARoom = new RoomModel({
+						name: "All Chat 1",
+						description: "Public chat for everyone.",
+					});
 					await defaultARoom.save();
 
-					let defaultBRoom = new RoomModel();
-					defaultBRoom.name = "All Chat 2";
-					defaultBRoom.description = "Public chat for everyone.";
+					let defaultBRoom = new RoomModel({
+						name: "All Chat 2",
+						description: "Public chat for everyone.",
+					});
 					await defaultBRoom.save();
 				}
 
@@ -83,9 +85,7 @@ class ServerRooms {
 
 		socket.on("make_room", async (roomName, roomDescription) => {
 			try {
-				let newRoom = new RoomModel();
-				newRoom.name = roomName;
-				newRoom.description = roomDescription;
+				let newRoom = new RoomModel({ name: roomName, description: roomDescription });
 
 				await newRoom.save();
 
