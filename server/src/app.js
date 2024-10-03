@@ -50,7 +50,12 @@ class ServerBackend {
 				throw socketError;
 			}
 			const PORT = process.env.PORT || 6001; // Define a default port
-			this.server.listen(PORT, () => logger.info(`Server started on port ${PORT}`));
+			this.server
+				.listen(PORT, () => logger.info(`Server started on port ${PORT}`))
+				.on("error", (err) => {
+					logger.error("Server listener error:", err);
+					process.exit(1);
+				});
 		} catch (error) {
 			logger.error("Failed to start the server:", error);
 		}
