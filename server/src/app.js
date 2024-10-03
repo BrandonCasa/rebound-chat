@@ -34,7 +34,11 @@ class ServerBackend {
 		this.app.use(methodOverride());
 	}
 
-	configureLogger() {}
+	configureLogger() {
+		if (logger && logger.stream) {
+			this.app.use(morgan("combined", { stream: logger.stream }));
+		}
+	}
 
 	initializeRoutes() {
 		this.app.use(routes);
@@ -43,12 +47,24 @@ class ServerBackend {
 	async startBackend() {
 		try {
 			await databaseServer.startServer();
-			try {
-				socketBackend.startListening();
-			} catch (socketError) {
-				logger.error("Failed to start socket backend:", socketError);
-				throw socketError;
+			let socketAttempts = 0;
+			const maxSocketAttempts = 3;
+			let socketStarted = false;
+
+			while (socketAttempts < maxSocketAttempts && !socketStarted) {
+				try {
+					socketBackend.startListening();
+					socketStarted = true;
+				} catch (socketError) {
+					socketAttempts++;
+					logger.error(`Failed to start socket backend (attempt ${socketAttempts} of ${maxSocketAttempts}):`, socketError);
+					if (socketAttempts >= maxSocketAttempts) {
+						throw socketError;
+					}
+					await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait before retrying
+				}
 			}
+
 			const PORT = process.env.PORT || 6001; // Define a default port
 			this.server
 				.listen(PORT, () => logger.info(`Server started on port ${PORT}`))
@@ -58,6 +74,7 @@ class ServerBackend {
 				});
 		} catch (error) {
 			logger.error("Failed to start the server:", error);
+			process.exit(1);
 		}
 	}
 
@@ -71,6 +88,16 @@ class ServerBackend {
 			throw error;
 		}
 	}
+
+	async handleShutdown(signal) {
+		try {
+			await this.stopBackend();
+			process.exit(0);
+		} catch (e) {
+			logger.error(`Failed to shut down the server on ${signal}:`, e);
+			process.exit(1);
+		}
+	}
 }
 
 // Initiate the server
@@ -79,23 +106,11 @@ class ServerBackend {
 
 	// Ensure backend stops gracefully on SIGINT and SIGTERM signals
 	process.on("SIGINT", async () => {
-		try {
-			await serverBackend.stopBackend();
-			process.exit(0);
-		} catch (e) {
-			logger.error("Failed to shut down the server:", e);
-			process.exit(1);
-		}
+		await serverBackend.handleShutdown("SIGINT");
 	});
 
 	process.on("SIGTERM", async () => {
-		try {
-			await serverBackend.stopBackend();
-			process.exit(0);
-		} catch (e) {
-			logger.error("Failed to shut down the server:", e);
-			process.exit(1);
-		}
+		await serverBackend.handleShutdown("SIGTERM");
 	});
 
 	try {
