@@ -23,8 +23,7 @@ class ServerWatchers {
 		this.attachListeners(socket);
 	}
 
-	removeListeners(socket) {
-		socket.removeAllListeners();
+	listenerCleanup(socket) {
 		if (!socket?.user?.id) return;
 
 		Object.keys(this.watchedUsers).forEach((watchedUserId) => {

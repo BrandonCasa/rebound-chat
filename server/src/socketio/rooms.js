@@ -23,8 +23,8 @@ class ServerRooms {
 		this.attachListeners(socket);
 	}
 
-	removeListeners(socket) {
-		socket.removeAllListeners();
+	listenerCleanup(socket) {
+		this.leaveRooms(socket);
 	}
 
 	async leaveRooms(socket) {

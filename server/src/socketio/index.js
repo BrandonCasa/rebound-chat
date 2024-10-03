@@ -67,8 +67,10 @@ class SocketBackend {
 
 	onDisconnect(socket) {
 		logger.info(`User disconnected: '${socket.user.username}'.`);
-		serverRooms.removeListeners(socket);
-		serverWatchers.removeListeners(socket);
+		serverRooms.listenerCleanup(socket);
+		serverWatchers.listenerCleanup(socket);
+		socket.emit("disconnected");
+		socket.removeAllListeners();
 	}
 
 	async getSocketsInRoom(roomId) {
