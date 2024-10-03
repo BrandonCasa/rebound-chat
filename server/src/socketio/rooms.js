@@ -60,7 +60,7 @@ class ServerRooms {
 			try {
 				let [roomList, rooms] = await this.getRoomList();
 
-				if (JSON.stringify(roomList) === JSON.stringify({})) {
+				if (Object.keys(roomList).length === 0) {
 					let defaultARoom = new RoomModel();
 					defaultARoom.name = "All Chat 1";
 					defaultARoom.description = "Public chat for everyone.";
