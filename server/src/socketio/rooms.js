@@ -28,17 +28,19 @@ class ServerRooms {
 	}
 
 	async leaveRooms(socket) {
-		let promises = Array.from(socket.rooms).map(async (room) => {
-			socket.leave(room);
-			socket.emit("left_room", room);
-			logger.info(`User '${socket.user.username}' left room '${room}'.`);
+		let promises = Promise.all(
+			Array.from(socket.rooms).map(async (room) => {
+				socket.leave(room);
+				socket.emit("left_room", room);
+				logger.info(`User '${socket.user.username}' left room '${room}'.`);
 
-			const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(room);
-			socketsInRoom.forEach((socket) => {
-				socket.emit("user_list", room, usersInRoom);
-			});
-		});
-		await Promise.all(promises);
+				const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(room);
+				socketsInRoom.forEach((socket) => {
+					socket.emit("user_list", room, usersInRoom);
+				});
+			})
+		);
+		await promises;
 	}
 
 	async joinRoom(socket, newRoom, joinedRoom) {
