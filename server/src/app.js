@@ -77,8 +77,18 @@ class ServerBackend {
 (async () => {
 	const serverBackend = new ServerBackend();
 
-	// Ensure backend stops gracefully on SIGINT signal
+	// Ensure backend stops gracefully on SIGINT and SIGTERM signals
 	process.on("SIGINT", async () => {
+		try {
+			await serverBackend.stopBackend();
+			process.exit(0);
+		} catch (e) {
+			logger.error("Failed to shut down the server:", e);
+			process.exit(1);
+		}
+	});
+
+	process.on("SIGTERM", async () => {
 		try {
 			await serverBackend.stopBackend();
 			process.exit(0);
