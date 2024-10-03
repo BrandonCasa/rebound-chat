@@ -51,7 +51,7 @@ class ServerWatchers {
 					return;
 				}
 
-				if (!Object.keys(this.watchedUsers).includes(userToWatch._id)) {
+				if (!this.watchedUsers.hasOwnProperty(userToWatch._id)) {
 					this.watchedUsers[userToWatch._id] = [[socket.user.id, socket.id]];
 					return;
 				}
@@ -68,7 +68,7 @@ class ServerWatchers {
 	}
 
 	onUserSaved(userId, publicDoc, privateDoc) {
-		if (Object.keys(this.watchedUsers).includes(userId)) {
+		if (this.watchedUsers.hasOwnProperty(userId)) {
 			this.watchedUsers[userId].forEach((watcher) => {
 				socketBackend.emitToSocketById(watcher[1], "watched_user_saved", [userId, publicDoc]);
 			});
