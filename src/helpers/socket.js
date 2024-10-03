@@ -1,27 +1,30 @@
 import { io } from "socket.io-client";
 
 class SocketIoHelper {
-  constructor() {
-    this.socketURL = process.env.NODE_ENV === "production" ? undefined : "http://localhost:6002";
-    this.socketClient = null;
-  }
+	constructor() {
+		this.socketURL = process.env.NODE_ENV === "production" ? undefined : "http://localhost:6002";
+		this.socketClient = null;
+	}
 
-  connectSocket(userToken) {
-    this.socketClient = io(this.socketURL, {
-      autoConnect: true,
-      query: { token: userToken },
-    });
+	connectSocket(userToken) {
+		console.log(userToken);
+		this.socketClient = io(this.socketURL, {
+			autoConnect: true,
+			extraHeaders: {
+				Authorization: `Bearer ${userToken}`,
+			},
+		});
 
-    return this.socketClient;
-  }
+		return this.socketClient;
+	}
 
-  disconnectSocket() {
-    this.socketClient.disconnect();
-  }
+	disconnectSocket() {
+		this.socketClient.disconnect();
+	}
 
-  getSocket() {
-    return this.socketClient;
-  }
+	getSocket() {
+		return this.socketClient;
+	}
 }
 
 const socketIoHelper = new SocketIoHelper();
