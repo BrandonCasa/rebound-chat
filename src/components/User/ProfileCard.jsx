@@ -8,6 +8,7 @@ import * as Icons from "@mui/icons-material";
 import axios from "axios";
 import { setLoggedIn } from "slices/authSlice";
 import socketIoHelper from "helpers/socket";
+import { addSnackbar } from "slices/snackbarSlice";
 
 function FullProfile(props) {
 	let theme = useTheme();
@@ -126,6 +127,7 @@ function FullProfile(props) {
 				)
 				.then((response) => {
 					dispatch(setLoggedIn({ friends: [response?.data?.friendId, ...authState.friends] }));
+					dispatch(addSnackbar({ snackbarMsg: `Sent friend request to '${displayName}'.`, snackbarSeverity: "success", autoHideDuration: 3000 }));
 				})
 				.catch((error) => {
 					console.log(error);

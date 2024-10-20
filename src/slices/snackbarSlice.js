@@ -20,7 +20,7 @@ const snackbarSlice = createSlice({
 					open: true,
 					autoHideDuration: action.payload.autoHideDuration,
 				},
-				alertProps: { severity: action.payload.snackbarSeverity, variant: "filled", sx: { width: "100%" } },
+				alertProps: { severity: action.payload.snackbarSeverity, variant: action.payload?.snackbarVariant || "filled", sx: { width: "100%" } },
 				childText: action.payload.snackbarMsg,
 			};
 		},
