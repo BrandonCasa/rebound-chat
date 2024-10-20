@@ -28,15 +28,7 @@ function SnackbarMapper() {
 		return newSnackbarComponents;
 	}, [snackbarsState.snackbarList]);
 
-	useEffect(() => {
-		setSnackbarComponents(computeSnackbars);
-
-		return () => {
-			setSnackbarComponents([]);
-		};
-	}, [computeSnackbars]);
-
-	return snackbarComponents;
+	return computeSnackbars;
 }
 
 export default SnackbarMapper;

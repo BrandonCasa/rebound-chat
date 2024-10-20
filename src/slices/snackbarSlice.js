@@ -23,7 +23,6 @@ const snackbarSlice = createSlice({
 				alertProps: { severity: action.payload.snackbarSeverity, variant: "filled", sx: { width: "100%" } },
 				childText: action.payload.snackbarMsg,
 			};
-			console.log(JSON.stringify(state.snackbarList[snackbarNewId]));
 		},
 	},
 });
