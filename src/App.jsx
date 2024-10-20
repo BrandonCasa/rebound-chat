@@ -1,7 +1,7 @@
 import React, { useEffect, Suspense, lazy } from "react";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
-import { CssBaseline, ThemeProvider } from "@mui/material";
+import { Alert, CssBaseline, Snackbar, ThemeProvider } from "@mui/material";
 import { createTheme } from "@mui/material/styles";
 import { useSnackbar } from "@mui/base";
 import { styled } from "@mui/material/styles";
@@ -11,8 +11,10 @@ import RegisterDialog from "./components/RegisterDialog";
 import LoginDialog from "./components/LoginDialog.comp";
 import socketIoHelper from "./helpers/socket";
 import { setLoggedIn, setLoggingIn, setSocketStatus } from "./slices/authSlice";
+import { addSnackbar, removeSnackbar } from "./slices/snackbarSlice";
 import useDarkTheme from "./helpers/darkTheme";
 import axios from "axios";
+import SnackbarMapper from "./components/SnackbarMapper";
 
 const LandingPage = lazy(() => import("./routes/LandingPage/LandingPage.route"));
 const ProfilePage = lazy(() => import("routes/ProfilePage/ProfilePage.route"));
@@ -28,7 +30,6 @@ const App = () => {
 	const authState = useSelector((state) => state.auth);
 	const darkTheme = useDarkTheme();
 	const dispatch = useDispatch();
-	const enqueueSnackbar = useSnackbar({ autoHideDuration: 2000 });
 
 	const useSocketConnection = (authToken, loggedIn) => {
 		useEffect(() => {
@@ -83,7 +84,7 @@ const App = () => {
 							})
 						);
 					} catch (error) {
-						enqueueSnackbar("Failed to verify user. Please try logging in again.", { variant: "error" });
+						dispatch(addSnackbar({ snackbarMsg: "Failed to verify user. Please try logging in again.", snackbarSeverity: "error", autoHideDuration: 2000 }));
 						window.localStorage.removeItem("auth-token");
 						dispatch(setLoggedIn({ loggedIn: false, token: null }));
 					}
@@ -102,7 +103,7 @@ const App = () => {
 	return (
 		<ThemeProvider theme={darkTheme}>
 			<CssBaseline />
-			<Snackbar open={open} autoHideDuration={5000} onClose={handleClose} message="This Snackbar will be dismissed in 5 seconds." />
+			<SnackbarMapper />
 			<Router>
 				<RegisterDialog />
 				<LoginDialog />

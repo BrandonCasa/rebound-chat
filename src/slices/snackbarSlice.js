@@ -1,26 +1,32 @@
 import { createSlice } from "@reduxjs/toolkit";
 
 const initialState = {
-	snackbarList: [],
+	snackbarList: {},
 };
-// [snackbarMsg, snackbarType, autoHideDuration, onCloseCallback]
+
 const snackbarSlice = createSlice({
 	name: "snackbars",
 	initialState,
 	reducers: {
+		removeSnackbar: (state, action) => {
+			// action.payload = {snackbarId}
+			delete state.snackbarList[action.payload.snackbarId];
+		},
 		addSnackbar: (state, action) => {
-			state.snackbarList.push({
+			// [snackbarMsg, snackbarSeverity, autoHideDuration]
+			const snackbarNewId = new Date().getTime();
+			state.snackbarList[snackbarNewId] = {
 				snackbarProps: {
 					open: true,
 					autoHideDuration: action.payload.autoHideDuration,
-					onClose: action.payload.onCloseCallback, // should be a dispatch to removeSnackbar
 				},
-				alertProps: { severity: action.payload.severity, variant: "filled", sx: { width: "100%" } },
-				childText: action.payload.message,
-			});
+				alertProps: { severity: action.payload.snackbarSeverity, variant: "filled", sx: { width: "100%" } },
+				childText: action.payload.snackbarMsg,
+			};
+			console.log(JSON.stringify(state.snackbarList[snackbarNewId]));
 		},
 	},
 });
 
-export const { addSnackbar } = snackbarSlice.actions;
+export const { addSnackbar, removeSnackbar } = snackbarSlice.actions;
 export default snackbarSlice.reducer;
