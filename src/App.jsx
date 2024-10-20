@@ -83,7 +83,9 @@ const App = () => {
 								friends: response.data.user.friends,
 							})
 						);
-						dispatch(addSnackbar({ snackbarMsg: `Login Successful. Hello ${response.data.user.displayName}`, snackbarSeverity: "success", autoHideDuration: 2000 }));
+						dispatch(
+							addSnackbar({ snackbarMsg: `Login reload Successful. Hello ${response.data.user.displayName}`, snackbarSeverity: "success", autoHideDuration: 2000 })
+						);
 					} catch (error) {
 						dispatch(addSnackbar({ snackbarMsg: "Failed to verify user. Please try logging in again.", snackbarSeverity: "error", autoHideDuration: 5000 }));
 						window.localStorage.removeItem("auth-token");

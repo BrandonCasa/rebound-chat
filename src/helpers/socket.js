@@ -7,7 +7,7 @@ class SocketIoHelper {
 	}
 
 	connectSocket(userToken) {
-		console.log(userToken);
+		//console.log(userToken);
 		this.socketClient = io(this.socketURL, {
 			autoConnect: true,
 			extraHeaders: {

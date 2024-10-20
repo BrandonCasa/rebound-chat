@@ -103,7 +103,7 @@ function ChatPage() {
 			// Render Emits
 			socketClient.emit("list_rooms");
 		} else if (!authState.loggingIn) {
-			dispatch(addSnackbar({ snackbarMsg: `Login or register to use this page.`, snackbarSeverity: "warning", autoHideDuration: 4000 }));
+			//dispatch(addSnackbar({ snackbarMsg: `Login or register to use this page.`, snackbarSeverity: "warning", autoHideDuration: 4000 }));
 		}
 
 		return () => {
