@@ -102,6 +102,19 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
 						<Icons.PersonRounded />
 					</ListItemIcon>
 				</ListItemWithTooltip>
+				<ListItemWithTooltip key="Testing" title="Testing" placement="right">
+					<ListItemIcon
+						sx={{ opacity: window.location.pathname.toString() === "/testing" ? "0.5" : "1.0" }}
+						onClick={() => {
+							navigate("/testing");
+							setTimeout(() => {
+								setDrawerOpen(false);
+							}, 500);
+						}}
+					>
+						<Icons.ScienceTwoTone />
+					</ListItemIcon>
+				</ListItemWithTooltip>
 				<ListItemWithTooltip key="Settings" title="Settings" placement="right">
 					<ListItemIcon sx={{ opacity: window.location.pathname.toString() === "/settings" ? "0.5" : "1.0" }}>
 						<Icons.SettingsRounded />

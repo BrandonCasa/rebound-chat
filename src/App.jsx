@@ -15,6 +15,7 @@ import { addSnackbar, removeSnackbar } from "./slices/snackbarSlice";
 import useDarkTheme from "./helpers/darkTheme";
 import axios from "axios";
 import SnackbarMapper from "./components/SnackbarMapper";
+import TestingPage from "routes/TestingPage/TestingPage.route";
 
 const LandingPage = lazy(() => import("./routes/LandingPage/LandingPage.route"));
 const ProfilePage = lazy(() => import("routes/ProfilePage/ProfilePage.route"));
@@ -118,6 +119,7 @@ const App = () => {
 								<Route path="/profile" element={<ProfilePage />} />
 								<Route path="/chat" element={<ChatPage />} />
 								<Route path="/servers" element={<ServersPage />} />
+								<Route path="/testing" element={<TestingPage />} />
 								<Route
 									path="*"
 									element={
