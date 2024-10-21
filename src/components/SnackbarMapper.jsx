@@ -1,23 +1,19 @@
-import { Alert, Snackbar, Typography } from "@mui/material";
+import { Alert, Snackbar } from "@mui/material";
 import { removeSnackbar } from "slices/snackbarSlice";
-import React, { useCallback, useEffect, useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 function SnackbarMapper() {
 	const snackbarsState = useSelector((state) => state.snackbars);
 	const dispatch = useDispatch();
-	const [snackbarComponents, setSnackbarComponents] = useState([]);
 
-	const computeSnackbars = useMemo(() => {
-		let newSnackbarComponents = [];
-		Object.keys(snackbarsState.snackbarList).forEach((snackbarId) => {
-			const snackbarData = snackbarsState.snackbarList[snackbarId];
-
+	const snackbarComponents = useMemo(() => {
+		return Object.entries(snackbarsState.snackbarList).map(([snackbarId, snackbarData]) => {
 			const onCloseAction = () => {
-				dispatch(removeSnackbar({ snackbarId: snackbarId }));
+				dispatch(removeSnackbar({ snackbarId }));
 			};
 
-			newSnackbarComponents.push(
+			return (
 				<Snackbar open={snackbarData.snackbarProps.open} autoHideDuration={snackbarData.snackbarProps.autoHideDuration} onClose={onCloseAction} key={snackbarId}>
 					<Alert onClose={onCloseAction} {...snackbarData.alertProps}>
 						{snackbarData.childText}
@@ -25,10 +21,9 @@ function SnackbarMapper() {
 				</Snackbar>
 			);
 		});
-		return newSnackbarComponents;
-	}, [snackbarsState.snackbarList]);
+	}, [snackbarsState.snackbarList, dispatch]);
 
-	return computeSnackbars;
+	return snackbarComponents;
 }
 
 export default SnackbarMapper;
