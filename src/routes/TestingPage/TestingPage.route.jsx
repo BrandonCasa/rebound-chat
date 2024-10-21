@@ -26,7 +26,7 @@ function TestingPage(props) {
 	const snackbarList = useSelector((state) => state.snackbars.snackbarList);
 
 	const warnSnackbar = () => {
-		dispatch(addSnackbar({ snackbarMsg: "This is a test snackbar.", snackbarSeverity: "warning", autoHideDuration: 20000 }));
+		dispatch(addSnackbar({ snackbarMsg: "This is a test snackbar.", snackbarSeverity: "warning", autoHideDuration: 5000 }));
 	};
 
 	return (
