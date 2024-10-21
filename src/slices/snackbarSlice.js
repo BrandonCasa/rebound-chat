@@ -14,7 +14,7 @@ const snackbarSlice = createSlice({
 		},
 		addSnackbar: (state, action) => {
 			// [snackbarMsg, snackbarSeverity, autoHideDuration]
-			const snackbarNewId = new Date().getTime();
+			const snackbarNewId = new Date().getTime() + Math.floor(Math.random() * 500);
 			state.snackbarList[snackbarNewId] = {
 				snackbarProps: {
 					open: true,
