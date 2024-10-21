@@ -3,23 +3,6 @@ import { Box, Button, Card, CardContent, Grid, List, ListItem, ListItemIcon, Lis
 import { useDispatch, useSelector } from "react-redux";
 import { addSnackbar } from "slices/snackbarSlice";
 
-function TestingCard({ title, description }) {
-	let theme = useTheme();
-
-	return (
-		<Card sx={{ p: 0, flexGrow: 1 }}>
-			<CardContent>
-				<Typography variant="h5" sx={{ color: `${theme.palette.text.primary}` }}>
-					{title}
-				</Typography>
-				<Typography variant="body2" sx={{ color: `${theme.palette.text.secondary}` }}>
-					{description}
-				</Typography>
-			</CardContent>
-		</Card>
-	);
-}
-
 function TestingPage(props) {
 	const theme = useTheme();
 	const dispatch = useDispatch();
