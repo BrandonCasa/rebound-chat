@@ -15,6 +15,8 @@ import { addSnackbar, removeSnackbar } from "./slices/snackbarSlice";
 import useDarkTheme from "./helpers/darkTheme";
 import axios from "axios";
 import SnackbarMapper from "./components/SnackbarMapper";
+import useCustomAppBar from "components/CustomAppBar/useCustomAppBar";
+import useWindowDimensions from "helpers/useWindowDimensions";
 
 const LandingPage = lazy(() => import("./routes/LandingPage/LandingPage.route"));
 const ProfilePage = lazy(() => import("routes/ProfilePage/ProfilePage.route"));
@@ -31,6 +33,7 @@ const App = () => {
 	const authState = useSelector((state) => state.auth);
 	const darkTheme = useDarkTheme();
 	const dispatch = useDispatch();
+	const customAppBarProps = useCustomAppBar(useWindowDimensions().width);
 
 	const useSocketConnection = (authToken, loggedIn) => {
 		useEffect(() => {
@@ -107,11 +110,11 @@ const App = () => {
 	return (
 		<ThemeProvider theme={darkTheme}>
 			<CssBaseline />
-			<SnackbarMapper />
+			<SnackbarMapper drawerWidth={customAppBarProps.drawerWidth} drawerOpen={customAppBarProps.drawerOpen} />
 			<Router>
 				<RegisterDialog />
 				<LoginDialog />
-				<CustomAppBar>
+				<CustomAppBar {...customAppBarProps}>
 					{!authState.loggingIn ? (
 						<Suspense fallback={<div>Loading...</div>}>
 							<Routes>

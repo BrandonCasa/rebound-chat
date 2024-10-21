@@ -1,6 +1,6 @@
 import { useTheme } from "@mui/material/styles";
-import { Box, Button, Card, CardContent, Grid, Stack, Typography } from "@mui/material";
-import { useDispatch } from "react-redux";
+import { Box, Button, Card, CardContent, Grid, List, ListItem, ListItemIcon, ListItemText, Stack, Typography } from "@mui/material";
+import { useDispatch, useSelector } from "react-redux";
 import { addSnackbar } from "slices/snackbarSlice";
 
 function TestingCard({ title, description }) {
@@ -23,9 +23,10 @@ function TestingCard({ title, description }) {
 function TestingPage(props) {
 	const theme = useTheme();
 	const dispatch = useDispatch();
+	const snackbarList = useSelector((state) => state.snackbars.snackbarList);
 
 	const warnSnackbar = () => {
-		dispatch(addSnackbar({ snackbarMsg: "This is a test snackbar.", snackbarSeverity: "warning", autoHideDuration: 2000 }));
+		dispatch(addSnackbar({ snackbarMsg: "This is a test snackbar.", snackbarSeverity: "warning", autoHideDuration: 20000 }));
 	};
 
 	return (
@@ -37,11 +38,25 @@ function TestingPage(props) {
 							Test Alert
 						</Typography>
 						<Typography variant="body2" sx={{ color: `${theme.palette.text.secondary}` }}>
-							Spawn a 2 second warning snackbar
+							Spawn a 5 second warn alert
 						</Typography>
 						<Button variant="contained" sx={{ mt: 1 }} color="warning" onClick={warnSnackbar}>
 							Alert
 						</Button>
+					</Card>
+				</Grid>
+				<Grid item xs={12} sm={4} md={4} justifyContent="center" sx={{ display: "flex" }}>
+					<Card sx={{ p: 2, flexGrow: 1 }}>
+						<Typography variant="h5" sx={{ color: `${theme.palette.text.primary}` }}>
+							Current Snackbars
+						</Typography>
+						<List sx={{ width: "100%", bgcolor: "background.paper" }}>
+							{Object.keys(snackbarList).map((value) => (
+								<ListItem key={value}>
+									<ListItemText primary={`Snackbar ID: ${value}`} />
+								</ListItem>
+							))}
+						</List>
 					</Card>
 				</Grid>
 			</Grid>

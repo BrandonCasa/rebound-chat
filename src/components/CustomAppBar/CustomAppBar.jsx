@@ -7,19 +7,17 @@ import useWindowDimensions from "helpers/useWindowDimensions";
 import { useTheme } from "@mui/material/styles";
 import { Box } from "@mui/material";
 
-function CustomAppBar(props) {
-  const { height, width } = useWindowDimensions();
-  const theme = useTheme();
-  const { drawerWidth, iconWidth, drawerOpen, setDrawerOpen, handleIconClick, loggedInState, anchorEl, open, handleClose, handleLogout } = useCustomAppBar(width);
+function CustomAppBar({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, handleIconClick, loggedInState, anchorEl, open, handleClose, handleLogout, children }) {
+	const theme = useTheme();
 
-  return (
-    <Box sx={{ display: "flex", height: "100%", width: "100%", position: "fixed", top: 0 }}>
-      <AppBarContent handleIconClick={handleIconClick} iconWidth={iconWidth} drawerWidth={drawerWidth} loggedInState={loggedInState} />
-      <AccountMenu anchorEl={anchorEl} open={open} handleClose={handleClose} handleLogout={handleLogout} theme={theme} />
-      <DrawerMenu drawerWidth={drawerWidth} iconWidth={iconWidth} drawerOpen={drawerOpen} setDrawerOpen={setDrawerOpen} theme={theme} />
-      <MainContent drawerWidth={drawerWidth} drawerOpen={drawerOpen} theme={theme} iconWidth={iconWidth} setDrawerOpen={setDrawerOpen} children={props.children} />
-    </Box>
-  );
+	return (
+		<Box sx={{ display: "flex", height: "100%", width: "100%", position: "fixed", top: 0 }}>
+			<AppBarContent handleIconClick={handleIconClick} iconWidth={iconWidth} drawerWidth={drawerWidth} loggedInState={loggedInState} />
+			<AccountMenu anchorEl={anchorEl} open={open} handleClose={handleClose} handleLogout={handleLogout} theme={theme} />
+			<DrawerMenu drawerWidth={drawerWidth} iconWidth={iconWidth} drawerOpen={drawerOpen} setDrawerOpen={setDrawerOpen} theme={theme} />
+			<MainContent drawerWidth={drawerWidth} drawerOpen={drawerOpen} theme={theme} iconWidth={iconWidth} setDrawerOpen={setDrawerOpen} children={children} />
+		</Box>
+	);
 }
 
 export default CustomAppBar;
