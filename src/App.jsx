@@ -15,12 +15,12 @@ import { addSnackbar, removeSnackbar } from "./slices/snackbarSlice";
 import useDarkTheme from "./helpers/darkTheme";
 import axios from "axios";
 import SnackbarMapper from "./components/SnackbarMapper";
-import TestingPage from "routes/TestingPage/TestingPage.route";
 
 const LandingPage = lazy(() => import("./routes/LandingPage/LandingPage.route"));
 const ProfilePage = lazy(() => import("routes/ProfilePage/ProfilePage.route"));
 const ChatPage = lazy(() => import("routes/ChatPage/ChatPage"));
 const ServersPage = lazy(() => import("routes/ServersPage/ServersPage.route"));
+const TestingPage = lazy(() => import("routes/TestingPage/TestingPage.route"));
 
 const PageNotFoundContainer = styled("div")({
 	maxWidth: "100%",
