@@ -1,63 +1,63 @@
 {
-  "name": "rebound-web",
-  "version": "0.1.1",
-  "private": true,
-  "dependencies": {
-    "@emotion/react": "^11.10.6",
-    "@emotion/styled": "^11.10.6",
-    "@fontsource/roboto": "^5.0.3",
-    "@mui/icons-material": "^5.11.16",
-    "@mui/material": "^5.11.10",
-    "@mui/styled-engine-sc": "^5.11.9",
-    "@reduxjs/toolkit": "^1.9.5",
-    "@testing-library/jest-dom": "^5.16.5",
-    "@testing-library/react": "^13.4.0",
-    "@testing-library/user-event": "^14.4.3",
-    "axios": "^1.7.7",
-    "cross-env": "^7.0.3",
-    "kill-port": "^2.0.1",
-    "nodemon": "^3.1.0",
-    "prettier": "^2.8.8",
-    "react": "^18.2.0",
-    "react-device-detect": "^2.2.3",
-    "react-dom": "^18.2.0",
-    "react-google-button": "^0.7.2",
-    "react-query": "^3.39.3",
-    "react-redux": "^8.0.5",
-    "react-router-dom": "^6.8.1",
-    "react-scripts": "5.0.1",
-    "react-transition-group": "^4.4.5",
-    "rebound-web": "file:",
-    "sass": "^1.63.6",
-    "socket.io-client": "^4.6.2",
-    "styled-components": "^5.3.6",
-    "validator": "^13.9.0",
-    "web-vitals": "^2.1.4"
-  },
-  "scripts": {
-    "start": "react-scripts start",
-    "build": "CI=false && react-scripts --openssl-legacy-provider build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "ssh-win": "icacls ./keys/rebound_server.pem /inheritance:r & icacls ./keys/rebound_server.pem /grant:r \"%username%\":\"(R)\" & ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@44.194.181.255",
-    "ssh-mac": "chmod 400 ./keys/rebound_server.pem && ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@44.194.181.255"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
-  }
+	"name": "rebound-web",
+	"version": "0.1.1",
+	"private": true,
+	"dependencies": {
+		"@emotion/react": "^11.10.6",
+		"@emotion/styled": "^11.10.6",
+		"@fontsource/roboto": "^5.0.3",
+		"@mui/icons-material": "^5.11.16",
+		"@mui/material": "^5.11.10",
+		"@mui/styled-engine-sc": "^5.11.9",
+		"@reduxjs/toolkit": "^1.9.5",
+		"@testing-library/jest-dom": "^5.16.5",
+		"@testing-library/react": "^13.4.0",
+		"@testing-library/user-event": "^14.4.3",
+		"axios": "^1.7.7",
+		"cross-env": "^7.0.3",
+		"kill-port": "^2.0.1",
+		"nodemon": "^3.1.0",
+		"prettier": "^2.8.8",
+		"react": "^18.2.0",
+		"react-device-detect": "^2.2.3",
+		"react-dom": "^18.2.0",
+		"react-google-button": "^0.7.2",
+		"react-query": "^3.39.3",
+		"react-redux": "^8.0.5",
+		"react-router-dom": "^6.8.1",
+		"react-scripts": "5.0.1",
+		"react-transition-group": "^4.4.5",
+		"rebound-web": "file:",
+		"sass": "^1.63.6",
+		"socket.io-client": "^4.6.2",
+		"styled-components": "^5.3.6",
+		"validator": "^13.9.0",
+		"web-vitals": "^2.1.4"
+	},
+	"scripts": {
+		"start": "react-scripts start",
+		"build": "CI=false && react-scripts --openssl-legacy-provider build",
+		"test": "react-scripts test",
+		"eject": "react-scripts eject",
+		"ssh-win": "icacls ./keys/rebound_server.pem /inheritance:r & icacls ./keys/rebound_server.pem /grant:r \"%username%\":\"(R)\" & ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@100.26.232.245",
+		"ssh-mac": "chmod 400 ./keys/rebound_server.pem && ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@100.26.232.245"
+	},
+	"eslintConfig": {
+		"extends": [
+			"react-app",
+			"react-app/jest"
+		]
+	},
+	"browserslist": {
+		"production": [
+			">0.2%",
+			"not dead",
+			"not op_mini all"
+		],
+		"development": [
+			"last 1 chrome version",
+			"last 1 firefox version",
+			"last 1 safari version"
+		]
+	}
 }
