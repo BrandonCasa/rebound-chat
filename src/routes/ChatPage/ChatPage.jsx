@@ -71,7 +71,7 @@ function ChatPage() {
 				const [roomList, rooms] = response;
 
 				setChannels(rooms);
-				console.log(authState.socketInfo.currentRoom, Object.keys(roomList)[0]);
+				//console.log(authState.socketInfo.currentRoom, Object.keys(roomList)[0]);
 				if (authState.socketInfo.currentRoom === null) {
 					dispatch(setSocketRoom({ lastRoom: authState.socketInfo.currentRoom, currentRoom: Object.keys(roomList)[0] }));
 				}
@@ -187,7 +187,13 @@ function ChatPage() {
 				onClose={() => previewUser(null)}
 				sx={{ marginBottom: 2 }}
 			>
-				<ProfileCard self={false} type="full" width="400px" passStyle={{ maxHeight: "400px", maxWidth: "400px" }} user={userPreviewUser} />
+				<ProfileCard
+					self={authState.userId === userPreviewUser?.id}
+					type="full"
+					width="400px"
+					passStyle={{ maxHeight: "400px", maxWidth: "400px" }}
+					user={userPreviewUser}
+				/>
 			</Popover>
 			<ChatRoomMenu anchorEl={roomAnchorEl} setAnchorEl={setRoomAnchorEl} channels={channels} setMessages={setMessages} />
 			<UserListMenu anchorEl={userListAnchorEl} setAnchorEl={setUserListAnchorEl} users={users} />

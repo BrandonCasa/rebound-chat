@@ -24,32 +24,16 @@ function FullProfile(props) {
 	const dispatch = useDispatch();
 
 	const updateDataOther = (data) => {
-		if ((props?.self || data?.id === authState.userId) && authState.loggedIn === true) {
-			console.log(authState.userId);
-			setBio(authState.bio);
-			setDisplayName(authState.displayName);
-			setUsername(authState.username);
-			setUserId(authState.userId);
-			setIsPending(false);
-			setIsFriends(false);
-			setFriendId("");
-			setIsSender(false);
-			stopListeningChanges();
-		} else if ((data && userId === null) || (data && data.id === userId)) {
-			setBio("");
-			setDisplayName("");
-			setUsername("");
-			setUserId(null);
-			setIsPending(false);
-			setIsFriends(false);
-			setFriendId("");
-			setIsSender(false);
-			if (bio !== data.bio) setBio(data.bio);
-			if (displayName !== data.displayName) setDisplayName(data.displayName);
-			if (username !== data.username) setUsername(data.username);
-			if (userId !== data.id) setUserId(data.id);
-			console.log(data.friends);
+		setBio(data?.bio);
+		setDisplayName(data?.displayName);
+		setUsername(data?.username);
+		setUserId(data?.id);
+		setIsPending(false);
+		setIsFriends(false);
+		setFriendId("");
+		setIsSender(false);
 
+		if (!props?.self) {
 			for (let friend in data.friends) {
 				friend = data.friends[friend];
 				if (friend.requester !== authState.userId && friend.recipient !== authState.userId) {
@@ -71,7 +55,6 @@ function FullProfile(props) {
 		if (socketIoHelper.getSocket() !== null && socketIoHelper.getSocket().connected) {
 			const socketClient = socketIoHelper.getSocket();
 			socketClient.on("watched_user_saved", ([watchedId, watchedData]) => {
-				console.log(watchedId, userIdIn);
 				if (watchedId === userIdIn) {
 					updateDataOther(watchedData);
 				}
@@ -87,12 +70,12 @@ function FullProfile(props) {
 	};
 
 	useEffect(() => {
-		if (!props?.self && props?.user.id !== authState.userId && socketIoHelper.getSocket() !== null && socketIoHelper.getSocket().connected) {
+		if (socketIoHelper.getSocket() !== null && socketIoHelper.getSocket().connected) {
 			const socketClient = socketIoHelper.getSocket();
-			socketClient.emit("watch_user", props?.user.id);
-			startListeningChanges(props?.user.id);
+			socketClient.emit("watch_user", props?.self ? authState.userId : props?.user.id);
+			startListeningChanges(props?.self ? authState.userId : props?.user.id);
 		}
-		updateDataOther(props?.user);
+		updateDataOther(props?.self ? { ...authState, id: authState.userId } : props?.user);
 
 		return () => {
 			setBio("");
@@ -214,7 +197,7 @@ function FullProfile(props) {
 							{displayName}
 						</Typography>
 						<Typography variant="subtitle2" height={"32px"} sx={{ color: `${theme.palette.text.secondary}` }}>
-							{userId}
+							{username}
 						</Typography>
 					</Stack>
 					<Stack spacing={0} sx={{ padding: 0, height: "64px", flexGrow: 1, paddingRight: theme.spacing(0.5) }}>
