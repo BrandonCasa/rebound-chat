@@ -93,10 +93,13 @@ function ChatPage() {
 			});
 
 			// User List
-			socketClient.on("user_list", (roomId, roomUsers) => {
-				const usersInRoom = roomUsers.map((roomUser) => {
-					return roomUser;
-				});
+			socketClient.on("user_list", (roomId, usersInRoom, userSender, eventType) => {
+				if (userSender.id !== authState.userId && eventType === "join") {
+					dispatch(addSnackbar({ snackbarMsg: `'${userSender.displayName}' joined!`, snackbarSeverity: "info", autoHideDuration: 1500 }));
+				}
+				if (userSender.id !== authState.userId && eventType === "leave") {
+					dispatch(addSnackbar({ snackbarMsg: `'${userSender.displayName}' left.`, snackbarSeverity: "info", autoHideDuration: 1500 }));
+				}
 				setUsers(usersInRoom);
 			});
 
