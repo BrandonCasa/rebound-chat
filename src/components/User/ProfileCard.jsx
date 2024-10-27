@@ -283,18 +283,18 @@ function FullProfile(props) {
 				</Paper>
 				<Stack direction="row" justifyContent="space-between" spacing={1} sx={{ padding: theme.spacing(0.5) }}>
 					{!isPending && !isFriends && (
-						<Button variant="contained" color="secondary" disabled={userId === authState.userId} onClick={sendFriendRequest}>
-							Add Friend
+						<Button variant="contained" color="secondary" disabled={userId === authState.userId} onClick={sendFriendRequest} startIcon={<Icons.PersonAddRounded />}>
+							Add
 						</Button>
 					)}
 					{!isPending && isFriends && (
-						<Button variant="contained" color="error" onClick={removeFriend}>
-							Remove Friend
+						<Button variant="contained" color="error" onClick={removeFriend} startIcon={<Icons.PersonRemoveRounded />}>
+							Remove
 						</Button>
 					)}
 					{isPending && !isFriends && isSender && (
-						<Button variant="outlined" color="info" onClick={cancelFriendRequest}>
-							Cancel Friend Request
+						<Button variant="outlined" color="info" onClick={cancelFriendRequest} startIcon={<Icons.PersonOffRounded />}>
+							Cancel
 						</Button>
 					)}
 					{isPending && !isFriends && !isSender && (
