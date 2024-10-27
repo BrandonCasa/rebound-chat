@@ -88,7 +88,7 @@ const App = () => {
 							})
 						);
 						dispatch(
-							addSnackbar({ snackbarMsg: `Login reload Successful. Hello ${response.data.user.displayName}`, snackbarSeverity: "success", autoHideDuration: 2000 })
+							addSnackbar({ snackbarMsg: `Login reload successful. Hello ${response.data.user.displayName}`, snackbarSeverity: "success", autoHideDuration: 2000 })
 						);
 					} catch (error) {
 						dispatch(addSnackbar({ snackbarMsg: "Failed to verify user. Please try logging in again.", snackbarSeverity: "error", autoHideDuration: 5000 }));

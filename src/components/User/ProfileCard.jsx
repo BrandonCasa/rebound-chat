@@ -109,7 +109,8 @@ function FullProfile(props) {
 					}
 				)
 				.then((response) => {
-					dispatch(setLoggedIn({ friends: [response?.data?.friendId, ...authState.friends] }));
+					//setIsPending(true);
+					//dispatch(setLoggedIn({ friends: [response?.data?.friendId, ...authState.friends] }));
 					dispatch(addSnackbar({ snackbarMsg: `Sent friend request to '${displayName}'.`, snackbarSeverity: "success", autoHideDuration: 3000 }));
 				})
 				.catch((error) => {
@@ -135,8 +136,65 @@ function FullProfile(props) {
 				)
 				.then((response) => {
 					if (response.status === 200) {
-						setIsPending(false);
-						setIsFriends(true);
+						//setIsPending(false);
+						//setIsFriends(true);
+						dispatch(addSnackbar({ snackbarMsg: `Accepted friend request from '${displayName}'.`, snackbarSeverity: "success", autoHideDuration: 3000 }));
+					}
+				})
+				.catch((error) => {
+					console.log(error);
+				});
+		}
+	};
+
+	const declineFriendRequest = () => {
+		if (isPending && !isFriends && userId !== authState.userId) {
+			const requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/declinefriend" : "/api/users/declinefriend";
+			axios
+				.put(
+					requestString,
+					{ friendId: friendId },
+					{
+						headers: {
+							"Content-Type": "application/json",
+							"Allow-Control-Allow-Origin": "*",
+							authorization: `Bearer ${authState.authToken}`,
+						},
+					}
+				)
+				.then((response) => {
+					if (response.status === 200) {
+						//setIsPending(false);
+						//setIsFriends(false);
+						dispatch(addSnackbar({ snackbarMsg: `Declined friend request from '${displayName}'.`, snackbarSeverity: "warning", autoHideDuration: 3000 }));
+					}
+				})
+				.catch((error) => {
+					console.log(error);
+				});
+		}
+	};
+
+	const cancelFriendRequest = () => {
+		if (isPending && !isFriends && userId !== authState.userId) {
+			const requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/cancelfriend" : "/api/users/cancelfriend";
+			axios
+				.put(
+					requestString,
+					{ friendId: friendId },
+					{
+						headers: {
+							"Content-Type": "application/json",
+							"Allow-Control-Allow-Origin": "*",
+							authorization: `Bearer ${authState.authToken}`,
+						},
+					}
+				)
+				.then((response) => {
+					if (response.status === 200) {
+						//setIsPending(false);
+						//setIsFriends(false);
+						dispatch(addSnackbar({ snackbarMsg: `Canceled friend request to '${displayName}'.`, snackbarSeverity: "info", autoHideDuration: 3000 }));
 					}
 				})
 				.catch((error) => {
@@ -162,8 +220,9 @@ function FullProfile(props) {
 				)
 				.then((response) => {
 					if (response.status === 200) {
-						setIsPending(false);
-						setIsFriends(false);
+						//setIsPending(false);
+						//setIsFriends(false);
+						dispatch(addSnackbar({ snackbarMsg: `Removed friend '${displayName}'.`, snackbarSeverity: "info", autoHideDuration: 3000 }));
 					}
 				})
 				.catch((error) => {
@@ -234,14 +293,19 @@ function FullProfile(props) {
 						</Button>
 					)}
 					{isPending && !isFriends && isSender && (
-						<Button variant="outlined" color="info" disabled>
+						<Button variant="outlined" color="info" onClick={cancelFriendRequest}>
 							Cancel Friend Request
 						</Button>
 					)}
 					{isPending && !isFriends && !isSender && (
-						<Button variant="contained" color="success" disabled={userId === authState.userId} onClick={acceptFriendRequest}>
-							Accept Friend
-						</Button>
+						<ButtonGroup variant="contained">
+							<Button color="success" onClick={acceptFriendRequest} startIcon={<Icons.PersonAddRounded />}>
+								Accept
+							</Button>
+							<Button color="error" onClick={declineFriendRequest} startIcon={<Icons.PersonRemoveRounded />}>
+								Decline
+							</Button>
+						</ButtonGroup>
 					)}
 					<Button variant="contained" color="primary" disabled={userId === authState.userId || true}>
 						Block

@@ -47,7 +47,61 @@ const sendFriendRequest = async (sender, recipient, res) => {
 	return res.json({ friendId: newFriend._id.toString() });
 };
 
-const removeFriend = async (friend, res) => {
+const declineFriend = async (req, res, currentUserJwt) => {
+	const friend = await validateFriendById(req.body.friendId);
+
+	if (friend.confirmed) {
+		return res.sendStatus(403);
+	}
+
+	if (friend.recipient._id.toString() !== currentUserJwt.id) {
+		return res.sendStatus(401);
+	}
+
+	const sender = await validateUserById(friend.requester._id, res);
+	const recipient = await validateUserById(friend.recipient._id, res);
+
+	sender.friends.pull(req.body.friendId);
+	await sender.save();
+	recipient.friends.pull(req.body.friendId);
+	await recipient.save();
+
+	await friend.remove();
+
+	return res.sendStatus(200);
+};
+
+const cancelFriend = async (req, res, currentUserJwt) => {
+	const friend = await validateFriendById(req.body.friendId);
+
+	if (friend.requester._id.toString() !== currentUserJwt.id) {
+		return res.sendStatus(401);
+	}
+
+	if (friend.confirmed) {
+		return res.sendStatus(403);
+	}
+
+	const sender = await validateUserById(friend.requester._id, res);
+	const recipient = await validateUserById(friend.recipient._id, res);
+
+	sender.friends.pull(friend._id);
+	await sender.save();
+	recipient.friends.pull(friend._id);
+	await recipient.save();
+
+	await friend.remove();
+
+	return res.sendStatus(200);
+};
+
+const removeFriend = async (req, res, currentUserJwt) => {
+	const friend = await validateFriendById(req.body.friendId);
+
+	if (friend.recipient._id.toString() !== currentUserJwt.id && friend.requester._id.toString() !== currentUserJwt.id) {
+		return res.sendStatus(401);
+	}
+
 	if (!friend.confirmed) {
 		return res.sendStatus(403);
 	}
@@ -65,4 +119,4 @@ const removeFriend = async (friend, res) => {
 	return res.sendStatus(200);
 };
 
-export { validateUserById, validateFriendById, sendFriendRequest, removeFriend };
+export { validateUserById, validateFriendById, sendFriendRequest, cancelFriend, declineFriend, removeFriend };

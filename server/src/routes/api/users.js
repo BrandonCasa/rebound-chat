@@ -6,7 +6,7 @@ import passport from "passport";
 import jwt from "jsonwebtoken";
 import logger from "../../logger.js";
 import "dotenv/config";
-import { sendFriendRequest, validateFriendById, validateUserById, removeFriend } from "../../models/helpers/UserHelper.js";
+import { sendFriendRequest, validateFriendById, validateUserById, removeFriend, declineFriend, cancelFriend } from "../../models/helpers/UserHelper.js";
 
 const router = Router();
 
@@ -192,27 +192,17 @@ router.put("/users/declinefriend", auth.required, async function (req, res, next
 		return res.sendStatus(404);
 	}
 
-	const friend = await validateFriendById(req.body.friendId);
+	return await declineFriend(req, res, currentUserJwt);
+});
 
-	if (friend.confirmed) {
+router.put("/users/cancelfriend", auth.required, async function (req, res, next) {
+	const currentUserJwt = jwt.verify(getTokenFromHeader(req), process.env.SECRET, { algorithms: ["HS256"] });
+
+	if (currentUserJwt.id === req.body.friendId) {
 		return res.sendStatus(403);
 	}
 
-	if (friend.recipient._id.toString() !== currentUserJwt.id) {
-		return res.sendStatus(401);
-	}
-
-	const sender = await validateUserById(friend.requester._id, res);
-	const recipient = await validateUserById(friend.recipient._id, res);
-
-	sender.friends.pull(req.body.friendId);
-	await sender.save();
-	recipient.friends.pull(req.body.friendId);
-	await recipient.save();
-
-	await friend.remove();
-
-	return res.sendStatus(200);
+	return await cancelFriend(req, res, currentUserJwt);
 });
 
 router.put("/users/removefriend", auth.required, async function (req, res, next) {
@@ -222,13 +212,7 @@ router.put("/users/removefriend", auth.required, async function (req, res, next)
 		return res.sendStatus(403);
 	}
 
-	const friend = await validateFriendById(req.body.friendId);
-
-	if (friend.recipient._id.toString() !== currentUserJwt.id && friend.requester._id.toString() !== currentUserJwt.id) {
-		return res.sendStatus(401);
-	}
-
-	return await removeFriend(friend, res);
+	return await removeFriend(req, res, currentUserJwt);
 });
 
 export default router;
