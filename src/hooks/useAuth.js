@@ -1,97 +1,69 @@
 // hooks/useAuth.js
-import { useEffect } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { useVerifyUserQuery, useLoginUserMutation } from "../services/authApi";
-import { setLoggingIn, logoutUser } from "slices/authSlice_new";
-import { addSnackbar } from "slices/snackbarSlice";
+import { useSelector, useDispatch } from "react-redux";
+import { useCallback } from "react";
+import { setSocketStatus, setSocketRoom, logoutUser } from "slices/authSlice_new";
+import { authApi } from "services/authApi";
 
 const useAuth = () => {
 	const dispatch = useDispatch();
-	const authState = useSelector((state) => state.authNew);
 
-	// Login mutation from authApi
-	const [loginUser, { isLoading: isLoggingIn }] = useLoginUserMutation();
+	// Select relevant data from auth state
+	const authToken = useSelector((state) => state.authNew.authToken);
+	const loggedIn = useSelector((state) => state.authNew.loggedIn);
+	const loggingIn = useSelector((state) => state.authNew.loggingIn);
+	const userId = useSelector((state) => state.authNew.userId);
+	const username = useSelector((state) => state.authNew.username);
+	const displayName = useSelector((state) => state.authNew.displayName);
+	const bio = useSelector((state) => state.authNew.bio);
+	const friends = useSelector((state) => state.authNew.friends);
+	const socketInfo = useSelector((state) => state.authNew.socketInfo);
 
-	// Verify query from authApi
-	const {
-		data: verifyData,
-		error: verifyError,
-		isFetching: isVerifying,
-	} = useVerifyUserQuery(authState.authToken, {
-		skip: !authState.authToken || authState.loggedIn,
-	});
+	// Actions for managing socket connection
+	const setSocketConnected = useCallback(
+		(connected) => {
+			dispatch(setSocketStatus({ connected }));
+		},
+		[dispatch]
+	);
 
-	// Effect to handle user verification response
-	useEffect(() => {
-		if (isVerifying) {
-			dispatch(setLoggingIn({ loggingIn: true }));
-		} else if (verifyData) {
-			dispatch(
-				addSnackbar({
-					snackbarMsg: `Login reload successful. Hello ${verifyData.user.displayName}`,
-					snackbarSeverity: "success",
-					autoHideDuration: 2000,
-				})
-			);
-		} else if (verifyError) {
-			dispatch(
-				addSnackbar({
-					snackbarMsg: "Failed to verify user. Please try logging in again.",
-					snackbarSeverity: "error",
-					autoHideDuration: 5000,
-				})
-			);
-			dispatch(logoutUser());
-		}
-	}, [verifyData, verifyError, isVerifying, dispatch]);
+	const changeSocketRoom = useCallback(
+		(currentRoom, lastRoom = null) => {
+			dispatch(setSocketRoom({ currentRoom, lastRoom }));
+		},
+		[dispatch]
+	);
 
-	// Login function
-	const login = async (credentials) => {
-		try {
-			const { data } = await loginUser(credentials);
-			dispatch(
-				addSnackbar({
-					snackbarMsg: `Login successful. Hello ${data.user.displayName}`,
-					snackbarSeverity: "success",
-					autoHideDuration: 2000,
-				})
-			);
-		} catch (error) {
-			dispatch(
-				addSnackbar({
-					snackbarMsg: "Login failed. Please check your credentials.",
-					snackbarSeverity: "error",
-					autoHideDuration: 5000,
-				})
-			);
-		}
-	};
-
-	// Logout function
-	const logout = () => {
+	// Logout action
+	const logout = useCallback(() => {
 		dispatch(logoutUser());
-		dispatch(
-			addSnackbar({
-				snackbarMsg: "You have been logged out.",
-				snackbarSeverity: "info",
-				autoHideDuration: 2000,
-			})
-		);
-	};
+	}, [dispatch]);
+
+	// Login action example
+	const login = useCallback(
+		async (credentials) => {
+			try {
+				await dispatch(authApi.endpoints.loginUser.initiate(credentials)).unwrap();
+			} catch (error) {
+				console.error("Login failed:", error);
+			}
+		},
+		[dispatch]
+	);
 
 	return {
-		login,
+		authToken,
+		loggedIn,
+		loggingIn,
+		userId,
+		username,
+		displayName,
+		bio,
+		friends,
+		socketInfo,
+		setSocketConnected,
+		changeSocketRoom,
 		logout,
-		isLoggingIn,
-		isVerifying,
-		loggedIn: authState.loggedIn,
-		user: {
-			id: authState.userId,
-			username: authState.username,
-			displayName: authState.displayName,
-			bio: authState.bio,
-			friends: authState.friends,
-		},
+		login,
 	};
 };
 

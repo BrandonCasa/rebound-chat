@@ -19,7 +19,7 @@ const initialState = {
 };
 
 const authSlice = createSlice({
-	name: "auth",
+	name: "authNew",
 	initialState,
 	reducers: {
 		setSocketStatus: (state, action) => {
@@ -90,6 +90,49 @@ const authSlice = createSlice({
 			state.loggedIn = false;
 			state.authToken = null;
 			window.localStorage.removeItem("auth-token");
+		});
+
+		// Handle user registration
+		builder.addMatcher(authApi.endpoints.registerUser.matchFulfilled, (state, { payload }) => {
+			const { user } = payload;
+			state.authToken = user.token;
+			state.loggedIn = true;
+			state.userId = user.id;
+			state.username = user.username;
+			state.displayName = user.displayName;
+			state.bio = user.bio;
+			window.localStorage.setItem("auth-token", user.token);
+		});
+
+		// Handle profile modification
+		builder.addMatcher(authApi.endpoints.modifyUser.matchFulfilled, (state, { payload }) => {
+			const { user } = payload;
+			state.username = user.username;
+			state.displayName = user.displayName;
+			state.bio = user.bio;
+		});
+
+		// Handle friend actions
+		builder.addMatcher(authApi.endpoints.sendFriendRequest.matchFulfilled, (state, action) => {
+			// Optionally handle updates after sending a friend request
+		});
+
+		builder.addMatcher(authApi.endpoints.acceptFriendRequest.matchFulfilled, (state, { payload }) => {
+			const friend = payload.friend;
+			state.friends = [...state.friends, friend]; // Add the new friend to the user's friends list
+		});
+
+		builder.addMatcher(authApi.endpoints.declineFriendRequest.matchFulfilled, (state, action) => {
+			// Optionally handle updates after declining a friend request
+		});
+
+		builder.addMatcher(authApi.endpoints.cancelFriendRequest.matchFulfilled, (state, action) => {
+			// Optionally handle updates after canceling a friend request
+		});
+
+		builder.addMatcher(authApi.endpoints.removeFriend.matchFulfilled, (state, { payload }) => {
+			const friendId = payload.friendId;
+			state.friends = state.friends.filter((friend) => friend.id !== friendId);
 		});
 	},
 });
