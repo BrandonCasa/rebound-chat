@@ -69,7 +69,7 @@ const App = () => {
 					const requestString = process.env.NODE_ENV === "development" ? `http://localhost:6001/api/users/verify` : `/api/users/verify`;
 
 					try {
-						const response = await axios.get(requestString, {
+						const response = await axios.post(requestString, {
 							headers: {
 								"Content-Type": "application/json",
 								"Allow-Control-Allow-Origin": "*",

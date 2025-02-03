@@ -10,7 +10,7 @@ import { sendFriendRequest, validateFriendById, validateUserById, removeFriend, 
 
 const router = Router();
 
-router.get("/users/verify", async function (req, res, next) {
+router.post("/users/verify", async function (req, res, next) {
 	const token = getTokenFromHeader(req);
 	const decoded = await jwt.verify(token, process.env.SECRET, function (err, decoded) {
 		if (err) {
@@ -60,8 +60,7 @@ router.get("/users/profile", auth.required, async function (req, res, next) {
 		});
 });
 
-router.get("/users/login", function (req, res, next) {
-	req.body = req.query;
+router.post("/users/login", function (req, res, next) {
 	if (!req.body?.user?.email) {
 		return res.status(422).json({ errors: { email: "is required" } });
 	}

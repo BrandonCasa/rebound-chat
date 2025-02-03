@@ -17,13 +17,11 @@ const LoginDialog = () => {
 	const handleUserLogin = () => {
 		const requestString = !process.env.NODE_ENV || process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/login" : "/api/users/login";
 		axios
-			.get(requestString, {
-				params: {
-					user: {
-						email: email,
-						password: password,
-						//stayLoggedIn
-					},
+			.post(requestString, {
+				user: {
+					email: email,
+					password: password,
+					//stayLoggedIn
 				},
 			})
 			.then((res) => {
