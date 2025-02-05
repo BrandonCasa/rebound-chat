@@ -23,7 +23,6 @@
 		"axios": "^1.7.7",
 		"concurrently": "^9.1.2",
 		"cross-env": "^7.0.3",
-		"electron-is-dev": "^3.0.1",
 		"kill-port": "^2.0.1",
 		"nodemon": "^3.1.0",
 		"prettier": "^2.8.8",
@@ -63,7 +62,7 @@
 			"output": "dist"
 		},
 		"files": [
-			"**/*"
+			"build/**/*"
 		],
 		"win": {
 			"target": "nsis"
@@ -95,6 +94,7 @@
 	},
 	"devDependencies": {
 		"electron": "^34.0.2",
-		"electron-builder": "^25.1.8"
+		"electron-builder": "^25.1.8",
+		"electron-is-dev": "^3.0.1"
 	}
 }
