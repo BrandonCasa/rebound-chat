@@ -1,4 +1,4 @@
-const electron = require("electron");
+const { electron, dialog } = require("electron");
 const app = electron.app;
 const BrowserWindow = electron.BrowserWindow;
 
@@ -10,7 +10,12 @@ let mainWindow;
 function createWindow() {
 	mainWindow = new BrowserWindow({ width: 900, height: 680 });
 
-	mainWindow.loadURL(isDev ? "http://localhost:3000" : `file://${path.join(__dirname, "index.html")}`);
+	if (isDev) {
+		mainWindow.loadURL("http://localhost:3000");
+	} else {
+		dialog.showErrorBox("HTML File Path", `file://${path.join(__dirname, "../build/index.html")}`);
+		mainWindow.loadFile(`file://${path.join(__dirname, "../build/index.html")}`);
+	}
 
 	mainWindow.on("closed", () => (mainWindow = null));
 }
