@@ -1,6 +1,7 @@
 {
 	"name": "rebound-web",
 	"version": "0.1.1",
+	"main": "main.js",
 	"private": true,
 	"dependencies": {
 		"@emotion/react": "^11.10.6",
@@ -39,6 +40,7 @@
 		"build": "CI=false && react-scripts --openssl-legacy-provider build",
 		"test": "react-scripts test",
 		"eject": "react-scripts eject",
+		"electron": "electron .",
 		"ssh-win": "icacls ./keys/rebound_server.pem /inheritance:r & icacls ./keys/rebound_server.pem /grant:r \"%username%\":\"(R)\" & ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@100.26.232.245",
 		"ssh-mac": "chmod 400 ./keys/rebound_server.pem && ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@100.26.232.245"
 	},
@@ -59,5 +61,8 @@
 			"last 1 firefox version",
 			"last 1 safari version"
 		]
+	},
+	"devDependencies": {
+		"electron": "^34.0.2"
 	}
 }
