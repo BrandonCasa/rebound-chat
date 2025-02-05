@@ -62,7 +62,8 @@
 			"output": "dist"
 		},
 		"files": [
-			"build/**/*"
+			"build/**/*",
+			"node_modules/**/*"
 		],
 		"win": {
 			"target": "nsis"
@@ -72,7 +73,8 @@
 		},
 		"linux": {
 			"target": "AppImage"
-		}
+		},
+		"asar": false
 	},
 	"eslintConfig": {
 		"extends": [

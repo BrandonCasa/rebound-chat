@@ -16,7 +16,7 @@ function createWindow() {
 }
 
 function isDev() {
-	return !app.getAppPath().includes("app.asar");
+	return app.isPackaged;
 }
 
 app.on("ready", createWindow);
