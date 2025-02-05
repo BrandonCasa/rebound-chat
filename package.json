@@ -1,8 +1,14 @@
 {
 	"name": "rebound-web",
 	"version": "0.1.1",
-	"main": "main.js",
 	"private": true,
+	"main": "public/electron.js",
+	"description": "Rebound Nexus official web and user client.",
+	"author": {
+		"name": "Brandon Casamichana",
+		"email": "brandoncasawork8@gmail.com",
+		"url": "https://github.com/BrandonCasa"
+	},
 	"dependencies": {
 		"@emotion/react": "^11.10.6",
 		"@emotion/styled": "^11.10.6",
@@ -15,7 +21,9 @@
 		"@testing-library/react": "^13.4.0",
 		"@testing-library/user-event": "^14.4.3",
 		"axios": "^1.7.7",
+		"concurrently": "^9.1.2",
 		"cross-env": "^7.0.3",
+		"electron-is-dev": "^3.0.1",
 		"kill-port": "^2.0.1",
 		"nodemon": "^3.1.0",
 		"prettier": "^2.8.8",
@@ -33,6 +41,7 @@
 		"socket.io-client": "^4.6.2",
 		"styled-components": "^5.3.6",
 		"validator": "^13.9.0",
+		"wait-on": "^8.0.2",
 		"web-vitals": "^2.1.4"
 	},
 	"scripts": {
@@ -41,8 +50,30 @@
 		"test": "react-scripts test",
 		"eject": "react-scripts eject",
 		"electron": "electron .",
+		"electron-dev": "concurrently \"cross-env BROWSER=none npm run start\" \"npm run dev --prefix ./server\" \"wait-on http://localhost:3000 && npm run electron\"",
+		"dist": "electron-builder",
+		"postinstall": "electron-builder install-app-deps",
 		"ssh-win": "icacls ./keys/rebound_server.pem /inheritance:r & icacls ./keys/rebound_server.pem /grant:r \"%username%\":\"(R)\" & ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@100.26.232.245",
 		"ssh-mac": "chmod 400 ./keys/rebound_server.pem && ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@100.26.232.245"
+	},
+	"build": {
+		"appId": "com.brandoncasa.rebound",
+		"productName": "ReboundNexus",
+		"directories": {
+			"output": "dist"
+		},
+		"files": [
+			"**/*"
+		],
+		"win": {
+			"target": "nsis"
+		},
+		"mac": {
+			"target": "dmg"
+		},
+		"linux": {
+			"target": "AppImage"
+		}
 	},
 	"eslintConfig": {
 		"extends": [
@@ -63,6 +94,7 @@
 		]
 	},
 	"devDependencies": {
-		"electron": "^34.0.2"
+		"electron": "^34.0.2",
+		"electron-builder": "^25.1.8"
 	}
 }
