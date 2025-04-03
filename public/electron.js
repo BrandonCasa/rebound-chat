@@ -18,8 +18,7 @@ async function createWindow() {
 	if (isDev) {
 		mainWindow.loadURL("http://localhost:3000");
 	} else {
-		dialog.showErrorBox("HTML File Path", `file://${path.join(__dirname, "../build/index.html")}`);
-		mainWindow.loadFile(path.join(__dirname, "../build/index.html"));
+		mainWindow.loadURL("https://rebound.nexus");
 	}
 
 	mainWindow.on("closed", () => {

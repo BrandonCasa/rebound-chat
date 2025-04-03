@@ -2,7 +2,7 @@
 	"name": "rebound-web",
 	"version": "0.1.1",
 	"private": true,
-	"main": "public/electron.js",
+	"main": "build/electron.js",
 	"description": "Rebound Nexus official web and user client.",
 	"author": {
 		"name": "Brandon Casamichana",
@@ -61,11 +61,6 @@
 		"directories": {
 			"output": "dist"
 		},
-		"files": [
-			"build/**/*",
-			"node_modules/**/*",
-			"public/**/*"
-		],
 		"win": {
 			"target": "nsis"
 		},
