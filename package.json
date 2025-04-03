@@ -66,13 +66,22 @@
 			"target": [
 				"nsis",
 				"portable"
+			],
+			"publish": [
+				"github"
 			]
 		},
 		"mac": {
-			"target": "dmg"
+			"target": "dmg",
+			"publish": [
+				"github"
+			]
 		},
 		"linux": {
-			"target": "AppImage"
+			"target": "AppImage",
+			"publish": [
+				"github"
+			]
 		},
 		"nsis": {
 			"oneClick": false,
