@@ -98,13 +98,13 @@ jobs:
 
       - name: Setup Server and Deploy
         run: |
-          ssh ubuntu@${{ secrets.EC2_INSTANCE_IP }} << 'EOF'
+          ssh ubuntu@${{ secrets.EC2_INSTANCE_IP }} << EOF
             set -e
-            if [ ! -d "${GITHUB_EVENT_INPUTS_APPDIRECTORY}" ]; then
-              mkdir -p "${GITHUB_EVENT_INPUTS_APPDIRECTORY}"
-              cd "${GITHUB_EVENT_INPUTS_APPDIRECTORY}"
-              git clone ${GITHUB_EVENT_INPUTS_REPOSITORYURL} ./
-              cd ${GITHUB_EVENT_INPUTS_SERVERSUBDIRECTORY}
+            if [ ! -d "${{ github.event.inputs.appDirectory }}" ]; then
+              mkdir -p "${{ github.event.inputs.appDirectory }}"
+              cd "${{ github.event.inputs.appDirectory }}"
+              git clone ${{ github.event.inputs.repositoryURL }} ./
+              cd ${{ github.event.inputs.serverSubdirectory }}
               npm install
 
               echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
@@ -112,19 +112,19 @@ jobs:
               pm2 start ecosystem.config.cjs
               pm2 save
             else
-              cd "${GITHUB_EVENT_INPUTS_APPDIRECTORY}"
+              cd "${{ github.event.inputs.appDirectory }}"
               git pull origin dev || exit 1
-              cd ${GITHUB_EVENT_INPUTS_SERVERSUBDIRECTORY}
+              cd ${{ github.event.inputs.serverSubdirectory }}
 
               echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
 
               npm install
 
-              pm2 restart ${GITHUB_EVENT_INPUTS_PM2PROCESSNAME}
+              pm2 restart ${{ github.event.inputs.pm2ProcessName }}
             fi
 
-            if ! cmp -s "${GITHUB_EVENT_INPUTS_NGINXCONFIG}" "${GITHUB_EVENT_INPUTS_APPDIRECTORY}/${GITHUB_EVENT_INPUTS_SERVERSUBDIRECTORY}/nginx/default"; then
-              sudo cp "${GITHUB_EVENT_INPUTS_APPDIRECTORY}/${GITHUB_EVENT_INPUTS_SERVERSUBDIRECTORY}/nginx/default" "${GITHUB_EVENT_INPUTS_NGINXCONFIG}"
+            if ! cmp -s "${{ github.event.inputs.nginxConfig }}" "${{ github.event.inputs.appDirectory }}/${{ github.event.inputs.serverSubdirectory }}/nginx/default"; then
+              sudo cp "${{ github.event.inputs.appDirectory }}/${{ github.event.inputs.serverSubdirectory }}/nginx/default" "${{ github.event.inputs.nginxConfig }}"
               sudo systemctl restart nginx
             fi
           EOF
