@@ -52,7 +52,7 @@
 		"electron-dev": "concurrently \"cross-env BROWSER=none npm run start\" \"npm run dev --prefix ./server\" \"wait-on http://localhost:3000 && npm run electron\"",
 		"predist": "node projectscripts/clean-build.js",
 		"dist": "npm run predist && electron-builder",
-		"publish-dist": "npm run dist -- --win --mac --publish always",
+		"publish-dist": "npm run dist -- --win --mac --linux --publish always",
 		"postinstall": "electron-builder install-app-deps",
 		"ssh-win": "icacls ./keys/rebound_server.pem /inheritance:r & icacls ./keys/rebound_server.pem /grant:r \"%username%\":\"(R)\" & ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@100.26.232.245",
 		"ssh-mac": "chmod 400 ./keys/rebound_server.pem && ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@100.26.232.245"
