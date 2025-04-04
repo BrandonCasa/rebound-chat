@@ -4,29 +4,29 @@ on:
   workflow_dispatch:
     inputs:
       appDirectory:
-        description: 'Application directory path'
+        description: "Application directory path"
         required: false
-        default: '/home/ubuntu/Rebound/Full'
+        default: "/home/ubuntu/Rebound/Full"
       tmpDirectory:
-        description: 'Temporary directory path'
+        description: "Temporary directory path"
         required: false
-        default: '/home/ubuntu/tmp'
+        default: "/home/ubuntu/tmp"
       nginxConfig:
-        description: 'Nginx config file path'
+        description: "Nginx config file path"
         required: false
-        default: '/etc/nginx/sites-enabled/default'
+        default: "/etc/nginx/sites-enabled/default"
       repositoryURL:
-        description: 'The HTTPS .git URL for the repository'
+        description: "The HTTPS .git URL for the repository"
         required: false
-        default: 'https://github.com/BrandonCasa/rebound-chat.git'
+        default: "https://github.com/BrandonCasa/rebound-chat.git"
       serverSubdirectory:
-        description: 'The path of the server directory within the repository'
+        description: "The path of the server directory within the repository"
         required: false
-        default: 'server'
+        default: "server"
       pm2ProcessName:
-        description: 'The name of PM2 Process to be restarted'
+        description: "The name of PM2 Process to be restarted"
         required: false
-        default: 'rebound-express'
+        default: "rebound-express"
 
 env:
   AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
@@ -47,6 +47,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3.5.3
 
+      - name: Bump version in package.json files
+        run: |
+          echo "Bumping version in package.json"
+          # Bump version in the root package.json (patch version) without creating a git tag
+          npm version patch --no-git-tag-version
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "New version: $NEW_VERSION"
+          # Update the version in server/package.json to match the new version
+          jq --arg v "$NEW_VERSION" '.version = $v' server/package.json > server/package.tmp && mv server/package.tmp server/package.json
+          # Configure git and commit the changes
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add package.json server/package.json
+          git commit -m "Bump version to $NEW_VERSION [skip ci]" || echo "No changes to commit"
+          git push origin HEAD:${{ github.ref }}
+
       - name: Setup Node.js 18.x
         uses: actions/setup-node@v3.4.1
         with:
@@ -55,7 +71,7 @@ jobs:
       - name: Cache node modules
         uses: actions/cache@v3.2.6
         with:
-          path: '**/node_modules'
+          path: "**/node_modules"
           key: ${{ runner.os }}-modules-${{ hashFiles('**/package-lock.json') }}
 
       - name: Install NPM Packages and Build App
@@ -82,13 +98,13 @@ jobs:
 
       - name: Setup Server and Deploy
         run: |
-          ssh ubuntu@${{ secrets.EC2_INSTANCE_IP }} << EOF
+          ssh ubuntu@${{ secrets.EC2_INSTANCE_IP }} << 'EOF'
             set -e
-            if [ ! -d "${{ github.event.inputs.appDirectory }}" ]; then
-              mkdir -p "${{ github.event.inputs.appDirectory }}"
-              cd "${{ github.event.inputs.appDirectory }}"
-              git clone ${{ github.event.inputs.repositoryURL }} ./
-              cd ${{ github.event.inputs.serverSubdirectory }}
+            if [ ! -d "${GITHUB_EVENT_INPUTS_APPDIRECTORY}" ]; then
+              mkdir -p "${GITHUB_EVENT_INPUTS_APPDIRECTORY}"
+              cd "${GITHUB_EVENT_INPUTS_APPDIRECTORY}"
+              git clone ${GITHUB_EVENT_INPUTS_REPOSITORYURL} ./
+              cd ${GITHUB_EVENT_INPUTS_SERVERSUBDIRECTORY}
               npm install
 
               echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
@@ -96,19 +112,19 @@ jobs:
               pm2 start ecosystem.config.cjs
               pm2 save
             else
-              cd "${{ github.event.inputs.appDirectory }}"
+              cd "${GITHUB_EVENT_INPUTS_APPDIRECTORY}"
               git pull origin dev || exit 1
-              cd ${{ github.event.inputs.serverSubdirectory }}
+              cd ${GITHUB_EVENT_INPUTS_SERVERSUBDIRECTORY}
 
               echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
 
               npm install
 
-              pm2 restart ${{ github.event.inputs.pm2ProcessName }}
+              pm2 restart ${GITHUB_EVENT_INPUTS_PM2PROCESSNAME}
             fi
 
-            if ! cmp -s "${{ github.event.inputs.nginxConfig }}" "${{ github.event.inputs.appDirectory }}/${{ github.event.inputs.serverSubdirectory }}/nginx/default"; then
-              sudo cp "${{ github.event.inputs.appDirectory }}/${{ github.event.inputs.serverSubdirectory }}/nginx/default" "${{ github.event.inputs.nginxConfig }}"
+            if ! cmp -s "${GITHUB_EVENT_INPUTS_NGINXCONFIG}" "${GITHUB_EVENT_INPUTS_APPDIRECTORY}/${GITHUB_EVENT_INPUTS_SERVERSUBDIRECTORY}/nginx/default"; then
+              sudo cp "${GITHUB_EVENT_INPUTS_APPDIRECTORY}/${GITHUB_EVENT_INPUTS_SERVERSUBDIRECTORY}/nginx/default" "${GITHUB_EVENT_INPUTS_NGINXCONFIG}"
               sudo systemctl restart nginx
             fi
           EOF
