@@ -24,4 +24,4 @@ jobs:
         run: npm run build
 
       - name: Run Dist Command
-        run: npm run dist
+        run: npm run publish-dist
