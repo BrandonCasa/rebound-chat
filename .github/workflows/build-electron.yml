@@ -2,6 +2,11 @@ name: Build and Dist for macOS
 
 on:
   workflow_dispatch:
+    inputs:
+      bumpVersion:
+        description: "Whether to bump the version in package.json files"
+        required: false
+        default: "false"
 
 jobs:
   build:
@@ -11,6 +16,23 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
+
+      - name: Bump version in package.json files
+        if: ${{ github.event.inputs.bumpVersion == 'true' }}
+        run: |
+          echo "Bumping version in package.json"
+          # Bump version in the root package.json (patch version) without creating a git tag
+          npm version patch --no-git-tag-version
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "New version: $NEW_VERSION"
+          # Update the version in server/package.json to match the new version
+          jq --arg v "$NEW_VERSION" '.version = $v' server/package.json > server/package.tmp && mv server/package.tmp server/package.json
+          # Configure git and commit the changes
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add package.json server/package.json
+          git commit -m "Bump version to $NEW_VERSION [skip ci]" || echo "No changes to commit"
+          git push origin HEAD:${{ github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
