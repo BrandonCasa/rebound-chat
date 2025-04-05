@@ -1,0 +1,11 @@
+.git/
+.github/
+.vscode/
+keys/
+projectscripts/
+public/
+server/
+src/
+\*.log
+README.md
+.gitignore
