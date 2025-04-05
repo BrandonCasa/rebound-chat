@@ -44,6 +44,8 @@ jobs:
 
       - name: Run Build Command
         run: npm run build
+        env:
+          CI: false
 
       - name: Run Dist Command
         run: npm run publish-dist
