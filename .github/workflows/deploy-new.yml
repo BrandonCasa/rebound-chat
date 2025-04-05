@@ -27,6 +27,10 @@ on:
         description: "The name of PM2 Process to be restarted"
         required: false
         default: "rebound-express"
+      bumpVersion:
+        description: "Whether to bump the version in package.json files"
+        required: false
+        default: "false"
 
 env:
   AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
@@ -48,6 +52,7 @@ jobs:
         uses: actions/checkout@v3.5.3
 
       - name: Bump version in package.json files
+        if: ${{ github.event.inputs.bumpVersion == 'true' }}
         run: |
           echo "Bumping version in package.json"
           # Bump version in the root package.json (patch version) without creating a git tag
