@@ -1,4 +1,4 @@
-name: Build and Dist for macOS
+name: Build and Dist
 
 on:
   workflow_dispatch:
