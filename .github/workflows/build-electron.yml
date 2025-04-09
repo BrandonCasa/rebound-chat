@@ -7,6 +7,22 @@ on:
         description: "Whether to bump the version in package.json files"
         required: false
         default: "false"
+      build_windows_11:
+        description: "Build for Windows 11 (set to 'true' to enable)"
+        required: false
+        default: "false"
+      build_macos_arm:
+        description: "Build for macOS ARM (set to 'true' to enable)"
+        required: false
+        default: "false"
+      build_macos_intel:
+        description: "Build for macOS Intel (set to 'true' to enable)"
+        required: false
+        default: "false"
+      build_linux:
+        description: "Build for Linux (set to 'true' to enable)"
+        required: false
+        default: "false"
 
 jobs:
   version:
@@ -33,19 +49,40 @@ jobs:
           git commit -m "Bump version to $NEW_VERSION [skip ci]" || echo "No changes to commit"
           git push origin HEAD:${{ github.ref }}
 
+  set-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Generate matrix
+        id: set-matrix
+        run: |
+          # Initialize an empty JSON structure for the matrix
+          MATRIX="{\"include\": []}"
+          echo "Initial matrix: $MATRIX"
+
+          # Conditionally add platforms based on workflow inputs
+          if [ "${{ github.event.inputs.build_windows_11 }}" = "true" ]; then
+            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "windows-latest", "target": "win", "platform": "Windows 11"}]')
+          fi
+          if [ "${{ github.event.inputs.build_macos_intel }}" = "true" ]; then
+            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "macos-latest", "target": "mac-intel", "platform": "macOS Intel"}]')
+          fi
+          if [ "${{ github.event.inputs.build_macos_arm }}" = "true" ]; then
+            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "macos-latest", "target": "mac-arm", "platform": "macOS ARM"}]')
+          fi
+          if [ "${{ github.event.inputs.build_linux }}" = "true" ]; then
+            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "ubuntu-latest", "target": "linux", "platform": "Linux"}]')
+          fi
+          echo "Final matrix: $MATRIX"
+          # Output the matrix JSON for use by other jobs
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+
   build:
-    needs: version
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        include:
-          - os: ubuntu-latest
-            target: linux
-          - os: macos-latest
-            target: mac
-          - os: windows-latest
-            target: win
+    needs: [version, set-matrix]
     runs-on: ${{ matrix.os }}
+    strategy:
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     env:
       GH_TOKEN: ${{ secrets.GH_TOKEN }}
     steps:
