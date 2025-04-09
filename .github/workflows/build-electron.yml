@@ -75,8 +75,10 @@ jobs:
             MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "ubuntu-latest", "target": "linux", "platform": "Linux"}]')
           fi
           echo "Final matrix: $MATRIX"
-          # Output the matrix JSON for use by other jobs
-          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          # Output the matrix JSON for use by other jobs using multiline syntax
+          echo "matrix<<EOF" >> $GITHUB_OUTPUT
+          echo "$MATRIX" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
   build:
     needs: [version, set-matrix]
