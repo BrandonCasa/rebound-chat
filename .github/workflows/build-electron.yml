@@ -63,16 +63,16 @@ jobs:
 
           # Conditionally add platforms based on workflow inputs
           if [ "${{ github.event.inputs.build_windows_11 }}" = "true" ]; then
-            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "windows-latest", "target": "win", "platform": "Windows 11"}]')
+            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "windows-latest", "builderFlag": "--win", "archFlag": "", "platform": "Windows 11"}]')
           fi
           if [ "${{ github.event.inputs.build_macos_intel }}" = "true" ]; then
-            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "macos-latest", "target": "mac-intel", "platform": "macOS Intel"}]')
+            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "macos-latest", "builderFlag": "--mac", "archFlag": "--x64", "platform": "macOS Intel"}]')
           fi
           if [ "${{ github.event.inputs.build_macos_arm }}" = "true" ]; then
-            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "macos-latest", "target": "mac-arm", "platform": "macOS ARM"}]')
+            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "macos-latest", "builderFlag": "--mac", "archFlag": "--arm64", "platform": "macOS ARM"}]')
           fi
           if [ "${{ github.event.inputs.build_linux }}" = "true" ]; then
-            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "ubuntu-latest", "target": "linux", "platform": "Linux"}]')
+            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "ubuntu-latest", "builderFlag": "--linux", "archFlag": "", "platform": "Linux"}]')
           fi
           echo "Final matrix: $MATRIX"
           # Output the matrix JSON for use by other jobs using multiline syntax
@@ -100,5 +100,5 @@ jobs:
         run: npm run build
         env:
           CI: false
-      - name: Run Dist Command for ${{ matrix.target }}
-        run: npm run dist -- --${{ matrix.target }} --publish always
+      - name: Run Dist Command for ${{ matrix.platform }}
+        run: npm run dist -- ${{ matrix.builderFlag }} ${{ matrix.archFlag }} --publish always
