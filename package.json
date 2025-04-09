@@ -64,21 +64,24 @@
 				"nsis",
 				"portable"
 			],
-			"publish": [
-				"github"
-			]
+			"publish": {
+				"provider": "github",
+				"draft": false
+			}
 		},
 		"mac": {
 			"target": "dmg",
-			"publish": [
-				"github"
-			]
+			"publish": {
+				"provider": "github",
+				"draft": false
+			}
 		},
 		"linux": {
 			"target": "AppImage",
-			"publish": [
-				"github"
-			]
+			"publish": {
+				"provider": "github",
+				"draft": false
+			}
 		},
 		"nsis": {
 			"oneClick": false,
