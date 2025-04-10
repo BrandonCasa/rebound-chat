@@ -5,94 +5,95 @@ import jwt from "jsonwebtoken";
 import serverWatchers from "../socketio/watchers.js";
 
 const UserSchema = new Schema(
-  {
-    username: { type: String, lowercase: true, unique: true, required: [true, "is required"], match: [/^[a-zA-Z0-9]+$/, "is invalid"], index: true },
-    email: { type: String, lowercase: true, unique: true, required: [true, "is required"], match: [/\S+@\S+\.\S+/, "is invalid"], index: true },
-    displayName: { type: String, default: "" },
-    bio: { type: String, default: "" },
-    hash: { type: String, default: "" },
-    salt: { type: String, default: "" },
-    friends: [{ type: Schema.Types.ObjectId, ref: "Friend" }],
-    blocked: [{ type: Schema.Types.ObjectId, ref: "User" }],
-    serverInvites: [{ type: Schema.Types.ObjectId, ref: "ServerInvite" }],
-  },
-  { timestamps: true }
+	{
+		username: { type: String, lowercase: true, unique: true, required: [true, "is required"], match: [/^[a-zA-Z0-9]+$/, "is invalid"], index: true },
+		email: { type: String, lowercase: true, unique: true, required: [true, "is required"], match: [/\S+@\S+\.\S+/, "is invalid"], index: true },
+		displayName: { type: String, default: "" },
+		bio: { type: String, default: "" },
+		hash: { type: String, default: "" },
+		salt: { type: String, default: "" },
+		friends: [{ type: Schema.Types.ObjectId, ref: "Friend" }],
+		blocked: [{ type: Schema.Types.ObjectId, ref: "User" }],
+		serverInvites: [{ type: Schema.Types.ObjectId, ref: "ServerInvite" }],
+		servers: [{ type: Schema.Types.ObjectId, ref: "Server" }],
+	},
+	{ timestamps: true }
 );
 
 UserSchema.plugin(mongooseUniqueValidator, { message: "is already taken" });
 
 UserSchema.methods.validPassword = function (password) {
-  var hash = crypto.pbkdf2Sync(password, this.salt, 10000, 512, "sha512").toString("hex");
-  return this.hash === hash;
+	var hash = crypto.pbkdf2Sync(password, this.salt, 10000, 512, "sha512").toString("hex");
+	return this.hash === hash;
 };
 
 UserSchema.methods.setPassword = function (password) {
-  this.salt = crypto.randomBytes(16).toString("hex");
-  this.hash = crypto.pbkdf2Sync(password, this.salt, 10000, 512, "sha512").toString("hex");
+	this.salt = crypto.randomBytes(16).toString("hex");
+	this.hash = crypto.pbkdf2Sync(password, this.salt, 10000, 512, "sha512").toString("hex");
 };
 
 UserSchema.methods.generateJWT = function () {
-  var today = new Date();
-  var exp = new Date(today);
-  exp.setDate(today.getDate() + 60); // expire after 60 days
+	var today = new Date();
+	var exp = new Date(today);
+	exp.setDate(today.getDate() + 60); // expire after 60 days
 
-  return jwt.sign(
-    {
-      id: this._id,
-      username: this.username,
-      exp: parseInt(exp.getTime() / 1000),
-    },
-    process.env.SECRET
-  );
+	return jwt.sign(
+		{
+			id: this._id,
+			username: this.username,
+			exp: parseInt(exp.getTime() / 1000),
+		},
+		process.env.SECRET
+	);
 };
 
 UserSchema.methods.toAuthJSON = function () {
-  return {
-    username: this.username,
-    email: this.email,
-    displayName: this.displayName,
-    token: this.generateJWT(),
-    bio: this.bio,
-    id: this._id,
-    friends: this.friends,
-    blocked: this.blocked,
-    serverInvites: this.serverInvites,
-  };
+	return {
+		username: this.username,
+		email: this.email,
+		displayName: this.displayName,
+		token: this.generateJWT(),
+		bio: this.bio,
+		id: this._id,
+		friends: this.friends,
+		blocked: this.blocked,
+		serverInvites: this.serverInvites,
+	};
 };
 
 UserSchema.methods.toProfileJSON = async function () {
-  const outFriends = (await this.populate("friends")).friends;
-  //const outInvites = (await this.populate("serverInvites")).serverInvites;
+	const outFriends = (await this.populate("friends")).friends;
+	//const outInvites = (await this.populate("serverInvites")).serverInvites;
 
-  return {
-    username: this.username,
-    displayName: this.displayName,
-    bio: this.bio,
-    id: this._id,
-    friends: outFriends,
-    blocked: this.blocked,
-    serverInvites: this.serverInvites,
-  };
+	return {
+		username: this.username,
+		displayName: this.displayName,
+		bio: this.bio,
+		id: this._id,
+		friends: outFriends,
+		blocked: this.blocked,
+		serverInvites: this.serverInvites,
+	};
 };
 
 UserSchema.methods.toProfilePubJSON = function () {
-  return {
-    username: this.username,
-    displayName: this.displayName,
-    bio: this.bio,
-    id: this._id,
-  };
+	return {
+		username: this.username,
+		displayName: this.displayName,
+		bio: this.bio,
+		id: this._id,
+	};
 };
 
 UserSchema.methods.isBlocked = function (user) {
-  return this.blocked.includes(user._id);
+	return this.blocked.includes(user._id);
 };
 
 UserSchema.post("save", async function (doc) {
-  const publicInfo = await doc.toProfileJSON();
-  const privateInfo = doc.toAuthJSON();
+	const publicInfo = await doc.toProfileJSON();
+	const privateInfo = doc.toAuthJSON();
 
-  serverWatchers.onUserSaved(doc._id.toString(), publicInfo, privateInfo);
+	serverWatchers.onUserSaved(doc._id.toString(), publicInfo, privateInfo);
 });
 
 const UserModel = mongoose.model("User", UserSchema);
