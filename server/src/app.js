@@ -61,11 +61,11 @@ class ServerBackend {
 					if (socketAttempts >= maxSocketAttempts) {
 						throw socketError;
 					}
-					await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait before retrying
+					await new Promise((resolve) => setTimeout(resolve, 2000));
 				}
 			}
 
-			const PORT = process.env.PORT || 6001; // Define a default port
+			const PORT = process.env.PORT || 6001;
 			this.server
 				.listen(PORT, () => logger.info(`Server started on port ${PORT}`))
 				.on("error", (err) => {
