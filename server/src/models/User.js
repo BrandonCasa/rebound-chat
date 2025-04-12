@@ -6,8 +6,22 @@ import serverWatchers from "../socketio/watchers.js";
 
 const UserSchema = new Schema(
 	{
-		username: { type: String, lowercase: true, unique: true, required: [true, "is required"], match: [/^[a-zA-Z0-9]+$/, "is invalid"], index: true },
-		email: { type: String, lowercase: true, unique: true, required: [true, "is required"], match: [/\S+@\S+\.\S+/, "is invalid"], index: true },
+		username: {
+			type: String,
+			lowercase: true,
+			unique: true,
+			required: [true, "is required"],
+			match: [/^[a-zA-Z0-9]+$/, "is invalid"],
+			index: true,
+		},
+		email: {
+			type: String,
+			lowercase: true,
+			unique: true,
+			required: [true, "is required"],
+			match: [/\S+@\S+\.\S+/, "is invalid"],
+			index: true,
+		},
 		displayName: { type: String, default: "" },
 		bio: { type: String, default: "" },
 		hash: { type: String, default: "" },
@@ -23,145 +37,162 @@ const UserSchema = new Schema(
 
 UserSchema.plugin(mongooseUniqueValidator, { message: "is already taken" });
 
+/**
+ * Deactivate the user.
+ */
 UserSchema.methods.deactivate = function () {
 	this.active = false;
-	return;
 };
 
+/**
+ * Check if the provided password is valid.
+ * @param {String} password
+ * @returns {Boolean}
+ */
 UserSchema.methods.validPassword = function (password) {
-	var hash = crypto.pbkdf2Sync(password, this.salt, 10000, 512, "sha512").toString("hex");
+	const hash = crypto.pbkdf2Sync(password, this.salt, 10000, 512, "sha512").toString("hex");
 	return this.hash === hash;
 };
 
+/**
+ * Set the password for the user.
+ * @param {String} password
+ */
 UserSchema.methods.setPassword = function (password) {
 	this.salt = crypto.randomBytes(16).toString("hex");
 	this.hash = crypto.pbkdf2Sync(password, this.salt, 10000, 512, "sha512").toString("hex");
-	return;
 };
 
+/**
+ * Generate a JSON Web Token for the user.
+ * @returns {String} JWT
+ */
 UserSchema.methods.generateJWT = function () {
-	var today = new Date();
-	var exp = new Date(today);
-	exp.setDate(today.getDate() + 60); // expire after 60 days
+	const today = new Date();
+	const exp = new Date(today);
+	exp.setDate(today.getDate() + 60); // Expires in 60 days
 
 	return jwt.sign(
 		{
 			id: this._id,
 			username: this.username,
-			exp: parseInt(exp.getTime() / 1000),
+			exp: Math.floor(exp.getTime() / 1000),
 		},
 		process.env.SECRET
 	);
 };
 
+/**
+ * Return authentication JSON.
+ * @returns {Object}
+ */
 UserSchema.methods.toAuthJSON = function () {
 	return {
+		id: this._id,
 		username: this.username,
 		email: this.email,
 		displayName: this.displayName,
-		token: this.generateJWT(),
 		bio: this.bio,
-		id: this._id,
+		token: this.generateJWT(),
 		friends: this.friends,
 		blocked: this.blocked,
 		serverInvites: this.serverInvites,
 	};
 };
 
+/**
+ * Return private profile information.
+ * Only returns details if the requesting user is the owner.
+ * @param {Object} requestingUser - The user requesting private details.
+ * @returns {Object} Private profile data or an empty object.
+ */
 UserSchema.methods.toProfilePrivJSON = async function (requestingUser) {
-	if (requestingUser._id !== this._id) return;
+	if (requestingUser._id.toString() !== this._id.toString()) return {};
 
-	const outFriends = (await this.populate("friends")).friends;
-	const outInvites = (await this.populate("serverInvites")).serverInvites;
+	// Populate fields for private data
+	await this.populate("friends");
+	await this.populate("serverInvites");
 
 	return {
+		id: this._id,
 		username: this.username,
 		email: this.email,
 		displayName: this.displayName,
 		bio: this.bio,
-		id: this._id,
-		friends: outFriends,
+		friends: this.friends,
 		blocked: this.blocked,
-		serverInvites: outInvites,
+		serverInvites: this.serverInvites,
 		servers: this.servers,
 	};
 };
 
-UserSchema.methods.toProfilePubJSON = async function (methodQueryingUser) {
-	// Populate the user’s friends and serverInvites.
+/**
+ * Return public profile information.
+ * Returns mutual confirmed friend IDs (if any) and any pending friend invite as separate fields.
+ * Also calculates mutual servers and blocked status.
+ * @param {Object} queryingUser - The user querying the profile.
+ * @returns {Object} Public profile data.
+ */
+UserSchema.methods.toProfilePubJSON = async function (queryingUser) {
+	// Populate the current user's friend relationships.
 	await this.populate("friends");
 	const outFriends = this.friends;
 
-	// -------------------------------
-	// 1. Friend Invite Between Users
-	// -------------------------------
-	// Find the friend record (invite or established friendship) that involves the querying user.
-	let friendInvite = outFriends.find(
-		(f) => f.requester.toString() === methodQueryingUser._id.toString() || f.recipient.toString() === methodQueryingUser._id.toString()
-	);
+	// 1. Look for any friend invite between this user and the querying user.
+	const friendInvite = outFriends.find((f) => f.requester.toString() === queryingUser._id.toString() || f.recipient.toString() === queryingUser._id.toString());
 
-	// -------------------------------
-	// 2. Mutual Friends Calculation
-	// -------------------------------
-	// We only consider confirmed friendships.
+	// 2. Calculate my confirmed friends (only the confirmed ones).
+	// Determine "the other person" in each confirmed friend relationship.
 	const myConfirmedFriends = outFriends
 		.filter((f) => f.confirmed)
 		.map((f) => (f.requester.toString() === this._id.toString() ? f.recipient.toString() : f.requester.toString()));
 
-	// Ensure the querying user’s friends are populated.
-	const queryingUser = await this.model("User").findById(methodQueryingUser._id).populate("friends");
-	const queryingConfirmedFriends = queryingUser.friends
+	// 3. Ensure the querying user's friend list is populated and calculate their confirmed friends.
+	const queryingUserData = await this.model("User").findById(queryingUser._id).populate("friends");
+	const queryingConfirmedFriends = queryingUserData.friends
 		.filter((f) => f.confirmed)
-		.map((f) => (f.requester.toString() === queryingUser._id.toString() ? f.recipient.toString() : f.requester.toString()));
+		.map((f) => (f.requester.toString() === queryingUserData._id.toString() ? f.recipient.toString() : f.requester.toString()));
 
-	// Find mutual friend IDs (intersection of the two lists).
+	// 4. Mutual friend IDs are the intersection of the two confirmed friends lists.
 	const mutualFriendIds = myConfirmedFriends.filter((id) => queryingConfirmedFriends.includes(id));
 
-	// -------------------------------
-	// 3. Blocked Users
-	// -------------------------------
-	// Only include the blocked array if the querying user is in it.
-	const blockedList = this.blocked.some((b) => b.toString() === methodQueryingUser._id.toString()) ? [methodQueryingUser] : [];
+	// 5. Determine if the querying user is blocked.
+	const isBlocked = this.blocked.some((b) => b.toString() === queryingUser._id.toString());
+	const blockedList = isBlocked ? [queryingUser] : [];
 
-	// -------------------------------
-	// 4. Mutual Servers
-	// -------------------------------
-	// Here we assume that both this user and the querying user have an array
-	// of server ids stored in the 'servers' field.
-	// We take the intersection (making sure to compare as strings).
-	const mutualServers = this.servers.filter((serverId) => methodQueryingUser.servers.map((s) => s.toString()).includes(serverId.toString()));
+	// 6. Calculate mutual servers between both users.
+	const queryingUserServers = queryingUser.servers ? queryingUser.servers.map((s) => s.toString()) : [];
+	const mutualServers = this.servers.filter((serverId) => queryingUserServers.includes(serverId.toString()));
 
-	// -------------------------------
-	// 5. Final Public Profile JSON
-	// -------------------------------
+	// Return the public profile JSON with separate keys for mutualFriends and friendInvite.
 	return {
+		id: this._id,
 		username: this.username,
 		displayName: this.displayName,
 		bio: this.bio,
-		id: this._id,
-		// Returns the friend record between the two users (or undefined if none exists)
-		friendInvite: friendInvite,
-		// Mutual friends represented as an array of user IDs. You might instead choose to populate details.
-		mutualFriends: mutualFriendIds,
-		// Only returns blocked information if the querying user is blocked; otherwise, an empty array.
+		friends: [friendInvite, ...mutualFriendIds],
 		blocked: blockedList,
-		// Mutual servers shared between the profile user and the querying user.
-		servers: mutualServers,
+		mutualServers: mutualServers,
 	};
 };
 
+/**
+ * Check if a given user is blocked.
+ * @param {Object} user
+ * @returns {Boolean}
+ */
 UserSchema.methods.isBlocked = function (user) {
-	return this.blocked.includes(user._id);
+	return this.blocked.some((blockedId) => blockedId.toString() === user._id.toString());
 };
 
+// Post-save hook: Notify server watchers when a user is saved.
 UserSchema.post("save", async function (doc) {
-	const publicInfo = await doc.toProfilePubJSON();
-	const privateInfo = await doc.toProfilePrivJSON();
+	// Use the same user document as the querying/requesting user
+	const publicInfo = await doc.toProfilePubJSON(doc);
+	const privateInfo = await doc.toProfilePrivJSON(doc);
 
 	serverWatchers.onUserSaved(doc._id.toString(), publicInfo, privateInfo);
-	return;
 });
 
 const UserModel = mongoose.model("User", UserSchema);
-
 export default UserModel;
