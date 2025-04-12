@@ -1,6 +1,7 @@
 import { Router } from "express";
 import usersApi from "./users.js";
 import devApi from "./dev.js";
+import adminApi from "./admin.js";
 
 const router = Router();
 

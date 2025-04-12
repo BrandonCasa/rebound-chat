@@ -3,7 +3,7 @@ import mongoose, { Schema } from "mongoose";
 const ServerSchema = new mongoose.Schema(
 	{
 		name: { type: String, required: [true, "is required"] },
-		owner: { type: Schema.Types.ObjectId, ref: "User", required: [true, "is required"] },
+		owner: { type: Schema.Types.ObjectId, ref: "User" },
 		co_owner: { type: Schema.Types.ObjectId, ref: "User" },
 		tags: [{ type: String }],
 		settings: [{ type: Schema.Types.ObjectId, ref: "Setting" }],
