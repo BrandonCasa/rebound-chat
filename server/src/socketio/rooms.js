@@ -38,7 +38,7 @@ class ServerRooms {
 
 				const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(room);
 				socketsInRoom.forEach((socketInRoom) => {
-					socketInRoom.emit("user_list", room, usersInRoom, socketUser.toProfilePubJSON(), "leave");
+					socketInRoom.emit("user_list", room, usersInRoom, socketUser.toProfilePubJSON(null), "leave");
 				});
 			})
 		);
@@ -53,7 +53,7 @@ class ServerRooms {
 
 		const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(newRoom);
 		socketsInRoom.forEach((socketInRoom) => {
-			socketInRoom.emit("user_list", newRoom, usersInRoom, socketUser.toProfilePubJSON(), "join");
+			socketInRoom.emit("user_list", newRoom, usersInRoom, socketUser.toProfilePubJSON(null), "join");
 		});
 
 		logger.info(`User '${socket.user.username}' joined room '${newRoom}'.`);

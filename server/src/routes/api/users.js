@@ -10,66 +10,82 @@ import { sendFriendRequest, validateFriendById, validateUserById, removeFriend, 
 
 const router = Router();
 
-router.post("/users/verify", async function (req, res, next) {
+/**
+ * /users/verify
+ * Verify a user via token. Checks that the account is active and returns authentication data.
+ */
+router.post("/users/verify", async (req, res, next) => {
 	const token = getTokenFromHeader(req);
 
 	try {
 		const decoded = jwt.verify(token, process.env.SECRET);
 		const user = await UserModel.findById(decoded.id);
-
 		if (!user || user.active === false) {
 			return res.status(401).json({ error: "Invalid or deactivated account." });
 		}
-
 		return res.json({ user: user.toAuthJSON() });
 	} catch (err) {
+		logger.error(`Verification error: ${err.message}`);
 		next(err);
 		return res.sendStatus(500);
 	}
 });
 
-router.get("/users/profile", auth.required, async function (req, res, next) {
+/**
+ * /users/profile
+ * Retrieve a user's profile.
+ * If a query parameter id is provided and does not match the requesting user,
+ * returns the public profile (with mutual friend and server info).
+ * Otherwise, returns the private profile.
+ */
+router.get("/users/profile", auth.required, async (req, res, next) => {
 	const token = getTokenFromHeader(req);
-	const decoded = await jwt.verify(token, process.env.SECRET, function (err, decoded) {
-		if (err) {
-			next(err);
-			return res.sendStatus(500);
+	try {
+		const decoded = jwt.verify(token, process.env.SECRET);
+		// Use provided id if any, otherwise default to the logged-in user's id.
+		const targetUserId = req.query.id || decoded.id;
+		const user = await UserModel.findById(targetUserId);
+
+		if (!user) {
+			return res.sendStatus(404);
 		}
-		return decoded;
-	});
 
-	return await UserModel.findById(req?.body?.id || req?.query?.id)
-		.then(async function (user) {
-			if (!user) {
-				return res.sendStatus(401);
-			}
+		let profile;
+		// If the request is for the owner's profile, return the private version.
+		if (decoded.id === user._id.toString()) {
+			profile = await user.toProfilePrivJSON(user);
+		} else {
+			// For public profile, fetch the querying user's document to calculate mutual fields.
+			const queryingUser = await UserModel.findById(decoded.id);
+			profile = await user.toProfilePubJSON(queryingUser);
+		}
 
-			const userOut = await user.toProfileJSON(decoded.id);
-
-			return res.json({ user: userOut });
-		})
-		.catch((err) => {
-			next(err);
-			return res.sendStatus(500);
-		});
+		return res.json({ user: profile });
+	} catch (err) {
+		logger.error(`Profile retrieval error: ${err.message}`);
+		next(err);
+		return res.sendStatus(500);
+	}
 });
 
-router.post("/users/login", function (req, res, next) {
+/**
+ * /users/login
+ * Log in a user using passport local strategy.
+ */
+router.post("/users/login", (req, res, next) => {
 	if (!req.body?.user?.email) {
 		return res.status(422).json({ errors: { email: "is required" } });
 	}
-
 	if (!req.body?.user?.password) {
 		return res.status(422).json({ errors: { password: "is required" } });
 	}
 
-	passport.authenticate("local", { session: false }, function (err, user, info) {
+	passport.authenticate("local", { session: false }, (err, user, info) => {
 		if (err) {
+			logger.error(`Login error: ${err.message}`);
 			return next(err);
 		}
-
 		if (user) {
-			user.token = user.generateJWT();
 			return res.json({ user: user.toAuthJSON() });
 		} else {
 			return res.status(422).json(info);
@@ -77,45 +93,51 @@ router.post("/users/login", function (req, res, next) {
 	})(req, res, next);
 });
 
-router.post("/users/register", function (req, res, next) {
-	var password = req.body.user.password;
-	if (!password || password.trim().length < 8) {
-		return res.json({ errors: { password: "is invalid" } });
+/**
+ * /users/register
+ * Register a new user. Checks for a password with a minimum length.
+ */
+router.post("/users/register", async (req, res, next) => {
+	try {
+		const { username, email, displayName, bio, password } = req.body.user;
+		if (!password || password.trim().length < 8) {
+			return res.status(422).json({ errors: { password: "is invalid" } });
+		}
+		const user = new UserModel({ username, email, displayName, bio });
+		user.setPassword(password);
+
+		await user.save();
+		return res.json({ user: user.toAuthJSON() });
+	} catch (err) {
+		logger.error(`Registration error: ${err.message}`);
+		next(err);
+		return res.sendStatus(500);
 	}
-
-	var user = new UserModel();
-
-	user.username = req.body.user.username;
-	user.email = req.body.user.email;
-	user.displayName = req.body.user.displayName;
-	user.bio = req.body.user.bio;
-	user.setPassword(req.body.user.password);
-
-	user
-		.save()
-		.then(function () {
-			return res.json({ user: user.toAuthJSON() });
-		})
-		.catch((err) => {
-			next(err);
-			return res.sendStatus(500);
-		});
 });
 
-router.put("/users/modify", auth.required, function (req, res, next) {
-	const currentUserJwt = jwt.verify(getTokenFromHeader(req), process.env.SECRET, { algorithms: ["HS256"] });
-
-	if (!currentUserJwt || !currentUserJwt?.id) {
-		return res.sendStatus(404);
+/**
+ * /users/modify
+ * Update fields of the user's profile.
+ * This endpoint uses a transaction, which is important for replica sets.
+ */
+router.put("/users/modify", auth.required, async (req, res, next) => {
+	const token = getTokenFromHeader(req);
+	let decoded;
+	try {
+		decoded = jwt.verify(token, process.env.SECRET);
+	} catch (err) {
+		logger.error(`Token verification error in modify: ${err.message}`);
+		return res.sendStatus(401);
 	}
 
-	UserModel.findById(currentUserJwt.id)
-		.then(function (user) {
+	try {
+		await UserModel.transaction(async (session) => {
+			const user = await UserModel.findById(decoded.id).session(session);
 			if (!user) {
-				return res.sendStatus(404);
+				res.sendStatus(404);
+				return;
 			}
-
-			// only update fields that were actually passed...
+			// Only update fields that are sent in the request.
 			if (typeof req.body.user.username !== "undefined") {
 				user.username = req.body.user.username;
 			}
@@ -131,81 +153,158 @@ router.put("/users/modify", auth.required, function (req, res, next) {
 			if (typeof req.body.user.password !== "undefined") {
 				user.setPassword(req.body.user.password);
 			}
-
-			return user.save().then(function () {
-				return res.json({ user: user.toAuthJSON() });
-			});
-		})
-		.catch((err) => {
-			next(err);
-			return res.sendStatus(500);
+			await user.save({ session });
+			res.json({ user: user.toAuthJSON() });
 		});
+	} catch (err) {
+		logger.error(`User modification error: ${err.message}`);
+		next(err);
+		return res.sendStatus(500);
+	}
 });
 
-router.put("/users/addfriend", auth.required, async function (req, res, next) {
-	const currentUserJwt = jwt.verify(getTokenFromHeader(req), process.env.SECRET, { algorithms: ["HS256"] });
+/**
+ * Friend-related endpoints
+ */
 
-	if (currentUserJwt.id === req.body.recipientId) {
-		return res.sendStatus(403);
-	}
-
-	const sender = await validateUserById(currentUserJwt.id, res);
-	const recipient = await validateUserById(req.body.recipientId, res);
-
-	return await sendFriendRequest(sender, recipient, res);
-});
-
-router.put("/users/acceptfriend", auth.required, async function (req, res, next) {
-	const currentUserJwt = jwt.verify(getTokenFromHeader(req), process.env.SECRET, { algorithms: ["HS256"] });
-
-	if (!currentUserJwt || !currentUserJwt?.id) {
-		return res.sendStatus(404);
-	}
-
-	const friend = await validateFriendById(req.body.friendId);
-
-	if (friend.confirmed) {
-		return res.sendStatus(403);
-	}
-
-	if (friend.recipient._id.toString() !== currentUserJwt.id) {
+/**
+ * /users/addfriend
+ * Send a friend request.
+ * The sender is the authenticated user and the recipient is provided in the request body.
+ */
+router.put("/users/addfriend", auth.required, async (req, res, next) => {
+	const token = getTokenFromHeader(req);
+	let decoded;
+	try {
+		decoded = jwt.verify(token, process.env.SECRET);
+	} catch (err) {
+		logger.error(`Token verification error in addfriend: ${err.message}`);
 		return res.sendStatus(401);
 	}
 
-	friend.confirmed = true;
-	await friend.save();
-
-	return res.sendStatus(200);
-});
-
-router.put("/users/declinefriend", auth.required, async function (req, res, next) {
-	const currentUserJwt = jwt.verify(getTokenFromHeader(req), process.env.SECRET, { algorithms: ["HS256"] });
-
-	if (!currentUserJwt || !currentUserJwt?.id) {
-		return res.sendStatus(404);
-	}
-
-	return await declineFriend(req, res, currentUserJwt);
-});
-
-router.put("/users/cancelfriend", auth.required, async function (req, res, next) {
-	const currentUserJwt = jwt.verify(getTokenFromHeader(req), process.env.SECRET, { algorithms: ["HS256"] });
-
-	if (currentUserJwt.id === req.body.friendId) {
+	if (decoded.id === req.body.recipientId) {
 		return res.sendStatus(403);
 	}
 
-	return await cancelFriend(req, res, currentUserJwt);
+	try {
+		const sender = await validateUserById(decoded.id, res);
+		const recipient = await validateUserById(req.body.recipientId, res);
+		return await sendFriendRequest(sender, recipient, res);
+	} catch (err) {
+		logger.error(`Add friend error: ${err.message}`);
+		next(err);
+		return res.sendStatus(500);
+	}
 });
 
-router.put("/users/removefriend", auth.required, async function (req, res, next) {
-	const currentUserJwt = jwt.verify(getTokenFromHeader(req), process.env.SECRET, { algorithms: ["HS256"] });
+/**
+ * /users/acceptfriend
+ * Accept a pending friend request.
+ * Only the intended recipient may confirm the request.
+ */
+router.put("/users/acceptfriend", auth.required, async (req, res, next) => {
+	const token = getTokenFromHeader(req);
+	let decoded;
+	try {
+		decoded = jwt.verify(token, process.env.SECRET);
+	} catch (err) {
+		logger.error(`Token verification error in acceptfriend: ${err.message}`);
+		return res.sendStatus(401);
+	}
 
-	if (currentUserJwt.id === req.body.friendId) {
+	try {
+		const friend = await validateFriendById(req.body.friendId);
+		if (friend.confirmed) {
+			return res.sendStatus(403);
+		}
+		if (friend.recipient.toString() !== decoded.id) {
+			return res.sendStatus(401);
+		}
+		friend.confirmed = true;
+		await friend.save();
+		return res.sendStatus(200);
+	} catch (err) {
+		logger.error(`Accept friend error: ${err.message}`);
+		next(err);
+		return res.sendStatus(500);
+	}
+});
+
+/**
+ * /users/declinefriend
+ * Decline a pending friend request.
+ */
+router.put("/users/declinefriend", auth.required, async (req, res, next) => {
+	const token = getTokenFromHeader(req);
+	let decoded;
+	try {
+		decoded = jwt.verify(token, process.env.SECRET);
+	} catch (err) {
+		logger.error(`Token verification error in declinefriend: ${err.message}`);
+		return res.sendStatus(401);
+	}
+
+	try {
+		return await declineFriend(req, res, decoded);
+	} catch (err) {
+		logger.error(`Decline friend error: ${err.message}`);
+		next(err);
+		return res.sendStatus(500);
+	}
+});
+
+/**
+ * /users/cancelfriend
+ * Cancel a sent friend request.
+ */
+router.put("/users/cancelfriend", auth.required, async (req, res, next) => {
+	const token = getTokenFromHeader(req);
+	let decoded;
+	try {
+		decoded = jwt.verify(token, process.env.SECRET);
+	} catch (err) {
+		logger.error(`Token verification error in cancelfriend: ${err.message}`);
+		return res.sendStatus(401);
+	}
+
+	if (decoded.id === req.body.friendId) {
 		return res.sendStatus(403);
 	}
 
-	return await removeFriend(req, res, currentUserJwt);
+	try {
+		return await cancelFriend(req, res, decoded);
+	} catch (err) {
+		logger.error(`Cancel friend error: ${err.message}`);
+		next(err);
+		return res.sendStatus(500);
+	}
+});
+
+/**
+ * /users/removefriend
+ * Remove an existing friend.
+ */
+router.put("/users/removefriend", auth.required, async (req, res, next) => {
+	const token = getTokenFromHeader(req);
+	let decoded;
+	try {
+		decoded = jwt.verify(token, process.env.SECRET);
+	} catch (err) {
+		logger.error(`Token verification error in removefriend: ${err.message}`);
+		return res.sendStatus(401);
+	}
+
+	if (decoded.id === req.body.friendId) {
+		return res.sendStatus(403);
+	}
+
+	try {
+		return await removeFriend(req, res, decoded);
+	} catch (err) {
+		logger.error(`Remove friend error: ${err.message}`);
+		next(err);
+		return res.sendStatus(500);
+	}
 });
 
 export default router;
