@@ -104,14 +104,15 @@ UserSchema.methods.toAuthJSON = function () {
  * Return private profile information.
  * Only returns details if the requesting user is the owner.
  * @param {Object} requestingUser - The user requesting private details.
+ * @param {Object} [session=null] - Optional mongoose session for transaction.
  * @returns {Object} Private profile data or an empty object.
  */
-UserSchema.methods.toProfilePrivJSON = async function (requestingUser) {
+UserSchema.methods.toProfilePrivJSON = async function (requestingUser, session = null) {
 	if (requestingUser._id.toString() !== this._id.toString()) return {};
 
-	// Populate fields for private data
-	await this.populate("friends");
-	await this.populate("serverInvites");
+	// Populate fields for private data using the provided session if available.
+	await this.populate({ path: "friends", options: { session } });
+	await this.populate({ path: "serverInvites", options: { session } });
 
 	return {
 		id: this._id,
@@ -131,11 +132,12 @@ UserSchema.methods.toProfilePrivJSON = async function (requestingUser) {
  * Returns mutual confirmed friend IDs (if any) and any pending friend invite as separate fields.
  * Also calculates mutual servers and blocked status.
  * @param {Object} queryingUser - The user querying the profile.
+ * @param {Object} [session=null] - Optional mongoose session for transaction.
  * @returns {Object} Public profile data.
  */
-UserSchema.methods.toProfilePubJSON = async function (queryingUser) {
-	// Populate the current user's friend relationships.
-	await this.populate("friends");
+UserSchema.methods.toProfilePubJSON = async function (queryingUser, session = null) {
+	// Populate the current user's friend relationships using session if provided.
+	await this.populate({ path: "friends", options: { session } });
 	const outFriends = this.friends;
 
 	// 1. Look for any friend invite between this user and the querying user.
@@ -148,7 +150,7 @@ UserSchema.methods.toProfilePubJSON = async function (queryingUser) {
 		.map((f) => (f.requester.toString() === this._id.toString() ? f.recipient.toString() : f.requester.toString()));
 
 	// 3. Ensure the querying user's friend list is populated and calculate their confirmed friends.
-	const queryingUserData = await this.model("User").findById(queryingUser._id).populate("friends");
+	const queryingUserData = await this.model("User").findById(queryingUser._id).populate({ path: "friends", options: { session } });
 	const queryingConfirmedFriends = queryingUserData.friends
 		.filter((f) => f.confirmed)
 		.map((f) => (f.requester.toString() === queryingUserData._id.toString() ? f.recipient.toString() : f.requester.toString()));
@@ -183,6 +185,26 @@ UserSchema.methods.toProfilePubJSON = async function (queryingUser) {
  */
 UserSchema.methods.isBlocked = function (user) {
 	return this.blocked.some((blockedId) => blockedId.toString() === user._id.toString());
+};
+
+/**
+ * Static helper to run a series of operations in a transaction.
+ * Usage:
+ * await UserModel.transaction(async (session) => {
+ *    // perform operations with { session } option in queries / updates
+ * });
+ */
+UserSchema.statics.transaction = async function (callback) {
+	const session = await this.startSession();
+	let result;
+	try {
+		await session.withTransaction(async () => {
+			result = await callback(session);
+		});
+		return result;
+	} finally {
+		session.endSession();
+	}
 };
 
 // Post-save hook: Notify server watchers when a user is saved.
