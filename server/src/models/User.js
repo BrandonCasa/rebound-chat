@@ -185,7 +185,9 @@ UserSchema.methods.toProfilePubJSON = async function (queryingUser, session = nu
 		username: this.username,
 		displayName: this.displayName,
 		bio: this.bio,
-		friends: [friendInvite, ...mutualFriendIds],
+		friends: [friendInvite, ...mutualFriendIds].filter(function (friendEl) {
+			return friendEl != null;
+		}),
 		blocked: blockedList,
 		servers: mutualServers,
 	};

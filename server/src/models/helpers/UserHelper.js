@@ -11,7 +11,7 @@ import UserModel from "../User.js";
  */
 const validateUserById = async (userId) => {
 	const user = await UserModel.findById(userId);
-	if (!user) {
+	if (!user || user.active === false) {
 		const error = new Error("User not found");
 		error.status = 404;
 		throw error;
