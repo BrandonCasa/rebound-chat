@@ -131,11 +131,24 @@ UserSchema.methods.toProfilePrivJSON = async function (requestingUser, session =
  * Return public profile information.
  * Returns mutual confirmed friend IDs (if any) and any pending friend invite as separate fields.
  * Also calculates mutual servers and blocked status.
- * @param {Object} queryingUser - The user querying the profile.
+ * @param {Object|null} queryingUser - The user querying the profile (can be null).
  * @param {Object} [session=null] - Optional mongoose session for transaction.
  * @returns {Object} Public profile data.
  */
 UserSchema.methods.toProfilePubJSON = async function (queryingUser, session = null) {
+	// If no querying user is provided, return only basic public profile information.
+	if (!queryingUser) {
+		return {
+			id: this._id,
+			username: this.username,
+			displayName: this.displayName,
+			bio: this.bio,
+			friends: [],
+			blocked: [],
+			servers: [],
+		};
+	}
+
 	// Populate the current user's friend relationships using session if provided.
 	await this.populate({ path: "friends", options: { session } });
 	const outFriends = this.friends;
@@ -174,7 +187,7 @@ UserSchema.methods.toProfilePubJSON = async function (queryingUser, session = nu
 		bio: this.bio,
 		friends: [friendInvite, ...mutualFriendIds],
 		blocked: blockedList,
-		mutualServers: mutualServers,
+		servers: mutualServers,
 	};
 };
 
