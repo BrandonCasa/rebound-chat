@@ -83,6 +83,8 @@ jobs:
         run: |
           npm ci
           npm run build
+        env:
+          CI: false
 
       - name: Setup SSH
         run: |
