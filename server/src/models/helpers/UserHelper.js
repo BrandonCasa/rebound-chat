@@ -1,122 +1,202 @@
 import FriendModel from "../Friend.js";
 import UserModel from "../User.js";
 
-const validateUserById = async (userId, res) => {
+/**
+ * Validate and retrieve a user by ID.
+ * Throws an error with status 404 if not found.
+ *
+ * @param {String} userId
+ * @returns {Object} User document
+ * @throws {Error} If user not found
+ */
+const validateUserById = async (userId) => {
 	const user = await UserModel.findById(userId);
 	if (!user) {
-		return res.sendStatus(404);
+		const error = new Error("User not found");
+		error.status = 404;
+		throw error;
 	}
 	return user;
 };
 
-const validateFriendById = async (friendId, res) => {
+/**
+ * Validate and retrieve a friend request by ID.
+ * Throws an error with status 404 if not found.
+ *
+ * @param {String} friendId
+ * @returns {Object} Friend document
+ * @throws {Error} If friend document not found
+ */
+const validateFriendById = async (friendId) => {
 	const friend = await FriendModel.findById(friendId);
 	if (!friend) {
-		return res.sendStatus(404);
+		const error = new Error("Friend request not found");
+		error.status = 404;
+		throw error;
 	}
 	return friend;
 };
 
-const sendFriendRequest = async (sender, recipient, res) => {
+/**
+ * Send a friend request from sender to recipient.
+ * Throws an error if:
+ *  - The recipient has blocked the sender.
+ *  - A request has already been sent or received.
+ *
+ * On success, returns an object with the new friend request's ID.
+ *
+ * @param {Object} sender - Sender user document.
+ * @param {Object} recipient - Recipient user document.
+ * @returns {Object} Object containing friendId.
+ * @throws {Error} If operation is not allowed.
+ */
+const sendFriendRequest = async (sender, recipient) => {
 	if (recipient.isBlocked(sender)) {
-		return res.sendStatus(403);
+		const error = new Error("Action forbidden: You are blocked by this user.");
+		error.status = 403;
+		throw error;
 	}
 
-	let alreadySent = await FriendModel.exists({ requester: sender, recipient: recipient });
-	if (alreadySent !== null) {
-		return res.sendStatus(403);
+	const alreadySent = await FriendModel.exists({
+		requester: sender._id,
+		recipient: recipient._id,
+	});
+	if (alreadySent) {
+		const error = new Error("Friend request already sent.");
+		error.status = 403;
+		throw error;
 	}
 
-	let alreadyReceived = await FriendModel.exists({ requester: recipient, recipient: sender });
-	if (alreadyReceived !== null) {
-		// realistically should just accept it at this point
-		return res.sendStatus(403);
+	const alreadyReceived = await FriendModel.exists({
+		requester: recipient._id,
+		recipient: sender._id,
+	});
+	if (alreadyReceived) {
+		const error = new Error("Incoming friend request already exists.");
+		error.status = 403;
+		throw error;
 	}
 
-	let newFriend = new FriendModel();
-	newFriend.requester = sender;
-	newFriend.recipient = recipient;
+	const newFriend = new FriendModel({
+		requester: sender._id,
+		recipient: recipient._id,
+	});
 
 	await newFriend.save();
 
-	sender.friends.push(newFriend);
+	// Push friend reference onto both user's friend arrays.
+	sender.friends.push(newFriend._id);
 	await sender.save();
-	recipient.friends.push(newFriend);
+	recipient.friends.push(newFriend._id);
 	await recipient.save();
 
-	return res.json({ friendId: newFriend._id.toString() });
+	return { friendId: newFriend._id.toString() };
 };
 
-const declineFriend = async (req, res, currentUserJwt) => {
-	const friend = await validateFriendById(req.body.friendId);
+/**
+ * Decline a friend request.
+ * Only the recipient can decline a pending friend request.
+ *
+ * @param {String} friendId - The friend request ID.
+ * @param {String} currentUserId - The ID of the requesting user.
+ * @returns {Boolean} Returns true on success.
+ * @throws {Error} If the request has already been confirmed or if unauthorized.
+ */
+const declineFriend = async (friendId, currentUserId) => {
+	const friend = await validateFriendById(friendId);
 
 	if (friend.confirmed) {
-		return res.sendStatus(403);
+		const error = new Error("Cannot decline an already confirmed friend request.");
+		error.status = 403;
+		throw error;
 	}
 
-	if (friend.recipient._id.toString() !== currentUserJwt.id) {
-		return res.sendStatus(401);
+	if (friend.recipient.toString() !== currentUserId) {
+		const error = new Error("Unauthorized: You are not permitted to decline this request.");
+		error.status = 401;
+		throw error;
 	}
 
-	const sender = await validateUserById(friend.requester._id, res);
-	const recipient = await validateUserById(friend.recipient._id, res);
-
-	sender.friends.pull(req.body.friendId);
-	await sender.save();
-	recipient.friends.pull(req.body.friendId);
-	await recipient.save();
-
-	await friend.remove();
-
-	return res.sendStatus(200);
-};
-
-const cancelFriend = async (req, res, currentUserJwt) => {
-	const friend = await validateFriendById(req.body.friendId);
-
-	if (friend.requester._id.toString() !== currentUserJwt.id) {
-		return res.sendStatus(401);
-	}
-
-	if (friend.confirmed) {
-		return res.sendStatus(403);
-	}
-
-	const sender = await validateUserById(friend.requester._id, res);
-	const recipient = await validateUserById(friend.recipient._id, res);
-
+	// Remove friend document reference from both sender and recipient.
+	const sender = await validateUserById(friend.requester);
+	const recipient = await validateUserById(friend.recipient);
 	sender.friends.pull(friend._id);
 	await sender.save();
 	recipient.friends.pull(friend._id);
 	await recipient.save();
 
 	await friend.remove();
-
-	return res.sendStatus(200);
+	return true;
 };
 
-const removeFriend = async (req, res, currentUserJwt) => {
-	const friend = await validateFriendById(req.body.friendId);
+/**
+ * Cancel a sent friend request.
+ * Only the sender can cancel a pending friend request.
+ *
+ * @param {String} friendId - The friend request ID.
+ * @param {String} currentUserId - The ID of the sender.
+ * @returns {Boolean} Returns true on success.
+ * @throws {Error} If the request has been confirmed or if unauthorized.
+ */
+const cancelFriend = async (friendId, currentUserId) => {
+	const friend = await validateFriendById(friendId);
 
-	if (friend.recipient._id.toString() !== currentUserJwt.id && friend.requester._id.toString() !== currentUserJwt.id) {
-		return res.sendStatus(401);
+	if (friend.requester.toString() !== currentUserId) {
+		const error = new Error("Unauthorized: You are not permitted to cancel this request.");
+		error.status = 401;
+		throw error;
+	}
+
+	if (friend.confirmed) {
+		const error = new Error("Cannot cancel an already confirmed friend request.");
+		error.status = 403;
+		throw error;
+	}
+
+	const sender = await validateUserById(friend.requester);
+	const recipient = await validateUserById(friend.recipient);
+	sender.friends.pull(friend._id);
+	await sender.save();
+	recipient.friends.pull(friend._id);
+	await recipient.save();
+
+	await friend.remove();
+	return true;
+};
+
+/**
+ * Remove a confirmed friend from both users' friend lists.
+ * Either party may perform this action.
+ *
+ * @param {String} friendId - The friend request ID.
+ * @param {String} currentUserId - The ID of the requesting user.
+ * @returns {Boolean} Returns true on success.
+ * @throws {Error} If the request is not confirmed or if unauthorized.
+ */
+const removeFriend = async (friendId, currentUserId) => {
+	const friend = await validateFriendById(friendId);
+
+	if (friend.recipient.toString() !== currentUserId && friend.requester.toString() !== currentUserId) {
+		const error = new Error("Unauthorized: You are not permitted to remove this friend.");
+		error.status = 401;
+		throw error;
 	}
 
 	if (!friend.confirmed) {
-		return res.sendStatus(403);
+		const error = new Error("Cannot remove an unconfirmed friend request.");
+		error.status = 403;
+		throw error;
 	}
 
-	const sender = await validateUserById(friend.requester._id, res);
-	const recipient = await validateUserById(friend.recipient._id, res);
-
+	const sender = await validateUserById(friend.requester);
+	const recipient = await validateUserById(friend.recipient);
 	sender.friends.pull(friend._id);
 	await sender.save();
 	recipient.friends.pull(friend._id);
 	await recipient.save();
 
 	await friend.remove();
-
-	return res.sendStatus(200);
+	return true;
 };
 
 export { validateUserById, validateFriendById, sendFriendRequest, cancelFriend, declineFriend, removeFriend };
