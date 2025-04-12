@@ -10,7 +10,7 @@ import "dotenv/config";
 const router = Router();
 
 router.post("/admin/users/delete", async function (req, res, next) {
-	const userId = req.body.user;
+	const userId = req.body.userId;
 
 	// Start a session and transaction for an all-or-nothing update.
 	const session = await mongoose.startSession();
