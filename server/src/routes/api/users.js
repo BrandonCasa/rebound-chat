@@ -182,14 +182,16 @@ router.put("/users/addfriend", auth.required, async (req, res, next) => {
 		return res.sendStatus(401);
 	}
 
+	// Prevent a user from sending a friend request to themselves.
 	if (decoded.id === req.body.recipientId) {
 		return res.sendStatus(403);
 	}
 
 	try {
-		const sender = await validateUserById(decoded.id, res);
-		const recipient = await validateUserById(req.body.recipientId, res);
-		return await sendFriendRequest(sender, recipient, res);
+		const sender = await validateUserById(decoded.id);
+		const recipient = await validateUserById(req.body.recipientId);
+		const result = await sendFriendRequest(sender, recipient);
+		return res.json(result);
 	} catch (err) {
 		logger.error(`Add friend error: ${err.message}`);
 		next(err);
@@ -245,7 +247,9 @@ router.put("/users/declinefriend", auth.required, async (req, res, next) => {
 	}
 
 	try {
-		return await declineFriend(req, res, decoded);
+		// Call declineFriend with the friend request ID and current user ID.
+		await declineFriend(req.body.friendId, decoded.id);
+		return res.sendStatus(200);
 	} catch (err) {
 		logger.error(`Decline friend error: ${err.message}`);
 		next(err);
@@ -267,12 +271,9 @@ router.put("/users/cancelfriend", auth.required, async (req, res, next) => {
 		return res.sendStatus(401);
 	}
 
-	if (decoded.id === req.body.friendId) {
-		return res.sendStatus(403);
-	}
-
 	try {
-		return await cancelFriend(req, res, decoded);
+		await cancelFriend(req.body.friendId, decoded.id);
+		return res.sendStatus(200);
 	} catch (err) {
 		logger.error(`Cancel friend error: ${err.message}`);
 		next(err);
@@ -294,12 +295,9 @@ router.put("/users/removefriend", auth.required, async (req, res, next) => {
 		return res.sendStatus(401);
 	}
 
-	if (decoded.id === req.body.friendId) {
-		return res.sendStatus(403);
-	}
-
 	try {
-		return await removeFriend(req, res, decoded);
+		await removeFriend(req.body.friendId, decoded.id);
+		return res.sendStatus(200);
 	} catch (err) {
 		logger.error(`Remove friend error: ${err.message}`);
 		next(err);
