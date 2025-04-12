@@ -106,6 +106,7 @@ router.post("/admin/users/delete", async function (req, res, next) {
 				salt: "",
 				friends: [],
 				serverInvites: [],
+				active: false,
 			}
 		).session(session);
 

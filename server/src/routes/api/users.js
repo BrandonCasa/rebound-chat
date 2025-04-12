@@ -12,26 +12,20 @@ const router = Router();
 
 router.post("/users/verify", async function (req, res, next) {
 	const token = getTokenFromHeader(req);
-	const decoded = await jwt.verify(token, process.env.SECRET, function (err, decoded) {
-		if (err) {
-			next(err);
-			return res.sendStatus(500);
+
+	try {
+		const decoded = jwt.verify(token, process.env.SECRET);
+		const user = await UserModel.findById(decoded.id);
+
+		if (!user || user.active === false) {
+			return res.status(401).json({ error: "Invalid or deactivated account." });
 		}
-		return decoded;
-	});
 
-	UserModel.findById(decoded.id)
-		.then(function (user) {
-			if (!user) {
-				return res.sendStatus(401);
-			}
-
-			return res.json({ user: user.toAuthJSON() });
-		})
-		.catch((err) => {
-			next(err);
-			return res.sendStatus(500);
-		});
+		return res.json({ user: user.toAuthJSON() });
+	} catch (err) {
+		next(err);
+		return res.sendStatus(500);
+	}
 });
 
 router.get("/users/profile", auth.required, async function (req, res, next) {
