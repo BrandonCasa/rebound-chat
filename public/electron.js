@@ -82,6 +82,8 @@ app.whenReady().then(() => {
 			relativePath = details.url.replace("file:///", "");
 		} else if (details.url.startsWith("file://")) {
 			relativePath = details.url.replace("file://", "");
+		} else if (details.url.includes("index.html")) {
+			callback({ redirectURL: details.url });
 		} else {
 			callback({ redirectURL: details.url });
 		}
