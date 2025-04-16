@@ -1,8 +1,11 @@
 import { io } from "socket.io-client";
 
+const isElectron = typeof window !== "undefined" && window.process && window.process.versions != null && Boolean(window.process.versions.electron);
+
 class SocketIoHelper {
 	constructor() {
 		this.socketURL = process.env.NODE_ENV === "production" ? undefined : "http://localhost:6002";
+		this.socketURL = this.socketURL = isElectron ? "https://rebound.nexus/" : this.socketURL;
 		this.socketClient = null;
 	}
 
