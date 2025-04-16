@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, dialog } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const log = require("electron-log");
 const path = require("path");
@@ -6,6 +6,7 @@ const path = require("path");
 let mainWindow;
 
 async function createWindow() {
+	// Dynamically import the ES module "electron-is-dev"
 	const { default: isDev } = await import("electron-is-dev");
 
 	mainWindow = new BrowserWindow({
@@ -21,7 +22,7 @@ async function createWindow() {
 		mainWindow.loadURL("http://localhost:3000");
 	} else {
 		mainWindow.loadURL("index.html");
-		autoUpdater.checkForUpdatesAndNotify();
+		autoUpdater.checkForUpdates();
 	}
 
 	mainWindow.on("closed", () => {
@@ -30,7 +31,7 @@ async function createWindow() {
 }
 
 autoUpdater.logger = log;
-autoUpdater.logger.transports.file.level = "info";
+log.transports.file.level = "info";
 
 autoUpdater.on("checking-for-update", () => {
 	log.info("Checking for update...");
@@ -45,19 +46,30 @@ autoUpdater.on("update-not-available", (info) => {
 });
 
 autoUpdater.on("error", (err) => {
-	log.error("Error in auto-updater. " + err);
+	log.error("Error in auto-updater: " + err);
 });
 
 autoUpdater.on("download-progress", (progressObj) => {
-	let log_message = "Download speed: " + progressObj.bytesPerSecond;
-	log_message = log_message + " - Downloaded " + progressObj.percent + "%";
-	log_message = log_message + " (" + progressObj.transferred + "/" + progressObj.total + ")";
-	log.info(log_message);
+	let logMessage = "Download speed: " + progressObj.bytesPerSecond;
+	logMessage += " - Downloaded " + progressObj.percent + "%";
+	logMessage += " (" + progressObj.transferred + "/" + progressObj.total + ")";
+	log.info(logMessage);
 });
 
 autoUpdater.on("update-downloaded", (info) => {
-	log.info("Update downloaded", info);
-	autoUpdater.quitAndInstall();
+	const dialogOpts = {
+		type: "info",
+		buttons: ["Restart", "Later"],
+		title: "Update Available",
+		message: "A new version has been downloaded.",
+		detail: "Do you want to restart the application and install the updates now?",
+	};
+
+	dialog.showMessageBox(dialogOpts).then((returnValue) => {
+		if (returnValue.response === 0) {
+			autoUpdater.quitAndInstall();
+		}
+	});
 });
 
 app.whenReady().then(createWindow);

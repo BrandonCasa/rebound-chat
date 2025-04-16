@@ -31,7 +31,7 @@ try {
 		name: "rebound-desktop",
 		version: oldPackageJson.version,
 		private: false,
-		main: "electron.js",
+		main: "./electron.js",
 		description: "Rebound Nexus official desktop client.",
 		author: oldPackageJson.author,
 		dependencies: oldPackageJson.dependencies,
