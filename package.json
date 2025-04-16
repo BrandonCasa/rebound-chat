@@ -42,7 +42,7 @@
 		"eject": "react-scripts eject",
 		"electron": "electron .",
 		"electron-dev": "concurrently \"cross-env BROWSER=none npm run start\" \"npm run dev --prefix ./server\" \"wait-on http://localhost:3000 && npm run electron\"",
-		"predist": "npm run build && node projectscripts/clean-build.js",
+		"predist": "node projectscripts/clean-build.js",
 		"dist": "electron-builder",
 		"publish-dist": "npm run dist -- --win --mac --linux --publish always",
 		"postinstall": "electron-builder install-app-deps",
