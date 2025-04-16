@@ -20,10 +20,8 @@ try {
 		});
 	}
 
-	// Copy files from buildDir to appDir.
-	files.forEach((file) => {
-		fs.cpSync(path.join(buildDir, file), path.join(appDir, file), { recursive: true });
-	});
+	// Copy buildDir into appDir.
+	fs.cpSync(buildDir, path.join(appDir, "build"), { recursive: true });
 
 	// Create the new package.json for the desktop client.
 	const oldPackageJson = packageJson;
@@ -31,7 +29,7 @@ try {
 		name: "rebound-desktop",
 		version: oldPackageJson.version,
 		private: false,
-		main: "./electron.js",
+		main: "build/electron.js",
 		description: "Rebound Nexus official desktop client.",
 		author: oldPackageJson.author,
 		dependencies: oldPackageJson.dependencies,

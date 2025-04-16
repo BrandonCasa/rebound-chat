@@ -55,7 +55,7 @@
 		"asar": false,
 		"directories": {
 			"output": "dist",
-			"app": "./app/"
+			"app": "app"
 		},
 		"win": {
 			"target": [
