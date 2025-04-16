@@ -10,6 +10,8 @@ import { setLoggedIn } from "slices/authSlice";
 import socketIoHelper from "helpers/socket";
 import { addSnackbar } from "slices/snackbarSlice";
 
+const isElectron = typeof window !== "undefined" && window.process && window.process.versions != null && Boolean(window.process.versions.electron);
+
 function FullProfile(props) {
 	let theme = useTheme();
 	const authState = useSelector((state) => state.auth);
@@ -95,7 +97,9 @@ function FullProfile(props) {
 
 	const sendFriendRequest = () => {
 		if (userId !== authState.userId) {
-			const requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/addfriend" : "/api/users/addfriend";
+			let requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/addfriend" : "/api/users/addfriend";
+			requestString = process.env.NODE_ENV !== "development" && isElectron ? `https://rebound.nexus/api/users/addfriend` : requestString;
+
 			axios
 				.put(
 					requestString,
@@ -121,7 +125,9 @@ function FullProfile(props) {
 
 	const acceptFriendRequest = () => {
 		if (isPending && !isFriends && userId !== authState.userId) {
-			const requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/acceptfriend" : "/api/users/acceptfriend";
+			let requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/acceptfriend" : "/api/users/acceptfriend";
+			requestString = process.env.NODE_ENV !== "development" && isElectron ? `https://rebound.nexus/api/users/acceptfriend` : requestString;
+
 			axios
 				.put(
 					requestString,
@@ -149,7 +155,9 @@ function FullProfile(props) {
 
 	const declineFriendRequest = () => {
 		if (isPending && !isFriends && userId !== authState.userId) {
-			const requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/declinefriend" : "/api/users/declinefriend";
+			let requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/declinefriend" : "/api/users/declinefriend";
+			requestString = process.env.NODE_ENV !== "development" && isElectron ? `https://rebound.nexus/api/users/declinefriend` : requestString;
+
 			axios
 				.put(
 					requestString,
@@ -177,7 +185,9 @@ function FullProfile(props) {
 
 	const cancelFriendRequest = () => {
 		if (isPending && !isFriends && userId !== authState.userId) {
-			const requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/cancelfriend" : "/api/users/cancelfriend";
+			let requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/cancelfriend" : "/api/users/cancelfriend";
+			requestString = process.env.NODE_ENV !== "development" && isElectron ? `https://rebound.nexus/api/users/cancelfriend` : requestString;
+
 			axios
 				.put(
 					requestString,
@@ -205,7 +215,9 @@ function FullProfile(props) {
 
 	const removeFriend = () => {
 		if (!isPending && isFriends && userId !== authState.userId) {
-			const requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/removefriend" : "/api/users/removefriend";
+			let requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/removefriend" : "/api/users/removefriend";
+			requestString = process.env.NODE_ENV !== "development" && isElectron ? `https://rebound.nexus/api/users/removefriend` : requestString;
+
 			axios
 				.put(
 					requestString,

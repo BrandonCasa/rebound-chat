@@ -15,8 +15,12 @@ import ProfileCard from "components/User/ProfileCard";
 import axios from "axios";
 import { addSnackbar } from "slices/snackbarSlice";
 
+const isElectron = typeof window !== "undefined" && window.process && window.process.versions != null && Boolean(window.process.versions.electron);
+
 async function getUserInfo(userId, authToken) {
-	const requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/profile" : "/api/users/profile";
+	let requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/profile" : "/api/users/profile";
+	requestString = process.env.NODE_ENV !== "development" && isElectron ? `https://rebound.nexus/api/users/profile` : requestString;
+
 	return await axios
 		.get(requestString, {
 			headers: {

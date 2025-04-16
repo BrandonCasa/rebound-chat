@@ -52,7 +52,6 @@
 	"build": {
 		"appId": "com.brandoncasa.rebound",
 		"productName": "ReboundNexus",
-		"asar": false,
 		"directories": {
 			"output": "dist",
 			"app": "app"

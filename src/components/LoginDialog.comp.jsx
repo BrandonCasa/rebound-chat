@@ -6,6 +6,8 @@ import { setAuthState, setLoggedIn, setLoggingIn } from "../slices/authSlice";
 import axios from "axios";
 import { addSnackbar } from "slices/snackbarSlice";
 
+const isElectron = typeof window !== "undefined" && window.process && window.process.versions != null && Boolean(window.process.versions.electron);
+
 const LoginDialog = () => {
 	const loginDialogState = useSelector((state) => state.dialogs.loginDialogOpen);
 	const dispatch = useDispatch();
@@ -15,7 +17,9 @@ const LoginDialog = () => {
 	const [stayLoggedIn, setStayLoggedIn] = useState(true);
 
 	const handleUserLogin = () => {
-		const requestString = !process.env.NODE_ENV || process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/login" : "/api/users/login";
+		let requestString = !process.env.NODE_ENV || process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/login" : "/api/users/login";
+		requestString = process.env.NODE_ENV !== "development" && isElectron ? `https://rebound.nexus/api/users/login` : requestString;
+
 		axios
 			.post(requestString, {
 				user: {

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, session } = require("electron");
+const { app, BrowserWindow, dialog } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const log = require("electron-log");
 const path = require("path");
@@ -74,28 +74,7 @@ autoUpdater.on("update-downloaded", (info) => {
 	});
 });
 
-app.whenReady().then(() => {
-	// Intercept requests matching file:///static/*
-	session.defaultSession.webRequest.onBeforeRequest({ urls: ["file:///*", "file://*"] }, (details, callback) => {
-		let relativePath;
-		if (details.url.startsWith("file:///")) {
-			relativePath = details.url.replace("file:///", "");
-		} else if (details.url.startsWith("file://")) {
-			relativePath = details.url.replace("file://", "");
-		} else if (details.url.includes("index.html")) {
-			callback({ redirectURL: details.url });
-		} else {
-			callback({ redirectURL: details.url });
-		}
-
-		const newPath = path.join(__dirname, relativePath);
-		const redirectURL = "file://" + newPath;
-
-		callback({ redirectURL });
-	});
-
-	createWindow();
-});
+app.whenReady().then(createWindow);
 
 app.on("window-all-closed", () => {
 	if (process.platform !== "darwin") app.quit();

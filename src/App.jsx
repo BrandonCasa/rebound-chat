@@ -1,5 +1,5 @@
 import React, { useEffect, Suspense, lazy } from "react";
-import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import { BrowserRouter, HashRouter, Route, Routes } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { Alert, CssBaseline, Snackbar, ThemeProvider } from "@mui/material";
 import { createTheme } from "@mui/material/styles";
@@ -28,6 +28,13 @@ const PageNotFoundContainer = styled("div")({
 	maxWidth: "100%",
 	textAlign: "center",
 });
+
+const isElectron = typeof window !== "undefined" && window.process && window.process.versions != null && Boolean(window.process.versions.electron);
+
+const AppRouter = ({ children }) => {
+	const Router = isElectron ? HashRouter : BrowserRouter;
+	return <Router>{children}</Router>;
+};
 
 const App = () => {
 	const authState = useSelector((state) => state.auth);
@@ -66,7 +73,8 @@ const App = () => {
 			const verifyUser = async () => {
 				if (authState.authToken && !authState.loggedIn) {
 					dispatch(setLoggingIn({ loggingIn: true }));
-					const requestString = process.env.NODE_ENV === "development" ? `http://localhost:6001/api/users/verify` : `/api/users/verify`;
+					let requestString = process.env.NODE_ENV === "development" ? `http://localhost:6001/api/users/verify` : `/api/users/verify`;
+					requestString = process.env.NODE_ENV !== "development" && isElectron ? `https://rebound.nexus/api/users/verify` : requestString;
 
 					try {
 						const response = await axios.post(requestString, {
@@ -111,7 +119,7 @@ const App = () => {
 		<ThemeProvider theme={darkTheme}>
 			<CssBaseline />
 			<SnackbarMapper drawerWidth={customAppBarProps.drawerWidth} drawerOpen={customAppBarProps.drawerOpen} />
-			<Router>
+			<AppRouter>
 				<RegisterDialog />
 				<LoginDialog />
 				<CustomAppBar {...customAppBarProps}>
@@ -137,7 +145,7 @@ const App = () => {
 						</Suspense>
 					) : null}
 				</CustomAppBar>
-			</Router>
+			</AppRouter>
 		</ThemeProvider>
 	);
 };
