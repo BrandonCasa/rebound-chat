@@ -20,7 +20,7 @@ async function createWindow() {
 	if (isDev) {
 		mainWindow.loadURL("http://localhost:3000");
 	} else {
-		mainWindow.loadURL("https://rebound.nexus");
+		mainWindow.loadURL("index.html");
 		autoUpdater.checkForUpdatesAndNotify();
 	}
 
