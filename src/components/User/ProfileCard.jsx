@@ -12,16 +12,6 @@ const isElectron = typeof window !== "undefined" && window.process?.versions?.el
 // Base API endpoint depending on environment
 const API_BASE = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users" : isElectron ? "https://rebound.nexus/api/users" : "/api/users";
 
-const LoadingWrapper = styled(Paper)(({ theme }) => ({
-	padding: 0,
-	display: "flex",
-	alignItems: "center",
-	justifyContent: "center",
-	width: "100%",
-	height: "100%",
-	boxSizing: "border-box",
-}));
-
 function FullProfile({ user: initialUser, self, width = "auto", passStyle }) {
 	const theme = useTheme();
 	const dispatch = useDispatch();
@@ -68,9 +58,18 @@ function FullProfile({ user: initialUser, self, width = "auto", passStyle }) {
 	// Loading state
 	if (!profile?.id) {
 		return (
-			<LoadingWrapper style={{ width, height: passStyle?.maxHeight || "auto" }} elevation={3}>
-				<CircularProgress size={48} />
-			</LoadingWrapper>
+			<Paper
+				sx={{
+					width,
+					height: passStyle?.maxHeight,
+					maxHeight: "100%",
+					display: "flex",
+					flexDirection: "column",
+					overflow: "hidden",
+					boxSizing: "border-box",
+				}}
+				elevation={3}
+			></Paper>
 		);
 	}
 

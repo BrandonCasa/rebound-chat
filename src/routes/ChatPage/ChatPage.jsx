@@ -183,7 +183,7 @@ function ChatPage() {
 			<Popover
 				anchorOrigin={{
 					vertical: "top",
-					horizontal: "left",
+					horizontal: "right",
 				}}
 				transformOrigin={{
 					vertical: "bottom",
