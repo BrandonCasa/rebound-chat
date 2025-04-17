@@ -1,9 +1,10 @@
-import React from "react";
-import { Box, Paper, Stack, Typography, useTheme, Button, Divider, Chip, TextField, Container } from "@mui/material";
+import React, { useCallback, useMemo } from "react";
+import { Box, Paper, Stack, Typography, useTheme, Button, Divider, Chip, TextField } from "@mui/material";
 import { styled, darken, lighten, getContrastRatio } from "@mui/material/styles";
 import { useDispatch, useSelector } from "react-redux";
 import { updateThemeOverride, resetThemeOverrides } from "slices/settingsSlice";
 import { scrollbarStyles } from "routes/LandingPage/utils/scrollbarStyles";
+import { throttle } from "lodash";
 
 const ItemPaper = styled(Paper)(({ theme }) => ({
 	...theme.typography.body2,
@@ -35,52 +36,48 @@ function SettingsPage() {
 		dark: darken(color, 0.2),
 	});
 
-	const handleColorChange = (path, value) => {
-		// Special case: background.default => auto-calc background.paper
-		if (path[0] === "palette" && path[1] === "background" && path[2] === "default") {
-			const darker = darken(value, 0.3);
-			const paperColor = getContrastRatio(value, darker) < 1.2 ? lighten(value, 0.3) : darker;
-			dispatch(
-				updateThemeOverride({
-					palette: {
-						background: {
-							default: value,
-							paper: paperColor,
-						},
-					},
-				})
-			);
-			return;
-		}
-
-		// Main color changes: derive light/dark
-		if (path[0] === "palette" && path[2] === "main") {
-			const [_, key] = path; // e.g. ['palette','primary','main'] => key='primary'
-			const main = value;
-			const { light, dark } = deriveShades(main);
-			dispatch(
-				updateThemeOverride({
-					palette: {
-						[key]: { main, light, dark },
-					},
-				})
-			);
-			return;
-		}
-
-		// Fallback: generic override
-		const payload = {};
-		let obj = payload;
-		path.forEach((key, idx) => {
-			if (idx === path.length - 1) {
-				obj[key] = value;
-			} else {
-				obj[key] = {};
-				obj = obj[key];
+	// Stable dispatch function for overrides
+	const handleColorChange = useCallback(
+		(path, value) => {
+			if (path[0] === "palette" && path[1] === "background" && path[2] === "default") {
+				const darker = darken(value, 0.3);
+				const paperColor = getContrastRatio(value, darker) < 1.2 ? lighten(value, 0.3) : darker;
+				dispatch(
+					updateThemeOverride({
+						palette: { background: { default: value, paper: paperColor } },
+					})
+				);
+				return;
 			}
-		});
-		dispatch(updateThemeOverride(payload));
-	};
+			if (path[0] === "palette" && path[2] === "main") {
+				const [, key] = path;
+				const main = value;
+				const { light, dark } = deriveShades(main);
+				dispatch(
+					updateThemeOverride({
+						palette: { [key]: { main, light, dark } },
+					})
+				);
+				return;
+			}
+			// Fallback: generic override
+			const payload = {};
+			let obj = payload;
+			path.forEach((key, idx) => {
+				if (idx === path.length - 1) {
+					obj[key] = value;
+				} else {
+					obj[key] = {};
+					obj = obj[key];
+				}
+			});
+			dispatch(updateThemeOverride(payload));
+		},
+		[dispatch]
+	);
+
+	// Throttled version for drag events
+	const throttledHandleColorChange = useMemo(() => throttle(handleColorChange, 150), [handleColorChange]);
 
 	const handleNumberChange = (path, value) => {
 		const num = Number(value);
@@ -99,7 +96,6 @@ function SettingsPage() {
 
 	const handleReset = () => dispatch(resetThemeOverrides());
 
-	// Shape & spacing overrides
 	const borderRadius = overrides.shape?.borderRadius ?? theme.shape.borderRadius;
 
 	return (
@@ -127,7 +123,12 @@ function SettingsPage() {
 							return (
 								<Stack key={key} direction="row" spacing={2} alignItems="center">
 									<Typography sx={{ width: 120, textTransform: "capitalize" }}>{label}</Typography>
-									<input type="color" value={val} onChange={(e) => handleColorChange(parts, e.target.value)} />
+									<input
+										type="color"
+										value={val}
+										onChange={(e) => throttledHandleColorChange(parts, e.target.value)}
+										onMouseUp={(e) => handleColorChange(parts, e.target.value)}
+									/>
 								</Stack>
 							);
 						})}
