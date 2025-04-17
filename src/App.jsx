@@ -23,6 +23,7 @@ const ProfilePage = lazy(() => import("routes/ProfilePage/ProfilePage.route"));
 const ChatPage = lazy(() => import("routes/ChatPage/ChatPage"));
 const ServersPage = lazy(() => import("routes/ServersPage/ServersPage.route"));
 const TestingPage = lazy(() => import("routes/TestingPage/TestingPage.route"));
+const SettingsPage = lazy(() => import("routes/SettingsPage/SettingsPage.route"));
 
 const PageNotFoundContainer = styled("div")({
 	maxWidth: "100%",
@@ -130,7 +131,8 @@ const App = () => {
 								<Route path="/profile" element={<ProfilePage />} />
 								<Route path="/chat" element={<ChatPage />} />
 								<Route path="/servers" element={<ServersPage />} />
-								<Route path="/testing" element={<TestingPage />} />
+                                <Route path="/testing" element={<TestingPage />} />
+                                <Route path="/settings" element={<SettingsPage />} />
 								<Route
 									path="*"
 									element={

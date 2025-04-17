@@ -115,11 +115,19 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
 						<Icons.ScienceTwoTone />
 					</ListItemIcon>
 				</ListItemWithTooltip>
-				<ListItemWithTooltip key="Settings" title="Settings" placement="right">
-					<ListItemIcon sx={{ opacity: window.location.pathname.toString() === "/settings" ? "0.5" : "1.0" }}>
-						<Icons.SettingsRounded />
-					</ListItemIcon>
-				</ListItemWithTooltip>
+               <ListItemWithTooltip key="Settings" title="Settings" placement="right">
+                   <ListItemIcon
+                       sx={{ opacity: window.location.pathname.toString() === "/settings" ? "0.5" : "1.0" }}
+                       onClick={() => {
+                           navigate("/settings");
+                           setTimeout(() => {
+                               setDrawerOpen(false);
+                           }, 500);
+                       }}
+                   >
+                       <Icons.SettingsRounded />
+                   </ListItemIcon>
+               </ListItemWithTooltip>
 			</List>
 			<List
 				sx={{

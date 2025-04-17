@@ -1,6 +1,7 @@
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { useSelector } from "react-redux";
 
 const darkThemeBase = createTheme({
   palette: {
@@ -90,7 +91,10 @@ function useDarkTheme() {
     };
   }, [spacingMatch]);
 
-  return darkTheme;
+  const overrides = useSelector((state) => state.settings.overrides);
+  const themeWithOverrides = useMemo(() => createTheme(darkTheme, overrides), [darkTheme, overrides]);
+
+  return themeWithOverrides;
 }
 
 export default useDarkTheme;
