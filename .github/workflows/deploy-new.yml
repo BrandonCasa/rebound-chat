@@ -81,7 +81,7 @@ jobs:
 
       - name: Install NPM Packages and Build App
         run: |
-          npm ci
+          npm ci --ignore-scripts
           npm run build
         env:
           CI: false
@@ -112,7 +112,7 @@ jobs:
               cd "${{ github.event.inputs.appDirectory }}"
               git clone ${{ github.event.inputs.repositoryURL }} ./
               cd ${{ github.event.inputs.serverSubdirectory }}
-              npm install
+              npm install --ignore-scripts
 
               echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
 
@@ -125,7 +125,7 @@ jobs:
 
               echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
 
-              npm install
+              npm install --ignore-scripts
 
               pm2 restart ${{ github.event.inputs.pm2ProcessName }}
             fi
