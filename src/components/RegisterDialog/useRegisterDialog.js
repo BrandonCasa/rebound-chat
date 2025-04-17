@@ -132,14 +132,8 @@ const useRegisterDialog = () => {
 	};
 
 	const handleUserRegister = async () => {
-		let requestString = "";
-		if (!process.env.NODE_ENV || process.env.NODE_ENV === "development") {
-			requestString = "http://localhost:6001/api/users/register";
-		} else if (isElectron) {
-			requestString = "https://rebound.nexus/api/users/register";
-		} else {
-			requestString = "/api/users/register";
-		}
+		let requestString = process.env.NODE_ENV === "development" ? `http://localhost:6001/api/users/register` : `/api/users/register`;
+		requestString = process.env.NODE_ENV !== "development" && isElectron ? `https://rebound.nexus/api/users/register` : requestString;
 
 		try {
 			const response = await axios.post(requestString, {

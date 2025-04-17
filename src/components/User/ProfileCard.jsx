@@ -1,325 +1,191 @@
-// Imports
-import { Avatar, Box, Button, ButtonGroup, Chip, CircularProgress, Divider, Paper, Stack, Typography } from "@mui/material";
+import React, { useState, useEffect, useMemo } from "react";
+import { Avatar, Box, Button, ButtonGroup, Chip, CircularProgress, Paper, Stack, Typography } from "@mui/material";
 import { styled, useTheme } from "@mui/material/styles";
-import Grid from "@mui/material/Unstable_Grid2";
-import React, { useContext, useEffect, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
 import * as Icons from "@mui/icons-material";
 import axios from "axios";
-import { setLoggedIn } from "slices/authSlice";
+import { useSelector, useDispatch } from "react-redux";
 import socketIoHelper from "helpers/socket";
 import { addSnackbar } from "slices/snackbarSlice";
 
-const isElectron = typeof window !== "undefined" && window.process && window.process.versions != null && Boolean(window.process.versions.electron);
+// Detect Electron environment
+const isElectron = typeof window !== "undefined" && window.process?.versions?.electron;
+// Base API endpoint depending on environment
+const API_BASE = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users" : isElectron ? "https://rebound.nexus/api/users" : "/api/users";
 
-function FullProfile(props) {
-	let theme = useTheme();
-	const authState = useSelector((state) => state.auth);
-	const [userId, setUserId] = useState(null);
-	const [displayName, setDisplayName] = useState("");
-	const [username, setUsername] = useState("");
-	const [bio, setBio] = useState("");
-	const [isPending, setIsPending] = useState(false);
-	const [isSender, setIsSender] = useState(false);
-	const [isFriends, setIsFriends] = useState(false);
-	const [friendId, setFriendId] = useState("");
+const LoadingWrapper = styled(Paper)(({ theme }) => ({
+	padding: 0,
+	display: "flex",
+	alignItems: "center",
+	justifyContent: "center",
+	width: "100%",
+	height: "100%",
+	boxSizing: "border-box",
+}));
+
+function FullProfile({ user: initialUser, self, width = "auto", passStyle }) {
+	const theme = useTheme();
 	const dispatch = useDispatch();
+	const authState = useSelector((state) => state.auth);
+	const [profile, setProfile] = useState(null);
 
-	const updateDataOther = (data) => {
-		setBio(data?.bio);
-		setDisplayName(data?.displayName);
-		setUsername(data?.username);
-		setUserId(data?.id);
-		setIsPending(false);
-		setIsFriends(false);
-		setFriendId("");
-		setIsSender(false);
-
-		if (!props?.self) {
-			for (let friend in data.friends) {
-				friend = data.friends[friend];
-				if (friend.requester !== authState.userId && friend.recipient !== authState.userId) {
-					continue;
-				}
-				setIsSender(friend.requester === authState.userId);
-				setFriendId(friend._id);
-
-				if (!friend.confirmed) {
-					setIsPending(true);
-					break;
-				}
-				setIsFriends(true);
-			}
-		}
-	};
-
-	function startListeningChanges(userIdIn) {
-		if (socketIoHelper.getSocket() !== null && socketIoHelper.getSocket().connected) {
-			const socketClient = socketIoHelper.getSocket();
-			socketClient.on("watched_user_saved", ([watchedId, watchedData]) => {
-				if (watchedId === userIdIn) {
-					updateDataOther(watchedData);
-				}
+	// Sync profile on auth or prop change
+	useEffect(() => {
+		const userId = self ? authState.userId : initialUser?.id;
+		setProfile(self ? { ...authState, id: authState.userId } : initialUser);
+		const socket = socketIoHelper.getSocket();
+		if (socket?.connected) {
+			socket.emit("watch_user", userId);
+			socket.on("watched_user_saved", ([watchedId, data]) => {
+				if (watchedId === userId) setProfile(data);
 			});
 		}
-	}
+		return () => socket?.off("watched_user_saved");
+	}, [authState, initialUser, self]);
 
-	const stopListeningChanges = () => {
-		if (socketIoHelper.getSocket() !== null && socketIoHelper.getSocket().connected) {
-			const socketClient = socketIoHelper.getSocket();
-			socketClient.off("watched_user_saved");
-		}
-	};
-
-	useEffect(() => {
-		if (socketIoHelper.getSocket() !== null && socketIoHelper.getSocket().connected) {
-			const socketClient = socketIoHelper.getSocket();
-			socketClient.emit("watch_user", props?.self ? authState.userId : props?.user.id);
-			startListeningChanges(props?.self ? authState.userId : props?.user.id);
-		}
-		updateDataOther(props?.self ? { ...authState, id: authState.userId } : props?.user);
-
-		return () => {
-			setBio("");
-			setDisplayName("");
-			setUsername("");
-			setUserId(null);
-			setIsPending(false);
-			setIsFriends(false);
-			setFriendId("");
-			setIsSender(false);
-			stopListeningChanges();
+	// Friend relation details
+	const { isPending, isFriends, isSender, friendId } = useMemo(() => {
+		const friends = profile?.friends || [];
+		const rel = friends.find((f) => [f.requester, f.recipient].includes(authState.userId));
+		if (!rel) return { isPending: false, isFriends: false, isSender: false, friendId: "" };
+		return {
+			isPending: !rel.confirmed,
+			isFriends: Boolean(rel.confirmed),
+			isSender: rel.requester === authState.userId,
+			friendId: rel._id,
 		};
-	}, [authState.loggedIn, authState.socketInfo.connected]);
+	}, [profile, authState.userId]);
 
-	let cardWidth = props?.width || "auto";
-	let cardHeight = props?.width || "auto";
-
-	const sendFriendRequest = () => {
-		if (userId !== authState.userId) {
-			let requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/addfriend" : "/api/users/addfriend";
-			requestString = process.env.NODE_ENV !== "development" && isElectron ? `https://rebound.nexus/api/users/addfriend` : requestString;
-
-			axios
-				.put(
-					requestString,
-					{ recipientId: userId },
-					{
-						headers: {
-							"Content-Type": "application/json",
-							"Allow-Control-Allow-Origin": "*",
-							authorization: `Bearer ${authState.authToken}`,
-						},
-					}
-				)
-				.then((response) => {
-					//setIsPending(true);
-					//dispatch(setLoggedIn({ friends: [response?.data?.friendId, ...authState.friends] }));
-					dispatch(addSnackbar({ snackbarMsg: `Sent friend request to '${displayName}'.`, snackbarSeverity: "success", autoHideDuration: 3000 }));
-				})
-				.catch((error) => {
-					console.log(error);
-				});
-		}
+	// HTTP action wrapper
+	const handleAction = (endpoint, payload, message, severity = "success") => {
+		axios
+			.put(`${API_BASE}/${endpoint}`, payload, { headers: { authorization: `Bearer ${authState.authToken}` } })
+			.then(() => {
+				dispatch(addSnackbar({ snackbarMsg: message, snackbarSeverity: severity, autoHideDuration: 3000 }));
+			})
+			.catch(console.error);
 	};
 
-	const acceptFriendRequest = () => {
-		if (isPending && !isFriends && userId !== authState.userId) {
-			let requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/acceptfriend" : "/api/users/acceptfriend";
-			requestString = process.env.NODE_ENV !== "development" && isElectron ? `https://rebound.nexus/api/users/acceptfriend` : requestString;
-
-			axios
-				.put(
-					requestString,
-					{ friendId: friendId },
-					{
-						headers: {
-							"Content-Type": "application/json",
-							"Allow-Control-Allow-Origin": "*",
-							authorization: `Bearer ${authState.authToken}`,
-						},
-					}
-				)
-				.then((response) => {
-					if (response.status === 200) {
-						//setIsPending(false);
-						//setIsFriends(true);
-						dispatch(addSnackbar({ snackbarMsg: `Accepted friend request from '${displayName}'.`, snackbarSeverity: "success", autoHideDuration: 3000 }));
-					}
-				})
-				.catch((error) => {
-					console.log(error);
-				});
-		}
-	};
-
-	const declineFriendRequest = () => {
-		if (isPending && !isFriends && userId !== authState.userId) {
-			let requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/declinefriend" : "/api/users/declinefriend";
-			requestString = process.env.NODE_ENV !== "development" && isElectron ? `https://rebound.nexus/api/users/declinefriend` : requestString;
-
-			axios
-				.put(
-					requestString,
-					{ friendId: friendId },
-					{
-						headers: {
-							"Content-Type": "application/json",
-							"Allow-Control-Allow-Origin": "*",
-							authorization: `Bearer ${authState.authToken}`,
-						},
-					}
-				)
-				.then((response) => {
-					if (response.status === 200) {
-						//setIsPending(false);
-						//setIsFriends(false);
-						dispatch(addSnackbar({ snackbarMsg: `Declined friend request from '${displayName}'.`, snackbarSeverity: "warning", autoHideDuration: 3000 }));
-					}
-				})
-				.catch((error) => {
-					console.log(error);
-				});
-		}
-	};
-
-	const cancelFriendRequest = () => {
-		if (isPending && !isFriends && userId !== authState.userId) {
-			let requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/cancelfriend" : "/api/users/cancelfriend";
-			requestString = process.env.NODE_ENV !== "development" && isElectron ? `https://rebound.nexus/api/users/cancelfriend` : requestString;
-
-			axios
-				.put(
-					requestString,
-					{ friendId: friendId },
-					{
-						headers: {
-							"Content-Type": "application/json",
-							"Allow-Control-Allow-Origin": "*",
-							authorization: `Bearer ${authState.authToken}`,
-						},
-					}
-				)
-				.then((response) => {
-					if (response.status === 200) {
-						//setIsPending(false);
-						//setIsFriends(false);
-						dispatch(addSnackbar({ snackbarMsg: `Canceled friend request to '${displayName}'.`, snackbarSeverity: "info", autoHideDuration: 3000 }));
-					}
-				})
-				.catch((error) => {
-					console.log(error);
-				});
-		}
-	};
-
-	const removeFriend = () => {
-		if (!isPending && isFriends && userId !== authState.userId) {
-			let requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/removefriend" : "/api/users/removefriend";
-			requestString = process.env.NODE_ENV !== "development" && isElectron ? `https://rebound.nexus/api/users/removefriend` : requestString;
-
-			axios
-				.put(
-					requestString,
-					{ friendId: friendId },
-					{
-						headers: {
-							"Content-Type": "application/json",
-							"Allow-Control-Allow-Origin": "*",
-							authorization: `Bearer ${authState.authToken}`,
-						},
-					}
-				)
-				.then((response) => {
-					if (response.status === 200) {
-						//setIsPending(false);
-						//setIsFriends(false);
-						dispatch(addSnackbar({ snackbarMsg: `Removed friend '${displayName}'.`, snackbarSeverity: "info", autoHideDuration: 3000 }));
-					}
-				})
-				.catch((error) => {
-					console.log(error);
-				});
-		}
-	};
-
-	if (userId === null) {
+	// Loading state
+	if (!profile?.id) {
 		return (
-			<Paper
-				sx={{ padding: 0, width: cardWidth, height: cardHeight, overflow: "hidden", display: "flex", flexDirection: "column", ...props?.passStyle }}
-				elevation={3}
-			>
-				<CircularProgress size={96} sx={{ margin: "auto" }} />
-			</Paper>
+			<LoadingWrapper style={{ width, height: passStyle?.maxHeight || "auto" }} elevation={3}>
+				<CircularProgress size={48} />
+			</LoadingWrapper>
 		);
 	}
 
+	const { id: userId, displayName, username, bio } = profile;
+
 	return (
 		<Paper
-			sx={{ padding: 0, width: cardWidth, height: cardHeight, overflow: "hidden", display: "flex", flexDirection: "column", ...props?.passStyle }}
+			sx={{
+				width,
+				height: passStyle?.maxHeight || "auto",
+				maxHeight: "100%",
+				display: "flex",
+				flexDirection: "column",
+				overflow: "hidden",
+				boxSizing: "border-box",
+			}}
 			elevation={3}
 		>
-			<Stack spacing={0.5} sx={{ flexGrow: 1, padding: theme.spacing(0.5) }}>
-				<img style={{ borderRadius: theme.spacing(0.5) }} src="banner.png" alt="no_banner" />
-				<Stack direction="row" spacing={2} sx={{ padding: theme.spacing(0.5) }}>
-					<Avatar alt="User" src="defaultpfp.png" sx={{ width: "64px", height: "64px" }} />
-					<Stack spacing={0} sx={{ padding: 0, height: "64px" }}>
-						<Typography variant="h5" height={"32px"}>
-							{displayName}
-						</Typography>
-						<Typography variant="subtitle2" height={"32px"} sx={{ color: `${theme.palette.text.secondary}` }}>
+			<Stack spacing={1} sx={{ p: 1, flex: 1 }}>
+				<Box
+					component="img"
+					src="banner.png"
+					alt="banner"
+					sx={{
+						width: "100%",
+						height: 120,
+						borderRadius: 1,
+						objectFit: "cover",
+					}}
+				/>
+				<Stack direction="row" spacing={2} alignItems="center">
+					<Avatar src="defaultpfp.png" alt="avatar" sx={{ width: 56, height: 56 }} />
+					<Box>
+						<Typography variant="h6">{displayName}</Typography>
+						<Typography variant="body2" color="text.secondary">
 							{username}
 						</Typography>
-					</Stack>
-					<Stack spacing={0} sx={{ padding: 0, height: "64px", flexGrow: 1, paddingRight: theme.spacing(0.5) }}>
-						<Typography textAlign="end" variant="subtitle1" height={"32px"} sx={{ color: `${theme.palette.text.secondary}` }}>
+					</Box>
+					<Box sx={{ flexGrow: 1, textAlign: "right" }}>
+						<Typography variant="subtitle2" color="text.secondary">
 							Title
 						</Typography>
-					</Stack>
+					</Box>
 				</Stack>
-				<Paper sx={{ flexGrow: 1, borderWidth: "2px", padding: theme.spacing(0.5) }} variant="outlined">
-					<Typography variant="subtitle1" sx={{ color: `${theme.palette.text.primary}` }}>
-						About Me:
-					</Typography>
-					<Typography variant="subtitle2" sx={{ color: `${theme.palette.text.secondary}` }}>
+				<Paper variant="outlined" sx={{ p: 1, flex: 1 }}>
+					<Typography variant="subtitle2">About Me:</Typography>
+					<Typography variant="body2" color="text.secondary">
 						{bio}
 					</Typography>
-					<Typography variant="subtitle1" sx={{ color: `${theme.palette.text.primary}` }}>
+					<Typography variant="subtitle2" sx={{ mt: 1 }}>
 						Interests:
 					</Typography>
-					<Stack direction="row" spacing={1}>
-						<Chip label="Overwatch" variant="outlined" color="secondary" />
-						<Chip label="Programming" variant="outlined" color="secondary" />
-						<Chip label="Coffee" variant="outlined" color="secondary" />
+					<Stack direction="row" spacing={1} sx={{ mt: 0.5, flexWrap: "wrap" }}>
+						<Chip label="Overwatch" variant="outlined" size="small" />
+						<Chip label="Programming" variant="outlined" size="small" />
+						<Chip label="Coffee" variant="outlined" size="small" />
 					</Stack>
 				</Paper>
-				<Stack direction="row" justifyContent="space-between" spacing={1} sx={{ padding: theme.spacing(0.5) }}>
-					{!isPending && !isFriends && (
-						<Button variant="contained" color="secondary" disabled={userId === authState.userId} onClick={sendFriendRequest} startIcon={<Icons.PersonAddRounded />}>
+				<Stack direction="row" spacing={1} sx={{ pt: 1 }} justifyContent="space-between">
+					{!isPending && !isFriends ? (
+						<Button
+							fullWidth
+							size="small"
+							variant="contained"
+							color="secondary"
+							startIcon={<Icons.PersonAdd />}
+							disabled={userId === authState.userId}
+							onClick={() => handleAction("addfriend", { recipientId: userId }, `Sent friend request to '${displayName}'.`)}
+						>
 							Add
 						</Button>
-					)}
-					{!isPending && isFriends && (
-						<Button variant="contained" color="error" onClick={removeFriend} startIcon={<Icons.PersonRemoveRounded />}>
+					) : null}
+					{!isPending && isFriends ? (
+						<Button
+							fullWidth
+							size="small"
+							variant="contained"
+							color="error"
+							startIcon={<Icons.PersonRemove />}
+							onClick={() => handleAction("removefriend", { friendId }, `Removed friend '${displayName}'.`)}
+						>
 							Remove
 						</Button>
-					)}
-					{isPending && !isFriends && isSender && (
-						<Button variant="outlined" color="info" onClick={cancelFriendRequest} startIcon={<Icons.PersonOffRounded />}>
+					) : null}
+					{isPending && !isFriends && isSender ? (
+						<Button
+							fullWidth
+							size="small"
+							variant="outlined"
+							color="info"
+							startIcon={<Icons.PersonOff />}
+							onClick={() => handleAction("cancelfriend", { friendId }, `Canceled friend request to '${displayName}'.`, "info")}
+						>
 							Cancel
 						</Button>
-					)}
-					{isPending && !isFriends && !isSender && (
-						<ButtonGroup variant="contained">
-							<Button color="success" onClick={acceptFriendRequest} startIcon={<Icons.PersonAddRounded />}>
+					) : null}
+					{isPending && !isFriends && !isSender ? (
+						<ButtonGroup fullWidth size="small" variant="contained">
+							<Button
+								color="success"
+								startIcon={<Icons.PersonAdd />}
+								onClick={() => handleAction("acceptfriend", { friendId }, `Accepted friend request from '${displayName}'.`)}
+							>
 								Accept
 							</Button>
-							<Button color="error" onClick={declineFriendRequest} startIcon={<Icons.PersonRemoveRounded />}>
+							<Button
+								color="error"
+								startIcon={<Icons.PersonRemove />}
+								onClick={() => handleAction("declinefriend", { friendId }, `Declined friend request from '${displayName}'.`, "warning")}
+							>
 								Decline
 							</Button>
 						</ButtonGroup>
-					)}
-					<Button variant="contained" color="primary" disabled={userId === authState.userId || true}>
+					) : null}
+					<Button fullWidth size="small" variant="contained" disabled>
 						Block
 					</Button>
 				</Stack>
@@ -328,36 +194,33 @@ function FullProfile(props) {
 	);
 }
 
-function PopoutProfile(props) {
-	let theme = useTheme();
-
-	let cardWidth = props?.width || "auto";
-	let cardHeight = props?.width ? `calc(${props.width} * 1.6667)` : "auto";
-
-	return <Paper sx={{ padding: theme.spacing(1), width: cardWidth, height: cardHeight }}>xd2</Paper>;
+function PopoutProfile({ width = "auto" }) {
+	const theme = useTheme();
+	const height = width ? `calc(${width} * 1.6667)` : "auto";
+	return (
+		<Paper sx={{ width, height, p: 1, overflow: "hidden" }} elevation={3}>
+			xd2
+		</Paper>
+	);
 }
 
-function MiniProfile(props) {
-	let theme = useTheme();
-
-	let cardWidth = props?.width || "auto";
-	let cardHeight = props?.width ? `calc(${props.width} / 4)` : "auto";
-
-	return <Paper sx={{ padding: theme.spacing(1), width: cardWidth, height: cardHeight }}>xd3</Paper>;
+function MiniProfile({ width = "auto" }) {
+	const theme = useTheme();
+	const height = width ? `calc(${width} / 4)` : "auto";
+	return (
+		<Paper sx={{ width, height, p: 1, overflow: "hidden" }} elevation={3}>
+			xd3
+		</Paper>
+	);
 }
 
-function ProfileCard(props) {
-	let theme = useTheme();
-
-	if (props?.type === "full") {
-		return <FullProfile {...props} />;
-	}
-	if (props?.type === "popout") {
-		return <PopoutProfile {...props} />;
-	}
-	if (props?.type === "mini") {
-		return <MiniProfile {...props} />;
+export default function ProfileCard(props) {
+	switch (props.type) {
+		case "popout":
+			return <PopoutProfile width={props.width} />;
+		case "mini":
+			return <MiniProfile width={props.width} />;
+		default:
+			return <FullProfile {...props} />;
 	}
 }
-
-export default ProfileCard;
