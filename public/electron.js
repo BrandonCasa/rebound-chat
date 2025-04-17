@@ -23,7 +23,7 @@ async function createWindow() {
 	} else {
 		const indexPath = path.join(__dirname, "index.html");
 		mainWindow.loadFile(indexPath);
-		mainWindow.webContents.openDevTools();
+		//mainWindow.webContents.openDevTools();
 		autoUpdater.checkForUpdates();
 	}
 
