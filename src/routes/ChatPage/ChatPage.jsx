@@ -197,8 +197,8 @@ function ChatPage() {
 				<ProfileCard
 					self={authState.userId === userPreviewUser?.id}
 					type="full"
-					width="450px"
-					passStyle={{ maxHeight: "450px", maxWidth: "450px" }}
+					width="300px"
+					passStyle={{ maxHeight: "450px", maxWidth: "300px" }}
 					user={userPreviewUser}
 				/>
 			</Popover>
