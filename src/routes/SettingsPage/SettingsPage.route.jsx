@@ -1,13 +1,16 @@
 import React from "react";
-import { Box, Paper, Stack, Typography, useTheme, Button, Divider, Chip } from "@mui/material";
+import { Box, Paper, Stack, Typography, useTheme, Button, Divider, Chip, TextField, Container } from "@mui/material";
 import { styled, darken, lighten, getContrastRatio } from "@mui/material/styles";
 import { useDispatch, useSelector } from "react-redux";
 import { updateThemeOverride, resetThemeOverrides } from "slices/settingsSlice";
+import { scrollbarStyles } from "routes/LandingPage/utils/scrollbarStyles";
 
 const ItemPaper = styled(Paper)(({ theme }) => ({
 	...theme.typography.body2,
 	padding: theme.spacing(1),
 	textAlign: "center",
+	flexDirection: "row",
+	display: "flex",
 	color: theme.palette.text.secondary,
 }));
 
@@ -16,22 +19,27 @@ function SettingsPage() {
 	const overrides = useSelector((state) => state.settings.overrides);
 	const theme = useTheme();
 
-	const primaryColor = overrides.palette?.primary?.main || theme.palette.primary.main;
-	const secondaryColor = overrides.palette?.secondary?.main || theme.palette.secondary.main;
-	const backgroundDefault = overrides.palette?.background?.default || theme.palette.background.default;
-	const backgroundPaper = overrides.palette?.background?.paper || theme.palette.background.paper;
-	const textPrimary = overrides.palette?.text?.primary || theme.palette.text.primary;
-	const textSecondary = overrides.palette?.text?.secondary || theme.palette.text.secondary;
+	// Expose only main colors; derive light/dark and paper automatically
+	const fields = {
+		"palette.primary.main": overrides.palette?.primary?.main ?? theme.palette.primary.main,
+		"palette.secondary.main": overrides.palette?.secondary?.main ?? theme.palette.secondary.main,
+		"palette.error.main": overrides.palette?.error?.main ?? theme.palette.error.main,
+		"palette.warning.main": overrides.palette?.warning?.main ?? theme.palette.warning.main,
+		"palette.info.main": overrides.palette?.info?.main ?? theme.palette.info.main,
+		"palette.background.default": overrides.palette?.background?.default ?? theme.palette.background.default,
+	};
+
+	// Derive light/dark variants
+	const deriveShades = (color) => ({
+		light: lighten(color, 0.2),
+		dark: darken(color, 0.2),
+	});
 
 	const handleColorChange = (path, value) => {
-		// if changing background.default, also compute & set background.paper
+		// Special case: background.default => auto-calc background.paper
 		if (path[0] === "palette" && path[1] === "background" && path[2] === "default") {
-			// compute 30% darker
 			const darker = darken(value, 0.3);
-			// if contrast too low, flip to lighter
 			const paperColor = getContrastRatio(value, darker) < 1.2 ? lighten(value, 0.3) : darker;
-
-			// dispatch one action that overrides both default & paper
 			dispatch(
 				updateThemeOverride({
 					palette: {
@@ -45,7 +53,22 @@ function SettingsPage() {
 			return;
 		}
 
-		// otherwise just override the single path
+		// Main color changes: derive light/dark
+		if (path[0] === "palette" && path[2] === "main") {
+			const [_, key] = path; // e.g. ['palette','primary','main'] => key='primary'
+			const main = value;
+			const { light, dark } = deriveShades(main);
+			dispatch(
+				updateThemeOverride({
+					palette: {
+						[key]: { main, light, dark },
+					},
+				})
+			);
+			return;
+		}
+
+		// Fallback: generic override
 		const payload = {};
 		let obj = payload;
 		path.forEach((key, idx) => {
@@ -59,54 +82,77 @@ function SettingsPage() {
 		dispatch(updateThemeOverride(payload));
 	};
 
-	const handleReset = () => {
-		dispatch(resetThemeOverrides());
+	const handleNumberChange = (path, value) => {
+		const num = Number(value);
+		const payload = {};
+		let obj = payload;
+		path.forEach((key, idx) => {
+			if (idx === path.length - 1) {
+				obj[key] = num;
+			} else {
+				obj[key] = {};
+				obj = obj[key];
+			}
+		});
+		dispatch(updateThemeOverride(payload));
 	};
+
+	const handleReset = () => dispatch(resetThemeOverrides());
+
+	// Shape & spacing overrides
+	const borderRadius = overrides.shape?.borderRadius ?? theme.shape.borderRadius;
 
 	return (
 		<Box sx={{ display: "flex", justifyContent: "center", flexGrow: 1, overflow: "hidden", flexDirection: "column" }}>
-			<Stack spacing={2} sx={{ height: "100%", width: "100%" }}>
-				<ItemPaper>
-					<Typography variant="h4">Settings</Typography>
-				</ItemPaper>
+			<ItemPaper>
+				<Typography variant="h4" sx={{ flexGrow: 1 }}>
+					Settings
+				</Typography>
+				<Button variant="outlined" onClick={handleReset} sx={{ marginLeft: "auto" }}>
+					Reset to Defaults
+				</Button>
+			</ItemPaper>
+			<Stack marginTop={2} spacing={2} sx={{ height: "100%", width: "100%", overflow: "auto", ...scrollbarStyles }}>
+				<div>
+					<Divider variant="middle" textAlign="left" sx={{ m: 0, "&::before, &::after": { borderWidth: 3 } }}>
+						<Chip color="secondary" label="Palette Colors" />
+					</Divider>
+				</div>
 
-				<Divider sx={{ "&::after": { borderWidth: "3px" }, "&::before": { borderWidth: "3px" }, m: 0 }} variant="middle" textAlign="left">
-					<Chip color="secondary" label="Customization" />
-				</Divider>
+				<Paper sx={{ p: 2, backgroundColor: theme.palette.background.paper }}>
+					<Stack spacing={3}>
+						{Object.entries(fields).map(([key, val]) => {
+							const parts = key.split(".");
+							const label = parts.slice(-2)[0];
+							return (
+								<Stack key={key} direction="row" spacing={2} alignItems="center">
+									<Typography sx={{ width: 120, textTransform: "capitalize" }}>{label}</Typography>
+									<input type="color" value={val} onChange={(e) => handleColorChange(parts, e.target.value)} />
+								</Stack>
+							);
+						})}
+					</Stack>
+				</Paper>
 
-				<Paper sx={{ display: "flex", flexDirection: "column", p: 2, backgroundColor: backgroundPaper }}>
+				<div>
+					<Divider variant="middle" textAlign="left" sx={{ m: 0, "&::before, &::after": { borderWidth: 3 } }}>
+						<Chip color="secondary" label="Shape & Spacing" />
+					</Divider>
+				</div>
+
+				<Paper sx={{ p: 2, backgroundColor: theme.palette.background.paper }}>
 					<Stack spacing={3}>
 						<Stack direction="row" spacing={2} alignItems="center">
-							<Typography>Primary Color</Typography>
-							<input type="color" value={primaryColor} onChange={(e) => handleColorChange(["palette", "primary", "main"], e.target.value)} />
-						</Stack>
-
-						<Stack direction="row" spacing={2} alignItems="center">
-							<Typography>Secondary Color</Typography>
-							<input type="color" value={secondaryColor} onChange={(e) => handleColorChange(["palette", "secondary", "main"], e.target.value)} />
-						</Stack>
-
-						<Stack direction="row" spacing={2} alignItems="center">
-							<Typography>Background Color</Typography>
-							<input type="color" value={backgroundDefault} onChange={(e) => handleColorChange(["palette", "background", "default"], e.target.value)} />
-						</Stack>
-
-						<Stack direction="row" spacing={2} alignItems="center">
-							<Typography>Text 1st Color</Typography>
-							<input type="color" value={textPrimary} onChange={(e) => handleColorChange(["palette", "text", "primary"], e.target.value)} />
-						</Stack>
-
-						<Stack direction="row" spacing={2} alignItems="center">
-							<Typography>Text 2nd Color</Typography>
-							<input type="color" value={textSecondary} onChange={(e) => handleColorChange(["palette", "text", "secondary"], e.target.value)} />
+							<Typography sx={{ maxWidth: 160 }}>Border Radius</Typography>
+							<TextField
+								type="number"
+								inputProps={{ min: 0 }}
+								value={borderRadius}
+								onChange={(e) => handleNumberChange(["shape", "borderRadius"], e.target.value)}
+								size="small"
+							/>
 						</Stack>
 					</Stack>
-
-					<Box sx={{ mt: 4 }}>
-						<Button variant="outlined" onClick={handleReset}>
-							Reset to Defaults
-						</Button>
-					</Box>
 				</Paper>
 			</Stack>
 		</Box>
