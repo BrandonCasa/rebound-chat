@@ -22,6 +22,14 @@ module.exports = {
   },
 
   settings: {
+    "import/resolver": {
+      node: {
+        // look in these two folders for modules
+        moduleDirectory: ["node_modules", "src"],
+        // optionally list extensions you use:
+        extensions: [".js", ".jsx", ".ts", ".tsx", ".json"]
+      }
+    },
     react: {
       version: "detect",
     },
