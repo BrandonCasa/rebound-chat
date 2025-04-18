@@ -2,3 +2,7 @@ node_modules/
 build/
 app/
 dist/
+keys/
+server/node_modules/
+server/dev/
+server/logs/
