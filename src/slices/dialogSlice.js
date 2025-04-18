@@ -1,4 +1,4 @@
-import { createSlice } from '@reduxjs/toolkit';
+import { createSlice } from "@reduxjs/toolkit";
 
 const initialState = {
   registerDialogOpen: false,
@@ -6,7 +6,7 @@ const initialState = {
 };
 
 const dialogSlice = createSlice({
-  name: 'dialogs',
+  name: "dialogs",
   initialState,
   reducers: {
     setDialogOpened: (state, action) => {

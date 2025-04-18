@@ -1,5 +1,13 @@
-import { Menu, MenuList, MenuItem, ListItemIcon, ListItemText, Divider, Avatar } from "@mui/material";
 import * as Icons from "@mui/icons-material";
+import {
+  Menu,
+  MenuList,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Divider,
+  Avatar,
+} from "@mui/material";
 
 const AccountMenu = ({ anchorEl, open, handleClose, handleLogout, theme }) => (
   <Menu
@@ -20,20 +28,29 @@ const AccountMenu = ({ anchorEl, open, handleClose, handleLogout, theme }) => (
       <Divider />
       <MenuItem>
         <ListItemIcon>
-          <Icons.PersonAddRounded fontSize="small" sx={{ color: theme.palette.text.secondary }} />
+          <Icons.PersonAddRounded
+            fontSize="small"
+            sx={{ color: theme.palette.text.secondary }}
+          />
         </ListItemIcon>
         <ListItemText>Add Profile</ListItemText>
       </MenuItem>
       <MenuItem>
         <ListItemIcon>
-          <Icons.PersonRemoveRounded fontSize="small" sx={{ color: theme.palette.text.secondary }} />
+          <Icons.PersonRemoveRounded
+            fontSize="small"
+            sx={{ color: theme.palette.text.secondary }}
+          />
         </ListItemIcon>
         <ListItemText>Remove Profile</ListItemText>
       </MenuItem>
       <Divider />
       <MenuItem onClick={handleLogout}>
         <ListItemIcon>
-          <Icons.LogoutRounded fontSize="small" sx={{ color: theme.palette.text.secondary }} />
+          <Icons.LogoutRounded
+            fontSize="small"
+            sx={{ color: theme.palette.text.secondary }}
+          />
         </ListItemIcon>
         <ListItemText>Logout</ListItemText>
       </MenuItem>

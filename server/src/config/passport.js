@@ -1,6 +1,7 @@
-import UserModel from "../models/User.js";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
+
+import UserModel from "../models/User.js";
 
 class CustomPassport {
   setupPassport() {
@@ -15,14 +16,16 @@ class CustomPassport {
           UserModel.findOne({ email: email })
             .then(function (user) {
               if (!user || !user.validPassword(password)) {
-                return done(null, false, { errors: { "email or password": "is invalid." } });
+                return done(null, false, {
+                  errors: { "email or password": "is invalid." },
+                });
               }
 
               return done(null, user);
             })
             .catch(done);
-        }
-      )
+        },
+      ),
     );
   }
 }

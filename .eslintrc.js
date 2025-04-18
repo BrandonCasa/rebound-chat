@@ -24,15 +24,11 @@ module.exports = {
   settings: {
     "import/resolver": {
       node: {
-        // look in these two folders for modules
-        moduleDirectory: ["node_modules", "src"],
-        // optionally list extensions you use:
-        extensions: [".js", ".jsx", ".ts", ".tsx", ".json"]
-      }
+        moduleDirectory: ["node_modules"],
+        extensions: [".js", ".jsx", ".ts", ".tsx", ".json"],
+      },
     },
-    react: {
-      version: "detect",
-    },
+    react: { version: "detect" },
   },
 
   plugins: [
@@ -86,14 +82,7 @@ module.exports = {
     "import/order": [
       "warn",
       {
-        groups: [
-          "builtin",
-          "external",
-          "internal",
-          ["sibling", "parent"],
-          "index",
-        ],
-        "newlines-between": "always",
+        "newlines-between": "always-and-inside-groups",
         alphabetize: { order: "asc", caseInsensitive: true },
       },
     ],
@@ -108,6 +97,21 @@ module.exports = {
   },
 
   overrides: [
+    {
+      files: ["src/**/*.{js,jsx,ts,tsx}"],
+      settings: {
+        "import/resolver": {
+          node: {
+            moduleDirectory: ["node_modules", "src"],
+            extensions: [".js", ".jsx", ".ts", ".tsx", ".json"],
+          },
+        },
+      },
+    },
+    {
+      files: ["server/**/*.{js,ts}"],
+      env: { node: true, browser: false },
+    },
     {
       // for Jest test files
       files: ["**/*.test.js", "**/*.spec.js", "**/*.test.jsx", "**/*.spec.jsx"],

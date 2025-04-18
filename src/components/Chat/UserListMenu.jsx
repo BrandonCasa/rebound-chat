@@ -1,12 +1,9 @@
-import * as React from "react";
-import { styled, alpha } from "@mui/material/styles";
-import Button from "@mui/material/Button";
+import * as Icons from "@mui/icons-material";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
-import Divider from "@mui/material/Divider";
-import * as Icons from "@mui/icons-material";
-import { useDispatch, useSelector } from "react-redux";
-import { setSocketRoom } from "slices/authSlice";
+import { styled, alpha } from "@mui/material/styles";
+import * as React from "react";
+import { useSelector } from "react-redux";
 
 const StyledMenu = styled((props) => (
   <Menu
@@ -39,7 +36,10 @@ const StyledMenu = styled((props) => (
         marginRight: theme.spacing(1.5),
       },
       "&:active": {
-        backgroundColor: alpha(theme.palette.primary.main, theme.palette.action.selectedOpacity),
+        backgroundColor: alpha(
+          theme.palette.primary.main,
+          theme.palette.action.selectedOpacity,
+        ),
       },
     },
   },
@@ -48,16 +48,24 @@ const StyledMenu = styled((props) => (
 export default function UserListMenu({ anchorEl, setAnchorEl, users }) {
   const open = Boolean(anchorEl);
   const authState = useSelector((state) => state.auth);
-  const dispatch = useDispatch();
 
   const handleClose = () => {
     setAnchorEl(null);
   };
 
   return (
-    <StyledMenu id="user-list-menu" anchorEl={anchorEl} open={open} onClose={handleClose}>
+    <StyledMenu
+      id="user-list-menu"
+      anchorEl={anchorEl}
+      open={open}
+      onClose={handleClose}
+    >
       {Object.keys(users).map((user, index) => (
-        <MenuItem key={index} disableRipple selected={users[user].username === authState.username}>
+        <MenuItem
+          key={index}
+          disableRipple
+          selected={users[user].username === authState.username}
+        >
           <Icons.PersonRounded />
           {users[user].displayName}
         </MenuItem>

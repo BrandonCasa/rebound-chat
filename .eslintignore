@@ -3,6 +3,7 @@ build/
 app/
 dist/
 keys/
+server/
 server/node_modules/
 server/dev/
 server/logs/

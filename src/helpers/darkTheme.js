@@ -1,6 +1,6 @@
-import { createTheme, ThemeProvider } from "@mui/material/styles";
+import { createTheme } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
-import { useEffect, useState, useMemo } from "react";
+import { useMemo } from "react";
 import { useSelector } from "react-redux";
 
 const darkThemeBase = createTheme({
@@ -33,8 +33,6 @@ const darkThemeBase = createTheme({
     },
   },
   spacing: 8,
-  spacingMultFull: 1,
-  spacingMult: (factor) => 1,
   shape: {
     borderRadius: 8,
   },
@@ -64,35 +62,26 @@ const darkThemeBase = createTheme({
 
 function useDarkTheme() {
   const spacingMatch = useMediaQuery(darkThemeBase.breakpoints.up("sm"));
-  const [darkTheme, setDarkTheme] = useState(darkThemeBase);
 
-  function modifyTheme(newStyles) {
-    return createTheme({
-      ...darkTheme,
-      ...newStyles,
-    });
-  }
+  const darkTheme = useMemo(() => {
+    const [large, small] = [8, 6];
+    const chosen = spacingMatch ? large : small;
+    const spacingMult = chosen / Math.max(large, small);
 
-  useEffect(() => {
-    const spacings = [8, 6];
-    const chosenSpacing = spacings[Number(!spacingMatch)];
-    const spacingMult = chosenSpacing / Math.max(...spacings);
-
-    const newSpacingStyles = {
-      spacing: chosenSpacing,
+    return createTheme(darkThemeBase, {
+      spacing: chosen,
+      // if you really need these helpers on the theme
       spacingMultFull: spacingMult,
       spacingMult: (factor) => (1 - spacingMult) / factor + spacingMult,
-    };
-
-    setDarkTheme(modifyTheme(newSpacingStyles));
-
-    return () => {
-      return;
-    };
+    });
   }, [spacingMatch]);
 
   const overrides = useSelector((state) => state.settings.overrides);
-  const themeWithOverrides = useMemo(() => createTheme(darkTheme, overrides), [darkTheme, overrides]);
+
+  const themeWithOverrides = useMemo(
+    () => createTheme(darkTheme, overrides),
+    [darkTheme, overrides],
+  );
 
   return themeWithOverrides;
 }

@@ -1,24 +1,21 @@
-import useRegisterDialog from "components/RegisterDialog/useRegisterDialog";
-import StepContent from "./StepContent";
-import DialogButtons from "./DialogButtons";
-import ErrorMessages from "./ErrorMessages";
-import RegistrationForm from "./RegistrationForm";
 import { Box, Dialog, Typography } from "@mui/material";
+
+import DialogButtons from "./DialogButtons";
+import RegistrationForm from "./RegistrationForm";
+import StepContent from "./StepContent";
+
+import useRegisterDialog from "components/RegisterDialog/useRegisterDialog";
 
 const RegisterDialog = () => {
   const {
     registerDialogState,
     activeStep,
-    setActiveStep,
     formData,
-    setFormData,
     handleFormDataChange,
     handleStayLoggedInChange,
-    handleUserRegister,
     handleNextStep,
     handleBackButton,
     handleDialogClose,
-    errorMessages,
     handleToLogin,
   } = useRegisterDialog();
 
@@ -42,7 +39,11 @@ const RegisterDialog = () => {
           Register to join a communication network like no other.
         </Typography>
         <StepContent activeStep={activeStep} />
-        <RegistrationForm activeStep={activeStep} formData={formData} handleFormDataChange={handleFormDataChange} />
+        <RegistrationForm
+          activeStep={activeStep}
+          formData={formData}
+          handleFormDataChange={handleFormDataChange}
+        />
         <DialogButtons
           handleStayLoggedInChange={handleStayLoggedInChange}
           formData={formData}

@@ -1,7 +1,7 @@
-import { AppBar, Toolbar, Typography, IconButton, Avatar } from "@mui/material";
 import * as Icons from "@mui/icons-material";
+import { AppBar, Toolbar, Typography, IconButton, Avatar } from "@mui/material";
 
-const AppBarContent = ({ handleIconClick, iconWidth, drawerWidth, loggedInState }) => (
+const AppBarContent = ({ handleIconClick, drawerWidth, loggedInState }) => (
   <AppBar
     position="fixed"
     sx={{
@@ -20,9 +20,23 @@ const AppBarContent = ({ handleIconClick, iconWidth, drawerWidth, loggedInState 
       <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
         Rebound
       </Typography>
-      <IconButton color="secondary" sx={{ height: `${iconWidth}px`, height: drawerWidth }} onClick={handleIconClick}>
-        <Icons.AccountCircleRounded sx={{ height: drawerWidth - 16, width: drawerWidth - 16, display: loggedInState ? "none" : "inherit" }} />
-        <Avatar alt="User" src="defaultpfp.png" sx={{ height: drawerWidth - 16, width: drawerWidth - 16, display: loggedInState ? "inherit" : "none" }} />
+      <IconButton color="secondary" onClick={handleIconClick}>
+        <Icons.AccountCircleRounded
+          sx={{
+            height: drawerWidth - 16,
+            width: drawerWidth - 16,
+            display: loggedInState ? "none" : "inherit",
+          }}
+        />
+        <Avatar
+          alt="User"
+          src="defaultpfp.png"
+          sx={{
+            height: drawerWidth - 16,
+            width: drawerWidth - 16,
+            display: loggedInState ? "inherit" : "none",
+          }}
+        />
       </IconButton>
     </Toolbar>
   </AppBar>

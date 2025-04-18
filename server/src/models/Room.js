@@ -8,7 +8,7 @@ const RoomSchema = new mongoose.Schema(
     settings: [{ type: Schema.Types.ObjectId, ref: "Setting" }],
     messages: [{ type: Schema.Types.ObjectId, ref: "Message" }],
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const RoomModel = mongoose.model("Room", RoomSchema);

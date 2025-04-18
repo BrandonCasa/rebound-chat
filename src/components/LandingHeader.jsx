@@ -9,7 +9,11 @@ const LandingHeader = ({ title, subtitle }) => {
       <Typography variant="h4" sx={{ color: `${theme.palette.text.primary}` }}>
         {title}
       </Typography>
-      <Typography variant="subtitle1" sx={{ color: `${theme.palette.text.secondary}` }} color={theme.palette.text.primary}>
+      <Typography
+        variant="subtitle1"
+        sx={{ color: `${theme.palette.text.secondary}` }}
+        color={theme.palette.text.primary}
+      >
         {subtitle}
       </Typography>
     </Paper>

@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
-import { TextField, Button, Card, CardContent, Grid, Paper, IconButton, useTheme, Box } from "@mui/material";
 import * as Icons from "@mui/icons-material";
+import { TextField, Button, useTheme, Box } from "@mui/material";
+import React from "react";
 
 function ChatInput({ message, setMessage, sendMessage }) {
   const theme = useTheme();
@@ -39,7 +39,12 @@ function ChatInput({ message, setMessage, sendMessage }) {
         variant="contained"
         color="primary"
         onClick={sendMessage}
-        endIcon={<Icons.Send sx={{ color: "rgba(0, 0, 0, 0.52)" }} style={{ fontSize: "26px" }} />}
+        endIcon={
+          <Icons.Send
+            sx={{ color: "rgba(0, 0, 0, 0.52)" }}
+            style={{ fontSize: "26px" }}
+          />
+        }
       >
         Send
       </Button>

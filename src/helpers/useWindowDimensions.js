@@ -1,12 +1,4 @@
-import { useState, useEffect } from 'react';
-
-function getWindowDimensions(event) {
-  const { innerWidth: width, innerHeight: height } = window;
-  return {
-    width,
-    height
-  };
-}
+import { useState, useEffect } from "react";
 
 export default function useWindowDimensions() {
   const [dimensions, setDimensions] = useState({
@@ -15,7 +7,7 @@ export default function useWindowDimensions() {
   });
 
   useEffect(() => {
-    const debounceResize = (e) => {
+    const debounceResize = (_e) => {
       clearTimeout(debounceResize._timeout);
       debounceResize._timeout = setTimeout(() => {
         setDimensions({
@@ -25,8 +17,8 @@ export default function useWindowDimensions() {
       }, 100);
     };
 
-    window.addEventListener('resize', debounceResize);
-    return () => window.removeEventListener('resize', debounceResize);
+    window.addEventListener("resize", debounceResize);
+    return () => window.removeEventListener("resize", debounceResize);
   }, []);
 
   return dimensions;

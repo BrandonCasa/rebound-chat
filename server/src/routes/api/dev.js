@@ -1,17 +1,15 @@
 import { Router } from "express";
-import { auth, getTokenFromHeader } from "../auth.js";
-import UserModel from "../../models/User.js";
-import FriendModel from "../../models/Friend.js";
-import RoomModel from "../../models/Room.js";
-import MessageModel from "../../models/Message.js";
-import passport from "passport";
-import jwt from "jsonwebtoken";
+
 import logger from "../../logger.js";
+import FriendModel from "../../models/Friend.js";
+import MessageModel from "../../models/Message.js";
+import RoomModel from "../../models/Room.js";
+import UserModel from "../../models/User.js";
 import "dotenv/config";
 
 const router = Router();
 
-router.put("/dev/database/wipe", async function (req, res, next) {
+router.put("/dev/database/wipe", async function (req, res, _next) {
   if (process.env.NODE_ENV !== "development") {
     return res.sendStatus(403);
   }

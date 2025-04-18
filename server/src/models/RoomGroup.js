@@ -6,7 +6,7 @@ const RoomGroupSchema = new mongoose.Schema(
     rooms: [{ type: Schema.Types.ObjectId, ref: "Room" }],
     settings: [{ type: Schema.Types.ObjectId, ref: "Setting" }],
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const RoomGroupModel = mongoose.model("RoomGroup", RoomGroupSchema);

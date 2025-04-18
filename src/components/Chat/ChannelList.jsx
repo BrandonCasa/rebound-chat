@@ -1,6 +1,7 @@
+import { List, ListItemText, ListItemButton } from "@mui/material";
 import React from "react";
-import { List, ListItem, ListItemText, Card, ListItemButton } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
+
 import { setSocketRoom } from "slices/authSlice";
 
 function ChannelList({ channels, setMessages }) {
@@ -17,7 +18,12 @@ function ChannelList({ channels, setMessages }) {
             if (authState.socketInfo.currentRoom !== channel) {
               setMessages([]);
             }
-            dispatch(setSocketRoom({ lastRoom: authState.socketInfo.currentRoom, currentRoom: channel }));
+            dispatch(
+              setSocketRoom({
+                lastRoom: authState.socketInfo.currentRoom,
+                currentRoom: channel,
+              }),
+            );
           }}
         >
           <ListItemText primary={channels[channel].name} />

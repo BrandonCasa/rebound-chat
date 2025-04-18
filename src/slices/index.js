@@ -1,9 +1,10 @@
 import { combineReducers } from "@reduxjs/toolkit";
-import dialogReducer from "./dialogSlice";
+
 import authReducer from "./authSlice";
-import socketReducer from "./socketSlice";
-import snackbarReducer from "./snackbarSlice";
+import dialogReducer from "./dialogSlice";
 import settingsReducer from "./settingsSlice";
+import snackbarReducer from "./snackbarSlice";
+import socketReducer from "./socketSlice";
 
 const rootReducer = combineReducers({
   dialogs: dialogReducer,

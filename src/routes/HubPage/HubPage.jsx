@@ -1,13 +1,20 @@
-import { Box, Divider, List, ListItem, ListItemButton, ListItemText, ListSubheader, Paper, Stack, Typography } from "@mui/material";
+import {
+  Box,
+  Divider,
+  List,
+  ListItemButton,
+  ListItemText,
+  ListSubheader,
+  Paper,
+  Typography,
+} from "@mui/material";
 import { styled } from "@mui/material/styles";
 import Grid from "@mui/material/Unstable_Grid2";
-import ChannelList from "components/Chat/ChannelList";
+
+import React, { useState } from "react";
+
 import ChatArea from "components/Chat/ChatArea";
 import ChatInput from "components/Chat/ChatInput";
-import UserList from "components/Chat/UserList";
-import socketIoHelper from "helpers/socket";
-import React, { useEffect, useState } from "react";
-import { useSelector } from "react-redux";
 
 function ChatList({ currentChatRoom, setCurrentChatRoom, setMessages }) {
   return (
@@ -65,9 +72,6 @@ function HubPage() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [currentChatRoom, setCurrentChatRoom] = useState("phantompigz");
-  const [users, setUsers] = useState([]);
-
-  const authState = useSelector((state) => state.auth);
 
   /* 
   useEffect(() => {
@@ -97,21 +101,40 @@ function HubPage() {
   };
 
   return (
-    <Box sx={{ display: "flex", justifyContent: "center", flexGrow: 1, overflow: "hidden" }}>
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "center",
+        flexGrow: 1,
+        overflow: "hidden",
+      }}
+    >
       <Grid container spacing={2} sx={{ flexGrow: 1 }}>
         <Grid xs={12} sm={4.75} md={3} sx={{ height: "100%" }}>
-          <ChatList currentChatRoom={currentChatRoom} setCurrentChatRoom={setCurrentChatRoom} setMessages={setMessages} />
+          <ChatList
+            currentChatRoom={currentChatRoom}
+            setCurrentChatRoom={setCurrentChatRoom}
+            setMessages={setMessages}
+          />
         </Grid>
         <Grid sm={7.25} md={9}>
-          <Item sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+          <Item
+            sx={{ height: "100%", display: "flex", flexDirection: "column" }}
+          >
             <Typography align="center" variant="h5">
               {currentChatRoom}
             </Typography>
             <Divider />
-            <Box sx={{ width: "100%", flexGrow: 1, position: "relative", mb: 1 }}>
+            <Box
+              sx={{ width: "100%", flexGrow: 1, position: "relative", mb: 1 }}
+            >
               <ChatArea messages={messages} />
             </Box>
-            <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} />
+            <ChatInput
+              message={message}
+              setMessage={setMessage}
+              sendMessage={sendMessage}
+            />
           </Item>
         </Grid>
       </Grid>
