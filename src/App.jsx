@@ -113,9 +113,9 @@ const App = () => {
             );
             dispatch(
               addSnackbar({
-                snackbarMsg: `Login reload successful. Hello ${response.data.user.displayName}`,
+                snackbarMsg: `Hello ${response.data.user.displayName}!`,
                 snackbarSeverity: "success",
-                autoHideDuration: 2000,
+                autoHideDuration: 1000,
               }),
             );
           } catch (error) {

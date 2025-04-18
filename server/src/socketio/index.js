@@ -5,10 +5,9 @@ import { Server } from "socket.io";
 import logger from "../logger.js";
 
 import "dotenv/config";
-import UserModel from "../models/User.js";
-
 import serverRooms from "./rooms.js";
 import serverWatchers from "./watchers.js";
+import UserModel from "../models/User.js";
 
 import { configDotenv } from "dotenv";
 
