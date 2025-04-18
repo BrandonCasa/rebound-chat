@@ -10,10 +10,12 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
-import React, { useState, useEffect, useMemo } from "react";
+
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
 
 import socketIoHelper from "helpers/socket";
+
 import { addSnackbar } from "slices/snackbarSlice";
 
 // Detect Electron environment
@@ -27,24 +29,38 @@ const API_BASE =
       ? "https://rebound.nexus/api/users"
       : "/api/users";
 
-function FullProfile({ user: initialUser, self, width = "auto", passStyle }) {
+function FullProfile({ user, self, width = "auto", passStyle }) {
   const dispatch = useDispatch();
-  const authState = useSelector((state) => state.auth);
-  const [profile, setProfile] = useState(null);
+  const authState = useSelector((s) => s.auth);
+  const [profile, setProfile] = useState(user);
+
+  const socket = socketIoHelper.getSocket();
+  const prevId = useRef();
+  const watchedId = self ? authState.userId : user?.id;
 
   // Sync profile on auth or prop change
   useEffect(() => {
-    const userId = self ? authState.userId : initialUser?.id;
-    setProfile(self ? { ...authState, id: authState.userId } : initialUser);
-    const socket = socketIoHelper.getSocket();
-    if (socket?.connected) {
-      socket.emit("watch_user", userId);
-      socket.on("watched_user_saved", ([watchedId, data]) => {
-        if (watchedId === userId) setProfile(data);
-      });
+    if (!socket?.connected || !watchedId) return;
+
+    // only emit when the card starts watching a *new* id
+    if (prevId.current !== watchedId) {
+      if (prevId.current) socket.emit("unwatch_user", prevId.current);
+      socket.emit("watch_user", watchedId);
+      prevId.current = watchedId;
     }
-    return () => socket?.off("watched_user_saved");
-  }, [authState, initialUser, self]);
+
+    const handle = ([id, data]) => {
+      console.log(data);
+      id === watchedId && setProfile(data);
+    };
+    socket.on("watched_user_saved", handle);
+
+    return () => {
+      socket.emit("unwatch_user", watchedId);
+      socket.off("watched_user_saved", handle);
+      prevId.current = undefined;
+    };
+  }, [socket, watchedId]);
 
   // Friend relation details
   const { isPending, isFriends, isSender, friendId } = useMemo(() => {

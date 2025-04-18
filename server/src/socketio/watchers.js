@@ -1,89 +1,64 @@
-import logger from "../logger.js";
-import UserModel from "../models/User.js";
-
-import socketBackend from "./index.js";
-
-import "dotenv/config";
+import logger           from "../logger.js";
+import UserModel        from "../models/User.js";
+import socketBackend    from "./index.js";   // must expose emitToSocketById(id,event,payload)
 
 class ServerWatchers {
-  constructor() {
-    this.watchedUsers = {};
-    /*
-    this.watchedUsers = {
-      "65e1522ad7d3e65642a1cf63": [
-        "65e15247d7d3e65642a1cf7d"
-      ]
-    };
-    */
+  /**  Map<watchedUserId, Map<socketId, watcherUserId>> */
+  #watched = new Map();
+
+  init(socket) {
+    // main listeners
+    socket.on("watch_user",  (id) => this.#addWatch(socket, id));
+    socket.on("unwatch_user",(id) => this.#removeWatch(socket, id));
+    socket.on("disconnect",  ()   => this.#removeAllForSocket(socket));
   }
 
-  startListeners(socket) {
-    this.attachListeners(socket);
+  /* ------------------------------------------------------------------ */
+  async #addWatch(socket, watchedId) {
+    try {
+      const exists = await UserModel.exists({ _id: watchedId });
+      if (!exists) return;
+
+      if (!this.#watched.has(watchedId))
+        this.#watched.set(watchedId, new Map());
+
+      this.#watched.get(watchedId).set(socket.id, socket.user.id);
+    } catch (err) {
+      logger.error(err);
+    }
   }
 
-  listenerCleanup(socket) {
-    if (!socket?.user?.id) return;
-
-    Object.keys(this.watchedUsers).forEach((watchedUserId) => {
-      const filtered = this.watchedUsers[watchedUserId].filter(
-        (watcher) => watcher[0] === socket.user.id,
-      );
-      if (filtered.length > 0) {
-        const index = this.watchedUsers[watchedUserId].findIndex(
-          (watcher) => watcher[0] === socket.user.id,
-        );
-        if (this.watchedUsers[watchedUserId].length === 1) {
-          delete this.watchedUsers[watchedUserId];
-        } else {
-          this.watchedUsers[watchedUserId].splice(index, 1);
-        }
-      }
-    });
+  #removeWatch(socket, watchedId) {
+    if (!this.#watched.has(watchedId)) return;
+    const m = this.#watched.get(watchedId);
+    m.delete(socket.id);
+    if (m.size === 0) this.#watched.delete(watchedId);
   }
 
-  async attachListeners(socket) {
-    if (!socket?.user?.id) return;
-
-    socket.on("watch_user", async (userId) => {
-      try {
-        const userToWatch = await UserModel.findById(userId);
-
-        if (!userToWatch) {
-          return;
-        }
-
-        if (!(userToWatch._id in this.watchedUsers)) {
-          this.watchedUsers[userToWatch._id] = [[socket.user.id, socket.id]];
-          return;
-        }
-
-        if (
-          this.watchedUsers[userToWatch._id].filter(
-            (watcher) => watcher[0] === socket.user.id,
-          ).length === 0
-        ) {
-          this.watchedUsers[userToWatch._id].push([socket.user.id, socket.id]);
-          return;
-        }
-      } catch (error) {
-        console.log(error);
-        logger.error(error);
-      }
-    });
+  #removeAllForSocket(socket) {
+    for (const [watchedId, m] of this.#watched) {
+      m.delete(socket.id);
+      if (m.size === 0) this.#watched.delete(watchedId);
+    }
   }
 
-  onUserSaved(userId, publicDoc, privateDoc) {
-    if (userId in this.watchedUsers) {
-      this.watchedUsers[userId].forEach((watcher) => {
-        socketBackend.emitToSocketById(watcher[1], "watched_user_saved", [
-          userId,
-          publicDoc,
-        ]);
-      });
+  /* ------------------------------------------------------------------ */
+  /**
+   * Call this from your user‑save hook.
+   * @param {string} userId – the user that changed
+   * @param {object} publicDoc – sanitized user document
+   */
+  onUserSaved(userId, publicDoc, privateInfo) {
+    const watchers = this.#watched.get(userId);
+    if (!watchers) return;
+
+    for (const [socketId] of watchers) {
+      socketBackend.emitToSocketById(socketId, "watched_user_saved", [
+        userId,
+        publicDoc,
+      ]);
     }
   }
 }
 
-const serverWatchers = new ServerWatchers();
-
-export { serverWatchers as default };
+export default new ServerWatchers();

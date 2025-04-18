@@ -64,14 +64,13 @@ class SocketBackend {
   onConnection(socket) {
     logger.info(`User connected: '${socket.user.username}'.`);
     serverRooms.startListeners(socket);
-    serverWatchers.startListeners(socket);
+    serverWatchers.init(socket);
     socket.emit("connected");
   }
 
   onDisconnect(socket) {
     logger.info(`User disconnected: '${socket.user.username}'.`);
     serverRooms.listenerCleanup(socket);
-    serverWatchers.listenerCleanup(socket);
     socket.emit("disconnected");
     socket.removeAllListeners();
   }
