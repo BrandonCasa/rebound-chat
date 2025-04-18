@@ -10,18 +10,18 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
-
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
 
 import socketIoHelper from "helpers/socket";
-
 import { addSnackbar } from "slices/snackbarSlice";
 
-// Detect Electron environment
+// ------------------------------------------------------------
+// ENV HELPERS
+// ------------------------------------------------------------
 const isElectron =
   typeof window !== "undefined" && window.process?.versions?.electron;
-// Base API endpoint depending on environment
+
 const API_BASE =
   process.env.NODE_ENV === "development"
     ? "http://localhost:6001/api/users"
@@ -29,93 +29,103 @@ const API_BASE =
       ? "https://rebound.nexus/api/users"
       : "/api/users";
 
+// ------------------------------------------------------------
+// FULL PROFILE
+// ------------------------------------------------------------
 function FullProfile({ user, self, width = "auto", passStyle }) {
   const dispatch = useDispatch();
   const authState = useSelector((s) => s.auth);
-  const [profile, setProfile] = useState(user);
 
+  /** ---- local mirror of the incoming `user` prop ---- */
+  const [profile, setProfile] = useState(user); // initial
+  useEffect(() => setProfile(user || null), [user]); // keep in‑sync
+
+  /** ---- socket watcher wiring ---- */
   const socket = socketIoHelper.getSocket();
-  const prevId = useRef();
-  const watchedId = self ? authState.userId : user?.id;
+  const prevIdRef = useRef();
+  const watchedId = self ? authState.userId : user?.id; // might be undefined
 
-  // Sync profile on auth or prop change
   useEffect(() => {
-    if (!socket?.connected || !watchedId) return;
+    if (!socket?.connected) return;
 
-    // only emit when the card starts watching a *new* id
-    if (prevId.current !== watchedId) {
-      if (prevId.current) socket.emit("unwatch_user", prevId.current);
+    // (1) stop watching the previous id when either: component unmounts OR watchedId changes
+    if (prevIdRef.current && prevIdRef.current !== watchedId)
+      socket.emit("unwatch_user", prevIdRef.current);
+
+    // (2) start watching the new id (if present)
+    if (watchedId && prevIdRef.current !== watchedId) {
       socket.emit("watch_user", watchedId);
-      prevId.current = watchedId;
+      prevIdRef.current = watchedId;
     }
 
-    const handle = ([id, data]) => {
-      console.log(data);
-      id === watchedId && setProfile(data);
-    };
+    // (3) handle pushes
+    const handle = ([id, data]) => id === watchedId && setProfile(data);
     socket.on("watched_user_saved", handle);
 
+    // (4) cleanup on unmount or dependency change
     return () => {
-      socket.emit("unwatch_user", watchedId);
+      if (watchedId) socket.emit("unwatch_user", watchedId);
       socket.off("watched_user_saved", handle);
-      prevId.current = undefined;
+      prevIdRef.current = undefined;
     };
   }, [socket, watchedId]);
 
-  // Friend relation details
-  const { isPending, isFriends, isSender, friendId } = useMemo(() => {
-    const friends = profile?.friends || [];
-    const rel = friends.find((f) =>
-      [f.requester, f.recipient].includes(authState.userId),
-    );
-    if (!rel)
-      return {
-        isPending: false,
-        isFriends: false,
-        isSender: false,
-        friendId: "",
-      };
-    return {
-      isPending: !rel.confirmed,
-      isFriends: Boolean(rel.confirmed),
-      isSender: rel.requester === authState.userId,
-      friendId: rel._id,
-    };
-  }, [profile, authState.userId]);
+  /** ---- friend‑relation memo ---- */
+  const { status, friendId } = useMemo(() => {
+    // If the viewer is looking at their own profile, no buttons at all
+    if (profile?.id === authState.userId) {
+      return { status: "self", friendId: "" };
+    }
 
-  // HTTP action wrapper
+    const rel = profile?.friends?.find(
+      (f) =>
+        f.requester === authState.userId || // I sent something
+        f.recipient === authState.userId, // I received something
+    );
+
+    if (!rel) return { status: "none", friendId: "" };
+
+    if (rel.confirmed) return { status: "friends", friendId: rel._id };
+
+    // pending but not confirmed
+    return rel.requester === authState.userId
+      ? { status: "sent", friendId: rel._id } // I sent it  → Cancel
+      : { status: "received", friendId: rel._id }; // I got it  → Accept/Decline
+  }, [profile?.friends, profile?.id, authState.userId]);
+
+  /** ---- generic REST helper ---- */
   const handleAction = (endpoint, payload, message, severity = "success") => {
     axios
       .put(`${API_BASE}/${endpoint}`, payload, {
         headers: { authorization: `Bearer ${authState.authToken}` },
       })
-      .then(() => {
+      .then(() =>
         dispatch(
           addSnackbar({
             snackbarMsg: message,
             snackbarSeverity: severity,
             autoHideDuration: 3000,
           }),
-        );
-      })
+        ),
+      )
       .catch(console.error);
   };
 
-  // Loading state
-  if (!profile?.id) {
+  console.log(profile);
+
+  /* ---------------- render states ---------------- */
+  if (!profile) {
+    // user was reset to null → show nothing but preserve box sizing
     return (
       <Paper
         sx={{
           width,
           height: passStyle?.maxHeight,
           maxHeight: "100%",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
           boxSizing: "border-box",
         }}
         elevation={3}
-      ></Paper>
+      />
     );
   }
 
@@ -134,6 +144,7 @@ function FullProfile({ user, self, width = "auto", passStyle }) {
       }}
       elevation={3}
     >
+      {/* ---- BANNER + HEADER ---- */}
       <Stack spacing={1} sx={{ p: 1, flex: 1 }}>
         <Box
           component="img"
@@ -164,11 +175,14 @@ function FullProfile({ user, self, width = "auto", passStyle }) {
             </Typography>
           </Box>
         </Stack>
+
+        {/* ---- BIO ---- */}
         <Paper variant="outlined" sx={{ p: 1, flex: 1 }}>
           <Typography variant="subtitle2">About Me:</Typography>
           <Typography variant="body2" color="text.secondary">
             {bio}
           </Typography>
+
           <Typography variant="subtitle2" sx={{ mt: 1 }}>
             Interests:
           </Typography>
@@ -178,32 +192,34 @@ function FullProfile({ user, self, width = "auto", passStyle }) {
             <Chip label="Coffee" variant="outlined" size="small" />
           </Stack>
         </Paper>
+
+        {/* ---- ACTIONS ---- */}
         <Stack
           direction="row"
           spacing={1}
           sx={{ pt: 1 }}
           justifyContent="space-between"
         >
-          {!isPending && !isFriends ? (
+          {status === "none" && (
             <Button
               fullWidth
               size="small"
               variant="contained"
               color="secondary"
               startIcon={<Icons.PersonAdd />}
-              disabled={userId === authState.userId}
               onClick={() =>
                 handleAction(
                   "addfriend",
-                  { recipientId: userId },
-                  `Sent friend request to '${displayName}'.`,
+                  { recipientId: profile.id },
+                  `Sent friend request to '${profile.displayName}'.`,
                 )
               }
             >
               Add
             </Button>
-          ) : null}
-          {!isPending && isFriends ? (
+          )}
+
+          {status === "friends" && (
             <Button
               fullWidth
               size="small"
@@ -214,14 +230,15 @@ function FullProfile({ user, self, width = "auto", passStyle }) {
                 handleAction(
                   "removefriend",
                   { friendId },
-                  `Removed friend '${displayName}'.`,
+                  `Removed friend '${profile.displayName}'.`,
                 )
               }
             >
               Remove
             </Button>
-          ) : null}
-          {isPending && !isFriends && isSender ? (
+          )}
+
+          {status === "sent" && (
             <Button
               fullWidth
               size="small"
@@ -232,15 +249,16 @@ function FullProfile({ user, self, width = "auto", passStyle }) {
                 handleAction(
                   "cancelfriend",
                   { friendId },
-                  `Canceled friend request to '${displayName}'.`,
+                  `Canceled friend request to '${profile.displayName}'.`,
                   "info",
                 )
               }
             >
               Cancel
             </Button>
-          ) : null}
-          {isPending && !isFriends && !isSender ? (
+          )}
+
+          {status === "received" && (
             <ButtonGroup fullWidth size="small" variant="contained">
               <Button
                 color="success"
@@ -249,7 +267,7 @@ function FullProfile({ user, self, width = "auto", passStyle }) {
                   handleAction(
                     "acceptfriend",
                     { friendId },
-                    `Accepted friend request from '${displayName}'.`,
+                    `Accepted friend request from '${profile.displayName}'.`,
                   )
                 }
               >
@@ -262,7 +280,7 @@ function FullProfile({ user, self, width = "auto", passStyle }) {
                   handleAction(
                     "declinefriend",
                     { friendId },
-                    `Declined friend request from '${displayName}'.`,
+                    `Declined friend request from '${profile.displayName}'.`,
                     "warning",
                   )
                 }
@@ -270,34 +288,44 @@ function FullProfile({ user, self, width = "auto", passStyle }) {
                 Decline
               </Button>
             </ButtonGroup>
-          ) : null}
-          <Button fullWidth size="small" variant="contained" disabled>
-            Block
-          </Button>
+          )}
+
+          {/* Reserve space / future block button */}
+          {status !== "self" && (
+            <Button fullWidth size="small" variant="contained" disabled>
+              Block
+            </Button>
+          )}
         </Stack>
       </Stack>
     </Paper>
   );
 }
 
-function PopoutProfile({ width = "auto" }) {
-  const height = width ? `calc(${width} * 1.6667)` : "auto";
-  return (
-    <Paper sx={{ width, height, p: 1, overflow: "hidden" }} elevation={3}>
-      xd2
-    </Paper>
-  );
-}
+// ------------------------------------------------------------
+// POP‑OUT & MINI VARIANTS (unchanged)
+// ------------------------------------------------------------
+const PopoutProfile = ({ width = "auto" }) => (
+  <Paper
+    sx={{ width, height: width ? `calc(${width} * 1.6667)` : "auto", p: 1 }}
+    elevation={3}
+  >
+    xd2
+  </Paper>
+);
 
-function MiniProfile({ width = "auto" }) {
-  const height = width ? `calc(${width} / 4)` : "auto";
-  return (
-    <Paper sx={{ width, height, p: 1, overflow: "hidden" }} elevation={3}>
-      xd3
-    </Paper>
-  );
-}
+const MiniProfile = ({ width = "auto" }) => (
+  <Paper
+    sx={{ width, height: width ? `calc(${width} / 4)` : "auto", p: 1 }}
+    elevation={3}
+  >
+    xd3
+  </Paper>
+);
 
+// ------------------------------------------------------------
+// EXPORT
+// ------------------------------------------------------------
 export default function ProfileCard(props) {
   switch (props.type) {
     case "popout":
