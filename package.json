@@ -114,12 +114,13 @@
 		"electron-builder": "^25.1.8",
 		"eslint": "^8.57.1",
 		"eslint-plugin-import": "^2.31.0",
+		"eslint-plugin-prettier": "^5.2.6",
 		"eslint-plugin-react": "^7.37.5",
 		"eslint-plugin-unused-imports": "^4.1.4",
 		"globals": "^16.0.0",
 		"kill-port": "^2.0.1",
 		"nodemon": "^3.1.0",
-		"prettier": "^2.8.8",
+		"prettier": "^3.5.3",
 		"sass": "^1.63.6",
 		"wait-on": "^8.0.2"
 	}

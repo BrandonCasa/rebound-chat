@@ -30,14 +30,15 @@ module.exports = {
 	plugins: ["react", "react-hooks", "jsx-a11y", "unused-imports", "import", "prettier"],
 
 	extends: [
-		"eslint:recommended", // core rules
-		"plugin:react/recommended", // React best practices
-		"plugin:react-hooks/recommended", // Hooks rules
-		"plugin:jsx-a11y/recommended", // accessibility
-		"plugin:import/errors", // import validation
+		"eslint:recommended",
+		"plugin:react/recommended",
+		"plugin:react-hooks/recommended",
+		"plugin:jsx-a11y/recommended",
+
+		"plugin:import/errors",
 		"plugin:import/warnings",
-		"plugin:import/order", // import sorting
-		"plugin:prettier/recommended", // Prettier integration
+
+		"plugin:prettier/recommended",
 	],
 
 	rules: {
