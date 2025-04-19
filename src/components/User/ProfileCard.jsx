@@ -129,7 +129,7 @@ function FullProfile({ user, self, width = "auto", passStyle }) {
     );
   }
 
-  const { id: userId, displayName, username, bio } = profile;
+  const { _id, displayName, username, bio } = profile;
 
   return (
     <Paper

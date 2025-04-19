@@ -96,10 +96,11 @@ jobs:
           node-version: "18.x"
       - name: Install Dependencies
         run: npm ci --ignore-scripts
+      - name: Linter
+        run: eslint . --fix
       - name: Run Build Command
         run: npm run build
         env:
-          CI: false
           PUBLIC_URL: "."
       - name: Run Dist Command for ${{ matrix.platform }}
         run: npm run dist -- ${{ matrix.builderFlag }} ${{ matrix.archFlag }} --publish always

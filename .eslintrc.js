@@ -53,7 +53,7 @@ module.exports = {
   ],
 
   rules: {
-    "linebreak-style": ["error", "unix"],
+    "linebreak-style": ["warn", "unix"],
     "no-unused-vars": "off",
     // treat Prettier issues as errors
     "prettier/prettier": "error",
