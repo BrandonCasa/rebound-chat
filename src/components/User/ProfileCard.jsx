@@ -29,7 +29,7 @@ function FullProfile({ user, self, width = "auto", passStyle }) {
 	const socket = socketIoHelper.getSocket();
 	const prevIdRef = useRef();
 	const watchedId = self ? authState.userId : user?.id; // might be undefined
-	console.log(profile);
+
 	useEffect(() => {
 		if (!socket?.connected) return;
 
@@ -140,7 +140,7 @@ function FullProfile({ user, self, width = "auto", passStyle }) {
 					}}
 				/>
 				<Stack direction="row" spacing={2} alignItems="center">
-					<Avatar src="defaultpfp.png" alt="avatar" sx={{ width: 56, height: 56 }} />
+					<Avatar src="defaultpfp.webp" alt="avatar" sx={{ width: 56, height: 56 }} />
 					<Box>
 						<Typography variant="h6">{displayName}</Typography>
 						<Typography variant="body2" color="text.secondary">
