@@ -23,13 +23,13 @@ function FullProfile({ user, self, width = "auto", passStyle }) {
 
 	/** ---- local mirror of the incoming `user` prop ---- */
 	const [profile, setProfile] = useState(user); // initial
-	useEffect(() => setProfile(user || null), [user]); // keep in‑sync
+	useEffect(() => setProfile((self ? authState : user) || null), [user]); // keep in‑sync
 
 	/** ---- socket watcher wiring ---- */
 	const socket = socketIoHelper.getSocket();
 	const prevIdRef = useRef();
 	const watchedId = self ? authState.userId : user?.id; // might be undefined
-
+	console.log(profile);
 	useEffect(() => {
 		if (!socket?.connected) return;
 
@@ -130,7 +130,7 @@ function FullProfile({ user, self, width = "auto", passStyle }) {
 			<Stack spacing={1} sx={{ p: 1, flex: 1 }}>
 				<Box
 					component="img"
-					src="banner.png"
+					src="banner.webp"
 					alt="banner"
 					sx={{
 						width: "100%",
@@ -160,76 +160,73 @@ function FullProfile({ user, self, width = "auto", passStyle }) {
 					<Typography variant="body2" color="text.secondary">
 						{bio}
 					</Typography>
-
-					<Typography variant="subtitle2" sx={{ mt: 1 }}>
-						Interests:
-					</Typography>
-					<Stack direction="row" spacing={1} sx={{ mt: 0.5, flexWrap: "wrap" }}>
-						<Chip label="Overwatch" variant="outlined" size="small" />
-						<Chip label="Programming" variant="outlined" size="small" />
-						<Chip label="Coffee" variant="outlined" size="small" />
-					</Stack>
 				</Paper>
 
 				{/* ---- ACTIONS ---- */}
-				<Stack direction="row" spacing={1} sx={{ pt: 1 }} justifyContent="space-between">
-					{status === "none" && (
-						<Button
-							fullWidth
-							size="small"
-							variant="contained"
-							color="secondary"
-							startIcon={<Icons.PersonAdd />}
-							onClick={() => handleAction("addfriend", { recipientId: profile.id }, `Sent friend request to '${profile.displayName}'.`)}
-						>
-							Add
-						</Button>
-					)}
-
-					{status === "friends" && (
-						<Button
-							fullWidth
-							size="small"
-							variant="contained"
-							color="error"
-							startIcon={<Icons.PersonRemove />}
-							onClick={() => handleAction("removefriend", { friendId }, `Removed friend '${profile.displayName}'.`)}
-						>
-							Remove
-						</Button>
-					)}
-
-					{status === "sent" && (
-						<Button
-							fullWidth
-							size="small"
-							variant="outlined"
-							color="info"
-							startIcon={<Icons.PersonOff />}
-							onClick={() => handleAction("cancelfriend", { friendId }, `Canceled friend request to '${profile.displayName}'.`, "info")}
-						>
-							Cancel
-						</Button>
-					)}
-
-					{status === "received" && (
-						<ButtonGroup fullWidth size="small" variant="contained">
-							<Button color="success" startIcon={<Icons.PersonAdd />} onClick={() => handleAction("acceptfriend", { friendId }, `Accepted friend request from '${profile.displayName}'.`)}>
-								Accept
+				{!self && (
+					<Stack direction="row" spacing={1} sx={{ pt: 1 }} justifyContent="space-between">
+						{status === "none" && (
+							<Button
+								fullWidth
+								size="small"
+								variant="contained"
+								color="secondary"
+								startIcon={<Icons.PersonAdd />}
+								onClick={() => handleAction("addfriend", { recipientId: profile.id }, `Sent friend request to '${profile.displayName}'.`)}
+							>
+								Add
 							</Button>
-							<Button color="error" startIcon={<Icons.PersonRemove />} onClick={() => handleAction("declinefriend", { friendId }, `Declined friend request from '${profile.displayName}'.`, "warning")}>
-								Decline
-							</Button>
-						</ButtonGroup>
-					)}
+						)}
 
-					{/* Reserve space / future block button */}
-					{status !== "self" && (
-						<Button fullWidth size="small" variant="contained" disabled>
-							Block
-						</Button>
-					)}
-				</Stack>
+						{status === "friends" && (
+							<Button
+								fullWidth
+								size="small"
+								variant="contained"
+								color="error"
+								startIcon={<Icons.PersonRemove />}
+								onClick={() => handleAction("removefriend", { friendId }, `Removed friend '${profile.displayName}'.`)}
+							>
+								Remove
+							</Button>
+						)}
+
+						{status === "sent" && (
+							<Button
+								fullWidth
+								size="small"
+								variant="outlined"
+								color="info"
+								startIcon={<Icons.PersonOff />}
+								onClick={() => handleAction("cancelfriend", { friendId }, `Canceled friend request to '${profile.displayName}'.`, "info")}
+							>
+								Cancel
+							</Button>
+						)}
+
+						{status === "received" && (
+							<ButtonGroup fullWidth size="small" variant="contained">
+								<Button color="success" startIcon={<Icons.PersonAdd />} onClick={() => handleAction("acceptfriend", { friendId }, `Accepted friend request from '${profile.displayName}'.`)}>
+									Accept
+								</Button>
+								<Button
+									color="error"
+									startIcon={<Icons.PersonRemove />}
+									onClick={() => handleAction("declinefriend", { friendId }, `Declined friend request from '${profile.displayName}'.`, "warning")}
+								>
+									Decline
+								</Button>
+							</ButtonGroup>
+						)}
+
+						{/* Reserve space / future block button */}
+						{status !== "self" && (
+							<Button fullWidth size="small" variant="contained" disabled>
+								Block
+							</Button>
+						)}
+					</Stack>
+				)}
 			</Stack>
 		</Paper>
 	);
