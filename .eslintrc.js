@@ -53,10 +53,13 @@ module.exports = {
   ],
 
   rules: {
-    "linebreak-style": ["warn", "unix"],
+    "prettier/prettier": [
+      "error",
+      {
+        endOfLine: "auto",
+      },
+    ],
     "no-unused-vars": "off",
-    // treat Prettier issues as errors
-    "prettier/prettier": "error",
 
     // React-specific tweaks
     "react/react-in-jsx-scope": "off", // not needed with new JSX transform
