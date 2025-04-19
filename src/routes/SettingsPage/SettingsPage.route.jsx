@@ -100,7 +100,7 @@ function SettingsPage() {
 	const borderRadius = overrides.shape?.borderRadius ?? theme.shape.borderRadius;
 
 	return (
-		<Box
+        <Box
 			sx={{
 				display: "flex",
 				justifyContent: "center",
@@ -109,7 +109,7 @@ function SettingsPage() {
 				flexDirection: "column",
 			}}
 		>
-			<ItemPaper>
+            <ItemPaper>
 				<Typography variant="h4" sx={{ flexGrow: 1 }}>
 					Settings
 				</Typography>
@@ -117,7 +117,7 @@ function SettingsPage() {
 					Reset to Defaults
 				</Button>
 			</ItemPaper>
-			<Stack
+            <Stack
 				marginTop={2}
 				spacing={2}
 				sx={{
@@ -158,13 +158,15 @@ function SettingsPage() {
 					<Stack spacing={3}>
 						<Stack direction="row" spacing={2} alignItems="center">
 							<Typography sx={{ maxWidth: 160 }}>Border Radius</Typography>
-							<TextField type="number" inputProps={{ min: 0 }} value={borderRadius} onChange={(e) => handleNumberChange(["shape", "borderRadius"], e.target.value)} size="small" />
+							<TextField type="number" value={borderRadius} onChange={(e) => handleNumberChange(["shape", "borderRadius"], e.target.value)} size="small" slotProps={{
+                                htmlInput: { min: 0 }
+                            }} />
 						</Stack>
 					</Stack>
 				</Paper>
 			</Stack>
-		</Box>
-	);
+        </Box>
+    );
 }
 
 export default SettingsPage;

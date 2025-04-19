@@ -103,35 +103,37 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
           onChange={(e) => handleFormDataChange("username", e.target.value, {})}
           helperText="Your private login name."
           autoComplete="current-username"
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Tooltip
-                  title={usernameErrorMessages}
-                  arrow
-                  placement="bottom-start"
-                  open={Object.keys(formData.usernameErrors).length > 0}
-                >
-                  <span>
-                    <IconButton
-                      disableTouchRipple
-                      disabled={
-                        Object.keys(formData.usernameErrors).length <= 0
-                      }
-                      style={{ color: "rgba(0, 0, 0, 0.26)" }}
-                    >
-                      {Object.keys(formData.usernameErrors).length > 0 ? (
-                        <Icons.PriorityHighRounded
-                          style={{ color: "rgba(255, 0, 0, 0.52)" }}
-                        />
-                      ) : (
-                        <Icons.PersonRounded />
-                      )}
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              </InputAdornment>
-            ),
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Tooltip
+                    title={usernameErrorMessages}
+                    arrow
+                    placement="bottom-start"
+                    open={Object.keys(formData.usernameErrors).length > 0}
+                  >
+                    <span>
+                      <IconButton
+                        disableTouchRipple
+                        disabled={
+                          Object.keys(formData.usernameErrors).length <= 0
+                        }
+                        style={{ color: "rgba(0, 0, 0, 0.26)" }}
+                      >
+                        {Object.keys(formData.usernameErrors).length > 0 ? (
+                          <Icons.PriorityHighRounded
+                            style={{ color: "rgba(255, 0, 0, 0.52)" }}
+                          />
+                        ) : (
+                          <Icons.PersonRounded />
+                        )}
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </InputAdornment>
+              ),
+            }
           }}
         />
         <TextField
@@ -145,33 +147,35 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
           helperText="Your email address."
           autoComplete="current-email"
           type="email"
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Tooltip
-                  title={emailErrorMessages}
-                  arrow
-                  placement="bottom-start"
-                  open={Object.keys(formData.emailErrors).length > 0}
-                >
-                  <span>
-                    <IconButton
-                      disableTouchRipple
-                      disabled={Object.keys(formData.emailErrors).length <= 0}
-                      style={{ color: "rgba(0, 0, 0, 0.26)" }}
-                    >
-                      {Object.keys(formData.emailErrors).length > 0 ? (
-                        <Icons.PriorityHighRounded
-                          style={{ color: "rgba(255, 0, 0, 0.52)" }}
-                        />
-                      ) : (
-                        <Icons.EmailRounded />
-                      )}
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              </InputAdornment>
-            ),
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Tooltip
+                    title={emailErrorMessages}
+                    arrow
+                    placement="bottom-start"
+                    open={Object.keys(formData.emailErrors).length > 0}
+                  >
+                    <span>
+                      <IconButton
+                        disableTouchRipple
+                        disabled={Object.keys(formData.emailErrors).length <= 0}
+                        style={{ color: "rgba(0, 0, 0, 0.26)" }}
+                      >
+                        {Object.keys(formData.emailErrors).length > 0 ? (
+                          <Icons.PriorityHighRounded
+                            style={{ color: "rgba(255, 0, 0, 0.52)" }}
+                          />
+                        ) : (
+                          <Icons.EmailRounded />
+                        )}
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </InputAdornment>
+              ),
+            }
           }}
         />
         <TextField
@@ -185,35 +189,37 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
           helperText="Your encrypted password."
           autoComplete="current-password"
           type="password"
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Tooltip
-                  title={passwordErrorMessages}
-                  arrow
-                  placement="bottom-start"
-                  open={Object.keys(formData.passwordErrors).length > 0}
-                >
-                  <span>
-                    <IconButton
-                      disableTouchRipple
-                      disabled={
-                        Object.keys(formData.passwordErrors).length <= 0
-                      }
-                      style={{ color: "rgba(0, 0, 0, 0.26)" }}
-                    >
-                      {Object.keys(formData.passwordErrors).length > 0 ? (
-                        <Icons.PriorityHighRounded
-                          style={{ color: "rgba(255, 0, 0, 0.52)" }}
-                        />
-                      ) : (
-                        <Icons.KeyRounded />
-                      )}
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              </InputAdornment>
-            ),
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Tooltip
+                    title={passwordErrorMessages}
+                    arrow
+                    placement="bottom-start"
+                    open={Object.keys(formData.passwordErrors).length > 0}
+                  >
+                    <span>
+                      <IconButton
+                        disableTouchRipple
+                        disabled={
+                          Object.keys(formData.passwordErrors).length <= 0
+                        }
+                        style={{ color: "rgba(0, 0, 0, 0.26)" }}
+                      >
+                        {Object.keys(formData.passwordErrors).length > 0 ? (
+                          <Icons.PriorityHighRounded
+                            style={{ color: "rgba(255, 0, 0, 0.52)" }}
+                          />
+                        ) : (
+                          <Icons.KeyRounded />
+                        )}
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </InputAdornment>
+              ),
+            }
           }}
         />
       </>
@@ -235,35 +241,37 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
           }
           helperText="Your public display name."
           autoComplete="current-displayName"
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Tooltip
-                  title={displayNameErrorMessages}
-                  arrow
-                  placement="bottom-start"
-                  open={Object.keys(formData.displayNameErrors).length > 0}
-                >
-                  <span>
-                    <IconButton
-                      disableTouchRipple
-                      disabled={
-                        Object.keys(formData.displayNameErrors).length <= 0
-                      }
-                      style={{ color: "rgba(0, 0, 0, 0.26)" }}
-                    >
-                      {Object.keys(formData.displayNameErrors).length > 0 ? (
-                        <Icons.PriorityHighRounded
-                          style={{ color: "rgba(255, 0, 0, 0.52)" }}
-                        />
-                      ) : (
-                        <Icons.PersonRounded />
-                      )}
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              </InputAdornment>
-            ),
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Tooltip
+                    title={displayNameErrorMessages}
+                    arrow
+                    placement="bottom-start"
+                    open={Object.keys(formData.displayNameErrors).length > 0}
+                  >
+                    <span>
+                      <IconButton
+                        disableTouchRipple
+                        disabled={
+                          Object.keys(formData.displayNameErrors).length <= 0
+                        }
+                        style={{ color: "rgba(0, 0, 0, 0.26)" }}
+                      >
+                        {Object.keys(formData.displayNameErrors).length > 0 ? (
+                          <Icons.PriorityHighRounded
+                            style={{ color: "rgba(255, 0, 0, 0.52)" }}
+                          />
+                        ) : (
+                          <Icons.PersonRounded />
+                        )}
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </InputAdornment>
+              ),
+            }
           }}
         />
         <TextField
@@ -276,33 +284,35 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
           variant="outlined"
           helperText="Your public bio."
           autoComplete="current-aboutMe"
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Tooltip
-                  title={bioErrorMessages}
-                  arrow
-                  placement="bottom-start"
-                  open={Object.keys(formData.bioErrors).length > 0}
-                >
-                  <span>
-                    <IconButton
-                      disableTouchRipple
-                      disabled={Object.keys(formData.bioErrors).length <= 0}
-                      style={{ color: "rgba(0, 0, 0, 0.26)" }}
-                    >
-                      {Object.keys(formData.bioErrors).length > 0 ? (
-                        <Icons.PriorityHighRounded
-                          style={{ color: "rgba(255, 0, 0, 0.52)" }}
-                        />
-                      ) : (
-                        <Icons.NoteRounded />
-                      )}
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              </InputAdornment>
-            ),
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Tooltip
+                    title={bioErrorMessages}
+                    arrow
+                    placement="bottom-start"
+                    open={Object.keys(formData.bioErrors).length > 0}
+                  >
+                    <span>
+                      <IconButton
+                        disableTouchRipple
+                        disabled={Object.keys(formData.bioErrors).length <= 0}
+                        style={{ color: "rgba(0, 0, 0, 0.26)" }}
+                      >
+                        {Object.keys(formData.bioErrors).length > 0 ? (
+                          <Icons.PriorityHighRounded
+                            style={{ color: "rgba(255, 0, 0, 0.52)" }}
+                          />
+                        ) : (
+                          <Icons.NoteRounded />
+                        )}
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </InputAdornment>
+              ),
+            }
           }}
         />
       </>

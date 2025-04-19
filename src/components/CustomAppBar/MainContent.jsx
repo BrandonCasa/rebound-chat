@@ -1,8 +1,8 @@
 import * as Icons from "@mui/icons-material";
 import { Toolbar, Box, IconButton, Tooltip } from "@mui/material";
-import { styled } from "@mui/material/styles";
+import { styled, useTheme } from "@mui/material/styles";
 
-const MainBox = styled(Box)(({ _theme }) => ({
+const MainBox = styled(Box)(({ theme }) => ({
 	position: "absolute",
 	flexGrow: 1,
 	padding: 2,
@@ -19,14 +19,15 @@ const IconBox = styled(Box)(({ theme }) => ({
 	top: 0,
 }));
 
-function MainContent({ drawerWidth, drawerOpen, theme, iconWidth, setDrawerOpen, children }) {
+function MainContent({ drawerWidth, drawerOpen, iconWidth, setDrawerOpen, children }) {
+	const theme = useTheme();
+
 	const handleDrawerToggle = () => {
 		setDrawerOpen(!drawerOpen);
 	};
 
 	return (
 		<MainBox
-			theme={theme}
 			sx={{
 				left: `${drawerOpen ? drawerWidth : 0}px`,
 				width: `calc(100% - ${drawerOpen ? drawerWidth : 0}px)`,
@@ -43,7 +44,6 @@ function MainContent({ drawerWidth, drawerOpen, theme, iconWidth, setDrawerOpen,
 				}}
 			/>
 			<IconBox
-				theme={theme}
 				sx={{
 					width: `${drawerWidth}px`,
 					height: `${drawerWidth}px`,
