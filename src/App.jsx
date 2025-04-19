@@ -75,8 +75,8 @@ const App = () => {
 			const verifyUser = async () => {
 				if (authState.authToken && !authState.loggedIn) {
 					dispatch(setLoggingIn({ loggingIn: true }));
-					let requestString = process.env.NODE_ENV === "development" ? `http://localhost:6001/api/users/verify` : `/api/users/verify`;
-					requestString = process.env.NODE_ENV !== "development" && isElectron ? `https://rebound.nexus/api/users/verify` : requestString;
+					let requestStringBase = process.env.NODE_ENV === "development" ? `http://localhost:6001/api` : isElectron ? `https://rebound.nexus/api` : "/api";
+					let requestString = `${requestStringBase}/users/verify`;
 
 					try {
 						const response = await axios.post(requestString, {
@@ -95,6 +95,8 @@ const App = () => {
 								bio: response.data.user.bio,
 								authToken: authState.authToken,
 								friends: response.data.user.friends,
+								bannerUrl: response.data.user.bannerUrl !== "" ? requestStringBase + response.data.user.bannerUrl : null,
+								avatarUrl: response.data.user.avatarUrl !== "" ? requestStringBase + response.data.user.avatarUrl : null,
 							})
 						);
 						dispatch(

@@ -215,7 +215,9 @@ function ChatPage() {
 				}}
 				anchorEl={userPreviewEl}
 				open={Boolean(userPreviewEl)}
-				onClose={() => previewUser(null)}
+				onClose={() => {
+					previewUser(null);
+				}}
 				sx={{ marginBottom: 2 }}
 			>
 				<ProfileCard self={authState.userId === userPreviewUser?.id} type="full" width="300px" passStyle={{ maxWidth: "300px" }} user={userPreviewUser} />

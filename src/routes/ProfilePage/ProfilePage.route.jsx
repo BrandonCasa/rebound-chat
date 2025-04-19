@@ -1,52 +1,21 @@
-// Imports
-import { Box, Button, Paper, Stack, Typography } from "@mui/material";
+// src/pages/ProfilePage.jsx
+import { Box, Stack, Typography } from "@mui/material";
 import { styled, useTheme } from "@mui/material/styles";
-import axios from "axios";
-import React, { useEffect } from "react";
+import React from "react";
 import { useSelector } from "react-redux";
 
 import ProfileCard from "components/User/ProfileCard";
 
-const isElectron = typeof window !== "undefined" && window.process && window.process.versions != null && Boolean(window.process.versions.electron);
-
-const ItemPaper = styled(Paper)(({ theme }) => ({
+const ItemPaper = styled(Box)(({ theme }) => ({
 	...theme.typography.body2,
 	padding: theme.spacing(1),
 	textAlign: "center",
 	color: theme.palette.text.secondary,
 }));
 
-function ProfilePage(_props) {
-	let theme = useTheme();
+export default function ProfilePage() {
+	const theme = useTheme();
 	const authState = useSelector((state) => state.auth);
-
-	useEffect(() => {
-		return () => {};
-	}, [authState.loggedIn]);
-
-	function randomizeBio() {
-		const newUser = {
-			bio: (Math.random() + 1).toString(36).substring(2),
-		};
-		let requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/modify" : "/api/users/modify";
-		requestString = process.env.NODE_ENV !== "development" && isElectron ? `https://rebound.nexus/api/users/modify` : requestString;
-
-		axios
-			.put(
-				requestString,
-				{ user: newUser },
-				{
-					headers: {
-						"Content-Type": "application/json",
-						"Allow-Control-Allow-Origin": "*",
-						authorization: `Bearer ${authState.authToken}`,
-					},
-				}
-			)
-			.catch((error) => {
-				console.log(error);
-			});
-	}
 
 	return (
 		<Box
@@ -59,7 +28,7 @@ function ProfilePage(_props) {
 		>
 			<Stack spacing={2} sx={{ height: "100%", width: "100%" }}>
 				<ItemPaper>
-					<Typography variant="h4" sx={{ color: `${theme.palette.text.primary}` }}>
+					<Typography variant="h4" color="text.primary">
 						Your Profile
 					</Typography>
 				</ItemPaper>
@@ -77,22 +46,8 @@ function ProfilePage(_props) {
 							marginBottom: 2,
 						}}
 					/>
-					<Button
-						variant="contained"
-						sx={{
-							maxWidth: "275px",
-							marginLeft: "auto",
-							marginRight: "auto",
-							width: "100%",
-						}}
-						onClick={randomizeBio}
-					>
-						Randomize Bio (not recommended)
-					</Button>
 				</Box>
 			</Stack>
 		</Box>
 	);
 }
-
-export default ProfilePage;

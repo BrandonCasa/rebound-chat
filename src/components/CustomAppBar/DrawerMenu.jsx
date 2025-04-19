@@ -91,7 +91,6 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
 							sx={{ opacity: isActive(path) ? 0.5 : 1.0 }}
 							onClick={() => {
 								navigate(path);
-								setTimeout(() => setDrawerOpen(false), 500);
 							}}
 						>
 							<Icon />

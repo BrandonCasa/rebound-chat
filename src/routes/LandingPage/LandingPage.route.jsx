@@ -20,21 +20,6 @@ function LandingPage(_props) {
 		>
 			<Stack spacing={2} sx={{ height: "100%", width: "100%" }}>
 				<LandingHeader title="Introducing Rebound" subtitle="The social hub for gamers and friends." />
-
-				<ItemBox>
-					<Divider
-						sx={{
-							"&::after": { borderWidth: "3px" },
-							"&::before": { borderWidth: "3px" },
-							margin: 0,
-						}}
-						variant="middle"
-						textAlign="left"
-					>
-						<Chip color="secondary" label="Features" />
-					</Divider>
-				</ItemBox>
-
 				<ItemBox
 					sx={{
 						width: "100%",
