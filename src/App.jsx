@@ -18,6 +18,7 @@ import { addSnackbar } from "./slices/snackbarSlice";
 
 import useCustomAppBar from "components/CustomAppBar/useCustomAppBar";
 import useWindowDimensions from "helpers/useWindowDimensions";
+import AutoUpdate from "./components/AutoUpdate";
 
 const LandingPage = lazy(() => import("./routes/LandingPage/LandingPage.route"));
 const ProfilePage = lazy(() => import("routes/ProfilePage/ProfilePage.route"));
@@ -31,10 +32,8 @@ const PageNotFoundContainer = styled("div")({
 	textAlign: "center",
 });
 
-const isElectron = typeof window !== "undefined" && window.process && window.process.versions != null && Boolean(window.process.versions.electron);
-
 const AppRouter = ({ children }) => {
-	const Router = isElectron ? HashRouter : BrowserRouter;
+	const Router = window.isElectron ? HashRouter : BrowserRouter;
 	return <Router>{children}</Router>;
 };
 
@@ -75,7 +74,7 @@ const App = () => {
 			const verifyUser = async () => {
 				if (authState.authToken && !authState.loggedIn) {
 					dispatch(setLoggingIn({ loggingIn: true }));
-					let requestStringBase = process.env.NODE_ENV === "development" ? `http://localhost:6001/api` : isElectron ? `https://rebound.nexus/api` : "/api";
+					let requestStringBase = process.env.NODE_ENV === "development" ? `http://localhost:6001/api` : window.isElectron ? `https://rebound.nexus/api` : "/api";
 					let requestString = `${requestStringBase}/users/verify`;
 
 					try {
@@ -95,8 +94,8 @@ const App = () => {
 								bio: response.data.user.bio,
 								authToken: authState.authToken,
 								friends: response.data.user.friends,
-								bannerUrl: response.data.user.bannerUrl !== "" ? requestStringBase + response.data.user.bannerUrl : null,
-								avatarUrl: response.data.user.avatarUrl !== "" ? requestStringBase + response.data.user.avatarUrl : null,
+								bannerUrl: response?.data?.user?.bannerUrl && response?.data?.user?.bannerUrl !== "" ? requestStringBase + response.data.user.bannerUrl : null,
+								avatarUrl: response?.data?.user?.avatarUrl && response?.data?.user?.avatarUrl !== "" ? requestStringBase + response.data.user.avatarUrl : null,
 							})
 						);
 						dispatch(
@@ -131,6 +130,7 @@ const App = () => {
 
 	return (
 		<ThemeProvider theme={darkTheme}>
+			{window.isElectron && <AutoUpdate />}
 			<CssBaseline />
 			<SnackbarMapper drawerWidth={customAppBarProps.drawerWidth} drawerOpen={customAppBarProps.drawerOpen} />
 			<AppRouter>

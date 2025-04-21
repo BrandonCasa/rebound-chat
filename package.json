@@ -57,8 +57,7 @@
 		},
 		"win": {
 			"target": [
-				"nsis",
-				"portable"
+				"nsis"
 			],
 			"publish": [
 				"github"
@@ -77,7 +76,7 @@
 			]
 		},
 		"nsis": {
-			"oneClick": false,
+			"oneClick": true,
 			"perMachine": true
 		}
 	},

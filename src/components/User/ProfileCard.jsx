@@ -6,9 +6,10 @@ import { useSelector, useDispatch } from "react-redux";
 
 import socketIoHelper from "helpers/socket";
 import { addSnackbar } from "slices/snackbarSlice";
+import { setLoggedIn } from "slices/authSlice";
 
-const isElectron = typeof window !== "undefined" && Boolean(window.process?.versions?.electron);
-const API_BASE = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users" : isElectron ? "https://rebound.nexus/api/users" : "/api/users";
+let requestStringBase = process.env.NODE_ENV === "development" ? `http://localhost:6001/api` : window.isElectron ? `https://rebound.nexus/api` : "/api";
+const API_BASE = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users" : window.isElectron ? "https://rebound.nexus/api/users" : "/api/users";
 
 function FullProfile({ user, self, width = "auto", passStyle }) {
 	const dispatch = useDispatch();
@@ -21,25 +22,23 @@ function FullProfile({ user, self, width = "auto", passStyle }) {
 	const [bio, setBio] = useState("");
 	const [bannerFile, setBannerFile] = useState(null);
 	const [avatarFile, setAvatarFile] = useState(null);
-	const [bannerPreview, setBannerPreview] = useState(null);
-	const [avatarPreview, setAvatarPreview] = useState(null);
-
-	const bannerInputRef = useRef();
-	const avatarInputRef = useRef();
+	const [bannerPreview, setBannerPreview] = useState("/banner.webp");
+	const [avatarPreview, setAvatarPreview] = useState("/defaultpfp.webp");
 
 	// sync profile → form fields
 	useEffect(() => {
 		const src = self ? authState : user;
-		if (src) {
+		if (src && profile !== src) {
 			setProfile(src);
 			if (!editMode) {
 				setDisplayName(src.displayName || "");
 				setBio(src.bio || "");
-				setBannerPreview(src.bannerUrl || "/banner.webp");
-				setAvatarPreview(src.avatarUrl || "/defaultpfp.webp");
+				const now = Date.now();
+				setBannerPreview((src.bannerUrl || "/banner.webp") + `?t=${now}`);
+				setAvatarPreview((src.avatarUrl || "/defaultpfp.webp") + `?t=${now}`);
 			}
 		}
-	}, [user, authState, self, editMode]);
+	}, [user, authState, self, editMode, profile]);
 
 	// socket watching (unchanged) …
 	const socket = socketIoHelper.getSocket();
@@ -53,7 +52,14 @@ function FullProfile({ user, self, width = "auto", passStyle }) {
 			socket.emit("watch_user", watchedId);
 			prevIdRef.current = watchedId;
 		}
-		const handle = ([id, data]) => id === watchedId && setProfile(data) && !editMode && setBio(data.bio);
+		const handle = ([id, data]) => {
+			if (id !== watchedId || editMode) return;
+			setProfile(data);
+			setBio(data.bio);
+			const now = Date.now();
+			setAvatarPreview((data.avatarUrl || "/defaultpfp.webp") + `?t=${now}`);
+			setBannerPreview((data.bannerUrl || "/banner.webp") + `?t=${now}`);
+		};
 		socket.on("watched_user_saved", handle);
 		return () => {
 			if (watchedId) socket.emit("unwatch_user", watchedId);
@@ -97,7 +103,13 @@ function FullProfile({ user, self, width = "auto", passStyle }) {
 				},
 			})
 			.then((res) => {
-				setProfile(res.data);
+				setProfile(res.data.user);
+				dispatch(
+					setLoggedIn({
+						bannerUrl: res?.data?.user?.bannerUrl && res?.data?.user?.bannerUrl !== "" ? requestStringBase + res.data.user.bannerUrl : null,
+						avatarUrl: res?.data?.user?.avatarUrl && res?.data?.user?.avatarUrl !== "" ? requestStringBase + res.data.user.avatarUrl : null,
+					})
+				);
 				dispatch(addSnackbar({ snackbarMsg: "Profile updated!" }));
 				setEditMode(false);
 			})
@@ -176,7 +188,7 @@ function FullProfile({ user, self, width = "auto", passStyle }) {
 				{/* Header: avatar + name */}
 				<Stack direction="row" spacing={2} alignItems="center">
 					<Box position="relative">
-						<Avatar src={avatarPreview} sx={{ width: 56, height: 56 }} />
+						<Avatar src={avatarPreview} sx={{ width: 56, height: 56 }} key={avatarPreview} />
 						{self && editMode && (
 							<IconButton component="label" sx={{ position: "absolute", bottom: -4, right: -4, bgcolor: "white" }} size="small">
 								<input hidden type="file" accept="image/*" onChange={onAvatarChange} />
