@@ -242,14 +242,20 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 			<Stack spacing={1} sx={{ p: 1, flex: 1 }}>
 				{/* banner */}
 				<Box position="relative">
-					<Box component="img" src={banner.preview || "/banner.webp"} alt="banner" sx={{ width: "100%", height: 120, borderRadius: 1, objectFit: "cover" }} key={banner.preview} />
+					<Box
+						component="img"
+						src={banner.preview || (window.isElectron ? "banner.webp" : "/banner.webp")}
+						alt="banner"
+						sx={{ width: "100%", height: 120, borderRadius: 1, objectFit: "cover" }}
+						key={banner.preview}
+					/>
 					{isSelf && editMode && <CameraInput onChange={banner.onChange} sx={{ position: "absolute", top: 8, right: 8, bgcolor: "rgba(255,255,255,0.7)" }} />}
 				</Box>
 
 				{/* avatar + name */}
 				<Stack direction="row" spacing={2} alignItems="center">
 					<Box position="relative">
-						<Avatar src={avatar.preview || "/defaultpfp.webp"} sx={{ width: 56, height: 56 }} />
+						<Avatar src={avatar.preview || (window.isElectron ? "defaultpfp.webp" : "/defaultpfp.webp")} sx={{ width: 56, height: 56 }} />
 						{isSelf && editMode && <CameraInput onChange={avatar.onChange} sx={{ position: "absolute", bottom: -4, right: -4, bgcolor: "white" }} />}
 					</Box>
 					<Box flex={1} minWidth={0}>
