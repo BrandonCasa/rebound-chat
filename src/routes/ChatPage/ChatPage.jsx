@@ -1,266 +1,273 @@
+// src/pages/ChatPage.jsx
+import React, { useState, useEffect } from "react";
 import * as Icons from "@mui/icons-material";
 import { Box, Button, Divider, Paper, Popover, Typography, useTheme } from "@mui/material";
 import axios from "axios";
-import React, { useState, useEffect } from "react";
-
 import { useDispatch, useSelector } from "react-redux";
 
-import ChatRoomMenu from "../../components/Chat/ChatRoomMenu";
-
-import UserListMenu from "../../components/Chat/UserListMenu";
-
+import ChatRoomMenu from "components/Chat/ChatRoomMenu";
+import UserListMenu from "components/Chat/UserListMenu";
 import ChatArea from "components/Chat/ChatArea";
 import ChatInput from "components/Chat/ChatInput";
 import ProfileCard from "components/User/ProfileCard";
+
 import socketIoHelper from "helpers/socket";
-
 import { setSocketRoom } from "slices/authSlice";
-
 import { addSnackbar } from "slices/snackbarSlice";
 
-async function getUserInfo(userId, authToken) {
-	let requestString = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/profile" : "/api/users/profile";
-	requestString = process.env.NODE_ENV !== "development" && window.isElectron ? `https://rebound.nexus/api/users/profile` : requestString;
+/* -------------------------------------------------- */
+/*  Constants & helpers                               */
+/* -------------------------------------------------- */
+const REQUEST_BASE = process.env.NODE_ENV === "development" ? "http://localhost:6001/api" : window.isElectron ? "https://rebound.nexus/api" : "/api";
 
-	return await axios
-		.get(requestString, {
+// ensure a URL is absolute (API returns `/uploads/…`)
+const fullUrl = (u) => (u ? (u.startsWith("http") ? u : REQUEST_BASE + u) : null);
+
+// cache‑bust so new images show up instantly
+const cache = (u) => (u ? `${fullUrl(u)}?t=${Date.now()}` : null);
+
+/* fetch complete profile for a given user id */
+async function getUserInfo(userId, authToken) {
+	const url = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/profile" : window.isElectron ? "https://rebound.nexus/api/users/profile" : "/api/users/profile";
+
+	try {
+		const { data } = await axios.get(url, {
 			headers: {
 				"Content-Type": "application/json",
 				"Allow-Control-Allow-Origin": "*",
-				authorization: `Bearer ${authToken}`,
+				Authorization: `Bearer ${authToken}`,
 			},
-			params: {
-				id: userId,
-			},
-		})
-		.then((response) => {
-			return response.data.user;
-		})
-		.catch((error) => {
-			console.log(error);
-		})
-		.finally(() => {
-			return null;
+			params: { id: userId },
 		});
+
+		const u = data.user;
+		return {
+			...u,
+			avatarUrl: cache(u.avatarUrl),
+			bannerUrl: cache(u.bannerUrl),
+		};
+	} catch (err) {
+		console.error(err);
+		return null;
+	}
 }
 
+/* -------------------------------------------------- */
+/*  Main component                                   */
+/* -------------------------------------------------- */
 function ChatPage() {
-	const [message, setMessage] = useState("");
-	const [messages, setMessages] = useState([]);
-	const [channels, setChannels] = useState({});
-	const [users, setUsers] = useState([]);
-	const [roomAnchorEl, setRoomAnchorEl] = React.useState(null);
-	const [userPreviewEl, setUserPreviewEl] = React.useState(null);
-	const [userPreviewUser, setUserPreviewUser] = React.useState(null);
-	const [userListAnchorEl, setUserListAnchorEl] = React.useState(null);
+	/* ----- global & theme ----- */
 	const authState = useSelector((state) => state.auth);
 	const dispatch = useDispatch();
 	const theme = useTheme();
 
+	/* ----- local UI state ---- */
+	const [message, setMessage] = useState("");
+	const [messages, setMessages] = useState([]);
+	const [channels, setChannels] = useState({});
+	const [users, setUsers] = useState([]);
+
+	/* menus & preview popovers */
+	const [roomAnchorEl, setRoomAnchorEl] = useState(null);
+	const [userListAnchorEl, setUserListAnchorEl] = useState(null);
+	const [userPreviewEl, setUserPreviewEl] = useState(null);
+	const [userPreviewUser, setUserPreviewUser] = useState(null);
+
+	/* -------------------------------------------------- */
+	/*  Socket lifecycle                                  */
+	/* -------------------------------------------------- */
 	useEffect(() => {
-		const socketClient = socketIoHelper.getSocket();
+		const socket = socketIoHelper.getSocket();
 
-		if (authState.loggedIn === true && socketClient !== null) {
-			// Room List
-			socketClient.on("room_list", (response) => {
-				const [roomList, rooms] = response;
+		if (authState.loggedIn && socket) {
+			/* rooms */
+			socket.on("room_list", ([idMap, roomObjs]) => {
+				setChannels(roomObjs);
 
-				setChannels(rooms);
-				//console.log(authState.socketInfo.currentRoom, Object.keys(roomList)[0]);
-				if (authState.socketInfo.currentRoom === null) {
+				if (!authState.socketInfo.currentRoom) {
 					dispatch(
 						setSocketRoom({
-							lastRoom: authState.socketInfo.currentRoom,
-							currentRoom: Object.keys(roomList)[0],
+							lastRoom: null,
+							currentRoom: Object.keys(idMap)[0] || null,
 						})
 					);
 				}
 			});
 
-			// Joined Room
-			socketClient.on("joined_room", (roomId, roomMessages) => {
-				setMessages(roomMessages);
-			});
+			/* messages */
+			socket.on("joined_room", (_id, msgs) => setMessages(msgs));
+			socket.on("message_sent", (_id, msgs) => setMessages(msgs));
+			socket.on("new_message", (_id, msgs) => setMessages(msgs));
 
-			// Message Sent
-			socketClient.on("message_sent", (roomId, roomMessages) => {
-				setMessages(roomMessages);
-			});
-
-			// New Message
-			socketClient.on("new_message", (roomId, roomMessages) => {
-				setMessages(roomMessages);
-			});
-
-			// User List
-			socketClient.on("user_list", (roomId, usersInRoom, userSender, eventType) => {
-				if (userSender.id !== authState.userId && eventType === "join") {
+			/* presence */
+			socket.on("user_list", (_roomId, list, sender, evt) => {
+				if (sender.id !== authState.userId) {
 					dispatch(
 						addSnackbar({
-							snackbarMsg: `'${userSender.displayName}' joined!`,
+							snackbarMsg: `'${sender.displayName}' ${evt === "join" ? "joined!" : "left."}`,
 							snackbarSeverity: "info",
 							autoHideDuration: 1500,
 						})
 					);
 				}
-				if (userSender.id !== authState.userId && eventType === "leave") {
-					dispatch(
-						addSnackbar({
-							snackbarMsg: `'${userSender.displayName}' left.`,
-							snackbarSeverity: "info",
-							autoHideDuration: 1500,
-						})
-					);
-				}
-				setUsers(usersInRoom);
+				setUsers(list);
 			});
 
-			// Render Emits
-			socketClient.emit("list_rooms");
+			/* initial pull */
+			socket.emit("list_rooms");
 		} else if (!authState.loggingIn) {
 			dispatch(
 				addSnackbar({
-					snackbarMsg: `Login or register to use this page.`,
+					snackbarMsg: "Login or register to use this page.",
 					snackbarSeverity: "warning",
-					autoHideDuration: 3000,
+					autoHideDuration: 1500,
 				})
 			);
 		}
 
 		return () => {
-			const socketClient = socketIoHelper.getSocket();
-
-			if (socketClient !== null) {
-				socketClient.off("room_list");
-				socketClient.off("joined_room");
-				socketClient.off("message_sent");
-				socketClient.off("new_message");
-				socketClient.off("user_list");
-				setChannels({});
-				setMessage("");
-				setMessages([]);
-				setUsers([]);
+			if (socket) {
+				socket.off("room_list");
+				socket.off("joined_room");
+				socket.off("message_sent");
+				socket.off("new_message");
+				socket.off("user_list");
 			}
-		};
-	}, [authState.loggedIn, authState.socketInfo.connected, authState.loggingIn, authState.socketInfo.currentRoom, authState.userId, dispatch]);
-
-	useEffect(() => {
-		return () => {
+			setChannels({});
+			setMessages([]);
 			setUsers([]);
 		};
+	}, [authState.loggedIn, authState.loggingIn, authState.socketInfo.currentRoom, authState.userId, dispatch]);
+
+	/* Clear user list when switching rooms */
+	useEffect(() => {
+		setUsers([]);
 	}, [authState.socketInfo.currentRoom]);
 
-	useEffect(() => {
-		return () => {
+	/* Reset currentRoom on unmount */
+	useEffect(
+		() => () => {
 			dispatch(setSocketRoom({ currentRoom: null }));
-		};
-	}, [dispatch]);
+		},
+		[dispatch]
+	);
 
-	const sendMessage = (event) => {
-		event?.preventDefault();
+	/* -------------------------------------------------- */
+	/*  Handlers                                          */
+	/* -------------------------------------------------- */
+	const sendMessage = (e) => {
+		e?.preventDefault();
 
-		if (message && authState.socketInfo.currentRoom !== null) {
-			const socketClient = socketIoHelper.getSocket();
-			socketClient.emit("message_room", [authState.socketInfo.currentRoom, message]);
-			setMessage("");
-		}
+		if (!message || !authState.socketInfo.currentRoom) return;
+
+		const socket = socketIoHelper.getSocket();
+		socket.emit("message_room", [authState.socketInfo.currentRoom, message]);
+		setMessage("");
 	};
 
-	const clickRoomSelect = (event) => {
-		setRoomAnchorEl(event.currentTarget);
+	const clickRoomSelect = (e) => {
+		setRoomAnchorEl(e.currentTarget);
 		setUserListAnchorEl(null);
 	};
 
-	const clickUserList = (event) => {
-		setUserListAnchorEl(event.currentTarget);
+	const clickUserList = (e) => {
+		setUserListAnchorEl(e.currentTarget);
 		setRoomAnchorEl(null);
 	};
 
-	const previewUser = async (chatElement, user) => {
-		if (!chatElement?.current) {
+	const previewUser = async (elRef, u) => {
+		if (!elRef?.current) {
 			setUserPreviewEl(null);
 			setUserPreviewUser(null);
 			return;
 		}
-		let userInfo = null;
-		if (user?.["_id"]) {
-			userInfo = await getUserInfo(user["_id"], authState.authToken);
-		}
-		if (userInfo) {
-			setUserPreviewEl(chatElement?.current);
-			setUserPreviewUser(userInfo);
+
+		if (!u?._id) return;
+
+		const info = await getUserInfo(u._id, authState.authToken);
+		if (info) {
+			setUserPreviewEl(elRef.current);
+			setUserPreviewUser(info);
 		}
 	};
 
+	/* -------------------------------------------------- */
+	/*  Render                                            */
+	/* -------------------------------------------------- */
 	return (
 		<Box
 			sx={{
 				display: "flex",
-				justifyContent: "center",
 				flexGrow: 1,
-				overflow: "hidden",
 				flexDirection: "column",
+				justifyContent: "center",
+				overflow: "hidden",
 			}}
 		>
+			{/* user preview popover */}
 			<Popover
-				anchorOrigin={{
-					vertical: "top",
-					horizontal: "right",
-				}}
-				transformOrigin={{
-					vertical: "bottom",
-					horizontal: "left",
-				}}
+				anchorOrigin={{ vertical: "top", horizontal: "right" }}
+				transformOrigin={{ vertical: "bottom", horizontal: "left" }}
 				anchorEl={userPreviewEl}
 				open={Boolean(userPreviewEl)}
 				onClose={() => {
-					previewUser(null);
+					setUserPreviewEl(null);
+					setUserPreviewUser(null);
 				}}
-				sx={{ marginBottom: 2 }}
+				sx={{ mb: 2 }}
 			>
-				<ProfileCard self={authState.userId === userPreviewUser?.id} type="full" width="300px" passStyle={{ maxWidth: "300px" }} user={userPreviewUser} />
+				<ProfileCard self={authState.userId === userPreviewUser?.id} user={userPreviewUser} width="300px" passStyle={{ maxWidth: "300px" }} />
 			</Popover>
+
+			{/* menus */}
 			<ChatRoomMenu anchorEl={roomAnchorEl} setAnchorEl={setRoomAnchorEl} channels={channels} setMessages={setMessages} />
 			<UserListMenu anchorEl={userListAnchorEl} setAnchorEl={setUserListAnchorEl} users={users} />
+
+			{/* shell */}
 			<Paper
 				sx={{
-					height: "100%",
-					width: "100%",
-					flexGrow: 1,
 					position: "relative",
 					display: "flex",
 					flexDirection: "column",
+					width: "100%",
+					flexGrow: 1,
+					height: "100%",
 				}}
 			>
+				{/* header */}
 				<Box
 					sx={{
-						width: "100%",
-						position: "relative",
 						display: "flex",
-						padding: 1,
+						alignItems: "center",
+						p: 1,
 						height: `calc(56px * ${theme.spacingMult(2)})`,
 					}}
 				>
-					<Button sx={{ textTransform: "initial" }} color="secondary" component="label" variant="outlined" startIcon={<Icons.MenuRounded />} onClick={clickRoomSelect}>
-						<Typography align="center" variant="h6">
+					<Button variant="outlined" color="secondary" startIcon={<Icons.MenuRounded />} onClick={clickRoomSelect} sx={{ textTransform: "initial" }}>
+						<Typography variant="h6" align="center">
 							{channels[authState.socketInfo.currentRoom]?.name || "No Room"}
 						</Typography>
 					</Button>
-					<div style={{ flexGrow: 1 }} />
-					<Button sx={{ textTransform: "initial" }} color="secondary" component="label" variant="outlined" endIcon={<Icons.PeopleRounded />} onClick={clickUserList}>
-						<Typography align="center" variant="h6">
+					<Box flexGrow={1} />
+					<Button variant="outlined" color="secondary" endIcon={<Icons.PeopleRounded />} onClick={clickUserList} sx={{ textTransform: "initial" }}>
+						<Typography variant="h6" align="center">
 							{users.length}
 						</Typography>
 					</Button>
 				</Box>
+
 				<Divider />
-				<Box sx={{ width: "100%", flexGrow: 1, position: "relative" }}>
+
+				{/* messages */}
+				<Box sx={{ flexGrow: 1, position: "relative", width: "100%" }}>
 					<ChatArea messages={messages} previewUser={previewUser} />
 				</Box>
+
+				{/* input */}
 				<ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} />
 			</Paper>
 		</Box>
 	);
 }
 
-export default React.memo(ChatPage); // Memoize the entire component to prevent unnecessary re-renders
+export default React.memo(ChatPage);
