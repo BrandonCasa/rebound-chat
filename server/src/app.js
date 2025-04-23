@@ -1,5 +1,5 @@
+// src/server.js
 import http from "http";
-
 import cors from "cors";
 import { configDotenv } from "dotenv";
 import express from "express";
@@ -12,81 +12,75 @@ import logger from "./logger.js";
 import routes from "./routes/index.js";
 import socketBackend from "./socketio/index.js";
 
-import path from "path";
-
 configDotenv();
 
 class ServerBackend {
 	constructor() {
 		this.app = express();
 		customPassport.setupPassport();
-		this.initializeMiddleware();
-		this.initializeRoutes();
+		this._initMiddleware();
+		this._initRoutes();
 		this.server = http.createServer(this.app);
 	}
 
-	initializeMiddleware() {
+	_initMiddleware() {
+		// CORS
 		this.app.use(cors({ optionsSuccessStatus: 200 }));
-		this.configureLogger();
 
+		// HTTP request logging
+		if (logger.stream) {
+			this.app.use(morgan("combined", { stream: logger.stream }));
+		}
+
+		// Body parsing
 		this.app.use(express.urlencoded({ extended: false }));
 		this.app.use(express.json());
 
+		// Method-override for PUT/DELETE in forms
 		this.app.use(methodOverride());
 	}
 
-	configureLogger() {
-		if (logger && logger.stream) {
-			this.app.use(morgan("combined", { stream: logger.stream }));
-		}
-	}
-
-	initializeRoutes() {
+	_initRoutes() {
 		this.app.use(routes);
 	}
 
 	async startBackend() {
 		try {
+			// 1) connect to database
 			await databaseServer.startServer();
-			let socketAttempts = 0;
-			const maxSocketAttempts = 3;
-			let socketStarted = false;
 
-			while (socketAttempts < maxSocketAttempts && !socketStarted) {
-				try {
-					socketBackend.startListening();
-					socketStarted = true;
-				} catch (socketError) {
-					socketAttempts++;
-					logger.error(`Failed to start socket backend (attempt ${socketAttempts} of ${maxSocketAttempts}):`, socketError);
-					if (socketAttempts >= maxSocketAttempts) {
-						throw socketError;
-					}
-					await new Promise((resolve) => setTimeout(resolve, 2000));
-				}
-			}
+			// 2) start Socket.IO on its own port (default 6002)
+			socketBackend.start();
 
-			const PORT = process.env.PORT || 6001;
+			// 3) start HTTP server
+			const httpPort = process.env.PORT || 6001;
 			this.server
-				.listen(PORT, () => logger.info(`Server started on port ${PORT}`))
+				.listen(httpPort, () => logger.info(`HTTP server listening on port ${httpPort}`))
 				.on("error", (err) => {
-					logger.error("Server listener error:", err);
+					logger.error("HTTP server error:", err);
 					process.exit(1);
 				});
-		} catch (error) {
-			logger.error("Failed to start the server:", error);
+		} catch (err) {
+			logger.error("Failed to start backend:", err);
 			process.exit(1);
 		}
 	}
 
 	async stopBackend() {
 		try {
-			socketBackend.stopListening();
+			// shut down Socket.IO
+			if (socketBackend.io) {
+				socketBackend.io.close(() => logger.info("Socket.IO server stopped"));
+			}
+
+			// shut down database
 			await databaseServer.stopServer();
-			this.server.close(() => logger.info("Server gracefully stopped"));
-		} catch (error) {
-			logger.error("Error while stopping the server:", error);
-			throw error;
+
+			// shut down HTTP
+			this.server.close(() => logger.info("HTTP server stopped"));
+		} catch (err) {
+			logger.error("Error during shutdown:", err);
+			throw err;
 		}
 	}
 
@@ -94,18 +88,16 @@ class ServerBackend {
 		try {
 			await this.stopBackend();
 			process.exit(0);
-		} catch (e) {
-			logger.error(`Failed to shut down the server on ${signal}:`, e);
+		} catch (err) {
+			logger.error(`Failed to handle ${signal}:`, err);
 			process.exit(1);
 		}
 	}
 }
 
-// Initiate the server
 (async () => {
 	const serverBackend = new ServerBackend();
 
-	// Ensure backend stops gracefully on SIGINT and SIGTERM signals
 	process.on("SIGINT", async () => {
 		await serverBackend.handleShutdown("SIGINT");
 	});

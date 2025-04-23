@@ -1,64 +1,78 @@
-import logger           from "../logger.js";
-import UserModel        from "../models/User.js";
-import socketBackend    from "./index.js";   // must expose emitToSocketById(id,event,payload)
+// socketio/watchers.js
+import logger from "../logger.js";
+import UserModel from "../models/User.js";
+import socketBackend from "./index.js"; // must expose emitToSocketById(id,event,payload)
 
 class ServerWatchers {
-  /**  Map<watchedUserId, Map<socketId, watcherUserId>> */
-  #watched = new Map();
+	/** Map<watchedUserId, Map<socketId, watcherUserId>> */
+	#watched = new Map();
 
-  init(socket) {
-    // main listeners
-    socket.on("watch_user",  (id) => this.#addWatch(socket, id));
-    socket.on("unwatch_user",(id) => this.#removeWatch(socket, id));
-    socket.on("disconnect",  ()   => this.#removeAllForSocket(socket));
-  }
+	init(socket) {
+		socket.on("watch_user", (id) => this.#addWatch(socket, id));
+		socket.on("unwatch_user", (id) => this.#removeWatch(socket, id));
+		socket.on("disconnect", () => this.#removeAllForSocket(socket));
+	}
 
-  /* ------------------------------------------------------------------ */
-  async #addWatch(socket, watchedId) {
-    try {
-      const exists = await UserModel.exists({ _id: watchedId });
-      if (!exists) return;
+	async #addWatch(socket, watchedId) {
+		try {
+			if (!(await UserModel.exists({ _id: watchedId }))) return;
+			if (!this.#watched.has(watchedId)) {
+				this.#watched.set(watchedId, new Map());
+			}
+			// remember who (socket.user.id) is watching whom
+			this.#watched.get(watchedId).set(socket.id, socket.user.id);
+		} catch (err) {
+			logger.error(err);
+		}
+	}
 
-      if (!this.#watched.has(watchedId))
-        this.#watched.set(watchedId, new Map());
+	#removeWatch(socket, watchedId) {
+		const m = this.#watched.get(watchedId);
+		if (!m) return;
+		m.delete(socket.id);
+		if (m.size === 0) this.#watched.delete(watchedId);
+	}
 
-      this.#watched.get(watchedId).set(socket.id, socket.user.id);
-    } catch (err) {
-      logger.error(err);
-    }
-  }
+	#removeAllForSocket(socket) {
+		for (const [watchedId, m] of this.#watched) {
+			m.delete(socket.id);
+			if (m.size === 0) this.#watched.delete(watchedId);
+		}
+	}
 
-  #removeWatch(socket, watchedId) {
-    if (!this.#watched.has(watchedId)) return;
-    const m = this.#watched.get(watchedId);
-    m.delete(socket.id);
-    if (m.size === 0) this.#watched.delete(watchedId);
-  }
+	/**
+	 * Called from post-save hook when user `userId` changed.
+	 * Now for each watcher we:
+	 *   1. load the changed user
+	 *   2. load the watcher user
+	 *   3. compute public & private views
+	 *   4. emit to that socket
+	 */
+	async onUserSaved(userId) {
+		const watchers = this.#watched.get(userId);
+		if (!watchers) return;
 
-  #removeAllForSocket(socket) {
-    for (const [watchedId, m] of this.#watched) {
-      m.delete(socket.id);
-      if (m.size === 0) this.#watched.delete(watchedId);
-    }
-  }
+		let changedUser;
+		try {
+			changedUser = await UserModel.findById(userId);
+			if (!changedUser) return;
+		} catch (err) {
+			logger.error("Error loading changed user:", err);
+			return;
+		}
 
-  /* ------------------------------------------------------------------ */
-  /**
-   * Call this from your user‑save hook.
-   * @param {string} userId – the user that changed
-   * @param {object} publicDoc – sanitized user document
-   */
-  onUserSaved(userId, publicDoc, privateInfo) {
-    const watchers = this.#watched.get(userId);
-    if (!watchers) return;
-
-    for (const [socketId] of watchers) {
-      socketBackend.emitToSocketById(socketId, "watched_user_saved", [
-        userId,
-        publicDoc,
-      ]);
-    }
-  }
+		for (const [socketId, watcherUserId] of watchers) {
+			try {
+				const watcherUser = await UserModel.findById(watcherUserId);
+				// pass the watcherUser as the "queryingUser"
+				const publicInfo = await changedUser.toProfilePubJSON(watcherUser);
+				const privateInfo = await changedUser.toProfilePrivJSON(watcherUser);
+				socketBackend.emitToSocketById(socketId, "watched_user_saved", [userId, publicInfo, privateInfo]);
+			} catch (err) {
+				logger.error(`Error notifying watcher ${watcherUserId}:`, err);
+			}
+		}
+	}
 }
 
 export default new ServerWatchers();

@@ -13,6 +13,8 @@ import multer from "multer";
 import databaseServer from "../../database/index.js"; // <— your DatabaseServer instance
 import { once } from "events";
 
+import serverWatchers from "../../socketio/watchers.js";
+import mongoose from "mongoose";
 import "dotenv/config";
 
 const router = Router();
@@ -147,62 +149,60 @@ router.put(
 			return res.sendStatus(401);
 		}
 
-		// 2) Start transaction
+		// 2) Start a session & transaction
+		const session = await mongoose.startSession();
 		try {
-			await UserModel.transaction(async (session) => {
-				const user = await UserModel.findById(decoded.id).session(session);
-				if (!user) return res.sendStatus(404);
+			await session.withTransaction(async () => {
+				// 3) Load user under the session
+				const user = await UserModel.findById(decoded.id).session(session).exec();
+				if (!user) {
+					// throwing will abort the transaction
+					const err = new Error("User not found");
+					err.status = 404;
+					throw err;
+				}
 
-				// 3) Update text
+				// 4) Update text fields
 				const { displayName, bio } = req.body;
 				if (displayName != null) user.displayName = displayName;
 				if (bio != null) user.bio = bio;
 
-				// 4) Helper to upload one file buffer to GridFS
+				// 5) File‐upload helper
 				const uploadToGrid = async (file, fieldName) => {
-					// build a unique filename
 					const ext = file.originalname.split(".").pop();
 					const filename = `${fieldName}-${decoded.id}-${Date.now()}.${ext}`;
-
-					// open the GridFS upload stream
-					const bucket = databaseServer.gridfsBucket;
-					const uploadStream = bucket.openUploadStream(filename, {
-						contentType: file.mimetype,
-					});
-
-					// write the buffer and close the stream
+					const uploadStream = databaseServer.gridfsBucket.openUploadStream(filename, { contentType: file.mimetype });
 					uploadStream.end(file.buffer);
-
-					// wait until MongoDB has finished writing
 					await once(uploadStream, "finish");
-
-					// return the name we created
 					return filename;
 				};
 
-				// 5) Banner
+				// 6) Banner & avatar
 				if (req.files?.banner?.[0]) {
-					const file = req.files.banner[0];
-					const storedName = await uploadToGrid(file, "banner");
+					const storedName = await uploadToGrid(req.files.banner[0], "banner");
 					user.bannerUrl = `/content/${storedName}`;
 				}
-
-				// 6) Avatar
 				if (req.files?.avatar?.[0]) {
-					const file = req.files.avatar[0];
-					const storedName = await uploadToGrid(file, "avatar");
+					const storedName = await uploadToGrid(req.files.avatar[0], "avatar");
 					user.avatarUrl = `/content/${storedName}`;
 				}
 
-				// 7) Save & respond with private profile
+				// 7) Persist under the session
 				await user.save({ session });
-				const profile = await user.toProfilePrivJSON(user);
-				res.json({ user: profile });
 			});
+
+			// 8) After commit succeed: notify watchers & respond
+			serverWatchers.onUserSaved(decoded.id.toString());
+			const updated = await UserModel.findById(decoded.id).exec();
+			const profile = await updated.toProfilePrivJSON(updated);
+			return res.json({ user: profile });
 		} catch (err) {
+			// If you threw an Error with a .status, honor it:
+			if (err.status === 404) return res.sendStatus(404);
 			logger.error(`User modification error: ${err.message}`);
-			next(err);
-			res.sendStatus(500);
+			return next(err);
+		} finally {
+			session.endSession();
 		}
 	}
 );

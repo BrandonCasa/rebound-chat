@@ -1,213 +1,212 @@
+// src/socket/rooms.js
 import logger from "../logger.js";
 import MessageModel from "../models/Message.js";
 import RoomModel from "../models/Room.js";
 import UserModel from "../models/User.js";
-
 import socketio from "./index.js";
 import "dotenv/config";
 
 class ServerRooms {
-  async getRoomList() {
-    const roomIdList = {};
-    const roomList = {};
+	/**
+	 * Fetch all rooms from the database and build two maps:
+	 *  - idToName:   roomId → room.name
+	 *  - idToRoom:   roomId → full Room document
+	 */
+	async getRoomList() {
+		const idToName = {};
+		const idToRoom = {};
+		const rooms = await RoomModel.find({});
+		for (const room of rooms) {
+			idToName[room._id] = room.name;
+			idToRoom[room._id] = room;
+		}
+		return [idToName, idToRoom];
+	}
 
-    const rooms = await RoomModel.find({});
-    for (const room of rooms) {
-      roomIdList[room._id] = room.name;
-      roomList[room._id] = room;
-    }
-    return [roomIdList, roomList];
-  }
+	/**
+	 * Clean up all room listeners for a given socket (leave all chat rooms).
+	 */
+	async listenerCleanup(socket) {
+		await this.leaveRooms(socket);
+	}
 
-  startListeners(socket) {
-    this.attachListeners(socket);
-  }
+	/**
+	 * Helper to notify everyone in a room that `socket.user` has joined.
+	 */
+	async joinRoom(socket, roomId, roomDoc) {
+		socket.join(roomId);
+		socket.emit("joined_room", roomId, roomDoc.messages);
 
-  listenerCleanup(socket) {
-    this.leaveRooms(socket);
-  }
+		try {
+			const user = await UserModel.findById(socket.user.id);
+			const userProfile = await user.toProfilePubJSON(null);
+			const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
 
-  async leaveRooms(socket) {
-    try {
-      // Fetch the user only once and compute the public profile
-      const socketUser = await UserModel.findById(socket.user.id);
-      const userProfile = await socketUser.toProfilePubJSON(null);
+			socketsInRoom.forEach((s) => {
+				s.emit("user_list", roomId, usersInRoom, userProfile, "join");
+			});
+			logger.info(`User '${socket.user.username}' joined room '${roomId}'.`);
+		} catch (err) {
+			logger.error("Error notifying join:", err);
+		}
+	}
 
-      // Use a for-of loop for clarity
-      for (const room of socket.rooms) {
-        socket.leave(room);
-        socket.emit("left_room", room);
-        logger.info(`User '${socket.user.username}' left room '${room}'.`);
+	/**
+	 * Leave _all_ previously joined chat rooms (but skip the socket.id room).
+	 */
+	async leaveRooms(socket) {
+		try {
+			const [idToName] = await this.getRoomList();
+			const validRoomIds = new Set(Object.keys(idToName));
 
-        const [usersInRoom, socketsInRoom] =
-          await socketio.getSocketsInRoom(room);
-        socketsInRoom.forEach((socketInRoom) => {
-          socketInRoom.emit(
-            "user_list",
-            room,
-            usersInRoom,
-            userProfile,
-            "leave",
-          );
-        });
-      }
-    } catch (error) {
-      console.error("Error while leaving rooms:", error);
-      logger.error(error);
-    }
-  }
+			const user = await UserModel.findById(socket.user.id);
+			const userProfile = await user.toProfilePubJSON(null);
 
-  async joinRoom(socket, newRoom, joinedRoom) {
-    socket.join(newRoom);
-    socket.emit("joined_room", newRoom, joinedRoom.messages);
+			for (const roomId of socket.rooms) {
+				// skip default socket room and any non-chat-room
+				if (!validRoomIds.has(roomId)) continue;
 
-    const socketUser = await UserModel.findById(socket.user.id);
-    const userProfile = await socketUser.toProfilePubJSON(null);
+				socket.leave(roomId);
+				socket.emit("left_room", roomId);
+				logger.info(`User '${socket.user.username}' left room '${roomId}'.`);
 
-    const [usersInRoom, socketsInRoom] =
-      await socketio.getSocketsInRoom(newRoom);
-    socketsInRoom.forEach((socketInRoom) => {
-      socketInRoom.emit("user_list", newRoom, usersInRoom, userProfile, "join");
-    });
+				const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
+				socketsInRoom.forEach((s) => {
+					s.emit("user_list", roomId, usersInRoom, userProfile, "leave");
+				});
+			}
+		} catch (err) {
+			logger.error("Error while leaving rooms:", err);
+		}
+	}
 
-    logger.info(`User '${socket.user.username}' joined room '${newRoom}'.`);
-  }
+	startListeners(socket) {
+		// Client asks for the list of rooms
+		socket.on("list_rooms", async () => {
+			try {
+				let [idToName, idToRoom] = await this.getRoomList();
 
-  attachListeners(socket) {
-    socket.on("list_rooms", async (roomName, roomDescription) => {
-      try {
-        let [roomList, rooms] = await this.getRoomList();
+				// If no rooms exist yet, create two defaults
+				if (Object.keys(idToName).length === 0) {
+					const r1 = new RoomModel({ name: "All Chat 1", description: "Public chat for everyone." });
+					const r2 = new RoomModel({ name: "All Chat 2", description: "Public chat for everyone." });
+					await r1.save();
+					await r2.save();
+					[idToName, idToRoom] = await this.getRoomList();
+				}
 
-        // Create default rooms if none exist
-        if (Object.keys(roomList).length === 0) {
-          const defaultARoom = new RoomModel({
-            name: "All Chat 1",
-            description: "Public chat for everyone.",
-          });
-          await defaultARoom.save();
+				socket.emit("room_list", [idToName, idToRoom]);
+			} catch (err) {
+				logger.error("Error listing rooms:", err);
+			}
+		});
 
-          const defaultBRoom = new RoomModel({
-            name: "All Chat 2",
-            description: "Public chat for everyone.",
-          });
-          await defaultBRoom.save();
-        }
+		// Client creates a new room
+		socket.on("make_room", async (name, description) => {
+			try {
+				const room = new RoomModel({ name, description });
+				await room.save();
+				socket.emit("room_created", room._id);
+				logger.info(`New room '${room.name}' created by '${socket.user.username}'.`);
+			} catch (err) {
+				logger.error("Error creating room:", err);
+			}
+		});
 
-        [roomList, rooms] = await this.getRoomList();
-        socket.emit("room_list", [roomList, rooms]);
-      } catch (error) {
-        console.error(error);
-        logger.error(error);
-      }
-    });
+		// Client wants to join a given room
+		socket.on("join_room", async (roomId) => {
+			try {
+				const [idToName] = await this.getRoomList();
+				if (!idToName[roomId]) {
+					throw new Error("Room not found by ID.");
+				}
 
-    socket.on("make_room", async (roomName, roomDescription) => {
-      try {
-        const newRoom = new RoomModel({
-          name: roomName,
-          description: roomDescription,
-        });
-        await newRoom.save();
-        socket.emit("room_created", newRoom._id);
-        logger.info(`New Room Created by '${socket.user.username}'.`);
-      } catch (error) {
-        console.error(error);
-        logger.error(error);
-      }
-    });
+				const roomDoc = await RoomModel.findById(roomId).populate({
+					path: "messages",
+					populate: { path: "sender", select: "displayName" },
+				});
 
-    socket.on("join_room", async (roomId) => {
-      try {
-        const [roomList, rooms] = await this.getRoomList();
-        if (roomList[roomId] === undefined) {
-          throw new Error("Room not found by ID.");
-        }
+				// Leave any rooms we were in, then join the new one
+				await this.leaveRooms(socket);
+				await this.joinRoom(socket, roomId, roomDoc);
+			} catch (err) {
+				logger.error("Error joining room:", err);
+			}
+		});
 
-        const joinedRoom = await RoomModel.findById(roomId).populate([
-          {
-            path: "messages",
-            populate: [{ path: "sender", select: "displayName" }],
-          },
-        ]);
+		// Client explicitly leaves a room
+		socket.on("leave_room", async (roomId) => {
+			try {
+				// If they specify a roomId, leave only that room; otherwise leave all
+				if (roomId) {
+					socket.leave(roomId);
+					logger.info(`User '${socket.user.username}' left room '${roomId}'.`);
+					// Optional: notify others in that room
+					const user = await UserModel.findById(socket.user.id);
+					const userProfile = await user.toProfilePubJSON(null);
+					const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
+					socketsInRoom.forEach((s) => {
+						s.emit("user_list", roomId, usersInRoom, userProfile, "leave");
+					});
+				} else {
+					await this.leaveRooms(socket);
+				}
+			} catch (err) {
+				logger.error("Error on leave_room:", err);
+			}
+		});
 
-        await this.leaveRooms(socket);
-        await this.joinRoom(socket, roomId, joinedRoom);
-      } catch (error) {
-        console.error(error);
-        logger.error(error);
-      }
-    });
+		// Client sends a message to a room
+		socket.on("message_room", async (arg1, arg2) => {
+			try {
+				const [idToName] = await this.getRoomList();
+				let roomId, content;
 
-    socket.on("leave_room", async (roomId) => {
-      try {
-        const [roomList, rooms] = await this.getRoomList();
-        if (roomList[roomId] === undefined) {
-          console.error(socket.user);
-          logger.error(
-            `User '${socket.user.username}' attempted to leave room with ID '${roomId}', but it does not exist.`,
-          );
-          throw new Error("Room not found by ID.");
-        }
+				// Support both ( [roomId, content] ) or ( roomId, content ) signatures
+				if (Array.isArray(arg1) && arg2 === undefined) {
+					[roomId, content] = arg1;
+				} else {
+					roomId = arg1;
+					content = arg2;
+				}
 
-        await this.leaveRooms(socket);
-      } catch (error) {
-        console.error(error);
-        logger.error(error);
-      }
-    });
+				if (!idToName[roomId]) {
+					throw new Error("Room not found by ID.");
+				}
 
-    socket.on("message_room", async ([roomId, msg]) => {
-      try {
-        const [roomList, rooms] = await this.getRoomList();
-        if (roomList[roomId] === undefined) {
-          throw new Error("Room not found by ID.");
-        }
+				// Persist the message
+				const sender = await UserModel.findById(socket.user.id);
+				if (!sender) throw new Error("Sender not found.");
 
-        const sender = await UserModel.findById(socket.user.id);
-        if (!sender) {
-          throw new Error("Couldn't find sender user by ID.");
-        }
+				const msg = new MessageModel({ sender, content });
+				await msg.save();
 
-        const newMessage = new MessageModel();
-        newMessage.sender = sender;
-        newMessage.content = msg;
-        await newMessage.save();
+				const roomDoc = await RoomModel.findById(roomId);
+				roomDoc.messages.push(msg);
+				await roomDoc.save();
 
-        const messageRoom = await RoomModel.findById(roomId);
-        if (!messageRoom) {
-          throw new Error("Room not found by ID.");
-        }
-        messageRoom.messages.push(newMessage);
-        await messageRoom.save();
+				await roomDoc.populate({
+					path: "messages",
+					populate: { path: "sender", select: "displayName" },
+				});
 
-        await messageRoom.populate([
-          {
-            path: "messages",
-            populate: [{ path: "sender", select: "displayName" }],
-          },
-        ]);
+				// Broadcast to everyone in the room
+				const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
+				socketsInRoom.forEach((s) => {
+					if (s.user.id === socket.user.id) {
+						s.emit("message_sent", roomId, roomDoc.messages);
+					} else {
+						s.emit("new_message", roomId, roomDoc.messages);
+					}
+				});
 
-        const [usersInRoom, socketsInRoom] =
-          await socketio.getSocketsInRoom(roomId);
-        socketsInRoom.forEach((socketInRoom) => {
-          if (socketInRoom.user.id !== socket.user.id) {
-            socketInRoom.emit("new_message", roomId, messageRoom.messages);
-          } else {
-            socket.emit("message_sent", roomId, messageRoom.messages);
-          }
-        });
-
-        logger.info(
-          `User '${socket.user.username}' sent a message with id '${newMessage._id}' to room '${roomId}'.`,
-        );
-      } catch (error) {
-        console.error(error);
-        logger.error(error);
-      }
-    });
-  }
+				logger.info(`User '${socket.user.username}' sent message '${msg._id}' to room '${roomId}'.`);
+			} catch (err) {
+				logger.error("Error handling message_room:", err);
+			}
+		});
+	}
 }
 
 const serverRooms = new ServerRooms();
-
-export { serverRooms as default };
+export default serverRooms;

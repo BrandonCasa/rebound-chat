@@ -1,96 +1,90 @@
-// "./socketio/index.js";
-import jwt from "jsonwebtoken";
+// src/socketio/index.js
 import { Server } from "socket.io";
+import jwt from "jsonwebtoken";
+import "dotenv/config";
 
 import logger from "../logger.js";
-
-import "dotenv/config";
 import serverRooms from "./rooms.js";
 import serverWatchers from "./watchers.js";
 import UserModel from "../models/User.js";
 
-import { configDotenv } from "dotenv";
-
-configDotenv();
-
 class SocketBackend {
-  constructor() {
-    this.io = null;
-  }
+	constructor() {
+		this.io = null;
+	}
 
-  startListening() {
-    this.io = new Server({
-      path: "/socket.io",
-      cors: {
-        origin: "*",
-      },
-    });
+	/**
+	 * Start the Socket.IO server on the given port (defaults to 6002).
+	 */
+	start(port = 6002) {
+		this.io = new Server({
+			path: "/socket.io",
+			cors: { origin: "*" },
+		});
 
-    this.initializeMiddleware();
-    this.initializeIoEvents();
+		// attach authentication middleware
+		this.io.use(this._authenticate.bind(this));
 
-    this.io.listen(6002);
-  }
+		// handle new connections
+		this.io.on("connection", this._onConnection.bind(this));
 
-  stopListening() {
-    this.io.close();
-  }
+		this.io.listen(port);
+		logger.info(`Socket.IO listening on port ${port}`);
+	}
 
-  initializeMiddleware() {
-    this.io.use(function (socket, next) {
-      if (socket.handshake.headers && socket.handshake.headers.authorization) {
-        const token = socket.handshake.headers.authorization.split(" ")[1];
-        jwt.verify(token, process.env.SECRET, function (err, decoded) {
-          if (err) return next(new Error("Authentication error"));
-          socket.user = decoded;
-          next();
-        });
-      } else {
-        next(new Error("Authentication error"));
-      }
-    });
-  }
+	/**
+	 * Middleware: verify JWT and attach decoded user to socket.user
+	 */
+	_authenticate(socket, next) {
+		const auth = socket.handshake.headers.authorization;
+		if (!auth) return next(new Error("Authentication error"));
+		const token = auth.split(" ")[1];
+		jwt.verify(token, process.env.SECRET, (err, decoded) => {
+			if (err) return next(new Error("Authentication error"));
+			socket.user = decoded;
+			next();
+		});
+	}
 
-  initializeIoEvents() {
-    this.io.on("connection", (socket) => {
-      this.onConnection(socket);
+	/**
+	 * On new client connection: wire up rooms & watchers, send handshake.
+	 */
+	_onConnection(socket) {
+		logger.info(`User connected: '${socket.user.username}'`);
+		socket.emit("connected");
 
-      socket.on("disconnect", () => {
-        this.onDisconnect(socket);
-      });
-    });
-  }
+		// start handling room events
+		serverRooms.startListeners(socket);
 
-  onConnection(socket) {
-    logger.info(`User connected: '${socket.user.username}'.`);
-    serverRooms.startListeners(socket);
-    serverWatchers.init(socket);
-    socket.emit("connected");
-  }
+		// start handling watcher events
+		serverWatchers.init(socket);
 
-  onDisconnect(socket) {
-    logger.info(`User disconnected: '${socket.user.username}'.`);
-    serverRooms.listenerCleanup(socket);
-    socket.emit("disconnected");
-    socket.removeAllListeners();
-  }
+		// clean up on disconnect
+		socket.on("disconnect", () => {
+			logger.info(`User disconnected: '${socket.user.username}'`);
+			serverRooms.listenerCleanup(socket);
+			socket.removeAllListeners();
+		});
+	}
 
-  async getSocketsInRoom(roomId) {
-    const roomSockets = await this.io.in(roomId).fetchSockets();
-    let outUsers = roomSockets.map(async (socket) => {
-      const user = await UserModel.findById(socket.user.id);
-      return await user.toProfilePubJSON(null);
-    });
-    outUsers = await Promise.all(outUsers);
+	/**
+	 * Fetch all sockets in a room, plus their profile data.
+	 * Returns [ Array<profile>, Array<Socket> ].
+	 */
+	async getSocketsInRoom(roomId) {
+		const sockets = await this.io.in(roomId).fetchSockets();
+		const profiles = await Promise.all(sockets.map((s) => UserModel.findById(s.user.id).then((u) => u.toProfilePubJSON(null))));
+		return [profiles, sockets];
+	}
 
-    return [outUsers, roomSockets];
-  }
-
-  emitToSocketById(socketId, eventName, eventData) {
-    this.io.sockets.sockets.get(socketId).emit(eventName, eventData);
-  }
+	/**
+	 * Emit a custom event to a single socket by its socket.id.
+	 */
+	emitToSocketById(socketId, event, payload) {
+		const sock = this.io.sockets.sockets.get(socketId);
+		if (sock) sock.emit(event, payload);
+	}
 }
 
 const socketBackend = new SocketBackend();
-
-export { socketBackend as default };
+export default socketBackend;

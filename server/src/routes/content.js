@@ -13,13 +13,11 @@ router.get("/content/:filename", async (req, res) => {
 	}
 
 	const { filename } = req.params;
-	console.log(filename);
 	const clean = path.basename(filename);
 
 	if (clean !== filename || !/^[A-Za-z0-9._-]+$/.test(filename)) {
 		return res.status(400).send("Invalid filename");
 	}
-	console.log(filename);
 
 	try {
 		const downloadStream = bucket.openDownloadStreamByName(filename);

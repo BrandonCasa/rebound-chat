@@ -213,9 +213,11 @@ UserSchema.methods.isBlocked = function (user) {
  * });
  */
 UserSchema.statics.transaction = async function (callback) {
-	const session = await this.startSession();
+	// 1) start a session on mongoose
+	const session = await mongoose.startSession();
 	let result;
 	try {
+		// 2) wrap your work in a transaction
 		await session.withTransaction(async () => {
 			result = await callback(session);
 		});
@@ -227,11 +229,7 @@ UserSchema.statics.transaction = async function (callback) {
 
 // Post-save hook: Notify server watchers when a user is saved.
 UserSchema.post("save", async function (doc) {
-	// Use the same user document as the querying/requesting user
-	const publicInfo = await doc.toProfilePubJSON(doc);
-	const privateInfo = await doc.toProfilePrivJSON(doc);
-
-	serverWatchers.onUserSaved(doc._id.toString(), publicInfo, privateInfo);
+	serverWatchers.onUserSaved(doc._id.toString());
 });
 
 const UserModel = mongoose.model("User", UserSchema);
