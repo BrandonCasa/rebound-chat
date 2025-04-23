@@ -1,10 +1,14 @@
-// src/pages/FriendsPage.jsx
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import socketIoHelper from "helpers/socket";
-import { Box, Paper, Avatar, Typography, Button, Stack } from "@mui/material";
+import { Box, Paper, Avatar, Typography, Button, Stack, Tooltip } from "@mui/material";
+import ChatIcon from "@mui/icons-material/Chat";
+import PersonRemoveIcon from "@mui/icons-material/PersonRemove";
+import CancelIcon from "@mui/icons-material/Cancel";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import HighlightOffIcon from "@mui/icons-material/HighlightOff";
 import { setSocketRoom } from "slices/authSlice";
 
 // API base configuration
@@ -34,13 +38,8 @@ export default function FriendsPage() {
 		async function loadRelations() {
 			setLoading(true);
 			try {
-				// 1) Fetch own profile (includes Friend docs)
-				const res = await axios.get(`${API_BASE}/profile`, {
-					headers: { Authorization: `Bearer ${auth.authToken}` },
-				});
+				const res = await axios.get(`${API_BASE}/profile`, { headers: { Authorization: `Bearer ${auth.authToken}` } });
 				const relations = res.data.user.friends;
-
-				// 2) Map each relation to status, otherId, and profile
 				const items = await Promise.all(
 					relations.map(async (rel) => {
 						const myId = auth.userId;
@@ -70,7 +69,6 @@ export default function FriendsPage() {
 						};
 					})
 				);
-
 				if (isMounted) setFriendItems(items);
 			} catch (err) {
 				console.error("Error loading friend relations:", err);
@@ -79,22 +77,13 @@ export default function FriendsPage() {
 			}
 		}
 
-		// initial load
 		loadRelations();
-
 		if (socket) {
-			// tell server we want to watch changes on our own user
 			socket.emit("watch_user", auth.userId);
-
-			// when server notifies us that our profile (and thus our friends array) changed,
-			// re-fetch the list
-			socket.on("watched_user_saved", ([watchedId /*, publicInfo, privateInfo */]) => {
-				if (watchedId === auth.userId) {
-					loadRelations();
-				}
+			socket.on("watched_user_saved", ([watchedId]) => {
+				if (watchedId === auth.userId) loadRelations();
 			});
 		}
-
 		return () => {
 			isMounted = false;
 			if (socket) {
@@ -105,50 +94,47 @@ export default function FriendsPage() {
 	}, [auth.authToken, auth.userId, auth.loggedIn]);
 
 	const handleChat = (roomId) => {
-		dispatch(setSocketRoom({ currentRoom: roomId }));
+		//dispatch(setSocketRoom({ currentRoom: roomId }));
 		navigate("/chat");
 	};
 
 	const callApi = async (ep, data, onSuccessId) => {
 		try {
-			await axios.put(`${API_BASE}/${ep}`, data, {
-				headers: { Authorization: `Bearer ${auth.authToken}` },
-			});
+			await axios.put(`${API_BASE}/${ep}`, data, { headers: { Authorization: `Bearer ${auth.authToken}` } });
 			setFriendItems((prev) => prev.filter((item) => item.relation._id !== onSuccessId));
 		} catch (err) {
 			console.error(`${ep} failed`, err);
 		}
 	};
 
-	if (!auth.loggedIn) {
-		return <Typography>Please login.</Typography>;
-	}
-
-	if (loading) {
-		return <Typography>Loading friends...</Typography>;
-	}
-
-	if (!friendItems.length) {
-		return <Typography>No friends or pending requests.</Typography>;
-	}
+	if (!auth.loggedIn) return <Typography>Please login.</Typography>;
+	if (loading) return <Typography>Loading friends...</Typography>;
+	if (!friendItems.length) return <Typography>No friends or pending requests.</Typography>;
 
 	return (
-		<Box sx={{ display: "flex", justifyContent: "start", flexGrow: 1, overflow: "auto" }}>
-			<Stack spacing={2}>
+		<Box sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, justifyContent: "flex-start", overflow: "auto", flexGrow: 1 }}>
+			<Stack spacing={2} sx={{ width: "100%", maxWidth: { xs: "100%", sm: 500 }, p: 0 }}>
 				{friendItems.map(({ relation, profile, status }) => (
 					<Paper
 						key={relation._id}
 						sx={{
 							p: 2,
 							display: "flex",
+							flexDirection: { xs: "column", sm: "row" },
 							alignItems: "center",
+							transition: "box-shadow .3s",
+							"&:hover": { boxShadow: 6 },
 							border: status === "friends" ? "none" : 2,
 							borderColor: status === "sent" ? "info.main" : status === "received" ? "warning.main" : "grey.300",
+							gap: 1,
 						}}
 						elevation={2}
 					>
-						<Avatar src={profile.avatarUrl || (window.isElectron ? "defaultpfp.webp" : "/defaultpfp.webp")} sx={{ width: 56, height: 56, mr: 2 }} />
-						<Box flex={1} minWidth={0} sx={{ mr: 2 }}>
+						<Avatar
+							src={profile.avatarUrl || (window.isElectron ? "defaultpfp.webp" : "/defaultpfp.webp")}
+							sx={{ width: { xs: 40, sm: 56 }, height: { xs: 40, sm: 56 }, mb: { xs: 1, sm: 0 }, mr: { sm: 2 } }}
+						/>
+						<Box flex={1} minWidth={0} sx={{ mr: { sm: 2 } }}>
 							<Typography variant="h6" noWrap>
 								{profile.displayName}
 							</Typography>
@@ -156,30 +142,40 @@ export default function FriendsPage() {
 								@{profile.username}
 							</Typography>
 						</Box>
-						<Stack direction="row" spacing={1}>
+						<Stack direction="row" spacing={1} flexWrap="wrap">
 							{status === "friends" && (
 								<>
-									<Button variant="contained" size="small" onClick={() => handleChat(profile.id)}>
-										Chat
-									</Button>
-									<Button variant="outlined" size="small" onClick={() => callApi("removefriend", { friendId: relation._id }, relation._id)}>
-										Remove
-									</Button>
+									<Tooltip title="Start Chat">
+										<Button startIcon={<ChatIcon />} variant="contained" size="small" onClick={() => handleChat(profile.id)}>
+											Chat
+										</Button>
+									</Tooltip>
+									<Tooltip title="Remove Friend">
+										<Button startIcon={<PersonRemoveIcon />} variant="outlined" color="error" size="small" onClick={() => callApi("removefriend", { friendId: relation._id }, relation._id)}>
+											Remove
+										</Button>
+									</Tooltip>
 								</>
 							)}
 							{status === "sent" && (
-								<Button variant="outlined" size="small" onClick={() => callApi("cancelfriend", { friendId: relation._id }, relation._id)}>
-									Cancel Request
-								</Button>
+								<Tooltip title="Cancel Request">
+									<Button startIcon={<CancelIcon />} variant="outlined" color="warning" size="small" onClick={() => callApi("cancelfriend", { friendId: relation._id }, relation._id)}>
+										Cancel
+									</Button>
+								</Tooltip>
 							)}
 							{status === "received" && (
 								<>
-									<Button variant="contained" size="small" onClick={() => callApi("acceptfriend", { friendId: relation._id }, relation._id)}>
-										Accept
-									</Button>
-									<Button variant="outlined" size="small" onClick={() => callApi("declinefriend", { friendId: relation._id }, relation._id)}>
-										Decline
-									</Button>
+									<Tooltip title="Accept Request">
+										<Button startIcon={<CheckCircleIcon />} variant="contained" color="success" size="small" onClick={() => callApi("acceptfriend", { friendId: relation._id }, relation._id)}>
+											Accept
+										</Button>
+									</Tooltip>
+									<Tooltip title="Decline Request">
+										<Button startIcon={<HighlightOffIcon />} variant="outlined" color="error" size="small" onClick={() => callApi("declinefriend", { friendId: relation._id }, relation._id)}>
+											Decline
+										</Button>
+									</Tooltip>
 								</>
 							)}
 						</Stack>
