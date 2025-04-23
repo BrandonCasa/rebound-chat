@@ -102,7 +102,7 @@
 		"electron-builder": "^26.0.12",
 		"globals": "^16.0.0",
 		"kill-port": "^2.0.1",
-		"nodemon": "^3.1.9",
+		"nodemon": "^3.1.10",
 		"prettier": "^3.5.3",
 		"sass": "^1.86.3",
 		"wait-on": "^8.0.3"
