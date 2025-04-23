@@ -292,7 +292,7 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 							</Typography>
 						)}
 						<Typography variant="body2" color="text.secondary">
-							{profile.username}
+							@{profile.username}
 						</Typography>
 					</Box>
 				</Stack>
