@@ -32,7 +32,6 @@ const DEFAULT_USER = {
 function useFilePreview(initialUrl) {
 	const [file, setFile] = useState(null);
 	const [preview, setPrev] = useState(cache(initialUrl));
-	console.log(REQUEST_BASE);
 
 	const onChange = (e) => {
 		const f = e.target.files?.[0];
@@ -131,7 +130,6 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 	const [editMode, setEdit] = useState(false);
 	const [name, setName] = useState(rawData.displayName);
 	const [bio, setBio] = useState(rawData.bio);
-	console.log(rawData);
 	const banner = useFilePreview(rawData.bannerUrl);
 	const avatar = useFilePreview(rawData.avatarUrl);
 
@@ -219,7 +217,6 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 			})
 			.then(({ data }) => {
 				const u = data.user;
-				console.log(u);
 				const full = {
 					...u,
 					avatarUrl: u.avatarUrl ? cache(REQUEST_BASE + u.avatarUrl) : null,
