@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3.5.3
+        uses: actions/checkout@v4
 
       - name: Bump version in package.json files
         if: ${{ github.event.inputs.bumpVersion == 'true' }}
