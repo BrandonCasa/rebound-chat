@@ -11,10 +11,13 @@ import { setLoggedIn } from "slices/authSlice";
 /* -------------------------------------------------- */
 /*  Constants & helpers                              */
 /* -------------------------------------------------- */
-const REQUEST_BASE = process.env.NODE_ENV === "development" ? "http://localhost:6001/api" : window.isElectron ? "https://rebound.nexus/api" : "/api";
+const REQUEST_BASE = process.env.NODE_ENV === "development" ? "http://localhost:6001/api" : globalThis.IN_ELECTRON_ENV ? "https://rebound.nexus/api" : "/api";
 const API_BASE = `${REQUEST_BASE}/users`;
-const fullUrl = (u) => (u ? (u.startsWith("http") ? u : REQUEST_BASE + u) : null);
-const cache = (u) => (u ? `${fullUrl(u)}?t=${Date.now()}` : null);
+const cache = (u) => {
+	if (!u) return null;
+	const cleaned = u.replace(/([?&])t=\d+(&)?/, (_, sep, trailing) => (trailing ? sep : ""));
+	return `${cleaned}${cleaned.includes("?") ? "&" : "?"}t=${Date.now()}`;
+};
 
 const DEFAULT_USER = {
 	id: null,
@@ -29,6 +32,7 @@ const DEFAULT_USER = {
 function useFilePreview(initialUrl) {
 	const [file, setFile] = useState(null);
 	const [preview, setPrev] = useState(cache(initialUrl));
+	console.log(REQUEST_BASE);
 
 	const onChange = (e) => {
 		const f = e.target.files?.[0];
@@ -127,6 +131,7 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 	const [editMode, setEdit] = useState(false);
 	const [name, setName] = useState(rawData.displayName);
 	const [bio, setBio] = useState(rawData.bio);
+	console.log(rawData);
 	const banner = useFilePreview(rawData.bannerUrl);
 	const avatar = useFilePreview(rawData.avatarUrl);
 
@@ -169,8 +174,8 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 		if (!socket) return;
 		const onSaved = ([id, data]) => {
 			if (id !== watchId) return;
-			const av = data.avatarUrl ? REQUEST_BASE + data.avatarUrl : null;
-			const bn = data.bannerUrl ? REQUEST_BASE + data.bannerUrl : null;
+			const av = data.avatarUrl ? cache(REQUEST_BASE + data.avatarUrl) : null;
+			const bn = data.bannerUrl ? cache(REQUEST_BASE + data.bannerUrl) : null;
 			setProfile((p) => ({ ...p, ...data, avatarUrl: av, bannerUrl: bn }));
 			avatar.reset(av);
 			banner.reset(bn);
@@ -214,10 +219,11 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 			})
 			.then(({ data }) => {
 				const u = data.user;
+				console.log(u);
 				const full = {
 					...u,
-					avatarUrl: fullUrl(u.avatarUrl),
-					bannerUrl: fullUrl(u.bannerUrl),
+					avatarUrl: u.avatarUrl ? cache(REQUEST_BASE + u.avatarUrl) : null,
+					bannerUrl: u.bannerUrl ? cache(REQUEST_BASE + u.bannerUrl) : null,
 				};
 				dispatch(
 					setLoggedIn({
@@ -263,7 +269,7 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 				<Box position="relative">
 					<Box
 						component="img"
-						src={banner.preview || (window.isElectron ? "/banner.webp" : "/banner.webp")}
+						src={banner.preview || (window.isElectron ? "banner.webp" : "/banner.webp")}
 						alt="banner"
 						sx={{ width: "100%", height: 120, borderRadius: 1, objectFit: "cover" }}
 						key={banner.preview}
@@ -274,7 +280,7 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 				{/* Avatar + Name */}
 				<Stack direction="row" spacing={2} alignItems="center">
 					<Box position="relative">
-						<Avatar src={avatar.preview || (window.isElectron ? "/defaultpfp.webp" : "/defaultpfp.webp")} sx={{ width: 56, height: 56 }} />
+						<Avatar src={avatar.preview || (window.isElectron ? "defaultpfp.webp" : "/defaultpfp.webp")} sx={{ width: 56, height: 56 }} />
 						{isSelf && editMode && <CameraInput onChange={avatar.onChange} sx={{ position: "absolute", bottom: -4, right: -4, bgcolor: "white" }} />}
 					</Box>
 					<Box flex={1} minWidth={0}>

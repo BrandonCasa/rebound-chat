@@ -20,11 +20,14 @@ import { addSnackbar } from "slices/snackbarSlice";
 /* -------------------------------------------------- */
 const REQUEST_BASE = process.env.NODE_ENV === "development" ? `http://localhost:6001/api` : globalThis.IN_ELECTRON_ENV ? `https://rebound.nexus/api` : "/api";
 
-// ensure a URL is absolute (API returns `/uploads/…`)
-const fullUrl = (u) => (u ? (u.startsWith("http") ? u : REQUEST_BASE + u) : null);
-
 // cache‑bust so new images show up instantly
-const cache = (u) => (u ? `${fullUrl(u)}?t=${Date.now()}` : null);
+const cache = (u) => {
+	if (!u) return null;
+	// remove any existing “t=” parameter
+	const cleaned = u.replace(/([?&])t=\d+(&)?/, (_, sep, trailing) => (trailing ? sep : ""));
+	// append new timestamp (use & if there are still other query params)
+	return `${cleaned}${cleaned.includes("?") ? "&" : "?"}t=${Date.now()}`;
+};
 
 /* fetch complete profile for a given user id */
 async function getUserInfo(userId, authToken) {
@@ -43,8 +46,8 @@ async function getUserInfo(userId, authToken) {
 		const u = data.user;
 		return {
 			...u,
-			avatarUrl: cache(u.avatarUrl),
-			bannerUrl: cache(u.bannerUrl),
+			avatarUrl: u.avatarUrl ? cache(REQUEST_BASE + u.avatarUrl) : null,
+			bannerUrl: u.bannerUrl ? cache(REQUEST_BASE + u.bannerUrl) : null,
 		};
 	} catch (err) {
 		console.error(err);
