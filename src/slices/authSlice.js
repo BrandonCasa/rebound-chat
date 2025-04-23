@@ -10,13 +10,13 @@ const initialState = {
 	username: "",
 	displayName: "",
 	bio: "",
-	loggingIn: true,
+	loggingIn: false,
 	socketInfo: {
 		connected: false,
 		currentRoom: null,
 	},
-	bannerUrl: null,
-	avatarUrl: null,
+	bannerUrl: globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp",
+	avatarUrl: globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp",
 };
 
 const authSlice = createSlice({
@@ -41,8 +41,8 @@ const authSlice = createSlice({
 					action.payload.bio = "";
 					action.payload.friends = [];
 					state.socketInfo.currentRoom = null;
-					state.bannerUrl = null;
-					state.avatarUrl = null;
+					state.bannerUrl = globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp";
+					state.avatarUrl = globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp";
 				}
 			}
 			if ("authToken" in action.payload) {

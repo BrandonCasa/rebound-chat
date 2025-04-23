@@ -1,7 +1,7 @@
 import * as Icons from "@mui/icons-material";
 import { AppBar, Toolbar, Typography, IconButton, Avatar } from "@mui/material";
 
-const AppBarContent = ({ handleIconClick, drawerWidth, loggedInState }) => (
+const AppBarContent = ({ handleIconClick, drawerWidth, loggedInState, avatarUrl }) => (
 	<AppBar
 		position="fixed"
 		sx={{
@@ -30,7 +30,7 @@ const AppBarContent = ({ handleIconClick, drawerWidth, loggedInState }) => (
 				/>
 				<Avatar
 					alt="User"
-					src="defaultpfp.webp"
+					src={avatarUrl}
 					sx={{
 						height: drawerWidth - 16,
 						width: drawerWidth - 16,

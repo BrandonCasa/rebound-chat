@@ -94,8 +94,18 @@ const App = () => {
 								bio: response.data.user.bio,
 								authToken: authState.authToken,
 								friends: response.data.user.friends,
-								bannerUrl: response?.data?.user?.bannerUrl && response?.data?.user?.bannerUrl !== "" ? requestStringBase + response.data.user.bannerUrl : null,
-								avatarUrl: response?.data?.user?.avatarUrl && response?.data?.user?.avatarUrl !== "" ? requestStringBase + response.data.user.avatarUrl : null,
+								bannerUrl:
+									response?.data?.user?.bannerUrl && response?.data?.user?.bannerUrl !== ""
+										? requestStringBase + response.data.user.bannerUrl
+										: globalThis.IN_ELECTRON_ENV
+											? "banner.webp"
+											: "/banner.webp",
+								avatarUrl:
+									response?.data?.user?.avatarUrl && response?.data?.user?.avatarUrl !== ""
+										? requestStringBase + response.data.user.avatarUrl
+										: globalThis.IN_ELECTRON_ENV
+											? "defaultpfp.webp"
+											: "/defaultpfp.webp",
 							})
 						);
 						dispatch(
@@ -116,8 +126,6 @@ const App = () => {
 						window.localStorage.removeItem("auth-token");
 						dispatch(setLoggedIn({ loggedIn: false, token: null }));
 					}
-				} else {
-					dispatch(setLoggingIn({ loggingIn: false }));
 				}
 			};
 

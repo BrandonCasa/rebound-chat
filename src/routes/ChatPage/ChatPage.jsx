@@ -76,14 +76,14 @@ function ChatPage() {
 	/* -------------------------------------------------- */
 	/*  Socket lifecycle                                  */
 	/* -------------------------------------------------- */
-	useEffect(() => {
-		const socket = socketIoHelper.getSocket();
+	// grab the current socket instance once per render
+	const socket = socketIoHelper.getSocket();
 
+	useEffect(() => {
 		if (authState.loggedIn && socket) {
-			/* rooms */
+			// rooms
 			socket.on("room_list", ([idMap, roomObjs]) => {
 				setChannels(roomObjs);
-
 				if (!authState.socketInfo.currentRoom) {
 					dispatch(
 						setSocketRoom({
@@ -93,13 +93,11 @@ function ChatPage() {
 					);
 				}
 			});
-
-			/* messages */
+			// messages
 			socket.on("joined_room", (_id, msgs) => setMessages(msgs));
 			socket.on("message_sent", (_id, msgs) => setMessages(msgs));
 			socket.on("new_message", (_id, msgs) => setMessages(msgs));
-
-			/* presence */
+			// presence
 			socket.on("user_list", (_roomId, list, sender, evt) => {
 				if (sender.id !== authState.userId) {
 					dispatch(
@@ -112,10 +110,10 @@ function ChatPage() {
 				}
 				setUsers(list);
 			});
-
-			/* initial pull */
+			// initial pull (buffered until actually connected)
 			socket.emit("list_rooms");
-		} else if (!authState.loggingIn) {
+		} else if (!authState.loggingIn && !authState.loggedIn) {
+			// only warn if truly not logged in
 			dispatch(
 				addSnackbar({
 					snackbarMsg: "Login or register to use this page.",
@@ -137,7 +135,8 @@ function ChatPage() {
 			setMessages([]);
 			setUsers([]);
 		};
-	}, [authState.loggedIn, authState.loggingIn, authState.socketInfo.currentRoom, authState.userId, dispatch]);
+		// now re-run this effect not just on auth flags, but also as soon as the socket object changes
+	}, [authState.loggedIn, authState.loggingIn, authState.socketInfo.currentRoom, authState.userId, socket, dispatch]);
 
 	/* Clear user list when switching rooms */
 	useEffect(() => {
