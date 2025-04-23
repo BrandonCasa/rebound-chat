@@ -1,6 +1,6 @@
 {
 	"name": "rebound-web",
-	"version": "1.0.15",
+	"version": "1.0.16",
 	"private": true,
 	"main": "public/electron.js",
 	"description": "Rebound Nexus official web and user client.",
