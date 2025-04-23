@@ -3,6 +3,7 @@ import http from "http";
 import cors from "cors";
 import { configDotenv } from "dotenv";
 import express from "express";
+import rateLimit from "express-rate-limit";
 import methodOverride from "method-override";
 import morgan from "morgan";
 
@@ -26,6 +27,16 @@ class ServerBackend {
 	_initMiddleware() {
 		// CORS
 		this.app.use(cors({ optionsSuccessStatus: 200 }));
+		// ─── GLOBAL RATE LIMITER ───────────────────────────────────────────────────
+		// limit each IP to 150 requests per 5 minutes
+		const globalLimiter = rateLimit({
+			windowMs: 5 * 60 * 1000, // 5 minutes
+			max: 150,
+			standardHeaders: true,
+			legacyHeaders: false,
+			message: { error: "Too many requests, please try again later." },
+		});
+		this.app.use(globalLimiter);
 
 		// HTTP request logging
 		if (logger.stream) {

@@ -15,11 +15,32 @@ import { once } from "events";
 
 import serverWatchers from "../../socketio/watchers.js";
 import mongoose from "mongoose";
+import rateLimit from "express-rate-limit";
+
 import "dotenv/config";
 
 const router = Router();
 
 const upload = multer({ storage: multer.memoryStorage() });
+
+// ─── AUTH RATE LIMITER ────────────────────────────────────────────────────────
+// max 10 login/register attempts per hour per IP
+const authLimiter = rateLimit({
+	windowMs: 60 * 60 * 1000, // 1 hour
+	max: 10,
+	standardHeaders: true,
+	legacyHeaders: false,
+	message: { error: "Too many auth attempts, please try again later." },
+});
+// ─── MODIFY RATE LIMITER ────────────────────────────────────────────────────────
+// max 8 modify profile attempts per 30 minutes per IP
+const modifyLimiter = rateLimit({
+	windowMs: 30 * 60 * 1000, // 1 hour
+	max: 8,
+	standardHeaders: true,
+	legacyHeaders: false,
+	message: { error: "Too many modification attempts, please try again later." },
+});
 
 /**
  * /users/verify
@@ -83,7 +104,7 @@ router.get("/users/profile", auth.required, async (req, res, next) => {
  * /users/login
  * Log in a user using passport local strategy.
  */
-router.post("/users/login", (req, res, next) => {
+router.post("/users/login", authLimiter, (req, res, next) => {
 	if (!req.body?.user?.email) {
 		return res.status(422).json({ errors: { email: "is required" } });
 	}
@@ -108,7 +129,7 @@ router.post("/users/login", (req, res, next) => {
  * /users/register
  * Register a new user. Checks for a password with a minimum length.
  */
-router.post("/users/register", async (req, res, next) => {
+router.post("/users/register", authLimiter, async (req, res, next) => {
 	try {
 		const { username, email, displayName, bio, password } = req.body.user;
 		if (!password || password.trim().length < 8) {
@@ -133,6 +154,7 @@ router.post("/users/register", async (req, res, next) => {
  */
 router.put(
 	"/users/modify",
+	modifyLimiter,
 	auth.required,
 	upload.fields([
 		{ name: "banner", maxCount: 1 },
