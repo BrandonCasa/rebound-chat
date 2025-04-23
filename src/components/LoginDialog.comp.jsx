@@ -17,8 +17,8 @@ const LoginDialog = () => {
 	const [stayLoggedIn, setStayLoggedIn] = useState(true);
 
 	const handleUserLogin = () => {
-		let requestString = !process.env.NODE_ENV || process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/login" : "/api/users/login";
-		requestString = process.env.NODE_ENV !== "development" && window.isElectron ? `https://rebound.nexus/api/users/login` : requestString;
+		let requestStringBase = process.env.NODE_ENV === "development" ? `http://localhost:6001/api` : window.isElectron ? `https://rebound.nexus/api` : "/api";
+		let requestString = `${requestStringBase}/users/login`;
 
 		axios
 			.post(requestString, {
@@ -39,6 +39,9 @@ const LoginDialog = () => {
 							displayName: res.data.user.displayName,
 							bio: res.data.user.bio,
 							authToken: res.data.user.token,
+							bannerUrl: res?.data?.user?.bannerUrl && res?.data?.user?.bannerUrl !== "" ? requestStringBase + res.data.user.bannerUrl : globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp",
+							avatarUrl:
+								res?.data?.user?.avatarUrl && res?.data?.user?.avatarUrl !== "" ? requestStringBase + res.data.user.avatarUrl : globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp",
 						})
 					);
 					dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));

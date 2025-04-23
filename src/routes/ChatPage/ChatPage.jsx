@@ -18,7 +18,7 @@ import { addSnackbar } from "slices/snackbarSlice";
 /* -------------------------------------------------- */
 /*  Constants & helpers                               */
 /* -------------------------------------------------- */
-const REQUEST_BASE = process.env.NODE_ENV === "development" ? "http://localhost:6001/api" : window.isElectron ? "https://rebound.nexus/api" : "/api";
+const REQUEST_BASE = process.env.NODE_ENV === "development" ? `http://localhost:6001/api` : globalThis.IN_ELECTRON_ENV ? `https://rebound.nexus/api` : "/api";
 
 // ensure a URL is absolute (API returns `/uploads/…`)
 const fullUrl = (u) => (u ? (u.startsWith("http") ? u : REQUEST_BASE + u) : null);
@@ -28,7 +28,7 @@ const cache = (u) => (u ? `${fullUrl(u)}?t=${Date.now()}` : null);
 
 /* fetch complete profile for a given user id */
 async function getUserInfo(userId, authToken) {
-	const url = process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/profile" : window.isElectron ? "https://rebound.nexus/api/users/profile" : "/api/users/profile";
+	const url = `${REQUEST_BASE}/users/profile`;
 
 	try {
 		const { data } = await axios.get(url, {

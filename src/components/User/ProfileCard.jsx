@@ -9,17 +9,26 @@ import { addSnackbar } from "slices/snackbarSlice";
 import { setLoggedIn } from "slices/authSlice";
 
 /* -------------------------------------------------- */
-/*  Constants & small helpers                          */
+/*  Constants & helpers                              */
 /* -------------------------------------------------- */
 const REQUEST_BASE = process.env.NODE_ENV === "development" ? "http://localhost:6001/api" : window.isElectron ? "https://rebound.nexus/api" : "/api";
-
 const API_BASE = `${REQUEST_BASE}/users`;
 const fullUrl = (u) => (u ? (u.startsWith("http") ? u : REQUEST_BASE + u) : null);
-const cache = (u) => (u ? `${u}?t=${Date.now()}` : null);
+const cache = (u) => (u ? `${fullUrl(u)}?t=${Date.now()}` : null);
 
-function useFilePreview(initial) {
+const DEFAULT_USER = {
+	id: null,
+	displayName: "",
+	username: "",
+	bio: "",
+	avatarUrl: null,
+	bannerUrl: null,
+	friends: [],
+};
+
+function useFilePreview(initialUrl) {
 	const [file, setFile] = useState(null);
-	const [preview, setPrev] = useState(cache(initial));
+	const [preview, setPrev] = useState(cache(initialUrl));
 
 	const onChange = (e) => {
 		const f = e.target.files?.[0];
@@ -104,94 +113,93 @@ function FriendButtons({ status, friendId, profile, onAction }) {
 	}
 }
 
-/* -------------------------------------------------- */
-/*  Main component                                    */
-/* -------------------------------------------------- */
 export default function ProfileCard({ user, self: forceSelf = false, type = "full", width = "auto", passStyle }) {
 	const dispatch = useDispatch();
 	const auth = useSelector((s) => s.auth);
 
-	/* ----------  derived flags & core profile object  ---------- */
+	// determine if own profile
 	const isSelf = forceSelf || user?.id === auth.userId;
-	const rawData = isSelf ? auth : user;
+	// rawData: either auth (for self) or user or DEFAULT_USER (when user=null)
+	const rawData = isSelf ? auth : (user ?? DEFAULT_USER);
 
+	// hooks (always same order)
 	const [profile, setProfile] = useState(rawData);
 	const [editMode, setEdit] = useState(false);
-	const [name, setName] = useState(profile?.displayName || "");
-	const [bio, setBio] = useState(profile?.bio || "");
+	const [name, setName] = useState(rawData.displayName);
+	const [bio, setBio] = useState(rawData.bio);
+	const banner = useFilePreview(rawData.bannerUrl);
+	const avatar = useFilePreview(rawData.avatarUrl);
 
-	const banner = useFilePreview(profile?.bannerUrl);
-	const avatar = useFilePreview(profile?.avatarUrl);
-
-	/* ----------  resync local copies when store/user changes  --- */
+	// sync local state when rawData fields change
 	useEffect(() => {
 		setProfile(rawData);
-		setName(rawData?.displayName || "");
-		setBio(rawData?.bio || "");
-		banner.reset(rawData?.bannerUrl);
-		avatar.reset(rawData?.avatarUrl);
-	}, [rawData]);
+		setName(rawData.displayName);
+		setBio(rawData.bio);
+		banner.reset(rawData.bannerUrl);
+		avatar.reset(rawData.avatarUrl);
+	}, [rawData.id, rawData.displayName, rawData.bio, rawData.avatarUrl, rawData.bannerUrl]);
 
-	/* ----------  socket watch (live updates)  ------------------- */
+	/* ---------- socket watch ---------- */
 	const socket = socketIoHelper.getSocket();
 	const watchRef = useRef(null);
-	const watchId = profile?.id; // always watch *shown* profile
+	const watchId = profile.id;
 
 	useEffect(() => {
-		if (!socket?.connected || !watchId || editMode) return;
-
-		// detach previous
-		if (watchRef.current && watchRef.current !== watchId) {
+		if (!socket?.connected) return;
+		// unwatch when switching profile or entering edit
+		if (watchRef.current && (watchRef.current !== watchId || editMode)) {
 			socket.emit("unwatch_user", watchRef.current);
+			watchRef.current = null;
 		}
-
-		// attach new
-		if (watchRef.current !== watchId) {
+		// watch when not editing
+		if (!editMode && watchId && watchRef.current !== watchId) {
 			socket.emit("watch_user", watchId);
 			watchRef.current = watchId;
 		}
+		// cleanup on unmount
+		return () => {
+			if (watchRef.current) {
+				socket.emit("unwatch_user", watchRef.current);
+				watchRef.current = null;
+			}
+		};
+	}, [socket, watchId, editMode]);
 
-		const handle = ([id, data]) => {
+	useEffect(() => {
+		if (!socket) return;
+		const onSaved = ([id, data]) => {
 			if (id !== watchId) return;
 			const av = data.avatarUrl ? REQUEST_BASE + data.avatarUrl : null;
 			const bn = data.bannerUrl ? REQUEST_BASE + data.bannerUrl : null;
-
 			setProfile((p) => ({ ...p, ...data, avatarUrl: av, bannerUrl: bn }));
 			avatar.reset(av);
 			banner.reset(bn);
 			setName(data.displayName);
 			setBio(data.bio);
 		};
-
-		socket.on("watched_user_saved", handle);
+		socket.on("watched_user_saved", onSaved);
 		return () => {
-			socket.off("watched_user_saved", handle);
-			if (watchRef.current) socket.emit("unwatch_user", watchRef.current);
-			watchRef.current = null;
+			socket.off("watched_user_saved", onSaved);
 		};
-	}, [socket, watchId, editMode, avatar, banner]);
+	}, [socket, watchId, avatar, banner]);
 
-	/* ----------  friend relation state  ------------------------ */
+	/* ---------- friend-button derivation ---------- */
 	const { status, friendId } = useMemo(() => {
 		if (isSelf) return { status: "self", friendId: null };
-
-		const rel = profile?.friends?.find((f) => f.requester === auth.userId || f.recipient === auth.userId);
+		const rel = profile.friends.find((f) => f.requester === auth.userId || f.recipient === auth.userId);
 		if (!rel) return { status: "none", friendId: null };
 		if (rel.confirmed) return { status: "friends", friendId: rel._id };
 		return rel.requester === auth.userId ? { status: "sent", friendId: rel._id } : { status: "received", friendId: rel._id };
-	}, [profile?.friends, isSelf, auth.userId]);
+	}, [profile.friends, isSelf, auth.userId]);
 
-	/* ----------  server helpers  -------------------------------- */
+	/* ---------- API & save ---------- */
 	const callApi = (ep, data, msg, sev = "success") =>
 		axios
 			.put(`${API_BASE}/${ep}`, data, {
 				headers: { Authorization: `Bearer ${auth.authToken}` },
 			})
 			.then(() => dispatch(addSnackbar({ snackbarMsg: msg, snackbarSeverity: sev, autoHideDuration: 1500 })))
-			.catch((err) => {
-				console.error(err);
-				dispatch(addSnackbar({ snackbarMsg: "Error", snackbarSeverity: "error", autoHideDuration: 1500 }));
-			});
+			.catch(() => dispatch(addSnackbar({ snackbarMsg: "Error", snackbarSeverity: "error", autoHideDuration: 1500 })));
 
 	const saveProfile = () => {
 		const fd = new FormData();
@@ -206,32 +214,43 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 			})
 			.then(({ data }) => {
 				const u = data.user;
-				const full = { ...u, avatarUrl: fullUrl(u.avatarUrl), bannerUrl: fullUrl(u.bannerUrl) };
-				dispatch(setLoggedIn({ avatarUrl: full.avatarUrl, bannerUrl: full.bannerUrl, displayName: full.displayName, username: full.username, bio: full.bio }));
+				const full = {
+					...u,
+					avatarUrl: fullUrl(u.avatarUrl),
+					bannerUrl: fullUrl(u.bannerUrl),
+				};
+				dispatch(
+					setLoggedIn({
+						avatarUrl: full.avatarUrl,
+						bannerUrl: full.bannerUrl,
+						displayName: full.displayName,
+						username: full.username,
+						bio: full.bio,
+					})
+				);
 				setProfile((p) => ({ ...p, ...full }));
 				dispatch(addSnackbar({ snackbarMsg: "Profile updated", snackbarSeverity: "success", autoHideDuration: 1500 }));
 				setEdit(false);
 				avatar.reset(full.avatarUrl);
 				banner.reset(full.bannerUrl);
 			})
-			.catch((err) => {
-				console.error(err);
-				dispatch(addSnackbar({ snackbarMsg: "Update failed", snackbarSeverity: "error", autoHideDuration: 1500 }));
-			});
+			.catch(() => dispatch(addSnackbar({ snackbarMsg: "Update failed", snackbarSeverity: "error", autoHideDuration: 1500 })));
 	};
 
-	/* ----------  early outs / alt modes  ----------------------- */
-	if (!profile && type !== "mini") return <Paper sx={{ width, height: passStyle?.maxHeight }} />;
+	/* ---------- placeholder when no user ---------- */
+	if (!user && !forceSelf) {
+		return <></>;
+	}
 
-	if (type === "mini") return <Paper>mini</Paper>; // TODO
-	if (type === "popout") return <Paper>popout</Paper>; // TODO
+	if (type === "mini") return <Paper>mini</Paper>;
+	if (type === "popout") return <Paper>popout</Paper>;
 
-	/* ----------  render  --------------------------------------- */
+	/* ---------- main render ---------- */
 	return (
 		<Paper
 			sx={{
 				width,
-				maxHeight: "100%",
+				maxHeight: passStyle?.maxHeight,
 				display: "flex",
 				flexDirection: "column",
 				overflow: "hidden",
@@ -240,11 +259,11 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 			elevation={3}
 		>
 			<Stack spacing={1} sx={{ p: 1, flex: 1 }}>
-				{/* banner */}
+				{/* Banner */}
 				<Box position="relative">
 					<Box
 						component="img"
-						src={banner.preview || (window.isElectron ? "banner.webp" : "/banner.webp")}
+						src={banner.preview || (window.isElectron ? "/banner.webp" : "/banner.webp")}
 						alt="banner"
 						sx={{ width: "100%", height: 120, borderRadius: 1, objectFit: "cover" }}
 						key={banner.preview}
@@ -252,10 +271,10 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 					{isSelf && editMode && <CameraInput onChange={banner.onChange} sx={{ position: "absolute", top: 8, right: 8, bgcolor: "rgba(255,255,255,0.7)" }} />}
 				</Box>
 
-				{/* avatar + name */}
+				{/* Avatar + Name */}
 				<Stack direction="row" spacing={2} alignItems="center">
 					<Box position="relative">
-						<Avatar src={avatar.preview || (window.isElectron ? "defaultpfp.webp" : "/defaultpfp.webp")} sx={{ width: 56, height: 56 }} />
+						<Avatar src={avatar.preview || (window.isElectron ? "/defaultpfp.webp" : "/defaultpfp.webp")} sx={{ width: 56, height: 56 }} />
 						{isSelf && editMode && <CameraInput onChange={avatar.onChange} sx={{ position: "absolute", bottom: -4, right: -4, bgcolor: "white" }} />}
 					</Box>
 					<Box flex={1} minWidth={0}>
@@ -272,7 +291,7 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 					</Box>
 				</Stack>
 
-				{/* bio */}
+				{/* Bio */}
 				<Paper variant="outlined" sx={{ p: 1, flex: 1, minHeight: 80 }}>
 					<Typography variant="subtitle2">About Me</Typography>
 					{editMode ? (
@@ -284,7 +303,7 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 					)}
 				</Paper>
 
-				{/* actions */}
+				{/* Actions */}
 				<Box sx={{ pt: 1 }}>
 					{isSelf ? (
 						editMode ? (
