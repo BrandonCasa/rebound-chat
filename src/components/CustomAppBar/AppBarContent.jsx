@@ -1,7 +1,7 @@
 import * as Icons from "@mui/icons-material";
 import { AppBar, Toolbar, Typography, IconButton, Avatar } from "@mui/material";
 
-const AppBarContent = ({ handleIconClick, drawerWidth, loggedInState, avatarUrl }) => (
+const AppBarContent = ({ handleIconClick, drawerWidth, loggedInState, avatarUrl, theme }) => (
 	<AppBar
 		position="fixed"
 		sx={{
@@ -20,7 +20,7 @@ const AppBarContent = ({ handleIconClick, drawerWidth, loggedInState, avatarUrl 
 			<Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
 				Rebound
 			</Typography>
-			<IconButton color="secondary" onClick={handleIconClick}>
+			<IconButton color="secondary" onClick={handleIconClick} sx={{ mr: theme.spacing(-1) }}>
 				<Icons.AccountCircleRounded
 					sx={{
 						height: drawerWidth - 16,

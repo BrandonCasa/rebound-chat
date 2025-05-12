@@ -9,6 +9,7 @@ import { useSelector } from "react-redux";
 
 function CustomAppBar({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, handleIconClick, loggedInState, anchorEl, open, handleClose, handleLogout, children }) {
 	const theme = useTheme();
+	console.log(theme.spacing(1));
 	const auth = useSelector((s) => s.auth);
 	//console.log(auth);
 
@@ -22,10 +23,10 @@ function CustomAppBar({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, handl
 				top: 0,
 			}}
 		>
-			<AppBarContent handleIconClick={handleIconClick} iconWidth={iconWidth} drawerWidth={drawerWidth} loggedInState={loggedInState} avatarUrl={auth.avatarUrl} />
+			<AppBarContent handleIconClick={handleIconClick} iconWidth={iconWidth} drawerWidth={drawerWidth} loggedInState={loggedInState} avatarUrl={auth.avatarUrl} theme={theme} />
 			<AccountMenu anchorEl={anchorEl} open={open} handleClose={handleClose} handleLogout={handleLogout} theme={theme} />
 			<DrawerMenu drawerWidth={drawerWidth} iconWidth={iconWidth} drawerOpen={drawerOpen} setDrawerOpen={setDrawerOpen} theme={theme} />
-			<MainContent drawerWidth={drawerWidth} drawerOpen={drawerOpen} theme={theme} iconWidth={iconWidth} setDrawerOpen={setDrawerOpen}>
+			<MainContent drawerWidth={drawerWidth} drawerOpen={drawerOpen} iconWidth={iconWidth} setDrawerOpen={setDrawerOpen}>
 				{children}
 			</MainContent>
 		</Box>

@@ -32,7 +32,6 @@ const darkThemeBase = createTheme({
 			main: "#21f3dc",
 		},
 	},
-	spacing: 8,
 	shape: {
 		borderRadius: 8,
 	},
@@ -61,22 +60,19 @@ const darkThemeBase = createTheme({
 });
 
 function useDarkTheme() {
-	const spacingMatch = useMediaQuery(darkThemeBase.breakpoints.up("sm"));
-
-	const darkTheme = useMemo(() => {
-		const [large, small] = [8, 6];
-		const chosen = spacingMatch ? large : small;
-		const spacingMult = chosen / Math.max(large, small);
-
-		return createTheme(darkThemeBase, {
-			spacing: chosen,
-			// if you really need these helpers on the theme
-			spacingMultFull: spacingMult,
-			spacingMult: (factor) => (1 - spacingMult) / factor + spacingMult,
-		});
-	}, [spacingMatch]);
-
 	const overrides = useSelector((state) => state.settings.overrides);
+	const isDesktop = useMediaQuery(darkThemeBase.breakpoints.up("sm"));
+	const defaultMultiplier = isDesktop ? 8 : 4;
+
+	const spacingMultiplier = (overrides.shape?.spacingMultiplier || 1) * defaultMultiplier;
+
+	const darkTheme = useMemo(
+		() =>
+			createTheme(darkThemeBase, {
+				spacing: (factor) => `${spacingMultiplier * factor}px`,
+			}),
+		[spacingMultiplier]
+	);
 
 	const themeWithOverrides = useMemo(() => createTheme(darkTheme, overrides), [darkTheme, overrides]);
 

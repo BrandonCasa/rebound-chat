@@ -68,7 +68,7 @@ function MainContent({ drawerWidth, drawerOpen, iconWidth, setDrawerOpen, childr
 					</IconButton>
 				</Tooltip>
 			</IconBox>
-			<Box sx={{ flexGrow: 1, display: "flex", padding: 2, height: "50%" }}>{children}</Box>
+			<Box sx={{ flexGrow: 1, display: "flex", padding: theme.spacing(1), height: "50%" }}>{children}</Box>
 		</MainBox>
 	);
 }

@@ -242,7 +242,7 @@ function ChatPage() {
 						display: "flex",
 						alignItems: "center",
 						p: 1,
-						height: `calc(56px * ${theme.spacingMult(2)})`,
+						height: `calc(56px * ${theme.spacing(2)})`,
 					}}
 				>
 					<Button variant="outlined" color="secondary" startIcon={<Icons.MenuRounded />} onClick={clickRoomSelect} sx={{ textTransform: "initial" }}>

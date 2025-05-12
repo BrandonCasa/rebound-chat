@@ -98,9 +98,10 @@ function SettingsPage() {
 	const handleReset = () => dispatch(resetThemeOverrides());
 
 	const borderRadius = overrides.shape?.borderRadius ?? theme.shape.borderRadius;
+	const spacingMultiplier = overrides.shape?.spacingMultiplier ?? 1;
 
 	return (
-        <Box
+		<Box
 			sx={{
 				display: "flex",
 				justifyContent: "center",
@@ -109,7 +110,7 @@ function SettingsPage() {
 				flexDirection: "column",
 			}}
 		>
-            <ItemPaper>
+			<ItemPaper>
 				<Typography variant="h4" sx={{ flexGrow: 1 }}>
 					Settings
 				</Typography>
@@ -117,7 +118,7 @@ function SettingsPage() {
 					Reset to Defaults
 				</Button>
 			</ItemPaper>
-            <Stack
+			<Stack
 				marginTop={2}
 				spacing={2}
 				sx={{
@@ -129,7 +130,7 @@ function SettingsPage() {
 			>
 				<div>
 					<Divider variant="middle" textAlign="left" sx={{ m: 0, "&::before, &::after": { borderWidth: 3 } }}>
-						<Chip color="secondary" label="Palette Colors" />
+						<Chip color="secondary" label="Colors" />
 					</Divider>
 				</div>
 
@@ -150,23 +151,43 @@ function SettingsPage() {
 
 				<div>
 					<Divider variant="middle" textAlign="left" sx={{ m: 0, "&::before, &::after": { borderWidth: 3 } }}>
-						<Chip color="secondary" label="Shape & Spacing" />
+						<Chip color="secondary" label="Shape & Style" />
 					</Divider>
 				</div>
 
 				<Paper sx={{ p: 2, backgroundColor: theme.palette.background.paper }}>
 					<Stack spacing={3}>
 						<Stack direction="row" spacing={2} alignItems="center">
-							<Typography sx={{ maxWidth: 160 }}>Border Radius</Typography>
-							<TextField type="number" value={borderRadius} onChange={(e) => handleNumberChange(["shape", "borderRadius"], e.target.value)} size="small" slotProps={{
-                                htmlInput: { min: 0 }
-                            }} />
+							<Typography sx={{ width: 120, textTransform: "capitalize" }}>Rounding</Typography>
+							<TextField
+								type="number"
+								sx={{ width: 90 }}
+								value={borderRadius}
+								onChange={(e) => handleNumberChange(["shape", "borderRadius"], e.target.value)}
+								size="small"
+								slotProps={{
+									htmlInput: { min: 0 },
+								}}
+							/>
+						</Stack>
+						<Stack direction="row" spacing={2} alignItems="center">
+							<Typography sx={{ width: 120, textTransform: "capitalize" }}>Spacing</Typography>
+							<TextField
+								type="number"
+								sx={{ width: 90 }}
+								value={spacingMultiplier * 4}
+								onChange={(e) => handleNumberChange(["shape", "spacingMultiplier"], e.target.value / 4)}
+								size="small"
+								slotProps={{
+									htmlInput: { min: 1, max: 8 },
+								}}
+							/>
 						</Stack>
 					</Stack>
 				</Paper>
 			</Stack>
-        </Box>
-    );
+		</Box>
+	);
 }
 
 export default SettingsPage;
