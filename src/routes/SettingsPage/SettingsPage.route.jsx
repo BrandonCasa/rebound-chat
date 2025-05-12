@@ -1,7 +1,7 @@
-import { Box, Paper, Stack, Typography, useTheme, Button, Divider, Chip, TextField } from "@mui/material";
+import { Box, Paper, Stack, Typography, useTheme, Button, Divider, Chip, Slider, useMediaQuery } from "@mui/material";
 import { styled, darken, lighten, getContrastRatio } from "@mui/material/styles";
 import { throttle } from "lodash";
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 import { scrollbarStyles } from "routes/LandingPage/utils/scrollbarStyles";
@@ -10,9 +10,11 @@ import { updateThemeOverride, resetThemeOverrides } from "slices/settingsSlice";
 const ItemPaper = styled(Paper)(({ theme }) => ({
 	...theme.typography.body2,
 	padding: theme.spacing(1),
-	textAlign: "center",
-	flexDirection: "row",
 	display: "flex",
+	alignItems: "center",
+	width: "100%",
+	maxWidth: 600,
+	margin: "0 auto",
 	color: theme.palette.text.secondary,
 }));
 
@@ -20,8 +22,9 @@ function SettingsPage() {
 	const dispatch = useDispatch();
 	const overrides = useSelector((state) => state.settings.overrides);
 	const theme = useTheme();
+	const isSmUp = useMediaQuery(theme.breakpoints.up("sm"));
 
-	// Expose only main colors; derive light/dark and paper automatically
+	// Expose main colors
 	const fields = {
 		"palette.primary.main": overrides.palette?.primary?.main ?? theme.palette.primary.main,
 		"palette.secondary.main": overrides.palette?.secondary?.main ?? theme.palette.secondary.main,
@@ -37,37 +40,26 @@ function SettingsPage() {
 		dark: darken(color, 0.2),
 	});
 
-	// Stable dispatch function for overrides
 	const handleColorChange = useCallback(
 		(path, value) => {
 			if (path[0] === "palette" && path[1] === "background" && path[2] === "default") {
 				const darker = darken(value, 0.3);
 				const paperColor = getContrastRatio(value, darker) < 1.2 ? lighten(value, 0.3) : darker;
-				dispatch(
-					updateThemeOverride({
-						palette: { background: { default: value, paper: paperColor } },
-					})
-				);
+				dispatch(updateThemeOverride({ palette: { background: { default: value, paper: paperColor } } }));
 				return;
 			}
 			if (path[0] === "palette" && path[2] === "main") {
 				const [, key] = path;
 				const main = value;
 				const { light, dark } = deriveShades(main);
-				dispatch(
-					updateThemeOverride({
-						palette: { [key]: { main, light, dark } },
-					})
-				);
+				dispatch(updateThemeOverride({ palette: { [key]: { main, light, dark } } }));
 				return;
 			}
-			// Fallback: generic override
 			const payload = {};
 			let obj = payload;
 			path.forEach((key, idx) => {
-				if (idx === path.length - 1) {
-					obj[key] = value;
-				} else {
+				if (idx === path.length - 1) obj[key] = value;
+				else {
 					obj[key] = {};
 					obj = obj[key];
 				}
@@ -77,110 +69,110 @@ function SettingsPage() {
 		[dispatch]
 	);
 
-	// Throttled version for drag events
 	const throttledHandleColorChange = useMemo(() => throttle(handleColorChange, 150), [handleColorChange]);
 
-	const handleNumberChange = (path, value) => {
-		const num = Number(value);
-		const payload = {};
-		let obj = payload;
-		path.forEach((key, idx) => {
-			if (idx === path.length - 1) {
-				obj[key] = num;
-			} else {
-				obj[key] = {};
-				obj = obj[key];
-			}
-		});
-		dispatch(updateThemeOverride(payload));
-	};
+	const handleNumberChange = useCallback(
+		(path, value) => {
+			const num = Number(value);
+			const payload = {};
+			let obj = payload;
+			path.forEach((key, idx) => {
+				if (idx === path.length - 1) obj[key] = num;
+				else {
+					obj[key] = {};
+					obj = obj[key];
+				}
+			});
+			dispatch(updateThemeOverride(payload));
+		},
+		[dispatch]
+	);
 
 	const handleReset = () => dispatch(resetThemeOverrides());
 
 	const borderRadius = overrides.shape?.borderRadius ?? theme.shape.borderRadius;
 	const spacingMultiplier = overrides.shape?.spacingMultiplier ?? 1;
 
+	const [localBorder, setLocalBorder] = useState(borderRadius);
+	const [localSpacing, setLocalSpacing] = useState(spacingMultiplier);
+
+	useEffect(() => setLocalBorder(borderRadius), [borderRadius]);
+	useEffect(() => setLocalSpacing(spacingMultiplier), [spacingMultiplier]);
+
 	return (
 		<Box
 			sx={{
-				display: "flex",
-				justifyContent: "center",
 				flexGrow: 1,
-				overflow: "hidden",
+				overflowY: "auto",
+				overflowX: "hidden",
+				display: "flex",
 				flexDirection: "column",
+				alignItems: "start",
 			}}
 		>
-			<ItemPaper>
-				<Typography variant="h4" sx={{ flexGrow: 1 }}>
-					Settings
-				</Typography>
-				<Button variant="outlined" onClick={handleReset} sx={{ marginLeft: "auto" }}>
-					Reset to Defaults
-				</Button>
-			</ItemPaper>
 			<Stack
-				marginTop={2}
 				spacing={2}
 				sx={{
-					height: "100%",
-					width: "100%",
-					overflow: "auto",
+					width: { xs: "100%", sm: 600 },
+					overflowY: "auto",
+					overflowX: "hidden",
 					...scrollbarStyles,
 				}}
 			>
-				<div>
-					<Divider variant="middle" textAlign="left" sx={{ m: 0, "&::before, &::after": { borderWidth: 3 } }}>
-						<Chip color="secondary" label="Colors" />
-					</Divider>
-				</div>
-
+				<Box sx={{ display: "flex", justifyContent: "center" }}>
+					<Button variant="outlined" onClick={handleReset}>
+						Reset to Default
+					</Button>
+				</Box>
 				<Paper sx={{ p: 2, backgroundColor: theme.palette.background.paper }}>
-					<Stack spacing={3}>
+					<Stack spacing={2}>
 						{Object.entries(fields).map(([key, val]) => {
 							const parts = key.split(".");
 							const label = parts.slice(-2)[0];
 							return (
-								<Stack key={key} direction="row" spacing={2} alignItems="center">
-									<Typography sx={{ width: 120, textTransform: "capitalize" }}>{label}</Typography>
-									<input type="color" value={val} onChange={(e) => throttledHandleColorChange(parts, e.target.value)} onMouseUp={(e) => handleColorChange(parts, e.target.value)} />
+								<Stack key={key} direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ xs: "flex-start", sm: "center" }}>
+									<Typography sx={{ width: { xs: "100%", sm: 120 }, textTransform: "capitalize" }}>{label}</Typography>
+									<Box sx={{ width: 40 }}>
+										<input
+											type="color"
+											value={val}
+											style={{ width: "100%", height: 40 }}
+											onChange={(e) => throttledHandleColorChange(parts, e.target.value)}
+											onMouseUp={(e) => handleColorChange(parts, e.target.value)}
+										/>
+									</Box>
 								</Stack>
 							);
 						})}
 					</Stack>
 				</Paper>
-
-				<div>
-					<Divider variant="middle" textAlign="left" sx={{ m: 0, "&::before, &::after": { borderWidth: 3 } }}>
-						<Chip color="secondary" label="Shape & Style" />
-					</Divider>
-				</div>
-
 				<Paper sx={{ p: 2, backgroundColor: theme.palette.background.paper }}>
 					<Stack spacing={3}>
-						<Stack direction="row" spacing={2} alignItems="center">
-							<Typography sx={{ width: 120, textTransform: "capitalize" }}>Rounding</Typography>
-							<TextField
-								type="number"
-								sx={{ width: 90 }}
-								value={borderRadius}
-								onChange={(e) => handleNumberChange(["shape", "borderRadius"], e.target.value)}
-								size="small"
-								slotProps={{
-									htmlInput: { min: 0 },
-								}}
+						<Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ xs: "flex-start", sm: "center" }}>
+							<Typography sx={{ minWidth: 120, textTransform: "capitalize", flexShrink: 0 }}>Rounding</Typography>
+							<Slider
+								sx={{ width: "100%" }}
+								min={0}
+								max={50}
+								step={1}
+								value={localBorder}
+								onChange={(e, val) => setLocalBorder(val)}
+								onChangeCommitted={(e, val) => handleNumberChange(["shape", "borderRadius"], val)}
+								valueLabelDisplay="auto"
 							/>
 						</Stack>
-						<Stack direction="row" spacing={2} alignItems="center">
-							<Typography sx={{ width: 120, textTransform: "capitalize" }}>Spacing</Typography>
-							<TextField
-								type="number"
-								sx={{ width: 90 }}
-								value={spacingMultiplier * 4}
-								onChange={(e) => handleNumberChange(["shape", "spacingMultiplier"], e.target.value / 4)}
-								size="small"
-								slotProps={{
-									htmlInput: { min: 1, max: 8 },
-								}}
+
+						<Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ xs: "flex-start", sm: "center" }}>
+							<Typography sx={{ minWidth: 120, textTransform: "capitalize", flexShrink: 0 }}>Spacing</Typography>
+							<Slider
+								sx={{ flexGrow: 1 }}
+								min={0.25}
+								max={2}
+								step={0.25}
+								value={localSpacing}
+								onChange={(e, val) => setLocalSpacing(val)}
+								onChangeCommitted={(e, val) => handleNumberChange(["shape", "spacingMultiplier"], val)}
+								valueLabelDisplay="auto"
 							/>
 						</Stack>
 					</Stack>
