@@ -121,10 +121,10 @@ class ServerRooms {
 					throw new Error("Room not found by ID.");
 				}
 
-				const roomDoc = await RoomModel.findById(roomId).populate({
-					path: "messages",
-					populate: { path: "sender", select: "displayName" },
-				});
+                                const roomDoc = await RoomModel.findById(roomId).populate({
+                                        path: "messages",
+                                        populate: { path: "sender", select: "displayName avatarUrl" },
+                                });
 
 				// Leave any rooms we were in, then join the new one
 				await this.leaveRooms(socket);
@@ -185,10 +185,10 @@ class ServerRooms {
 				roomDoc.messages.push(msg);
 				await roomDoc.save();
 
-				await roomDoc.populate({
-					path: "messages",
-					populate: { path: "sender", select: "displayName" },
-				});
+                                await roomDoc.populate({
+                                        path: "messages",
+                                        populate: { path: "sender", select: "displayName avatarUrl" },
+                                });
 
 				// Broadcast to everyone in the room
 				const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
