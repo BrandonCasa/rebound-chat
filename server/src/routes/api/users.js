@@ -56,11 +56,10 @@ router.post("/users/verify", async (req, res, next) => {
 			return res.status(401).json({ error: "Invalid or deactivated account." });
 		}
 		return res.json({ user: user.toAuthJSON() });
-	} catch (err) {
-		logger.error(`Verification error: ${err.message}`);
-		next(err);
-		return res.sendStatus(500);
-	}
+        } catch (err) {
+                logger.error(`Verification error: ${err.message}`);
+                return next(err);
+        }
 });
 
 /**
@@ -93,11 +92,10 @@ router.get("/users/profile", auth.required, async (req, res, next) => {
 		}
 
 		return res.json({ user: profile });
-	} catch (err) {
-		logger.error(`Profile retrieval error: ${err.message}`);
-		next(err);
-		return res.sendStatus(500);
-	}
+        } catch (err) {
+                logger.error(`Profile retrieval error: ${err.message}`);
+                return next(err);
+        }
 });
 
 /**
@@ -140,11 +138,10 @@ router.post("/users/register", authLimiter, async (req, res, next) => {
 
 		await user.save();
 		return res.json({ user: user.toAuthJSON() });
-	} catch (err) {
-		logger.error(`Registration error: ${err.message}`);
-		next(err);
-		return res.sendStatus(500);
-	}
+        } catch (err) {
+                logger.error(`Registration error: ${err.message}`);
+                return next(err);
+        }
 });
 
 /**
@@ -258,11 +255,10 @@ router.put("/users/addfriend", auth.required, async (req, res, next) => {
 		const recipient = await validateUserById(req.body.recipientId);
 		const result = await sendFriendRequest(sender, recipient);
 		return res.json(result);
-	} catch (err) {
-		logger.error(`Add friend error: ${err.message}`);
-		next(err);
-		return res.sendStatus(500);
-	}
+        } catch (err) {
+                logger.error(`Add friend error: ${err.message}`);
+                return next(err);
+        }
 });
 
 /**
@@ -291,11 +287,10 @@ router.put("/users/acceptfriend", auth.required, async (req, res, next) => {
 		friend.confirmed = true;
 		await friend.save();
 		return res.sendStatus(200);
-	} catch (err) {
-		logger.error(`Accept friend error: ${err.message}`);
-		next(err);
-		return res.sendStatus(500);
-	}
+        } catch (err) {
+                logger.error(`Accept friend error: ${err.message}`);
+                return next(err);
+        }
 });
 
 /**
@@ -316,11 +311,10 @@ router.put("/users/declinefriend", auth.required, async (req, res, next) => {
 		// Call declineFriend with the friend request ID and current user ID.
 		await declineFriend(req.body.friendId, decoded.id);
 		return res.sendStatus(200);
-	} catch (err) {
-		logger.error(`Decline friend error: ${err.message}`);
-		next(err);
-		return res.sendStatus(500);
-	}
+        } catch (err) {
+                logger.error(`Decline friend error: ${err.message}`);
+                return next(err);
+        }
 });
 
 /**
@@ -340,11 +334,10 @@ router.put("/users/cancelfriend", auth.required, async (req, res, next) => {
 	try {
 		await cancelFriend(req.body.friendId, decoded.id);
 		return res.sendStatus(200);
-	} catch (err) {
-		logger.error(`Cancel friend error: ${err.message}`);
-		next(err);
-		return res.sendStatus(500);
-	}
+        } catch (err) {
+                logger.error(`Cancel friend error: ${err.message}`);
+                return next(err);
+        }
 });
 
 /**
@@ -364,11 +357,10 @@ router.put("/users/removefriend", auth.required, async (req, res, next) => {
 	try {
 		await removeFriend(req.body.friendId, decoded.id);
 		return res.sendStatus(200);
-	} catch (err) {
-		logger.error(`Remove friend error: ${err.message}`);
-		next(err);
-		return res.sendStatus(500);
-	}
+        } catch (err) {
+                logger.error(`Remove friend error: ${err.message}`);
+                return next(err);
+        }
 });
 
 export default router;

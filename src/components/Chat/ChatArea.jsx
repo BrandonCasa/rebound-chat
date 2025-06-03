@@ -47,7 +47,15 @@ function IndividualMessage({ msg, shouldDisplayAvatar, currentBlock, currentMsg,
 					width: "100%",
 				}}
 			>
-				<Avatar alt="User" src="defaultpfp.webp" sx={{ height: "40px", width: "40px", cursor: "pointer" }} onClick={() => onClickMessage(messageRef, msg.sender)} />
+                                <Avatar
+                                        alt="User"
+                                        src={
+                                                msg.sender.avatarUrl ||
+                                                (window.isElectron ? "defaultpfp.webp" : "/defaultpfp.webp")
+                                        }
+                                        sx={{ height: "40px", width: "40px", cursor: "pointer" }}
+                                        onClick={() => onClickMessage(messageRef, msg.sender)}
+                                />
 				<Link
 					component={Typography}
 					fontSize={20}

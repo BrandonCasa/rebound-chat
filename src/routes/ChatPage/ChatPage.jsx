@@ -22,12 +22,24 @@ const REQUEST_BASE = process.env.NODE_ENV === "development" ? `http://localhost:
 
 // cache‑bust so new images show up instantly
 const cache = (u) => {
-	if (!u) return null;
-	// remove any existing “t=” parameter
-	const cleaned = u.replace(/([?&])t=\d+(&)?/, (_, sep, trailing) => (trailing ? sep : ""));
-	// append new timestamp (use & if there are still other query params)
-	return `${cleaned}${cleaned.includes("?") ? "&" : "?"}t=${Date.now()}`;
+        if (!u) return null;
+        // remove any existing “t=” parameter
+        const cleaned = u.replace(/([?&])t=\d+(&)?/, (_, sep, trailing) => (trailing ? sep : ""));
+        // append new timestamp (use & if there are still other query params)
+        return `${cleaned}${cleaned.includes("?") ? "&" : "?"}t=${Date.now()}`;
 };
+
+// sanitize message objects with cached avatar URLs
+const mapMessages = (msgs) =>
+        msgs.map((m) => ({
+                ...m,
+                sender: {
+                        ...m.sender,
+                        avatarUrl: m.sender?.avatarUrl
+                                ? cache(REQUEST_BASE + m.sender.avatarUrl)
+                                : null,
+                },
+        }));
 
 /* fetch complete profile for a given user id */
 async function getUserInfo(userId, authToken) {
@@ -97,9 +109,9 @@ function ChatPage() {
 				}
 			});
 			// messages
-			socket.on("joined_room", (_id, msgs) => setMessages(msgs));
-			socket.on("message_sent", (_id, msgs) => setMessages(msgs));
-			socket.on("new_message", (_id, msgs) => setMessages(msgs));
+                        socket.on("joined_room", (_id, msgs) => setMessages(mapMessages(msgs)));
+                        socket.on("message_sent", (_id, msgs) => setMessages(mapMessages(msgs)));
+                        socket.on("new_message", (_id, msgs) => setMessages(mapMessages(msgs)));
 			// presence
 			socket.on("user_list", (_roomId, list, sender, evt) => {
 				if (sender.id !== authState.userId) {
