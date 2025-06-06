@@ -217,19 +217,23 @@ function ChatPage() {
                 setMsgMenuPos(pos);
         };
 
+        const closeMessageMenu = () => {
+                setMsgMenuPos(null);
+                setSelectedMessage(null);
+        };
+
         const startEditSelectedMessage = () => {
                 if (!selectedMessage) return;
                 setEditingMessageId(selectedMessage._id);
                 setEditingText(selectedMessage.content);
-                setMsgMenuPos(null);
+                closeMessageMenu();
         };
 
         const confirmDeleteSelectedMessage = () => {
                 if (!selectedMessage) return;
                 const socket = socketIoHelper.getSocket();
                 socket.emit("delete_message", authState.socketInfo.currentRoom, selectedMessage._id);
-                setMsgMenuPos(null);
-                setSelectedMessage(null);
+                closeMessageMenu();
         };
 
         const commitEditMessage = () => {
@@ -278,7 +282,7 @@ function ChatPage() {
                         <UserListMenu anchorEl={userListAnchorEl} setAnchorEl={setUserListAnchorEl} users={users} />
                         <MessageContextMenu
                                 anchorPosition={msgMenuPos}
-                                setAnchorPosition={setMsgMenuPos}
+                                setAnchorPosition={closeMessageMenu}
                                 onEdit={startEditSelectedMessage}
                                 onDelete={confirmDeleteSelectedMessage}
                                 allowEdit={selectedMessage?.sender?._id === authState.userId}
