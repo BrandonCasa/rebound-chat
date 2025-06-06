@@ -44,7 +44,7 @@
 		"predist": "node projectscripts/clean-build.js",
 		"dist": "electron-builder",
 		"publish-dist": "npm run dist -- --win --mac --linux --publish always",
-		"postinstall": "cd server && npm install && cd ../ && electron-builder install-app-deps",
+		"postinstall": "cd server && npm install && cd ../ && npm run predist && electron-builder install-app-deps",
 		"ssh-win": "icacls ./keys/rebound_server.pem /inheritance:r & icacls ./keys/rebound_server.pem /grant:r \"%username%\":\"(R)\" & ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@100.26.232.245",
 		"ssh-mac": "chmod 400 ./keys/rebound_server.pem && ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@100.26.232.245"
 	},
