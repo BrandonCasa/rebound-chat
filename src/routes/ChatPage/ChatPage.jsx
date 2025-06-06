@@ -88,8 +88,10 @@ function ChatPage() {
         const [userListAnchorEl, setUserListAnchorEl] = useState(null);
         const [userPreviewEl, setUserPreviewEl] = useState(null);
         const [userPreviewUser, setUserPreviewUser] = useState(null);
-        const [msgMenuAnchorEl, setMsgMenuAnchorEl] = useState(null);
+        const [msgMenuPos, setMsgMenuPos] = useState(null);
         const [selectedMessage, setSelectedMessage] = useState(null);
+        const [editingMessageId, setEditingMessageId] = useState(null);
+        const [editingText, setEditingText] = useState("");
 
 	/* -------------------------------------------------- */
 	/*  Socket lifecycle                                  */
@@ -210,30 +212,37 @@ function ChatPage() {
                 }
         };
 
-        const openMessageMenu = (msg, el) => {
+        const openMessageMenu = (msg, pos) => {
                 setSelectedMessage(msg);
-                setMsgMenuAnchorEl(el);
+                setMsgMenuPos(pos);
         };
 
-        const editSelectedMessage = () => {
+        const startEditSelectedMessage = () => {
                 if (!selectedMessage) return;
-                const newContent = window.prompt("Edit message", selectedMessage.content);
-                if (newContent !== null && newContent !== selectedMessage.content) {
-                        const socket = socketIoHelper.getSocket();
-                        socket.emit("edit_message", authState.socketInfo.currentRoom, selectedMessage._id, newContent);
-                }
-                setMsgMenuAnchorEl(null);
+                setEditingMessageId(selectedMessage._id);
+                setEditingText(selectedMessage.content);
+                setMsgMenuPos(null);
+        };
+
+        const confirmDeleteSelectedMessage = () => {
+                if (!selectedMessage) return;
+                const socket = socketIoHelper.getSocket();
+                socket.emit("delete_message", authState.socketInfo.currentRoom, selectedMessage._id);
+                setMsgMenuPos(null);
                 setSelectedMessage(null);
         };
 
-        const deleteSelectedMessage = () => {
-                if (!selectedMessage) return;
-                if (window.confirm("Delete this message?")) {
-                        const socket = socketIoHelper.getSocket();
-                        socket.emit("delete_message", authState.socketInfo.currentRoom, selectedMessage._id);
-                }
-                setMsgMenuAnchorEl(null);
-                setSelectedMessage(null);
+        const commitEditMessage = () => {
+                if (!editingMessageId) return;
+                const socket = socketIoHelper.getSocket();
+                socket.emit("edit_message", authState.socketInfo.currentRoom, editingMessageId, editingText);
+                setEditingMessageId(null);
+                setEditingText("");
+        };
+
+        const cancelEditMessage = () => {
+                setEditingMessageId(null);
+                setEditingText("");
         };
 
 	/* -------------------------------------------------- */
@@ -268,10 +277,10 @@ function ChatPage() {
                         <ChatRoomMenu anchorEl={roomAnchorEl} setAnchorEl={setRoomAnchorEl} channels={channels} setMessages={setMessages} />
                         <UserListMenu anchorEl={userListAnchorEl} setAnchorEl={setUserListAnchorEl} users={users} />
                         <MessageContextMenu
-                                anchorEl={msgMenuAnchorEl}
-                                setAnchorEl={setMsgMenuAnchorEl}
-                                onEdit={editSelectedMessage}
-                                onDelete={deleteSelectedMessage}
+                                anchorPosition={msgMenuPos}
+                                setAnchorPosition={setMsgMenuPos}
+                                onEdit={startEditSelectedMessage}
+                                onDelete={confirmDeleteSelectedMessage}
                                 allowEdit={selectedMessage?.sender?._id === authState.userId}
                         />
 
@@ -312,8 +321,17 @@ function ChatPage() {
 
 				{/* messages */}
 				<Box sx={{ flexGrow: 1, position: "relative", width: "100%" }}>
-                                <ChatArea messages={messages} previewUser={previewUser} onContextMenu={openMessageMenu} />
-				</Box>
+                                <ChatArea
+                                        messages={messages}
+                                        previewUser={previewUser}
+                                        onContextMenu={openMessageMenu}
+                                        editingMessageId={editingMessageId}
+                                        editingText={editingText}
+                                        setEditingText={setEditingText}
+                                        commitEdit={commitEditMessage}
+                                        cancelEdit={cancelEditMessage}
+                                />
+                                </Box>
 
 				{/* input */}
 				<ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} />

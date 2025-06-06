@@ -1,4 +1,4 @@
-import { Box, List, ListItem, Avatar, Typography, useTheme, Link } from "@mui/material";
+import { Box, List, ListItem, Avatar, Typography, useTheme, Link, TextField, Button } from "@mui/material";
 import React, { useMemo } from "react";
 
 import { scrollbarStyles } from "routes/LandingPage/utils/scrollbarStyles";
@@ -18,7 +18,23 @@ const formatDate = (timestamp) => {
 	return outStringFull;
 };
 
-function IndividualMessage({ msg, shouldDisplayAvatar, currentBlock, currentMsg, hoveredBlock, hoveredMessage, onHoverMessage, requestedTime, onClickMessage, onContextMenu }) {
+function IndividualMessage({
+        msg,
+        shouldDisplayAvatar,
+        currentBlock,
+        currentMsg,
+        hoveredBlock,
+        hoveredMessage,
+        onHoverMessage,
+        requestedTime,
+        onClickMessage,
+        onContextMenu,
+        editingMessageId,
+        editingText,
+        setEditingText,
+        commitEdit,
+        cancelEdit,
+}) {
         const theme = useTheme();
         let sendTimeText = requestedTime ? formatDate(requestedTime) : formatDate(msg.createdAt);
         const messageRef = React.useRef(null);
@@ -33,11 +49,12 @@ function IndividualMessage({ msg, shouldDisplayAvatar, currentBlock, currentMsg,
 
         const handleContext = (e) => {
                 e.preventDefault();
-                onContextMenu(msg, e.currentTarget);
+                onContextMenu(msg, { x: e.clientX, y: e.clientY });
         };
 
         const handleTouchStart = (e) => {
-                touchTimer.current = setTimeout(() => onContextMenu(msg, e.currentTarget), 500);
+                const { clientX, clientY } = e.touches[0];
+                touchTimer.current = setTimeout(() => onContextMenu(msg, { x: clientX, y: clientY }), 500);
         };
 
         const handleTouchEnd = () => {
@@ -113,10 +130,32 @@ function IndividualMessage({ msg, shouldDisplayAvatar, currentBlock, currentMsg,
 						justifyContent: "space-between",
 					}}
 				>
-					<Typography variant="subtitle1" sx={{ color: theme.palette.text.secondary }}>
-						{msg.content}
-					</Typography>
-				</Box>
+                                        {editingMessageId === msg._id ? (
+                                                <Box sx={{ display: "flex", gap: 1, width: "100%" }}>
+                                                        <TextField
+                                                                size="small"
+                                                                fullWidth
+                                                                value={editingText}
+                                                                onChange={(e) => setEditingText(e.target.value)}
+                                                                onKeyDown={(e) => {
+                                                                        if (e.key === "Enter") commitEdit();
+                                                                        if (e.key === "Escape") cancelEdit();
+                                                                }}
+                                                                autoFocus
+                                                        />
+                                                        <Button variant="contained" color="primary" onClick={commitEdit} size="small">
+                                                                Save
+                                                        </Button>
+                                                        <Button variant="text" color="secondary" onClick={cancelEdit} size="small">
+                                                                Cancel
+                                                        </Button>
+                                                </Box>
+                                        ) : (
+                                                <Typography variant="subtitle1" sx={{ color: theme.palette.text.secondary }}>
+                                                        {msg.content}
+                                                </Typography>
+                                        )}
+                                </Box>
 			</Box>
 		</ListItem>
 	);
@@ -142,7 +181,19 @@ const divideMessages = (messages) => {
 	return outputMessages;
 };
 
-function GetMessageBlock({ messageBlock, blockIndex, hoveredBlock, setHoveredBlock, previewUser, onContextMenu }) {
+function GetMessageBlock({
+        messageBlock,
+        blockIndex,
+        hoveredBlock,
+        setHoveredBlock,
+        previewUser,
+        onContextMenu,
+        editingMessageId,
+        editingText,
+        setEditingText,
+        commitEdit,
+        cancelEdit,
+}) {
 	const [requestedTime, setRequestedTime] = React.useState(null);
 	const [hoveredMessage, setHoveredMessage] = React.useState(-1);
 
@@ -180,12 +231,26 @@ function GetMessageBlock({ messageBlock, blockIndex, hoveredBlock, setHoveredBlo
                                 requestedTime={requestedTime}
                                 onClickMessage={onClickMessage}
                                 onContextMenu={onContextMenu}
+                                editingMessageId={editingMessageId}
+                                editingText={editingText}
+                                setEditingText={setEditingText}
+                                commitEdit={commitEdit}
+                                cancelEdit={cancelEdit}
                         />
                 );
         });
 }
 
-const ConstructedMessages = React.memo(function ConstructedMessages({ relevantMsgs, previewUser, onContextMenu }) {
+const ConstructedMessages = React.memo(function ConstructedMessages({
+        relevantMsgs,
+        previewUser,
+        onContextMenu,
+        editingMessageId,
+        editingText,
+        setEditingText,
+        commitEdit,
+        cancelEdit,
+}) {
 	const theme = useTheme();
 	const [hoveredBlock, setHoveredBlock] = React.useState(-1);
 
@@ -203,13 +268,34 @@ const ConstructedMessages = React.memo(function ConstructedMessages({ relevantMs
 					transition: `background ${hoveredBlock !== blockIndex ? "0.3s" : "0.1s"} ease-in-out`,
 				}}
 			>
-                                <GetMessageBlock messageBlock={messageBlock} blockIndex={blockIndex} hoveredBlock={hoveredBlock} setHoveredBlock={setHoveredBlock} previewUser={previewUser} onContextMenu={onContextMenu} />
-			</Box>
+                                <GetMessageBlock
+                                        messageBlock={messageBlock}
+                                        blockIndex={blockIndex}
+                                        hoveredBlock={hoveredBlock}
+                                        setHoveredBlock={setHoveredBlock}
+                                        previewUser={previewUser}
+                                        onContextMenu={onContextMenu}
+                                        editingMessageId={editingMessageId}
+                                        editingText={editingText}
+                                        setEditingText={setEditingText}
+                                        commitEdit={commitEdit}
+                                        cancelEdit={cancelEdit}
+                                />
+                        </Box>
 		);
 	});
 });
 
-function ChatArea({ messages, previewUser, onContextMenu }) {
+function ChatArea({
+        messages,
+        previewUser,
+        onContextMenu,
+        editingMessageId,
+        editingText,
+        setEditingText,
+        commitEdit,
+        cancelEdit,
+}) {
 	const boxStyles = useMemo(
 		() => ({
 			position: "absolute",
@@ -230,7 +316,16 @@ function ChatArea({ messages, previewUser, onContextMenu }) {
 	return (
 		<Box sx={boxStyles}>
 			<List disablePadding>
-                                <ConstructedMessages relevantMsgs={messages} previewUser={previewUser} onContextMenu={onContextMenu} />
+                                <ConstructedMessages
+                                        relevantMsgs={messages}
+                                        previewUser={previewUser}
+                                        onContextMenu={onContextMenu}
+                                        editingMessageId={editingMessageId}
+                                        editingText={editingText}
+                                        setEditingText={setEditingText}
+                                        commitEdit={commitEdit}
+                                        cancelEdit={cancelEdit}
+                                />
 			</List>
 		</Box>
 	);

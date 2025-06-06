@@ -2,6 +2,8 @@ import * as Icons from "@mui/icons-material";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import { styled, alpha } from "@mui/material/styles";
+import Button from "@mui/material/Button";
+import Typography from "@mui/material/Typography";
 import React from "react";
 
 const StyledMenu = styled((props) => (
@@ -35,20 +37,50 @@ const StyledMenu = styled((props) => (
   },
 }));
 
-export default function MessageContextMenu({ anchorEl, setAnchorEl, onEdit, onDelete, allowEdit }) {
-  const open = Boolean(anchorEl);
+export default function MessageContextMenu({ anchorPosition, setAnchorPosition, onEdit, onDelete, allowEdit }) {
+  const [confirming, setConfirming] = React.useState(false);
+  const open = Boolean(anchorPosition);
   const handleClose = () => {
-    setAnchorEl(null);
+    setConfirming(false);
+    setAnchorPosition(null);
   };
 
   return (
-    <StyledMenu id="message-context-menu" anchorEl={anchorEl} open={open} onClose={handleClose}>
-      <MenuItem disabled={!allowEdit} onClick={() => { handleClose(); onEdit(); }} disableRipple>
-        <Icons.Edit /> Edit
-      </MenuItem>
-      <MenuItem disabled={!allowEdit} onClick={() => { handleClose(); onDelete(); }} disableRipple>
-        <Icons.Delete /> Delete
-      </MenuItem>
+    <StyledMenu
+      id="message-context-menu"
+      anchorReference="anchorPosition"
+      anchorPosition={anchorPosition ? { top: anchorPosition.y, left: anchorPosition.x } : undefined}
+      open={open}
+      onClose={handleClose}
+    >
+      {confirming ? (
+        <div style={{ padding: 8 }}>
+          <Typography sx={{ mb: 1 }}>Are you sure?</Typography>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => {
+              handleClose();
+              onDelete();
+            }}
+            sx={{ mr: 1 }}
+          >
+            Yes
+          </Button>
+          <Button variant="outlined" color="error" onClick={handleClose}>
+            No
+          </Button>
+        </div>
+      ) : (
+        <>
+          <MenuItem disabled={!allowEdit} onClick={() => { handleClose(); onEdit(); }} disableRipple>
+            <Icons.Edit /> Edit
+          </MenuItem>
+          <MenuItem disabled={!allowEdit} onClick={() => { setConfirming(true); }} disableRipple>
+            <Icons.Delete /> Delete
+          </MenuItem>
+        </>
+      )}
     </StyledMenu>
   );
 }
