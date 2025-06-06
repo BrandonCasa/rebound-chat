@@ -127,3 +127,24 @@ Get to know more about us and explore all the fun and unique features at
 [Rebound](https://rebound.nexus/).
 
 Enjoy your time with Rebound, where we take social interaction to a whole new level!
+
+## Development and Testing
+
+This repository uses **Mocha** with **Chai** for backend API and Socket.IO tests
+located under `server/tests`. Frontend React components are tested with
+**Jest** via `react-scripts` and React Testing Library in `src/__tests__`.
+
+Run backend tests:
+
+```bash
+npm test --prefix server
+```
+
+Run frontend tests from the repository root:
+
+```bash
+npm test
+```
+
+Test helpers currently contain placeholders that will be filled out when the
+scenarios listed in `tests-todo.txt` are implemented.
