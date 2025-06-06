@@ -9,6 +9,7 @@ import ChatRoomMenu from "components/Chat/ChatRoomMenu";
 import UserListMenu from "components/Chat/UserListMenu";
 import ChatArea from "components/Chat/ChatArea";
 import ChatInput from "components/Chat/ChatInput";
+import MessageContextMenu from "components/Chat/MessageContextMenu";
 import ProfileCard from "components/User/ProfileCard";
 
 import socketIoHelper from "helpers/socket";
@@ -83,10 +84,12 @@ function ChatPage() {
 	const [users, setUsers] = useState([]);
 
 	/* menus & preview popovers */
-	const [roomAnchorEl, setRoomAnchorEl] = useState(null);
-	const [userListAnchorEl, setUserListAnchorEl] = useState(null);
-	const [userPreviewEl, setUserPreviewEl] = useState(null);
-	const [userPreviewUser, setUserPreviewUser] = useState(null);
+        const [roomAnchorEl, setRoomAnchorEl] = useState(null);
+        const [userListAnchorEl, setUserListAnchorEl] = useState(null);
+        const [userPreviewEl, setUserPreviewEl] = useState(null);
+        const [userPreviewUser, setUserPreviewUser] = useState(null);
+        const [msgMenuAnchorEl, setMsgMenuAnchorEl] = useState(null);
+        const [selectedMessage, setSelectedMessage] = useState(null);
 
 	/* -------------------------------------------------- */
 	/*  Socket lifecycle                                  */
@@ -112,6 +115,7 @@ function ChatPage() {
                         socket.on("joined_room", (_id, msgs) => setMessages(mapMessages(msgs)));
                         socket.on("message_sent", (_id, msgs) => setMessages(mapMessages(msgs)));
                         socket.on("new_message", (_id, msgs) => setMessages(mapMessages(msgs)));
+                        socket.on("messages_updated", (_id, msgs) => setMessages(mapMessages(msgs)));
 			// presence
 			socket.on("user_list", (_roomId, list, sender, evt) => {
 				if (sender.id !== authState.userId) {
@@ -143,8 +147,9 @@ function ChatPage() {
 				socket.off("room_list");
 				socket.off("joined_room");
 				socket.off("message_sent");
-				socket.off("new_message");
-				socket.off("user_list");
+                                socket.off("new_message");
+                                socket.off("messages_updated");
+                                socket.off("user_list");
 			}
 			setChannels({});
 			setMessages([]);
@@ -189,21 +194,47 @@ function ChatPage() {
 		setRoomAnchorEl(null);
 	};
 
-	const previewUser = async (elRef, u) => {
-		if (!elRef?.current) {
-			setUserPreviewEl(null);
-			setUserPreviewUser(null);
-			return;
-		}
+        const previewUser = async (elRef, u) => {
+                if (!elRef?.current) {
+                        setUserPreviewEl(null);
+                        setUserPreviewUser(null);
+                        return;
+                }
 
 		if (!u?._id) return;
 
 		const info = await getUserInfo(u._id, authState.authToken);
-		if (info) {
-			setUserPreviewEl(elRef.current);
-			setUserPreviewUser(info);
-		}
-	};
+                if (info) {
+                        setUserPreviewEl(elRef.current);
+                        setUserPreviewUser(info);
+                }
+        };
+
+        const openMessageMenu = (msg, el) => {
+                setSelectedMessage(msg);
+                setMsgMenuAnchorEl(el);
+        };
+
+        const editSelectedMessage = () => {
+                if (!selectedMessage) return;
+                const newContent = window.prompt("Edit message", selectedMessage.content);
+                if (newContent !== null && newContent !== selectedMessage.content) {
+                        const socket = socketIoHelper.getSocket();
+                        socket.emit("edit_message", authState.socketInfo.currentRoom, selectedMessage._id, newContent);
+                }
+                setMsgMenuAnchorEl(null);
+                setSelectedMessage(null);
+        };
+
+        const deleteSelectedMessage = () => {
+                if (!selectedMessage) return;
+                if (window.confirm("Delete this message?")) {
+                        const socket = socketIoHelper.getSocket();
+                        socket.emit("delete_message", authState.socketInfo.currentRoom, selectedMessage._id);
+                }
+                setMsgMenuAnchorEl(null);
+                setSelectedMessage(null);
+        };
 
 	/* -------------------------------------------------- */
 	/*  Render                                            */
@@ -234,8 +265,15 @@ function ChatPage() {
 			</Popover>
 
 			{/* menus */}
-			<ChatRoomMenu anchorEl={roomAnchorEl} setAnchorEl={setRoomAnchorEl} channels={channels} setMessages={setMessages} />
-			<UserListMenu anchorEl={userListAnchorEl} setAnchorEl={setUserListAnchorEl} users={users} />
+                        <ChatRoomMenu anchorEl={roomAnchorEl} setAnchorEl={setRoomAnchorEl} channels={channels} setMessages={setMessages} />
+                        <UserListMenu anchorEl={userListAnchorEl} setAnchorEl={setUserListAnchorEl} users={users} />
+                        <MessageContextMenu
+                                anchorEl={msgMenuAnchorEl}
+                                setAnchorEl={setMsgMenuAnchorEl}
+                                onEdit={editSelectedMessage}
+                                onDelete={deleteSelectedMessage}
+                                allowEdit={selectedMessage?.sender?._id === authState.userId}
+                        />
 
 			{/* shell */}
 			<Paper
@@ -274,7 +312,7 @@ function ChatPage() {
 
 				{/* messages */}
 				<Box sx={{ flexGrow: 1, position: "relative", width: "100%" }}>
-					<ChatArea messages={messages} previewUser={previewUser} />
+                                <ChatArea messages={messages} previewUser={previewUser} onContextMenu={openMessageMenu} />
 				</Box>
 
 				{/* input */}

@@ -157,8 +157,8 @@ class ServerRooms {
 		});
 
 		// Client sends a message to a room
-		socket.on("message_room", async (arg1, arg2) => {
-			try {
+                socket.on("message_room", async (arg1, arg2) => {
+                        try {
 				const [idToName] = await this.getRoomList();
 				let roomId, content;
 
@@ -200,12 +200,70 @@ class ServerRooms {
 					}
 				});
 
-				logger.info(`User '${socket.user.username}' sent message '${msg._id}' to room '${roomId}'.`);
-			} catch (err) {
-				logger.error("Error handling message_room:", err);
-			}
-		});
-	}
+                                logger.info(`User '${socket.user.username}' sent message '${msg._id}' to room '${roomId}'.`);
+                        } catch (err) {
+                                logger.error("Error handling message_room:", err);
+                        }
+                });
+
+                // Client edits an existing message
+                socket.on("edit_message", async (roomId, messageId, content) => {
+                        try {
+                                const [idToName] = await this.getRoomList();
+                                if (!idToName[roomId]) {
+                                        throw new Error("Room not found by ID.");
+                                }
+
+                                const msg = await MessageModel.findById(messageId);
+                                if (!msg) return;
+                                if (msg.sender.toString() !== socket.user.id) return;
+
+                                msg.content = content;
+                                await msg.save();
+
+                                const roomDoc = await RoomModel.findById(roomId).populate({
+                                        path: "messages",
+                                        populate: { path: "sender", select: "displayName avatarUrl" },
+                                });
+
+                                const [, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
+                                socketsInRoom.forEach((s) => {
+                                        s.emit("messages_updated", roomId, roomDoc.messages);
+                                });
+                        } catch (err) {
+                                logger.error("Error handling edit_message:", err);
+                        }
+                });
+
+                // Client deletes a message
+                socket.on("delete_message", async (roomId, messageId) => {
+                        try {
+                                const [idToName] = await this.getRoomList();
+                                if (!idToName[roomId]) {
+                                        throw new Error("Room not found by ID.");
+                                }
+
+                                const msg = await MessageModel.findById(messageId);
+                                if (!msg) return;
+                                if (msg.sender.toString() !== socket.user.id) return;
+
+                                await MessageModel.deleteOne({ _id: messageId });
+                                await RoomModel.findByIdAndUpdate(roomId, { $pull: { messages: messageId } });
+
+                                const roomDoc = await RoomModel.findById(roomId).populate({
+                                        path: "messages",
+                                        populate: { path: "sender", select: "displayName avatarUrl" },
+                                });
+
+                                const [, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
+                                socketsInRoom.forEach((s) => {
+                                        s.emit("messages_updated", roomId, roomDoc.messages);
+                                });
+                        } catch (err) {
+                                logger.error("Error handling delete_message:", err);
+                        }
+                });
+        }
 }
 
 const serverRooms = new ServerRooms();

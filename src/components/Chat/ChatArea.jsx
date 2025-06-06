@@ -18,10 +18,11 @@ const formatDate = (timestamp) => {
 	return outStringFull;
 };
 
-function IndividualMessage({ msg, shouldDisplayAvatar, currentBlock, currentMsg, hoveredBlock, hoveredMessage, onHoverMessage, requestedTime, onClickMessage }) {
-	const theme = useTheme();
-	let sendTimeText = requestedTime ? formatDate(requestedTime) : formatDate(msg.createdAt);
-	const messageRef = React.useRef(null);
+function IndividualMessage({ msg, shouldDisplayAvatar, currentBlock, currentMsg, hoveredBlock, hoveredMessage, onHoverMessage, requestedTime, onClickMessage, onContextMenu }) {
+        const theme = useTheme();
+        let sendTimeText = requestedTime ? formatDate(requestedTime) : formatDate(msg.createdAt);
+        const messageRef = React.useRef(null);
+        const touchTimer = React.useRef(null);
 
 	const onHoverStart = (_event) => {
 		onHoverMessage(currentMsg);
@@ -30,16 +31,32 @@ function IndividualMessage({ msg, shouldDisplayAvatar, currentBlock, currentMsg,
 		onHoverMessage(-1);
 	};
 
-	return (
-		<ListItem
-			disablePadding
-			sx={{
-				alignItems: "flex-start",
-				display: "flex",
-				flexDirection: "column",
-				width: "100%",
-			}}
-		>
+        const handleContext = (e) => {
+                e.preventDefault();
+                onContextMenu(msg, e.currentTarget);
+        };
+
+        const handleTouchStart = (e) => {
+                touchTimer.current = setTimeout(() => onContextMenu(msg, e.currentTarget), 500);
+        };
+
+        const handleTouchEnd = () => {
+                clearTimeout(touchTimer.current);
+        };
+
+        return (
+                <ListItem
+                        disablePadding
+                        sx={{
+                                alignItems: "flex-start",
+                                display: "flex",
+                                flexDirection: "column",
+                                width: "100%",
+                        }}
+                        onContextMenu={handleContext}
+                        onTouchStart={handleTouchStart}
+                        onTouchEnd={handleTouchEnd}
+                >
 			<Box
 				sx={{
 					display: shouldDisplayAvatar ? "inherit" : "none",
@@ -125,7 +142,7 @@ const divideMessages = (messages) => {
 	return outputMessages;
 };
 
-function GetMessageBlock({ messageBlock, blockIndex, hoveredBlock, setHoveredBlock, previewUser }) {
+function GetMessageBlock({ messageBlock, blockIndex, hoveredBlock, setHoveredBlock, previewUser, onContextMenu }) {
 	const [requestedTime, setRequestedTime] = React.useState(null);
 	const [hoveredMessage, setHoveredMessage] = React.useState(-1);
 
@@ -150,24 +167,25 @@ function GetMessageBlock({ messageBlock, blockIndex, hoveredBlock, setHoveredBlo
 			}
 		};
 
-		return (
-			<IndividualMessage
-				key={msgIndex}
-				msg={msg}
-				shouldDisplayAvatar={shouldDisplayAvatar}
-				currentBlock={blockIndex}
-				currentMsg={msgIndex}
-				hoveredBlock={hoveredBlock}
-				hoveredMessage={hoveredMessage}
-				onHoverMessage={onHoverMessage}
-				requestedTime={requestedTime}
-				onClickMessage={onClickMessage}
-			/>
-		);
-	});
+                return (
+                        <IndividualMessage
+                                key={msgIndex}
+                                msg={msg}
+                                shouldDisplayAvatar={shouldDisplayAvatar}
+                                currentBlock={blockIndex}
+                                currentMsg={msgIndex}
+                                hoveredBlock={hoveredBlock}
+                                hoveredMessage={hoveredMessage}
+                                onHoverMessage={onHoverMessage}
+                                requestedTime={requestedTime}
+                                onClickMessage={onClickMessage}
+                                onContextMenu={onContextMenu}
+                        />
+                );
+        });
 }
 
-const ConstructedMessages = React.memo(function ConstructedMessages({ relevantMsgs, previewUser }) {
+const ConstructedMessages = React.memo(function ConstructedMessages({ relevantMsgs, previewUser, onContextMenu }) {
 	const theme = useTheme();
 	const [hoveredBlock, setHoveredBlock] = React.useState(-1);
 
@@ -185,13 +203,13 @@ const ConstructedMessages = React.memo(function ConstructedMessages({ relevantMs
 					transition: `background ${hoveredBlock !== blockIndex ? "0.3s" : "0.1s"} ease-in-out`,
 				}}
 			>
-				<GetMessageBlock messageBlock={messageBlock} blockIndex={blockIndex} hoveredBlock={hoveredBlock} setHoveredBlock={setHoveredBlock} previewUser={previewUser} />
+                                <GetMessageBlock messageBlock={messageBlock} blockIndex={blockIndex} hoveredBlock={hoveredBlock} setHoveredBlock={setHoveredBlock} previewUser={previewUser} onContextMenu={onContextMenu} />
 			</Box>
 		);
 	});
 });
 
-function ChatArea({ messages, previewUser }) {
+function ChatArea({ messages, previewUser, onContextMenu }) {
 	const boxStyles = useMemo(
 		() => ({
 			position: "absolute",
@@ -212,7 +230,7 @@ function ChatArea({ messages, previewUser }) {
 	return (
 		<Box sx={boxStyles}>
 			<List disablePadding>
-				<ConstructedMessages relevantMsgs={messages} previewUser={previewUser} />
+                                <ConstructedMessages relevantMsgs={messages} previewUser={previewUser} onContextMenu={onContextMenu} />
 			</List>
 		</Box>
 	);
