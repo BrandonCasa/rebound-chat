@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import useWindowDimensions from "../../helpers/useWindowDimensions";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
 import socketIoHelper from "../../helpers/socket";
@@ -69,6 +70,7 @@ export default function useChatPage() {
   const CHUNK_SIZE = 40;
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [totalMessages, setTotalMessages] = useState(0);
 
   const fetchChunk = useCallback(
     async (newOffset = 0) => {
@@ -89,7 +91,8 @@ export default function useChatPage() {
             : [...mapped, ...prev].slice(-CHUNK_SIZE * 3),
         );
         setOffset(newOffset);
-        setHasMore(data.messages.length === CHUNK_SIZE);
+        setTotalMessages(data.total);
+        setHasMore(newOffset + CHUNK_SIZE < data.total);
       } catch (err) {
         console.error("load messages error", err);
       } finally {
@@ -284,6 +287,12 @@ export default function useChatPage() {
     }
   };
 
+  const { width, height } = useWindowDimensions();
+
+  useEffect(() => {
+    handleScroll();
+  }, [width, height, messages.length]);
+
   return {
     authState,
     message,
@@ -317,5 +326,7 @@ export default function useChatPage() {
     cancelEditMessage,
     handleScroll,
     listRef,
+    totalMessages,
+    hasMore,
   };
 }
