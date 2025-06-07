@@ -1,5 +1,6 @@
 import React from "react";
-import * as Icons from "@mui/icons-material";
+import MenuRounded from "@mui/icons-material/MenuRounded";
+import PeopleRounded from "@mui/icons-material/PeopleRounded";
 import {
   Box,
   Button,
@@ -129,7 +130,7 @@ function ChatPage() {
           <Button
             variant="outlined"
             color="secondary"
-            startIcon={<Icons.MenuRounded />}
+            startIcon={<MenuRounded />}
             onClick={clickRoomSelect}
             sx={{ textTransform: "initial" }}
           >
@@ -141,7 +142,7 @@ function ChatPage() {
           <Button
             variant="outlined"
             color="secondary"
-            endIcon={<Icons.PeopleRounded />}
+            endIcon={<PeopleRounded />}
             onClick={clickUserList}
             sx={{ textTransform: "initial" }}
           >

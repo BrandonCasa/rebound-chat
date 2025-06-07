@@ -1,5 +1,8 @@
 import React from "react";
-import * as Icons from "@mui/icons-material";
+import CameraAlt from "@mui/icons-material/CameraAlt";
+import PersonAdd from "@mui/icons-material/PersonAdd";
+import PersonOff from "@mui/icons-material/PersonOff";
+import PersonRemove from "@mui/icons-material/PersonRemove";
 import {
   Avatar,
   Box,
@@ -18,7 +21,7 @@ import useProfileCard from "./useProfileCard";
 const CameraInput = ({ onChange, sx }) => (
   <IconButton component="label" sx={sx} size="small">
     <input hidden type="file" accept="image/*" onChange={onChange} />
-    <Icons.CameraAlt fontSize="small" />
+    <CameraAlt fontSize="small" />
   </IconButton>
 );
 
@@ -31,7 +34,7 @@ function FriendButtons({ status, friendId, profile, onAction }) {
           size="small"
           variant="contained"
           color="secondary"
-          startIcon={<Icons.PersonAdd />}
+          startIcon={<PersonAdd />}
           onClick={() =>
             onAction(
               "addfriend",
@@ -50,7 +53,7 @@ function FriendButtons({ status, friendId, profile, onAction }) {
           size="small"
           variant="outlined"
           color="info"
-          startIcon={<Icons.PersonOff />}
+          startIcon={<PersonOff />}
           onClick={() =>
             onAction(
               "cancelfriend",
@@ -68,7 +71,7 @@ function FriendButtons({ status, friendId, profile, onAction }) {
         <ButtonGroup fullWidth size="small" variant="contained">
           <Button
             color="success"
-            startIcon={<Icons.PersonAdd />}
+            startIcon={<PersonAdd />}
             onClick={() =>
               onAction(
                 "acceptfriend",
@@ -81,7 +84,7 @@ function FriendButtons({ status, friendId, profile, onAction }) {
           </Button>
           <Button
             color="error"
-            startIcon={<Icons.PersonRemove />}
+            startIcon={<PersonRemove />}
             onClick={() =>
               onAction(
                 "declinefriend",
@@ -102,7 +105,7 @@ function FriendButtons({ status, friendId, profile, onAction }) {
           size="small"
           variant="contained"
           color="error"
-          startIcon={<Icons.PersonRemove />}
+          startIcon={<PersonRemove />}
           onClick={() =>
             onAction(
               "removefriend",

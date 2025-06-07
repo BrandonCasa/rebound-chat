@@ -1,4 +1,4 @@
-import * as Icons from "@mui/icons-material";
+import Send from "@mui/icons-material/Send";
 import { TextField, Button, useTheme, Box } from "@mui/material";
 import React from "react";
 
@@ -41,7 +41,7 @@ function ChatInput({ message, setMessage, sendMessage }) {
         color="primary"
         onClick={sendMessage}
         endIcon={
-          <Icons.Send
+          <Send
             sx={{ color: "rgba(0, 0, 0, 0.52)" }}
             style={{ fontSize: "26px" }}
           />

@@ -1,4 +1,4 @@
-import * as Icons from "@mui/icons-material";
+import PersonRounded from "@mui/icons-material/PersonRounded";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import { styled, alpha } from "@mui/material/styles";
@@ -66,7 +66,7 @@ export default function UserListMenu({ anchorEl, setAnchorEl, users }) {
           disableRipple
           selected={users[user].id === authState.userId}
         >
-          <Icons.PersonRounded />
+          <PersonRounded />
           {users[user].displayName}
         </MenuItem>
       ))}

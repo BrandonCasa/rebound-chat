@@ -1,4 +1,4 @@
-import * as Icons from "@mui/icons-material";
+import DnsRounded from "@mui/icons-material/DnsRounded";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import { styled, alpha } from "@mui/material/styles";
@@ -88,7 +88,7 @@ export default function ChatRoomMenu({
           disableRipple
           selected={authState.socketInfo.currentRoom === channel}
         >
-          <Icons.DnsRounded />
+          <DnsRounded />
           {channels[channel].name}
         </MenuItem>
       ))}
