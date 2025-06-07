@@ -133,6 +133,7 @@ class ServerRooms {
 
         const roomDoc = await RoomModel.findById(roomId).populate({
           path: "messages",
+          options: { sort: { createdAt: 1 } },
           populate: { path: "sender", select: "displayName avatarUrl" },
         });
 
@@ -198,6 +199,7 @@ class ServerRooms {
 
         await roomDoc.populate({
           path: "messages",
+          options: { sort: { createdAt: 1 } },
           populate: { path: "sender", select: "displayName avatarUrl" },
         });
 
@@ -237,6 +239,7 @@ class ServerRooms {
 
         const roomDoc = await RoomModel.findById(roomId).populate({
           path: "messages",
+          options: { sort: { createdAt: 1 } },
           populate: { path: "sender", select: "displayName avatarUrl" },
         });
 
@@ -268,6 +271,7 @@ class ServerRooms {
 
         const roomDoc = await RoomModel.findById(roomId).populate({
           path: "messages",
+          options: { sort: { createdAt: 1 } },
           populate: { path: "sender", select: "displayName avatarUrl" },
         });
 

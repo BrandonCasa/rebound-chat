@@ -53,7 +53,6 @@ function ChatPage() {
     confirmDeleteSelectedMessage,
     commitEditMessage,
     cancelEditMessage,
-    handleScroll,
     listRef,
   } = useChatPage();
 
@@ -165,7 +164,6 @@ function ChatPage() {
             setEditingText={setEditingText}
             commitEdit={commitEditMessage}
             cancelEdit={cancelEditMessage}
-            onScroll={handleScroll}
             listRef={listRef}
           />
         </Box>
