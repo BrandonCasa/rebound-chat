@@ -40,7 +40,7 @@
 		"test": "vitest",
 		"electron": "electron .",
 		"electron-dev": "concurrently \"cross-env BROWSER=none pnpm run start\" \"cd server && pnpm run dev\" \"wait-on http://localhost:3000 && pnpm run electron\"",
-		"dist": "node projectscripts/clean-build.js && electron-builder",
+		"dist": "node projectscripts/clean-build.js && cd app && pnpm install --prod && cd ../ && electron-builder",
 		"publish-dist": "pnpm run dist -- --win --mac --linux --publish always",
 		"postinstall": "cd server && pnpm install && cd ../ && node projectscripts/clean-build.js",
 		"ssh-win": "icacls ./keys/rebound_server.pem /inheritance:r & icacls ./keys/rebound_server.pem /grant:r \"%username%\":\"(R)\" & ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@100.26.232.245",

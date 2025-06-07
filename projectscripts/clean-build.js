@@ -1,6 +1,7 @@
 import fs from "fs";
 import path, { dirname } from "path";
 import { fileURLToPath } from "url";
+
 import packageJson from "../package.json" with { type: "json" };
 
 const __filename = fileURLToPath(import.meta.url);
@@ -20,7 +21,7 @@ try {
 		}
 	}
 
-	// Copy buildDir into appDir.
+	// Copy build output into appDir.
 	if (fs.existsSync(buildDir)) {
 		fs.cpSync(buildDir, path.join(appDir, "build"), { recursive: true });
 	}
@@ -36,11 +37,22 @@ try {
 		author,
 		dependencies,
 	};
-
-	// Write the new package.json with formatting.
 	fs.writeFileSync(path.join(appDir, "package.json"), JSON.stringify(newPackageJson, null, 2));
+
+	// Copy lockfile if present for consistent installs
+	const lockfile = path.join(__dirname, "..", "pnpm-lock.yaml");
+	if (fs.existsSync(lockfile)) {
+		fs.copyFileSync(lockfile, path.join(appDir, "pnpm-lock.yaml"));
+	}
+
+	// Copy pnpm-workspace.yaml if present
+	const workspacefile = path.join(__dirname, "..", "pnpm-workspace.yaml");
+	if (fs.existsSync(workspacefile)) {
+		fs.copyFileSync(workspacefile, path.join(appDir, "pnpm-workspace.yaml"));
+	}
+
+	console.log("Clean build completed successfully.");
 } catch (err) {
 	console.error("Error during clean build:", err);
 	process.exit(1);
 }
-console.log("Clean build completed successfully.");
