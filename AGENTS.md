@@ -7,8 +7,8 @@
 
 ## Testing
 
-- **Frontend**: `pnpm test` (runs Vitest via the root `package.json`).
-- **Backend**: `pnpm test --prefix server` (runs Mocha/Chai in `server/tests`).
+- **Frontend**: `pnpm test` (when ran from the project root folder) (runs Vitest via the root `package.json`).
+- **Backend**: `pnpm test` (when ran from the server folder) (runs Mocha/Chai in `server/tests`).
 
 Run these test commands before committing any changes.
 
