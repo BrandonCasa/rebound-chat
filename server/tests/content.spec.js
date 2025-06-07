@@ -1,19 +1,19 @@
-import chai from 'chai';
-import chaiHttp from 'chai-http';
-import { startServer, stopServer } from './helpers/server.js';
+import * as chai from "chai";
+import chaiHttp from "chai-http";
+import { startServer, stopServer } from "./helpers/server.js";
 
 chai.use(chaiHttp);
 
 before(async () => {
-  await startServer();
+	await startServer();
 });
 
 after(async () => {
-  await stopServer();
+	await stopServer();
 });
 
-describe('Content API', () => {
-  describe('GET /content/:filename', () => {
-    it('retrieves files from GridFS');
-  });
+describe("Content API", () => {
+	describe("GET /content/:filename", () => {
+		it("retrieves files from GridFS");
+	});
 });
