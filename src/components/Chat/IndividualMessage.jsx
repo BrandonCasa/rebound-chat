@@ -162,6 +162,8 @@ function IndividualMessage({
               <TextField
                 size="small"
                 fullWidth
+                multiline
+                maxRows={5}
                 value={editingText}
                 onChange={(e) => setEditingText(e.target.value)}
                 onKeyDown={(e) => {
