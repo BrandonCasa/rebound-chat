@@ -11,24 +11,38 @@ const buildDir = path.join(__dirname, "..", "build");
 const appDir = path.join(__dirname, "..", "app");
 
 try {
-	// Ensure the app directory exists or create it.
+	// 1) ensure/clear appDir
 	if (!fs.existsSync(appDir)) {
 		fs.mkdirSync(appDir);
 	} else {
-		// Clear out the app directory.
-		for (const file of fs.readdirSync(appDir)) {
-			fs.rmSync(path.join(appDir, file), { recursive: true, force: true });
+		for (const f of fs.readdirSync(appDir)) {
+			fs.rmSync(path.join(appDir, f), { recursive: true, force: true });
 		}
 	}
 
-	// Copy build output into appDir.
+	// 2) copy build → app/build
 	if (fs.existsSync(buildDir)) {
 		fs.cpSync(buildDir, path.join(appDir, "build"), { recursive: true });
 	}
 
-	// Create the new package.json for the desktop client.
+	// 3) patch index.html to use relative "./" URLs
+	const indexPath = path.join(appDir, "build", "index.html");
+	if (fs.existsSync(indexPath)) {
+		let html = fs.readFileSync(indexPath, "utf-8");
+
+		// assets folder
+		html = html.replace(/(href|src)="\/assets\//g, '$1="./assets/');
+		// favicon, icons, manifest
+		html = html.replace(/href="\/favicon\.ico"/g, 'href="./favicon.ico"');
+		html = html.replace(/href="\/logo192\.png"/g, 'href="./logo192.png"');
+		html = html.replace(/href="\/manifest\.json"/g, 'href="./manifest.json"');
+
+		fs.writeFileSync(indexPath, html, "utf-8");
+	}
+
+	// 4) write new package.json
 	const { version, author, dependencies } = packageJson;
-	const newPackageJson = {
+	const newPkg = {
 		name: "rebound-desktop",
 		version,
 		private: false,
@@ -37,19 +51,13 @@ try {
 		author,
 		dependencies,
 	};
-	fs.writeFileSync(path.join(appDir, "package.json"), JSON.stringify(newPackageJson, null, 2));
+	fs.writeFileSync(path.join(appDir, "package.json"), JSON.stringify(newPkg, null, 2));
 
-	// Copy lockfile if present for consistent installs
+	// 5) copy lockfiles/workspace if exist
 	const lockfile = path.join(__dirname, "..", "pnpm-lock.yaml");
-	if (fs.existsSync(lockfile)) {
-		fs.copyFileSync(lockfile, path.join(appDir, "pnpm-lock.yaml"));
-	}
-
-	// Copy pnpm-workspace.yaml if present
-	const workspacefile = path.join(__dirname, "..", "pnpm-workspace.yaml");
-	if (fs.existsSync(workspacefile)) {
-		fs.copyFileSync(workspacefile, path.join(appDir, "pnpm-workspace.yaml"));
-	}
+	const workspace = path.join(__dirname, "..", "pnpm-workspace.yaml");
+	if (fs.existsSync(lockfile)) fs.copyFileSync(lockfile, path.join(appDir, "pnpm-lock.yaml"));
+	if (fs.existsSync(workspace)) fs.copyFileSync(workspace, path.join(appDir, "pnpm-workspace.yaml"));
 
 	console.log("Clean build completed successfully.");
 } catch (err) {
