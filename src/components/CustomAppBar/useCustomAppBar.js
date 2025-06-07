@@ -42,8 +42,10 @@ export default function useCustomAppBar(width) {
 		window.localStorage.removeItem("auth-token");
 		const oldDisplayName = displayName;
 		dispatch(setLoggedIn({ loggedIn: false }));
-		const socketClient = socketIoHelper.getSocket();
-		socketClient.disconnect();
+                const socketClient = socketIoHelper.getSocket();
+                if (socketClient && socketClient.connected) {
+                        socketIoHelper.disconnectSocket();
+                }
 		dispatch(
 			addSnackbar({
 				snackbarMsg: `Goodbye ${oldDisplayName}`,
