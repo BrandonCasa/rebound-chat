@@ -1,4 +1,3 @@
-import { Typography } from "@mui/material";
 import axios from "axios";
 import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -145,93 +144,133 @@ const useRegisterDialog = () => {
 		});
 	};
 
-	const handleStayLoggedInChange = (event) => {
-		setFormData({ ...formData, stayLoggedIn: event.target.checked });
-	};
+const handleStayLoggedInChange = (event) => {
+        setFormData({ ...formData, stayLoggedIn: event.target.checked });
+};
 
-	const handleUserRegister = async () => {
-		let requestString = process.env.NODE_ENV === "development" ? `http://localhost:6001/api/users/register` : `/api/users/register`;
-		requestString = process.env.NODE_ENV !== "development" && window.isElectron ? `https://rebound.nexus/api/users/register` : requestString;
+        const stepHasErrors = (step) => {
+                if (step === 0) {
+                        return (
+                                Object.keys(formData.usernameErrors).length > 0 ||
+                                Object.keys(formData.emailErrors).length > 0 ||
+                                Object.keys(formData.passwordErrors).length > 0
+                        );
+                }
+                if (step === 1) {
+                        return (
+                                Object.keys(formData.displayNameErrors).length > 0 ||
+                                Object.keys(formData.bioErrors).length > 0
+                        );
+                }
+                return false;
+        };
 
-		try {
-			const response = await axios.post(requestString, {
-				user: {
-					username: formData.username,
-					email: formData.email,
-					displayName: formData.displayName,
-					bio: formData.bio,
-					password: formData.password,
-					//formData.stayLoggedIn,
-				},
-			});
+        const hasAnyErrors = () =>
+                [
+                        formData.usernameErrors,
+                        formData.emailErrors,
+                        formData.passwordErrors,
+                        formData.displayNameErrors,
+                        formData.bioErrors,
+                ].some((err) => Object.keys(err).length > 0);
 
-			if (response.status === 200) {
-				const authToken = response.data.user.token;
-				window.localStorage.setItem("auth-token", authToken);
-				dispatch(setAuthState({ authToken }));
-				dispatch(setLoggedIn({ loggedIn: true }));
-				dispatch(
-					setDialogOpened({
-						dialogName: "registerDialogOpen",
-						newState: false,
-					})
-				);
-				setFormData({ ...formData });
-			}
-		} catch (error) {
-			if (!error?.response?.data?.errors) {
-				dispatch(
-					addSnackbar({
-						snackbarMsg: `Registration Failed! ${JSON.stringify(error?.response?.data?.errors || error?.message || "An unknown error occurred.")}`,
-						snackbarSeverity: "error",
-						autoHideDuration: 4000,
-					})
-				);
-			} else {
-				handleFormDataChange("password", formData.password, {});
-				handleFormDataChange("bio", formData.bio, {});
-				handleFormDataChange("email", formData.email, {});
-				handleFormDataChange("displayName", formData.displayName, {});
-				handleFormDataChange("username", formData.username, {});
+        const handleUserRegister = async () => {
+                let requestString = process.env.NODE_ENV === "development" ? `http://localhost:6001/api/users/register` : `/api/users/register`;
+                requestString = process.env.NODE_ENV !== "development" && window.isElectron ? `https://rebound.nexus/api/users/register` : requestString;
 
-				handleFormDataChange("requestErrors", undefined, error?.response?.data?.errors);
+                try {
+                        const response = await axios.post(requestString, {
+                                user: {
+                                        username: formData.username,
+                                        email: formData.email,
+                                        displayName: formData.displayName,
+                                        bio: formData.bio,
+                                        password: formData.password,
+                                        //formData.stayLoggedIn,
+                                },
+                        });
 
-				if (error?.response?.data?.errors) {
-					// display a snackbar for each error and prefix the error with the field name
-					for (const [field, errorMessages] of Object.entries(error?.response?.data?.errors)) {
-						if (Array.isArray(errorMessages)) {
-							errorMessages.forEach((errorMessage) => {
-								dispatch(
-									addSnackbar({
-										snackbarMsg: `${field.charAt(0).toUpperCase() + field.slice(1)} ${errorMessage}`,
-										snackbarSeverity: "error",
-										autoHideDuration: 4000,
-									})
-								);
-							});
-						} else {
-							dispatch(
-								addSnackbar({
-									snackbarMsg: `${field.charAt(0).toUpperCase() + field.slice(1)} ${errorMessages}`,
-									snackbarSeverity: "error",
-									autoHideDuration: 4000,
-								})
-							);
-						}
-					}
-				}
-			}
-			setActiveStep(0);
-		}
-	};
+                        if (response.status === 200) {
+                                const authToken = response.data.user.token;
+                                window.localStorage.setItem("auth-token", authToken);
+                                dispatch(setAuthState({ authToken }));
+                                dispatch(setLoggedIn({ loggedIn: true }));
+                                dispatch(
+                                        setDialogOpened({
+                                                dialogName: "registerDialogOpen",
+                                                newState: false,
+                                        })
+                                );
+                                setFormData({ ...formData });
+                                dispatch(
+                                        addSnackbar({
+                                                snackbarMsg: "Registration Successful!",
+                                                snackbarSeverity: "success",
+                                                autoHideDuration: 4000,
+                                        })
+                                );
+                        }
+                } catch (error) {
+                        const serverErrors = error?.response?.data?.errors;
+                        if (!serverErrors) {
+                                dispatch(
+                                        addSnackbar({
+                                                snackbarMsg: `Registration Failed! ${error?.message || "Unknown error."}`,
+                                                snackbarSeverity: "error",
+                                                autoHideDuration: 4000,
+                                        })
+                                );
+                        } else {
+                                const fieldsToProcess = ["username", "email", "password", "displayName", "bio"];
+                                fieldsToProcess.forEach((field) => {
+                                        const msg = serverErrors[field];
+                                        if (msg) {
+                                                const message = Array.isArray(msg) ? msg.join(", ") : msg;
+                                                const errObj = {};
+                                                errObj[field] = message;
+                                                handleFormDataChange(field, formData[field], errObj);
+                                                dispatch(
+                                                        addSnackbar({
+                                                                snackbarMsg: `${field.charAt(0).toUpperCase() + field.slice(1)} ${message}`,
+                                                                snackbarSeverity: "error",
+                                                                autoHideDuration: 4000,
+                                                        })
+                                                );
+                                        }
+                                });
+                        }
+                        setActiveStep(0);
+                }
+        };
 
-	const handleNextStep = () => {
-		if (activeStep < 2) {
-			setActiveStep((prevActiveStep) => prevActiveStep + 1);
-		} else {
-			handleUserRegister();
-		}
-	};
+        const handleNextStep = () => {
+                if (stepHasErrors(activeStep)) {
+                        dispatch(
+                                addSnackbar({
+                                        snackbarMsg: "Please resolve validation errors before continuing.",
+                                        snackbarSeverity: "warning",
+                                        autoHideDuration: 4000,
+                                })
+                        );
+                        return;
+                }
+
+                if (activeStep < 2) {
+                        setActiveStep((prevActiveStep) => prevActiveStep + 1);
+                } else {
+                        if (hasAnyErrors()) {
+                                dispatch(
+                                        addSnackbar({
+                                                snackbarMsg: "Please resolve validation errors before registering.",
+                                                snackbarSeverity: "warning",
+                                                autoHideDuration: 4000,
+                                        })
+                                );
+                                return;
+                        }
+                        handleUserRegister();
+                }
+        };
 
 	const handleBackButton = () => {
 		if (activeStep === 0) {
