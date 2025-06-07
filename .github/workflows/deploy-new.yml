@@ -114,6 +114,7 @@ jobs:
             if [ ! -d "${{ github.event.inputs.appDirectory }}" ]; then
               mkdir -p "${{ github.event.inputs.appDirectory }}"
               cd "${{ github.event.inputs.appDirectory }}"
+              git restore .
               git clone ${{ github.event.inputs.repositoryURL }} ./
               cd ${{ github.event.inputs.serverSubdirectory }}
               pnpm install --frozen-lockfile --ignore-scripts
