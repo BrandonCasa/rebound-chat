@@ -1,25 +1,26 @@
 Backend tests:
-- User verification via JWT (/users/verify)
-- User login (/users/login)
-- User registration (/users/register)
-- Retrieve user profiles (public/private) (/users/profile)
-- Modify profile with banner/avatar upload (/users/modify)
-- Friend request workflow (add, accept, decline, cancel, remove)
-- Content retrieval from GridFS (/content/:filename)
-- Admin user deletion cleanup (/admin/users/delete)
-- Development utilities (database wipe, create test room)
-- Socket.IO authentication and events
-  - List, create, join, and leave rooms
-  - Send, edit, and delete messages
-  - Watcher notifications on user updates
+- [x] Token helper (getTokenFromHeader)
+- [ ] User verification via JWT (/users/verify)
+- [ ] User login (/users/login)
+- [ ] User registration (/users/register)
+- [ ] Retrieve user profiles (public/private) (/users/profile)
+- [ ] Modify profile with banner/avatar upload (/users/modify)
+- [ ] Friend request workflow (add, accept, decline, cancel, remove)
+- [ ] Content retrieval from GridFS (/content/:filename)
+- [ ] Admin user deletion cleanup (/admin/users/delete)
+- [ ] Development utilities (database wipe, create test room)
+- [ ] Socket.IO authentication and events
+  - [ ] List, create, join, and leave rooms
+  - [ ] Send, edit, and delete messages
+  - [ ] Watcher notifications on user updates
 
 Frontend tests:
-- Login dialog interactions
-- Registration dialog and validation
-- Chat interface (sending, editing, deleting messages)
-- Channel and user lists
-- Theme designer in Settings page
-- Auto update dialog behavior
-- Friend list and profile pages
-- Hub and landing page rendering
-- Snackbar notifications
+- [ ] Login dialog interactions
+- [ ] Registration dialog and validation
+- [ ] Chat interface (sending, editing, deleting messages)
+- [ ] Channel and user lists
+- [ ] Theme designer in Settings page
+- [x] Auto update dialog behavior
+- [ ] Friend list and profile pages
+- [ ] Hub and landing page rendering
+- [ ] Snackbar notifications
