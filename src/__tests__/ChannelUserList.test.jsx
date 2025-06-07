@@ -1,13 +1,15 @@
-import { vi } from "vitest";
-vi.mock("slices/authSlice", async () => await import("../slices/authSlice"));
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, vi, afterEach } from 'vitest';
 
 import authReducer from '../slices/authSlice';
 import ChannelList from '../components/Chat/ChannelList.jsx';
 import UserList from '../components/Chat/UserList.jsx';
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
 
 function renderWithStore(ui, store) {
   return render(<Provider store={store}>{ui}</Provider>);

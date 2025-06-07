@@ -1,14 +1,25 @@
 import { render, screen } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect, vi, afterEach } from 'vitest';
 
 import authReducer from '../slices/authSlice';
 import ProfileCard from '../components/User/ProfileCard.jsx';
 
+vi.mock('axios', () => ({
+  default: {
+    put: vi.fn(() => Promise.resolve({ data: {} })),
+    get: vi.fn(() => Promise.resolve({ data: {} })),
+  },
+}));
+
 vi.mock('../helpers/socket', () => ({
   default: { getSocket: () => ({ on: vi.fn(), off: vi.fn(), emit: vi.fn(), connected: false }) }
 }));
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
 
 function renderWithStore(ui, store) {
   return render(<Provider store={store}>{ui}</Provider>);
