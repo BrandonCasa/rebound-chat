@@ -67,6 +67,7 @@ export default function useChatPage() {
   const listRef = useRef(null);
   const fetchingRef = useRef(false);
   const CHUNK_SIZE = 40;
+  const DISPLAY_MESSAGE_LIMIT = 120;
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [totalMessages, setTotalMessages] = useState(0);
@@ -87,7 +88,7 @@ export default function useChatPage() {
         setMessages((prev) =>
           newOffset === 0
             ? mapped
-            : [...mapped, ...prev].slice(-CHUNK_SIZE * 3),
+            : [...mapped, ...prev].slice(-DISPLAY_MESSAGE_LIMIT),
         );
         setOffset(newOffset);
         setTotalMessages(data.total);
@@ -120,14 +121,14 @@ export default function useChatPage() {
         const last = msgs[msgs.length - 1];
         if (!last) return;
         setMessages((prev) =>
-          [...prev, ...mapMessages([last])].slice(-CHUNK_SIZE * 3),
+          [...prev, ...mapMessages([last])].slice(-DISPLAY_MESSAGE_LIMIT),
         );
       });
       socket.on("new_message", (_id, msgs) => {
         const last = msgs[msgs.length - 1];
         if (!last) return;
         setMessages((prev) =>
-          [...prev, ...mapMessages([last])].slice(-CHUNK_SIZE * 3),
+          [...prev, ...mapMessages([last])].slice(-DISPLAY_MESSAGE_LIMIT),
         );
       });
       socket.on("messages_updated", () => fetchChunk(0));
