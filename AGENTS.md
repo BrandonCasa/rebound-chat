@@ -14,9 +14,10 @@ Run these test commands before committing any changes.
 
 ## Coding Guidelines
 
-- Format changed JavaScript/JSX with `npx prettier -w`.
+- Anytime you finish working on a file, prior to commiting it (if the file is JavaScript/JSX) run `pnpm prettier {the file --write` on it.
 - Avoid committing build artifacts (`dist/`, `app/`, etc., already ignored).
 - Keep tests and documentation in sync with code changes.
+- Check for tests which reference components you modify, and if your changes require those tests to be updated.
 
 ## Search Tips
 
