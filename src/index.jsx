@@ -7,19 +7,15 @@ import { Provider } from "react-redux";
 import App from "./App";
 import reportWebVitals from "./reportWebVitals";
 
-import "@fontsource/roboto/300.css";
-import "@fontsource/roboto/400.css";
-import "@fontsource/roboto/500.css";
-import "@fontsource/roboto/700.css";
 import store from "./store";
 
 window.isElectron = "electronAPI" in window;
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
-  <Provider store={store}>
-    <App />
-  </Provider>,
+	<Provider store={store}>
+		<App />
+	</Provider>
 );
 
 // If you want to start measuring performance in your app, pass a function
