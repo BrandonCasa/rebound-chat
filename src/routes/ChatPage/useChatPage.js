@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
 import socketIoHelper from "../../helpers/socket";
 import { setSocketRoom } from "../../slices/authSlice";
 import { addSnackbar } from "../../slices/snackbarSlice";
+import cacheMedia from "../../helpers/cacheMedia";
 
 const REQUEST_BASE =
   process.env.NODE_ENV === "development"
@@ -12,21 +13,13 @@ const REQUEST_BASE =
       ? `https://rebound.nexus/api`
       : "/api";
 
-const cache = (u) => {
-  if (!u) return null;
-  const cleaned = u.replace(/([?&])t=\d+(&)?/, (_, sep, trailing) =>
-    trailing ? sep : "",
-  );
-  return `${cleaned}${cleaned.includes("?") ? "&" : "?"}t=${Date.now()}`;
-};
-
 const mapMessages = (msgs) =>
   msgs.map((m) => ({
     ...m,
     sender: {
       ...m.sender,
       avatarUrl: m.sender?.avatarUrl
-        ? cache(REQUEST_BASE + m.sender.avatarUrl)
+        ? cacheMedia(REQUEST_BASE + m.sender.avatarUrl)
         : null,
     },
   }));
@@ -45,8 +38,8 @@ async function getUserInfo(userId, authToken) {
     const u = data.user;
     return {
       ...u,
-      avatarUrl: u.avatarUrl ? cache(REQUEST_BASE + u.avatarUrl) : null,
-      bannerUrl: u.bannerUrl ? cache(REQUEST_BASE + u.bannerUrl) : null,
+      avatarUrl: u.avatarUrl ? cacheMedia(REQUEST_BASE + u.avatarUrl) : null,
+      bannerUrl: u.bannerUrl ? cacheMedia(REQUEST_BASE + u.bannerUrl) : null,
     };
   } catch (err) {
     console.error(err);
@@ -71,10 +64,39 @@ export default function useChatPage() {
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingText, setEditingText] = useState("");
+  const listRef = useRef(null);
+  const CHUNK_SIZE = 40;
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
 
-  const socket = socketIoHelper.getSocket();
+  const fetchChunk = useCallback(
+    async (newOffset = 0) => {
+      if (!authState.socketInfo.currentRoom) return;
+      try {
+        const { data } = await axios.get(
+          `${REQUEST_BASE}/rooms/${authState.socketInfo.currentRoom}/messages`,
+          {
+            headers: { Authorization: `Bearer ${authState.authToken}` },
+            params: { offset: newOffset, limit: CHUNK_SIZE },
+          },
+        );
+        const mapped = mapMessages(data.messages.reverse());
+        setMessages((prev) =>
+          newOffset === 0
+            ? mapped
+            : [...mapped, ...prev].slice(-CHUNK_SIZE * 3),
+        );
+        setOffset(newOffset);
+        setHasMore(data.messages.length === CHUNK_SIZE);
+      } catch (err) {
+        console.error("load messages error", err);
+      }
+    },
+    [authState.socketInfo.currentRoom, authState.authToken],
+  );
 
   useEffect(() => {
+    const socket = socketIoHelper.getSocket();
     if (authState.loggedIn && socket) {
       socket.on("room_list", ([idMap, roomObjs]) => {
         setChannels(roomObjs);
@@ -87,12 +109,22 @@ export default function useChatPage() {
           );
         }
       });
-      socket.on("joined_room", (_id, msgs) => setMessages(mapMessages(msgs)));
-      socket.on("message_sent", (_id, msgs) => setMessages(mapMessages(msgs)));
-      socket.on("new_message", (_id, msgs) => setMessages(mapMessages(msgs)));
-      socket.on("messages_updated", (_id, msgs) =>
-        setMessages(mapMessages(msgs)),
-      );
+      socket.on("joined_room", () => fetchChunk(0));
+      socket.on("message_sent", (_id, msgs) => {
+        const last = msgs[msgs.length - 1];
+        if (!last) return;
+        setMessages((prev) =>
+          [...prev, ...mapMessages([last])].slice(-CHUNK_SIZE * 3),
+        );
+      });
+      socket.on("new_message", (_id, msgs) => {
+        const last = msgs[msgs.length - 1];
+        if (!last) return;
+        setMessages((prev) =>
+          [...prev, ...mapMessages([last])].slice(-CHUNK_SIZE * 3),
+        );
+      });
+      socket.on("messages_updated", () => fetchChunk(0));
       socket.on("user_list", (_roomId, list, sender, evt) => {
         if (sender.id !== authState.userId) {
           dispatch(
@@ -134,13 +166,21 @@ export default function useChatPage() {
     authState.loggingIn,
     authState.socketInfo.currentRoom,
     authState.userId,
-    socket,
+    authState.socketInfo.connected,
     dispatch,
+    fetchChunk,
   ]);
 
   useEffect(() => {
     setUsers([]);
   }, [authState.socketInfo.currentRoom]);
+
+  useEffect(() => {
+    setMessages([]);
+    setOffset(0);
+    setHasMore(true);
+    fetchChunk(0);
+  }, [authState.socketInfo.currentRoom, fetchChunk]);
 
   useEffect(
     () => () => {
@@ -227,6 +267,14 @@ export default function useChatPage() {
     setEditingText("");
   };
 
+  const handleScroll = () => {
+    const el = listRef.current;
+    if (!el || !hasMore) return;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
+      fetchChunk(offset + CHUNK_SIZE);
+    }
+  };
+
   return {
     authState,
     message,
@@ -258,5 +306,7 @@ export default function useChatPage() {
     confirmDeleteSelectedMessage,
     commitEditMessage,
     cancelEditMessage,
+    handleScroll,
+    listRef,
   };
 }

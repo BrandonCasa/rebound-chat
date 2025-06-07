@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSelector } from "react-redux";
 import axios from "axios";
 import socketIoHelper from "../../helpers/socket";
+import cacheMedia from "../../helpers/cacheMedia";
 
 const REQUEST_BASE =
   process.env.NODE_ENV === "development"
@@ -10,14 +11,6 @@ const REQUEST_BASE =
       ? "https://rebound.nexus/api"
       : "/api";
 const API_BASE = `${REQUEST_BASE}/users`;
-
-const cache = (u) => {
-  if (!u) return null;
-  const cleaned = u.replace(/([?&])t=\d+(&)?/, (_, sep, trailing) =>
-    trailing ? sep : "",
-  );
-  return `${cleaned}${cleaned.includes("?") ? "&" : "?"}t=${Date.now()}`;
-};
 
 async function getUserInfo(userId, authToken) {
   const url = `${REQUEST_BASE}/users/profile`;
@@ -33,8 +26,8 @@ async function getUserInfo(userId, authToken) {
     const u = data.user;
     return {
       ...u,
-      avatarUrl: u.avatarUrl ? cache(REQUEST_BASE + u.avatarUrl) : null,
-      bannerUrl: u.bannerUrl ? cache(REQUEST_BASE + u.bannerUrl) : null,
+      avatarUrl: u.avatarUrl ? cacheMedia(REQUEST_BASE + u.avatarUrl) : null,
+      bannerUrl: u.bannerUrl ? cacheMedia(REQUEST_BASE + u.bannerUrl) : null,
     };
   } catch (err) {
     console.error(err);
@@ -108,12 +101,12 @@ export default function useFriendPage() {
                 avatarUrl:
                   profileRes.data.user?.avatarUrl &&
                   profileRes.data.user.avatarUrl !== ""
-                    ? cache(REQUEST_BASE + profileRes.data.user.avatarUrl)
+                    ? cacheMedia(REQUEST_BASE + profileRes.data.user.avatarUrl)
                     : null,
                 bannerUrl:
                   profileRes.data.user?.bannerUrl &&
                   profileRes.data.user.bannerUrl !== ""
-                    ? cache(REQUEST_BASE + profileRes.data.user.bannerUrl)
+                    ? cacheMedia(REQUEST_BASE + profileRes.data.user.bannerUrl)
                     : null,
               },
               status,
@@ -142,7 +135,7 @@ export default function useFriendPage() {
         socket.off("watched_user_saved");
       }
     };
-  }, [auth.authToken, auth.userId, auth.loggedIn]);
+  }, [auth.authToken, auth.userId, auth.loggedIn, auth.socketInfo.connected]);
 
   const callApi = async (ep, data, onSuccessId) => {
     try {
