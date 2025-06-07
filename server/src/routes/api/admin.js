@@ -161,4 +161,46 @@ router.post("/admin/users/delete", async function (req, res, next) {
   }
 });
 
+router.post("/admin/friends/cleanup", async function (req, res, next) {
+  logger.info("Starting friend request cleanup");
+  try {
+    await UserModel.transaction(async (session) => {
+      // Get all valid friend request IDs
+      const allFriends = await FriendModel.find({}).session(session);
+      const validIds = new Set(allFriends.map((f) => f._id.toString()));
+
+      // Remove invalid friend references from users
+      const users = await UserModel.find({}).session(session);
+      for (const user of users) {
+        const filtered = user.friends.filter((id) =>
+          validIds.has(id.toString()),
+        );
+        if (filtered.length !== user.friends.length) {
+          user.friends = filtered;
+          await user.save({ session });
+          logger.info(`Cleaned friend list for user ${user._id}`);
+        }
+      }
+
+      // Delete orphan friend documents
+      for (const friend of allFriends) {
+        const isReferenced = await UserModel.exists(
+          { friends: friend._id },
+          { session },
+        );
+        if (!isReferenced) {
+          await friend.deleteOne({ session });
+          logger.info(`Deleted orphan friend document ${friend._id}`);
+        }
+      }
+    });
+
+    logger.info("Friend request cleanup completed successfully");
+    return res.sendStatus(200);
+  } catch (error) {
+    logger.info(`Error during friend request cleanup: ${error.message}`);
+    return next(error);
+  }
+});
+
 export default router;
