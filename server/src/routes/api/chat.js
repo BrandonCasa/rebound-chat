@@ -9,37 +9,33 @@ const router = Router();
 // ─── MESSAGES RATE LIMITER ─────────────────────────────────────────────────---
 // limit paged message requests to 60 per minute per IP
 const messagesLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 3000,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many requests, please try again later." },
+	windowMs: 60 * 1000,
+	max: 3000,
+	standardHeaders: true,
+	legacyHeaders: false,
+	message: { error: "Too many requests, please try again later." },
 });
 
-router.get(
-  "/rooms/:roomId/messages",
-  messagesLimiter,
-  auth.required,
-  async (req, res) => {
-  const { roomId } = req.params;
-  const limit = Math.min(parseInt(req.query.limit), 100) || 50;
-  const offset = parseInt(req.query.offset) || 0;
-  try {
-    const room = await RoomModel.findById(roomId).populate({
-      path: "messages",
-      options: {
-        sort: { createdAt: -1 },
-        skip: offset,
-        limit,
-      },
-      populate: { path: "sender", select: "displayName avatarUrl" },
-    });
-    if (!room) return res.sendStatus(404);
-    return res.json({ messages: room.messages });
-  } catch (err) {
-    logger.error("Error fetching paged messages:", err);
-    return res.sendStatus(500);
-  }
-);
+router.get("/rooms/:roomId/messages", messagesLimiter, auth.required, async (req, res, next) => {
+	const { roomId } = req.params;
+	const limit = Math.min(parseInt(req.query.limit), 100) || 50;
+	const offset = parseInt(req.query.offset) || 0;
+	try {
+		const room = await RoomModel.findById(roomId).populate({
+			path: "messages",
+			options: {
+				sort: { createdAt: -1 },
+				skip: offset,
+				limit,
+			},
+			populate: { path: "sender", select: "displayName avatarUrl" },
+		});
+		if (!room) return res.sendStatus(404);
+		return res.json({ messages: room.messages });
+	} catch (err) {
+		logger.error("Error fetching paged messages:", err);
+		return next(err);
+	}
+});
 
 export default router;
