@@ -1,4 +1,7 @@
-import * as Icons from "@mui/icons-material";
+import PersonRounded from "@mui/icons-material/PersonRounded";
+import EmailRounded from "@mui/icons-material/EmailRounded";
+import KeyRounded from "@mui/icons-material/KeyRounded";
+import NoteRounded from "@mui/icons-material/NoteRounded";
 import { Box } from "@mui/material";
 import RegisterTextField from "./RegisterTextField";
 
@@ -13,7 +16,7 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
           onChange={(val) => handleFormDataChange("username", val, {})}
           helperText="Your private login name."
           errors={formData.usernameErrors}
-          icon={Icons.PersonRounded}
+          icon={PersonRounded}
         />
         <RegisterTextField
           field="email"
@@ -23,7 +26,7 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
           onChange={(val) => handleFormDataChange("email", val, {})}
           helperText="Your email address."
           errors={formData.emailErrors}
-          icon={Icons.EmailRounded}
+          icon={EmailRounded}
         />
         <RegisterTextField
           field="password"
@@ -33,7 +36,7 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
           onChange={(val) => handleFormDataChange("password", val, {})}
           helperText="Your encrypted password."
           errors={formData.passwordErrors}
-          icon={Icons.KeyRounded}
+          icon={KeyRounded}
         />
       </>
     );
@@ -49,7 +52,7 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
           onChange={(val) => handleFormDataChange("displayName", val, {})}
           helperText="Your public display name."
           errors={formData.displayNameErrors}
-          icon={Icons.PersonRounded}
+          icon={PersonRounded}
         />
         <RegisterTextField
           field="bio"
@@ -58,7 +61,7 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
           onChange={(val) => handleFormDataChange("bio", val, {})}
           helperText="Your public bio."
           errors={formData.bioErrors}
-          icon={Icons.NoteRounded}
+          icon={NoteRounded}
         />
       </>
     );

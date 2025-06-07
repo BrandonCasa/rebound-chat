@@ -1,4 +1,4 @@
-import * as Icons from "@mui/icons-material";
+import ChevronRightRounded from "@mui/icons-material/ChevronRightRounded";
 import { Toolbar, Box, IconButton, Tooltip } from "@mui/material";
 import { styled, useTheme } from "@mui/material/styles";
 
@@ -72,7 +72,7 @@ function MainContent({
             }}
             onClick={handleDrawerToggle}
           >
-            <Icons.ChevronRightRounded />
+            <ChevronRightRounded />
           </IconButton>
         </Tooltip>
       </IconBox>
