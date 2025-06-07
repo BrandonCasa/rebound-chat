@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Button, Card, Grid, List, ListItem, ListItemText, Typography } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
-import { addSnackbar } from "slices/snackbarSlice";
+import { addSnackbar } from "../../slices/snackbarSlice";
 
 function TestingPage(_props) {
 	const dispatch = useDispatch();
