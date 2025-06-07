@@ -1,4 +1,5 @@
 import { render, screen, act } from '@testing-library/react';
+import { vi } from 'vitest';
 import AutoUpdate from '../components/AutoUpdate.jsx';
 
 describe('Auto update dialog', () => {
@@ -15,9 +16,9 @@ describe('Auto update dialog', () => {
       onDownloadProgress: (cb) => (handlers.progress = cb),
       onUpdateDownloaded: (cb) => (handlers.downloaded = cb),
       onUpdateError: (cb) => (handlers.error = cb),
-      checkForUpdates: jest.fn(),
-      installUpdate: jest.fn(),
-      downloadUpdate: jest.fn(),
+      checkForUpdates: vi.fn(),
+      installUpdate: vi.fn(),
+      downloadUpdate: vi.fn(),
     };
   });
 
