@@ -56,7 +56,7 @@ jobs:
         run: |
           echo "Bumping version in package.json"
           # Bump version in the root package.json (patch version) without creating a git tag
-          npm version patch --no-git-tag-version
+          pnpm version patch --no-git-tag-version
           NEW_VERSION=$(node -p "require('./package.json').version")
           echo "New version: $NEW_VERSION"
           # Update the version in server/package.json to match the new version
@@ -72,17 +72,21 @@ jobs:
         uses: actions/setup-node@v3.4.1
         with:
           node-version: 18.x
-
-      - name: Cache node modules
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+          run_install: false
+      - name: Cache pnpm modules
         uses: actions/cache@v3
         with:
-          path: "**/node_modules"
-          key: ${{ runner.os }}-modules-${{ hashFiles('**/package-lock.json') }}
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
 
-      - name: Install NPM Packages and Build App
+      - name: Install Packages and Build App
         run: |
-          npm ci --ignore-scripts
-          npm run build
+          pnpm install --frozen-lockfile
+          pnpm run build
         env:
           CI: false
 
@@ -112,7 +116,7 @@ jobs:
               cd "${{ github.event.inputs.appDirectory }}"
               git clone ${{ github.event.inputs.repositoryURL }} ./
               cd ${{ github.event.inputs.serverSubdirectory }}
-              npm install --ignore-scripts
+              pnpm install --frozen-lockfile --ignore-scripts
 
               echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
 
@@ -125,7 +129,7 @@ jobs:
 
               echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
 
-              npm install --ignore-scripts
+              pnpm install --frozen-lockfile --ignore-scripts
 
               pm2 restart ${{ github.event.inputs.pm2ProcessName }}
             fi
