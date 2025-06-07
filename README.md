@@ -132,7 +132,7 @@ Enjoy your time with Rebound, where we take social interaction to a whole new le
 
 This repository uses **Mocha** with **Chai** for backend API and Socket.IO tests
 located under `server/tests`. Frontend React components are tested with
-**Jest** via `react-scripts` and React Testing Library in `src/__tests__`.
+**Vitest** and React Testing Library in `src/__tests__`.
 
 Run backend tests:
 
