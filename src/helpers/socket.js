@@ -18,9 +18,12 @@ class SocketIoHelper {
 		return this.socketClient;
 	}
 
-	disconnectSocket() {
-		this.socketClient.disconnect();
-	}
+        disconnectSocket() {
+                if (this.socketClient) {
+                        this.socketClient.disconnect();
+                        this.socketClient = null;
+                }
+        }
 
 	getSocket() {
 		return this.socketClient;

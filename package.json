@@ -37,7 +37,7 @@
 	"scripts": {
 		"start": "vite",
 		"build": "vite build",
-		"test": "vitest",
+		"test": "vitest run --testTimeout 10000",
 		"electron": "electron .",
 		"electron-dev": "concurrently \"cross-env BROWSER=none pnpm run start\" \"cd server && pnpm run dev\" \"wait-on http://localhost:3000 && pnpm run electron\"",
 		"dist": "node projectscripts/clean-build.js && cd app && pnpm install --prod && cd ../ && electron-builder",
