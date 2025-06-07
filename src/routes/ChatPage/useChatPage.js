@@ -271,12 +271,16 @@ export default function useChatPage() {
     setEditingText("");
   };
 
-  const handleScroll = () => {
+  const handleScroll = async () => {
     const el = listRef.current;
     if (!el || !hasMore) return;
     const distanceFromTop = el.scrollHeight - el.clientHeight - el.scrollTop;
     if (distanceFromTop <= 100) {
-      fetchChunk(offset + CHUNK_SIZE);
+      const prevHeight = el.scrollHeight;
+      await fetchChunk(offset + CHUNK_SIZE);
+      requestAnimationFrame(() => {
+        el.scrollTop += el.scrollHeight - prevHeight;
+      });
     }
   };
 
