@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import useWindowDimensions from "../../helpers/useWindowDimensions";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
 import socketIoHelper from "../../helpers/socket";
@@ -287,11 +286,35 @@ export default function useChatPage() {
     }
   };
 
-  const { width, height } = useWindowDimensions();
+  const overflowCheckTimeout = useRef();
+
+  const checkOverflow = useCallback(() => {
+    const el = listRef.current;
+    if (!el || !hasMore) return;
+    if (el.scrollHeight <= el.clientHeight + 10) {
+      handleScroll();
+    }
+  }, [handleScroll, hasMore]);
 
   useEffect(() => {
-    handleScroll();
-  }, [width, height, messages.length]);
+    clearTimeout(overflowCheckTimeout.current);
+    overflowCheckTimeout.current = setTimeout(checkOverflow, 100);
+    return () => clearTimeout(overflowCheckTimeout.current);
+  }, [messages.length, checkOverflow]);
+
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      clearTimeout(overflowCheckTimeout.current);
+      overflowCheckTimeout.current = setTimeout(checkOverflow, 100);
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      clearTimeout(overflowCheckTimeout.current);
+    };
+  }, [checkOverflow]);
 
   return {
     authState,
