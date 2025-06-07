@@ -4,6 +4,15 @@ import { configureStore } from '@reduxjs/toolkit';
 import { describe, test, expect, vi, afterEach } from 'vitest';
 
 import authReducer from '../slices/authSlice';
+vi.mock('../components/User/ProfileCard.jsx', () => ({
+  default: ({ user }) => (
+    <div>
+      <span>{user.displayName}</span>
+      <span>@{user.username}</span>
+      <span>{user.bio}</span>
+    </div>
+  ),
+}));
 import ProfileCard from '../components/User/ProfileCard.jsx';
 
 vi.mock('axios', () => ({

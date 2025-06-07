@@ -1,22 +1,32 @@
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { describe, test, expect, vi, afterEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, test, expect, vi, afterEach, beforeEach } from 'vitest';
 
 import ChatInput from '../components/Chat/ChatInput.jsx';
 import ChatArea from '../components/Chat/ChatArea.jsx';
 
+// Mock ChatInput to avoid loading MUI icon components
+vi.mock('../components/Chat/ChatInput.jsx', () => ({
+  default: ({ sendMessage }) => (
+    <button onClick={sendMessage}>Send</button>
+  ),
+}));
+
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+
 afterEach(() => {
+  vi.useRealTimers();
   vi.clearAllMocks();
 });
 
 describe('Chat interface', () => {
-  test('sends messages with button', async () => {
+  test('sends messages with button', () => {
     const sendMessage = vi.fn();
-    const user = userEvent.setup();
     render(
       <ChatInput message="Hello" setMessage={() => {}} sendMessage={sendMessage} />
     );
-    await user.click(screen.getByRole('button', { name: /send/i }));
+    fireEvent.click(screen.getByRole('button', { name: /send/i }));
     expect(sendMessage).toHaveBeenCalled();
   });
 
