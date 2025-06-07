@@ -10,7 +10,7 @@ const router = Router();
 // limit paged message requests to 60 per minute per IP
 const messagesLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 60,
+  max: 3000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests, please try again later." },
@@ -22,7 +22,7 @@ router.get(
   auth.required,
   async (req, res) => {
   const { roomId } = req.params;
-  const limit = parseInt(req.query.limit) || 50;
+  const limit = Math.min(parseInt(req.query.limit), 100) || 50;
   const offset = parseInt(req.query.offset) || 0;
   try {
     const room = await RoomModel.findById(roomId).populate({
