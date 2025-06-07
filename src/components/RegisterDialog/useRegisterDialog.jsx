@@ -132,20 +132,40 @@ const useRegisterDialog = () => {
 		return errors;
 	};
 
-	const handleFormDataChange = (field, value, errors = {}) => {
-		setFormData({
-			...formData,
-			[field]: value,
-			bioErrors: field === "bio" || errors?.bio ? { ...validateBio(value, errors?.bio) } : { ...formData.bioErrors },
-			emailErrors: field === "email" || errors?.email ? { ...validateEmail(value, errors?.email) } : { ...formData.emailErrors },
-			usernameErrors: field === "username" || errors?.username ? { ...validateUsername(value, errors?.username) } : { ...formData.usernameErrors },
-			passwordErrors: field === "password" || errors?.password ? { ...validatePassword(value, errors?.password) } : { ...formData.passwordErrors },
-			displayNameErrors: field === "displayName" || errors?.displayName ? { ...validateDisplayName(value, errors?.displayName) } : { ...formData.displayNameErrors },
-		});
-	};
+        const handleFormDataChange = (field, value, errors = {}) => {
+                setFormData((prev) => {
+                        const next = { ...prev, [field]: value };
+                        next.bioErrors =
+                                field === "bio" || errors?.bio
+                                        ? { ...validateBio(field === "bio" ? value : prev.bio, errors?.bio) }
+                                        : { ...prev.bioErrors };
+                        next.emailErrors =
+                                field === "email" || errors?.email
+                                        ? { ...validateEmail(field === "email" ? value : prev.email, errors?.email) }
+                                        : { ...prev.emailErrors };
+                        next.usernameErrors =
+                                field === "username" || errors?.username
+                                        ? { ...validateUsername(field === "username" ? value : prev.username, errors?.username) }
+                                        : { ...prev.usernameErrors };
+                        next.passwordErrors =
+                                field === "password" || errors?.password
+                                        ? { ...validatePassword(field === "password" ? value : prev.password, errors?.password) }
+                                        : { ...prev.passwordErrors };
+                        next.displayNameErrors =
+                                field === "displayName" || errors?.displayName
+                                        ? {
+                                                  ...validateDisplayName(
+                                                          field === "displayName" ? value : prev.displayName,
+                                                          errors?.displayName,
+                                                  ),
+                                          }
+                                        : { ...prev.displayNameErrors };
+                        return next;
+                });
+        };
 
 const handleStayLoggedInChange = (event) => {
-        setFormData({ ...formData, stayLoggedIn: event.target.checked });
+        setFormData((prev) => ({ ...prev, stayLoggedIn: event.target.checked }));
 };
 
         const stepHasErrors = (step) => {
@@ -221,22 +241,44 @@ const handleStayLoggedInChange = (event) => {
                                         })
                                 );
                         } else {
-                                const fieldsToProcess = ["username", "email", "password", "displayName", "bio"];
-                                fieldsToProcess.forEach((field) => {
-                                        const msg = serverErrors[field];
-                                        if (msg) {
-                                                const message = Array.isArray(msg) ? msg.join(", ") : msg;
-                                                const errObj = {};
-                                                errObj[field] = message;
-                                                handleFormDataChange(field, formData[field], errObj);
-                                                dispatch(
-                                                        addSnackbar({
-                                                                snackbarMsg: `${field.charAt(0).toUpperCase() + field.slice(1)} ${message}`,
-                                                                snackbarSeverity: "error",
-                                                                autoHideDuration: 4000,
-                                                        })
-                                                );
-                                        }
+                                const updateErrors = {};
+                                Object.entries(serverErrors).forEach(([field, msg]) => {
+                                        if (!msg) return;
+                                        const message = Array.isArray(msg) ? msg.join(", ") : msg;
+                                        updateErrors[field] = message;
+                                        dispatch(
+                                                addSnackbar({
+                                                        snackbarMsg: `${field.charAt(0).toUpperCase() + field.slice(1)} ${message}`,
+                                                        snackbarSeverity: "error",
+                                                        autoHideDuration: 4000,
+                                                })
+                                        );
+                                });
+
+                                // apply all server errors at once
+                                setFormData((prev) => {
+                                        const next = { ...prev };
+                                        if (updateErrors.username)
+                                                next.usernameErrors = {
+                                                        ...validateUsername(prev.username, updateErrors.username),
+                                                };
+                                        if (updateErrors.email)
+                                                next.emailErrors = {
+                                                        ...validateEmail(prev.email, updateErrors.email),
+                                                };
+                                        if (updateErrors.password)
+                                                next.passwordErrors = {
+                                                        ...validatePassword(prev.password, updateErrors.password),
+                                                };
+                                        if (updateErrors.displayName)
+                                                next.displayNameErrors = {
+                                                        ...validateDisplayName(prev.displayName, updateErrors.displayName),
+                                                };
+                                        if (updateErrors.bio)
+                                                next.bioErrors = {
+                                                        ...validateBio(prev.bio, updateErrors.bio),
+                                                };
+                                        return next;
                                 });
                         }
                         setActiveStep(0);
