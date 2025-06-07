@@ -165,7 +165,7 @@ function ChatPage() {
             setEditingText={setEditingText}
             commitEdit={commitEditMessage}
             cancelEdit={cancelEditMessage}
-            onScroll={handleScroll}
+            onLoadMore={handleLoadMore}
             listRef={listRef}
           />
         </Box>

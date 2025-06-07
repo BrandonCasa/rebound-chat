@@ -58,6 +58,8 @@ describe("Chat interface", () => {
         setEditingText={() => {}}
         commitEdit={() => {}}
         cancelEdit={() => {}}
+        onLoadMore={() => {}}
+        listRef={{ current: document.createElement("div") }}
       />,
     );
 

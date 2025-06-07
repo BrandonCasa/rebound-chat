@@ -68,8 +68,6 @@ export default function useChatPage() {
   const fetchingRef = useRef(false);
   const CHUNK_SIZE = 40;
   const DISPLAY_MESSAGE_LIMIT = 120;
-  const OVERFLOW_THRESHOLD = 5;
-  const NEAR_TOP_THRESHOLD = 100;
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [totalMessages, setTotalMessages] = useState(0);
@@ -276,48 +274,15 @@ export default function useChatPage() {
     setEditingText("");
   };
 
-  const handleScroll = async () => {
+  const handleLoadMore = useCallback(async () => {
     const el = listRef.current;
     if (!el || !hasMore) return;
-    const distanceFromTop = el.scrollHeight - el.clientHeight - el.scrollTop;
-    if (distanceFromTop <= NEAR_TOP_THRESHOLD) {
-      const prevHeight = el.scrollHeight;
-      await fetchChunk(offset + CHUNK_SIZE);
-      requestAnimationFrame(() => {
-        el.scrollTop += el.scrollHeight - prevHeight;
-      });
-    }
-  };
-
-  const overflowCheckTimeout = useRef();
-
-  const checkOverflow = useCallback(() => {
-    const el = listRef.current;
-    if (!el || !hasMore) return;
-    if (el.scrollHeight - el.clientHeight <= OVERFLOW_THRESHOLD) {
-      handleScroll();
-    }
-  }, [handleScroll, hasMore]);
-
-  useEffect(() => {
-    clearTimeout(overflowCheckTimeout.current);
-    overflowCheckTimeout.current = setTimeout(checkOverflow, 100);
-    return () => clearTimeout(overflowCheckTimeout.current);
-  }, [messages.length, checkOverflow]);
-
-  useEffect(() => {
-    const el = listRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => {
-      clearTimeout(overflowCheckTimeout.current);
-      overflowCheckTimeout.current = setTimeout(checkOverflow, 100);
+    const prevHeight = el.scrollHeight;
+    await fetchChunk(offset + CHUNK_SIZE);
+    requestAnimationFrame(() => {
+      el.scrollTop += el.scrollHeight - prevHeight;
     });
-    ro.observe(el);
-    return () => {
-      ro.disconnect();
-      clearTimeout(overflowCheckTimeout.current);
-    };
-  }, [checkOverflow]);
+  }, [fetchChunk, offset, hasMore]);
 
   return {
     authState,
@@ -350,7 +315,7 @@ export default function useChatPage() {
     confirmDeleteSelectedMessage,
     commitEditMessage,
     cancelEditMessage,
-    handleScroll,
+    handleLoadMore,
     listRef,
     totalMessages,
     hasMore,

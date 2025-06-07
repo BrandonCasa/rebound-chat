@@ -13,28 +13,50 @@ function ChatArea({
   setEditingText,
   commitEdit,
   cancelEdit,
-  onScroll,
+  onLoadMore,
   listRef,
 }) {
   const boxStyles = useMemo(
     () => ({
       position: "absolute",
-      left: "0px",
-      top: "0px",
-      right: "0px",
-      bottom: "0px",
+      inset: 0,
       overflowX: "hidden",
       overflowY: "auto",
       padding: 1,
       display: "flex",
-      flexDirection: "column-reverse",
+      flexDirection: "column",
       ...scrollbarStyles,
     }),
     [],
   );
 
+  const topSentinel = React.useRef(null);
+
+  React.useEffect(() => {
+    const el = listRef.current;
+    if (!el || !topSentinel.current) return;
+    if (typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) onLoadMore();
+      },
+      { root: el, threshold: 0 },
+    );
+    observer.observe(topSentinel.current);
+    return () => observer.disconnect();
+  }, [onLoadMore, listRef]);
+
+  React.useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight <= 5) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages.length, listRef]);
+
   return (
-    <Box sx={boxStyles} onScroll={onScroll} ref={listRef}>
+    <Box sx={boxStyles} ref={listRef}>
+      <div ref={topSentinel} />
       <List disablePadding>
         <ConstructedMessages
           relevantMsgs={messages}
