@@ -22,24 +22,22 @@ router.get(
   auth.required,
   async (req, res, next) => {
     const { roomId } = req.params;
-    const limit = Math.min(parseInt(req.query.limit), 100) || 50;
-    const offset = parseInt(req.query.offset) || 0;
     try {
-      const meta = await RoomModel.findById(roomId).select("messages").lean();
-      if (!meta) return res.sendStatus(404);
       const room = await RoomModel.findById(roomId)
         .populate({
           path: "messages",
-          options: { sort: { createdAt: -1 }, skip: offset, limit },
+          options: { sort: { createdAt: 1 } },
           populate: { path: "sender", select: "displayName avatarUrl" },
         })
         .lean();
 
-      const total = meta.messages.length;
+      if (!room) return res.sendStatus(404);
+
+      const total = room.messages.length;
 
       return res.json({ messages: room.messages, total });
     } catch (err) {
-      logger.error("Error fetching paged messages:", err);
+      logger.error("Error fetching messages:", err);
       return next(err);
     }
   },

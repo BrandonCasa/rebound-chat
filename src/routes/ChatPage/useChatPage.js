@@ -67,40 +67,24 @@ export default function useChatPage() {
   const [editingText, setEditingText] = useState("");
   const listRef = useRef(null);
   const fetchingRef = useRef(false);
-  const CHUNK_SIZE = 40;
-  const [offset, setOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [totalMessages, setTotalMessages] = useState(0);
 
-  const fetchChunk = useCallback(
-    async (newOffset = 0) => {
-      if (!authState.socketInfo.currentRoom || fetchingRef.current) return;
-      fetchingRef.current = true;
-      try {
-        const { data } = await axios.get(
-          `${REQUEST_BASE}/rooms/${authState.socketInfo.currentRoom}/messages`,
-          {
-            headers: { Authorization: `Bearer ${authState.authToken}` },
-            params: { offset: newOffset, limit: CHUNK_SIZE },
-          },
-        );
-        const mapped = mapMessages(data.messages.reverse());
-        setMessages((prev) =>
-          newOffset === 0
-            ? mapped
-            : [...mapped, ...prev].slice(-CHUNK_SIZE * 3),
-        );
-        setOffset(newOffset);
-        setTotalMessages(data.total);
-        setHasMore(newOffset + CHUNK_SIZE < data.total);
-      } catch (err) {
-        console.error("load messages error", err);
-      } finally {
-        fetchingRef.current = false;
-      }
-    },
-    [authState.socketInfo.currentRoom, authState.authToken],
-  );
+  const fetchMessages = useCallback(async () => {
+    if (!authState.socketInfo.currentRoom || fetchingRef.current) return;
+    fetchingRef.current = true;
+    try {
+      const { data } = await axios.get(
+        `${REQUEST_BASE}/rooms/${authState.socketInfo.currentRoom}/messages`,
+        {
+          headers: { Authorization: `Bearer ${authState.authToken}` },
+        },
+      );
+      setMessages(mapMessages(data.messages));
+    } catch (err) {
+      console.error("load messages error", err);
+    } finally {
+      fetchingRef.current = false;
+    }
+  }, [authState.socketInfo.currentRoom, authState.authToken]);
 
   useEffect(() => {
     const socket = socketIoHelper.getSocket();
@@ -116,22 +100,18 @@ export default function useChatPage() {
           );
         }
       });
-      socket.on("joined_room", () => fetchChunk(0));
+      socket.on("joined_room", (_id, msgs) => {
+        setMessages(mapMessages(msgs));
+      });
       socket.on("message_sent", (_id, msgs) => {
-        const last = msgs[msgs.length - 1];
-        if (!last) return;
-        setMessages((prev) =>
-          [...prev, ...mapMessages([last])].slice(-CHUNK_SIZE * 3),
-        );
+        setMessages(mapMessages(msgs));
       });
       socket.on("new_message", (_id, msgs) => {
-        const last = msgs[msgs.length - 1];
-        if (!last) return;
-        setMessages((prev) =>
-          [...prev, ...mapMessages([last])].slice(-CHUNK_SIZE * 3),
-        );
+        setMessages(mapMessages(msgs));
       });
-      socket.on("messages_updated", () => fetchChunk(0));
+      socket.on("messages_updated", (_id, msgs) => {
+        setMessages(mapMessages(msgs));
+      });
       socket.on("user_list", (_roomId, list, sender, evt) => {
         if (sender.id !== authState.userId) {
           dispatch(
@@ -175,7 +155,6 @@ export default function useChatPage() {
     authState.userId,
     authState.socketInfo.connected,
     dispatch,
-    fetchChunk,
   ]);
 
   useEffect(() => {
@@ -184,10 +163,8 @@ export default function useChatPage() {
 
   useEffect(() => {
     setMessages([]);
-    setOffset(0);
-    setHasMore(true);
-    fetchChunk(0);
-  }, [authState.socketInfo.currentRoom, fetchChunk]);
+    fetchMessages();
+  }, [authState.socketInfo.currentRoom, fetchMessages]);
 
   useEffect(
     () => () => {
@@ -274,23 +251,14 @@ export default function useChatPage() {
     setEditingText("");
   };
 
-  const handleScroll = async () => {
-    const el = listRef.current;
-    if (!el || !hasMore) return;
-    const distanceFromTop = el.scrollHeight - el.clientHeight - el.scrollTop;
-    if (distanceFromTop <= 100) {
-      const prevHeight = el.scrollHeight;
-      await fetchChunk(offset + CHUNK_SIZE);
-      requestAnimationFrame(() => {
-        el.scrollTop += el.scrollHeight - prevHeight;
-      });
-    }
-  };
-
   const { width, height } = useWindowDimensions();
 
   useEffect(() => {
-    handleScroll();
+    const el = listRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollTop = 0;
+    });
   }, [width, height, messages.length]);
 
   return {
@@ -324,9 +292,6 @@ export default function useChatPage() {
     confirmDeleteSelectedMessage,
     commitEditMessage,
     cancelEditMessage,
-    handleScroll,
     listRef,
-    totalMessages,
-    hasMore,
   };
 }
