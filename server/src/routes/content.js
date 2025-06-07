@@ -2,11 +2,22 @@ import { Router } from "express";
 import mime from "mime";
 import path from "path";
 import databaseServer from "../database/index.js"; // ← import your DatabaseServer
+import rateLimit from "express-rate-limit";
 
 const router = Router();
 
+// ─── DOWNLOAD RATE LIMITER ─────────────────────────────────────────────────---
+// limit downloads to 20 per minute per IP
+const downloadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many download requests, please try again later." },
+});
+
 // GET /content/:filename
-router.get("/content/:filename", async (req, res) => {
+router.get("/content/:filename", downloadLimiter, async (req, res) => {
   const bucket = databaseServer.gridfsBucket;
   if (!bucket) {
     return res.status(503).send("File store not ready");

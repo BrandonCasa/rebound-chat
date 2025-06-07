@@ -49,11 +49,21 @@ const modifyLimiter = rateLimit({
   message: { error: "Too many modification attempts, please try again later." },
 });
 
+// ─── GENERAL RATE LIMITER ─────────────────────────────────────────────────────
+// fallback limiter for other user endpoints
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later." },
+});
+
 /**
  * /users/verify
  * Verify a user via token. Checks that the account is active and returns authentication data.
  */
-router.post("/users/verify", async (req, res, next) => {
+router.post("/users/verify", generalLimiter, async (req, res, next) => {
   const token = getTokenFromHeader(req);
 
   try {
@@ -76,7 +86,7 @@ router.post("/users/verify", async (req, res, next) => {
  * returns the public profile (with mutual friend and server info).
  * Otherwise, returns the private profile.
  */
-router.get("/users/profile", auth.required, async (req, res, next) => {
+router.get("/users/profile", generalLimiter, auth.required, async (req, res, next) => {
   const token = getTokenFromHeader(req);
   try {
     const decoded = jwt.verify(token, process.env.SECRET);
@@ -247,7 +257,7 @@ router.put(
  * Send a friend request.
  * The sender is the authenticated user and the recipient is provided in the request body.
  */
-router.put("/users/addfriend", auth.required, async (req, res, next) => {
+router.put("/users/addfriend", generalLimiter, auth.required, async (req, res, next) => {
   const token = getTokenFromHeader(req);
   let decoded;
   try {
@@ -278,7 +288,7 @@ router.put("/users/addfriend", auth.required, async (req, res, next) => {
  * Accept a pending friend request.
  * Only the intended recipient may confirm the request.
  */
-router.put("/users/acceptfriend", auth.required, async (req, res, next) => {
+router.put("/users/acceptfriend", generalLimiter, auth.required, async (req, res, next) => {
   const token = getTokenFromHeader(req);
   let decoded;
   try {
@@ -309,7 +319,7 @@ router.put("/users/acceptfriend", auth.required, async (req, res, next) => {
  * /users/declinefriend
  * Decline a pending friend request.
  */
-router.put("/users/declinefriend", auth.required, async (req, res, next) => {
+router.put("/users/declinefriend", generalLimiter, auth.required, async (req, res, next) => {
   const token = getTokenFromHeader(req);
   let decoded;
   try {
@@ -333,7 +343,7 @@ router.put("/users/declinefriend", auth.required, async (req, res, next) => {
  * /users/cancelfriend
  * Cancel a sent friend request.
  */
-router.put("/users/cancelfriend", auth.required, async (req, res, next) => {
+router.put("/users/cancelfriend", generalLimiter, auth.required, async (req, res, next) => {
   const token = getTokenFromHeader(req);
   let decoded;
   try {
@@ -356,7 +366,7 @@ router.put("/users/cancelfriend", auth.required, async (req, res, next) => {
  * /users/removefriend
  * Remove an existing friend.
  */
-router.put("/users/removefriend", auth.required, async (req, res, next) => {
+router.put("/users/removefriend", generalLimiter, auth.required, async (req, res, next) => {
   const token = getTokenFromHeader(req);
   let decoded;
   try {
