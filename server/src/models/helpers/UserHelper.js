@@ -129,7 +129,7 @@ const declineFriend = async (friendId, currentUserId) => {
   recipient.friends.pull(friend._id);
   await recipient.save();
 
-  await friend.remove();
+  await friend.deleteOne();
   return true;
 };
 
@@ -168,7 +168,7 @@ const cancelFriend = async (friendId, currentUserId) => {
   recipient.friends.pull(friend._id);
   await recipient.save();
 
-  await friend.remove();
+  await friend.deleteOne();
   return true;
 };
 
@@ -208,7 +208,7 @@ const removeFriend = async (friendId, currentUserId) => {
   recipient.friends.pull(friend._id);
   await recipient.save();
 
-  await friend.remove();
+  await friend.deleteOne();
   return true;
 };
 
