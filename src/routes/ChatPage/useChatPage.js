@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import useWindowDimensions from "../../helpers/useWindowDimensions";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
 import socketIoHelper from "../../helpers/socket";
@@ -65,13 +66,16 @@ export default function useChatPage() {
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingText, setEditingText] = useState("");
   const listRef = useRef(null);
+  const fetchingRef = useRef(false);
   const CHUNK_SIZE = 40;
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [totalMessages, setTotalMessages] = useState(0);
 
   const fetchChunk = useCallback(
     async (newOffset = 0) => {
-      if (!authState.socketInfo.currentRoom) return;
+      if (!authState.socketInfo.currentRoom || fetchingRef.current) return;
+      fetchingRef.current = true;
       try {
         const { data } = await axios.get(
           `${REQUEST_BASE}/rooms/${authState.socketInfo.currentRoom}/messages`,
@@ -87,9 +91,12 @@ export default function useChatPage() {
             : [...mapped, ...prev].slice(-CHUNK_SIZE * 3),
         );
         setOffset(newOffset);
-        setHasMore(data.messages.length === CHUNK_SIZE);
+        setTotalMessages(data.total);
+        setHasMore(newOffset + CHUNK_SIZE < data.total);
       } catch (err) {
         console.error("load messages error", err);
+      } finally {
+        fetchingRef.current = false;
       }
     },
     [authState.socketInfo.currentRoom, authState.authToken],
@@ -267,13 +274,24 @@ export default function useChatPage() {
     setEditingText("");
   };
 
-  const handleScroll = () => {
+  const handleScroll = async () => {
     const el = listRef.current;
     if (!el || !hasMore) return;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
-      fetchChunk(offset + CHUNK_SIZE);
+    const distanceFromTop = el.scrollHeight - el.clientHeight - el.scrollTop;
+    if (distanceFromTop <= 100) {
+      const prevHeight = el.scrollHeight;
+      await fetchChunk(offset + CHUNK_SIZE);
+      requestAnimationFrame(() => {
+        el.scrollTop += el.scrollHeight - prevHeight;
+      });
     }
   };
+
+  const { width, height } = useWindowDimensions();
+
+  useEffect(() => {
+    handleScroll();
+  }, [width, height, messages.length]);
 
   return {
     authState,
@@ -308,5 +326,7 @@ export default function useChatPage() {
     cancelEditMessage,
     handleScroll,
     listRef,
+    totalMessages,
+    hasMore,
   };
 }
