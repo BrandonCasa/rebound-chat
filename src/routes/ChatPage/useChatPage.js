@@ -68,6 +68,8 @@ export default function useChatPage() {
   const fetchingRef = useRef(false);
   const CHUNK_SIZE = 40;
   const DISPLAY_MESSAGE_LIMIT = 120;
+  const OVERFLOW_THRESHOLD = 5;
+  const NEAR_TOP_THRESHOLD = 100;
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [totalMessages, setTotalMessages] = useState(0);
@@ -278,7 +280,7 @@ export default function useChatPage() {
     const el = listRef.current;
     if (!el || !hasMore) return;
     const distanceFromTop = el.scrollHeight - el.clientHeight - el.scrollTop;
-    if (distanceFromTop <= 100) {
+    if (distanceFromTop <= NEAR_TOP_THRESHOLD) {
       const prevHeight = el.scrollHeight;
       await fetchChunk(offset + CHUNK_SIZE);
       requestAnimationFrame(() => {
@@ -292,7 +294,7 @@ export default function useChatPage() {
   const checkOverflow = useCallback(() => {
     const el = listRef.current;
     if (!el || !hasMore) return;
-    if (el.scrollHeight <= el.clientHeight + 10) {
+    if (el.scrollHeight - el.clientHeight <= OVERFLOW_THRESHOLD) {
       handleScroll();
     }
   }, [handleScroll, hasMore]);
