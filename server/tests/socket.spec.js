@@ -1,6 +1,6 @@
-import { startServer, stopServer } from './helpers/server.js';
-import { io as Client } from 'socket.io-client';
-import { expect } from 'chai';
+import { startServer, stopServer } from "./helpers/server.js";
+import { io as Client } from "socket.io-client";
+import { expect } from "chai";
 
 let client;
 
@@ -14,9 +14,9 @@ after(async () => {
   await stopServer();
 });
 
-describe('Socket.IO events', () => {
-  it('authenticates connections with JWT');
-  it('lists, creates, joins and leaves rooms');
-  it('sends, edits and deletes messages');
-  it('notifies watchers on user updates');
+describe("Socket.IO events", () => {
+  it("authenticates connections with JWT");
+  it("lists, creates, joins and leaves rooms");
+  it("sends, edits and deletes messages");
+  it("notifies watchers on user updates");
 });

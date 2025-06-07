@@ -5,17 +5,17 @@ import { startServer, stopServer } from "./helpers/server.js";
 chai.use(chaiHttp);
 
 before(async () => {
-	await startServer();
+  await startServer();
 });
 
 after(async () => {
-	await stopServer();
+  await stopServer();
 });
 
 describe("Friend request workflow", () => {
-	it("sends a friend request");
-	it("accepts a friend request");
-	it("declines a friend request");
-	it("cancels a sent request");
-	it("removes a friend");
+  it("sends a friend request");
+  it("accepts a friend request");
+  it("declines a friend request");
+  it("cancels a sent request");
+  it("removes a friend");
 });

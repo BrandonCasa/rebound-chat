@@ -1,10 +1,10 @@
-import { render, screen } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import { configureStore } from '@reduxjs/toolkit';
-import { describe, test, expect, vi, afterEach } from 'vitest';
+import { render, screen } from "@testing-library/react";
+import { Provider } from "react-redux";
+import { configureStore } from "@reduxjs/toolkit";
+import { describe, test, expect, vi, afterEach } from "vitest";
 
-import authReducer from '../slices/authSlice';
-vi.mock('../components/User/ProfileCard.jsx', () => ({
+import authReducer from "../slices/authSlice";
+vi.mock("../components/User/ProfileCard.jsx", () => ({
   default: ({ user }) => (
     <div>
       <span>{user.displayName}</span>
@@ -13,17 +13,24 @@ vi.mock('../components/User/ProfileCard.jsx', () => ({
     </div>
   ),
 }));
-import ProfileCard from '../components/User/ProfileCard.jsx';
+import ProfileCard from "../components/User/ProfileCard.jsx";
 
-vi.mock('axios', () => ({
+vi.mock("axios", () => ({
   default: {
     put: vi.fn(() => Promise.resolve({ data: {} })),
     get: vi.fn(() => Promise.resolve({ data: {} })),
   },
 }));
 
-vi.mock('../helpers/socket', () => ({
-  default: { getSocket: () => ({ on: vi.fn(), off: vi.fn(), emit: vi.fn(), connected: false }) }
+vi.mock("../helpers/socket", () => ({
+  default: {
+    getSocket: () => ({
+      on: vi.fn(),
+      off: vi.fn(),
+      emit: vi.fn(),
+      connected: false,
+    }),
+  },
 }));
 
 afterEach(() => {
@@ -34,22 +41,22 @@ function renderWithStore(ui, store) {
   return render(<Provider store={store}>{ui}</Provider>);
 }
 
-describe('Friend list and profile pages', () => {
-  test('displays profile information', () => {
+describe("Friend list and profile pages", () => {
+  test("displays profile information", () => {
     const store = configureStore({ reducer: { auth: authReducer } });
     const user = {
-      id: '1',
-      displayName: 'Charlie',
-      username: 'char',
-      bio: 'Hello there!',
+      id: "1",
+      displayName: "Charlie",
+      username: "char",
+      bio: "Hello there!",
       avatarUrl: null,
       bannerUrl: null,
       friends: [],
     };
 
     renderWithStore(<ProfileCard user={user} />, store);
-    expect(screen.getByText('Charlie')).toBeInTheDocument();
-    expect(screen.getByText('@char')).toBeInTheDocument();
-    expect(screen.getByText('Hello there!')).toBeInTheDocument();
+    expect(screen.getByText("Charlie")).toBeInTheDocument();
+    expect(screen.getByText("@char")).toBeInTheDocument();
+    expect(screen.getByText("Hello there!")).toBeInTheDocument();
   });
 });

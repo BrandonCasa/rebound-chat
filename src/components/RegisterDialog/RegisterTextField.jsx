@@ -1,5 +1,11 @@
 import * as Icons from "@mui/icons-material";
-import { TextField, InputAdornment, IconButton, Tooltip, Typography } from "@mui/material";
+import {
+  TextField,
+  InputAdornment,
+  IconButton,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 import { useMemo } from "react";
 
 const errorMessagesMap = {
@@ -60,7 +66,10 @@ const RegisterTextField = ({
   icon: Icon,
   type = "text",
 }) => {
-  const errorMessages = useMemo(() => buildMessages(field, errors), [field, errors]);
+  const errorMessages = useMemo(
+    () => buildMessages(field, errors),
+    [field, errors],
+  );
   const hasErrors = Object.keys(errors || {}).length > 0;
 
   return (
@@ -92,7 +101,9 @@ const RegisterTextField = ({
                     style={{ color: "rgba(0, 0, 0, 0.26)" }}
                   >
                     {hasErrors ? (
-                      <Icons.PriorityHighRounded style={{ color: "rgba(255, 0, 0, 0.52)" }} />
+                      <Icons.PriorityHighRounded
+                        style={{ color: "rgba(255, 0, 0, 0.52)" }}
+                      />
                     ) : (
                       <Icon />
                     )}
