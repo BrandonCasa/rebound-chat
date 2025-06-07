@@ -1,9 +1,16 @@
-// src/pages/ChatPage.jsx
-import React, { useState, useEffect } from "react";
+import React from "react";
 import * as Icons from "@mui/icons-material";
-import { Box, Button, Divider, Paper, Popover, Typography, useTheme } from "@mui/material";
-import axios from "axios";
-import { useDispatch, useSelector } from "react-redux";
+import {
+  Box,
+  Button,
+  Divider,
+  Paper,
+  Popover,
+  Typography,
+  useTheme,
+} from "@mui/material";
+
+import useChatPage from "./useChatPage";
 
 import ChatRoomMenu from "../../components/Chat/ChatRoomMenu";
 import UserListMenu from "../../components/Chat/UserListMenu";
@@ -12,334 +19,161 @@ import ChatInput from "../../components/Chat/ChatInput";
 import MessageContextMenu from "../../components/Chat/MessageContextMenu";
 import ProfileCard from "../../components/User/ProfileCard";
 
-import socketIoHelper from "../../helpers/socket";
-import { setSocketRoom } from "../../slices/authSlice";
-import { addSnackbar } from "../../slices/snackbarSlice";
-
-/* -------------------------------------------------- */
-/*  Constants & helpers                               */
-/* -------------------------------------------------- */
-const REQUEST_BASE = process.env.NODE_ENV === "development" ? `http://localhost:6001/api` : globalThis.IN_ELECTRON_ENV ? `https://rebound.nexus/api` : "/api";
-
-// cache‑bust so new images show up instantly
-const cache = (u) => {
-	if (!u) return null;
-	// remove any existing “t=” parameter
-	const cleaned = u.replace(/([?&])t=\d+(&)?/, (_, sep, trailing) => (trailing ? sep : ""));
-	// append new timestamp (use & if there are still other query params)
-	return `${cleaned}${cleaned.includes("?") ? "&" : "?"}t=${Date.now()}`;
-};
-
-// sanitize message objects with cached avatar URLs
-const mapMessages = (msgs) =>
-	msgs.map((m) => ({
-		...m,
-		sender: {
-			...m.sender,
-			avatarUrl: m.sender?.avatarUrl ? cache(REQUEST_BASE + m.sender.avatarUrl) : null,
-		},
-	}));
-
-/* fetch complete profile for a given user id */
-async function getUserInfo(userId, authToken) {
-	const url = `${REQUEST_BASE}/users/profile`;
-
-	try {
-		const { data } = await axios.get(url, {
-			headers: {
-				"Content-Type": "application/json",
-				"Allow-Control-Allow-Origin": "*",
-				Authorization: `Bearer ${authToken}`,
-			},
-			params: { id: userId },
-		});
-
-		const u = data.user;
-		return {
-			...u,
-			avatarUrl: u.avatarUrl ? cache(REQUEST_BASE + u.avatarUrl) : null,
-			bannerUrl: u.bannerUrl ? cache(REQUEST_BASE + u.bannerUrl) : null,
-		};
-	} catch (err) {
-		console.error(err);
-		return null;
-	}
-}
-
-/* -------------------------------------------------- */
-/*  Main component                                   */
-/* -------------------------------------------------- */
 function ChatPage() {
-	/* ----- global & theme ----- */
-	const authState = useSelector((state) => state.auth);
-	const dispatch = useDispatch();
-	const theme = useTheme();
+  const theme = useTheme();
+  const {
+    authState,
+    message,
+    setMessage,
+    messages,
+    channels,
+    users,
+    roomAnchorEl,
+    setRoomAnchorEl,
+    userListAnchorEl,
+    setUserListAnchorEl,
+    userPreviewEl,
+    setUserPreviewEl,
+    userPreviewUser,
+    setUserPreviewUser,
+    selectedMessage,
+    msgMenuPos,
+    editingMessageId,
+    editingText,
+    setEditingText,
+    setMessages,
+    sendMessage,
+    clickRoomSelect,
+    clickUserList,
+    previewUser,
+    openMessageMenu,
+    closeMessageMenu,
+    startEditSelectedMessage,
+    confirmDeleteSelectedMessage,
+    commitEditMessage,
+    cancelEditMessage,
+  } = useChatPage();
 
-	/* ----- local UI state ---- */
-	const [message, setMessage] = useState("");
-	const [messages, setMessages] = useState([]);
-	const [channels, setChannels] = useState({});
-	const [users, setUsers] = useState([]);
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        flexGrow: 1,
+        flexDirection: "column",
+        justifyContent: "center",
+        overflow: "hidden",
+      }}
+    >
+      {/* user preview popover */}
+      <Popover
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+        transformOrigin={{ vertical: "bottom", horizontal: "left" }}
+        anchorEl={userPreviewEl}
+        open={Boolean(userPreviewEl)}
+        onClose={() => {
+          setUserPreviewEl(null);
+          setUserPreviewUser(null);
+        }}
+        sx={{ mb: 2 }}
+      >
+        <ProfileCard
+          self={authState.userId === userPreviewUser?.id}
+          user={userPreviewUser}
+          width="300px"
+          passStyle={{ maxWidth: "300px" }}
+        />
+      </Popover>
 
-	/* menus & preview popovers */
-	const [roomAnchorEl, setRoomAnchorEl] = useState(null);
-	const [userListAnchorEl, setUserListAnchorEl] = useState(null);
-	const [userPreviewEl, setUserPreviewEl] = useState(null);
-	const [userPreviewUser, setUserPreviewUser] = useState(null);
-	const [msgMenuPos, setMsgMenuPos] = useState(null);
-	const [selectedMessage, setSelectedMessage] = useState(null);
-	const [editingMessageId, setEditingMessageId] = useState(null);
-	const [editingText, setEditingText] = useState("");
+      {/* menus */}
+      <ChatRoomMenu
+        anchorEl={roomAnchorEl}
+        setAnchorEl={setRoomAnchorEl}
+        channels={channels}
+        setMessages={setMessages}
+      />
+      <UserListMenu
+        anchorEl={userListAnchorEl}
+        setAnchorEl={setUserListAnchorEl}
+        users={users}
+      />
+      <MessageContextMenu
+        anchorPosition={msgMenuPos}
+        setAnchorPosition={closeMessageMenu}
+        onEdit={startEditSelectedMessage}
+        onDelete={confirmDeleteSelectedMessage}
+        allowEdit={selectedMessage?.sender?._id === authState.userId}
+      />
 
-	/* -------------------------------------------------- */
-	/*  Socket lifecycle                                  */
-	/* -------------------------------------------------- */
-	// grab the current socket instance once per render
-	const socket = socketIoHelper.getSocket();
+      {/* shell */}
+      <Paper
+        sx={{
+          position: "relative",
+          display: "flex",
+          flexDirection: "column",
+          width: "100%",
+          flexGrow: 1,
+          height: "100%",
+        }}
+      >
+        {/* header */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            p: 1,
+            height: `calc(56px * ${theme.spacing(2)})`,
+          }}
+        >
+          <Button
+            variant="outlined"
+            color="secondary"
+            startIcon={<Icons.MenuRounded />}
+            onClick={clickRoomSelect}
+            sx={{ textTransform: "initial" }}
+          >
+            <Typography variant="h6" align="center">
+              {channels[authState.socketInfo.currentRoom]?.name || "No Room"}
+            </Typography>
+          </Button>
+          <Box flexGrow={1} />
+          <Button
+            variant="outlined"
+            color="secondary"
+            endIcon={<Icons.PeopleRounded />}
+            onClick={clickUserList}
+            sx={{ textTransform: "initial" }}
+          >
+            <Typography variant="h6" align="center">
+              {users.length}
+            </Typography>
+          </Button>
+        </Box>
 
-	useEffect(() => {
-		if (authState.loggedIn && socket) {
-			// rooms
-			socket.on("room_list", ([idMap, roomObjs]) => {
-				setChannels(roomObjs);
-				if (!authState.socketInfo.currentRoom) {
-					dispatch(
-						setSocketRoom({
-							lastRoom: null,
-							currentRoom: Object.keys(idMap)[0] || null,
-						})
-					);
-				}
-			});
-			// messages
-			socket.on("joined_room", (_id, msgs) => setMessages(mapMessages(msgs)));
-			socket.on("message_sent", (_id, msgs) => setMessages(mapMessages(msgs)));
-			socket.on("new_message", (_id, msgs) => setMessages(mapMessages(msgs)));
-			socket.on("messages_updated", (_id, msgs) => setMessages(mapMessages(msgs)));
-			// presence
-			socket.on("user_list", (_roomId, list, sender, evt) => {
-				if (sender.id !== authState.userId) {
-					dispatch(
-						addSnackbar({
-							snackbarMsg: `'${sender.displayName}' ${evt === "join" ? "joined!" : "left."}`,
-							snackbarSeverity: "info",
-							autoHideDuration: 1500,
-						})
-					);
-				}
-				setUsers(list);
-			});
-			// initial pull (buffered until actually connected)
-			socket.emit("list_rooms");
-		} else if (!authState.loggingIn && !authState.loggedIn) {
-			// only warn if truly not logged in
-			dispatch(
-				addSnackbar({
-					snackbarMsg: "Login or register to use this page.",
-					snackbarSeverity: "warning",
-					autoHideDuration: 1500,
-				})
-			);
-		}
+        <Divider />
 
-		return () => {
-			if (socket) {
-				socket.off("room_list");
-				socket.off("joined_room");
-				socket.off("message_sent");
-				socket.off("new_message");
-				socket.off("messages_updated");
-				socket.off("user_list");
-			}
-			setChannels({});
-			setMessages([]);
-			setUsers([]);
-		};
-		// now re-run this effect not just on auth flags, but also as soon as the socket object changes
-	}, [authState.loggedIn, authState.loggingIn, authState.socketInfo.currentRoom, authState.userId, socket, dispatch]);
+        {/* messages */}
+        <Box sx={{ flexGrow: 1, position: "relative", width: "100%" }}>
+          <ChatArea
+            messages={messages}
+            previewUser={previewUser}
+            onContextMenu={openMessageMenu}
+            editingMessageId={editingMessageId}
+            editingText={editingText}
+            setEditingText={setEditingText}
+            commitEdit={commitEditMessage}
+            cancelEdit={cancelEditMessage}
+          />
+        </Box>
 
-	/* Clear user list when switching rooms */
-	useEffect(() => {
-		setUsers([]);
-	}, [authState.socketInfo.currentRoom]);
-
-	/* Reset currentRoom on unmount */
-	useEffect(
-		() => () => {
-			dispatch(setSocketRoom({ currentRoom: null }));
-		},
-		[dispatch]
-	);
-
-	/* -------------------------------------------------- */
-	/*  Handlers                                          */
-	/* -------------------------------------------------- */
-	const sendMessage = (e) => {
-		e?.preventDefault();
-
-		if (!message || !authState.socketInfo.currentRoom) return;
-
-		const socket = socketIoHelper.getSocket();
-		socket.emit("message_room", [authState.socketInfo.currentRoom, message]);
-		setMessage("");
-	};
-
-	const clickRoomSelect = (e) => {
-		setRoomAnchorEl(e.currentTarget);
-		setUserListAnchorEl(null);
-	};
-
-	const clickUserList = (e) => {
-		setUserListAnchorEl(e.currentTarget);
-		setRoomAnchorEl(null);
-	};
-
-	const previewUser = async (elRef, u) => {
-		if (!elRef?.current) {
-			setUserPreviewEl(null);
-			setUserPreviewUser(null);
-			return;
-		}
-
-		if (!u?._id) return;
-
-		const info = await getUserInfo(u._id, authState.authToken);
-		if (info) {
-			setUserPreviewEl(elRef.current);
-			setUserPreviewUser(info);
-		}
-	};
-
-	const openMessageMenu = (msg, pos) => {
-		setSelectedMessage(msg);
-		setMsgMenuPos(pos);
-	};
-
-	const closeMessageMenu = () => {
-		setMsgMenuPos(null);
-		setSelectedMessage(null);
-	};
-
-	const startEditSelectedMessage = () => {
-		if (!selectedMessage) return;
-		setEditingMessageId(selectedMessage._id);
-		setEditingText(selectedMessage.content);
-		closeMessageMenu();
-	};
-
-	const confirmDeleteSelectedMessage = () => {
-		if (!selectedMessage) return;
-		const socket = socketIoHelper.getSocket();
-		socket.emit("delete_message", authState.socketInfo.currentRoom, selectedMessage._id);
-		closeMessageMenu();
-	};
-
-	const commitEditMessage = () => {
-		if (!editingMessageId) return;
-		const socket = socketIoHelper.getSocket();
-		socket.emit("edit_message", authState.socketInfo.currentRoom, editingMessageId, editingText);
-		setEditingMessageId(null);
-		setEditingText("");
-	};
-
-	const cancelEditMessage = () => {
-		setEditingMessageId(null);
-		setEditingText("");
-	};
-
-	/* -------------------------------------------------- */
-	/*  Render                                            */
-	/* -------------------------------------------------- */
-	return (
-		<Box
-			sx={{
-				display: "flex",
-				flexGrow: 1,
-				flexDirection: "column",
-				justifyContent: "center",
-				overflow: "hidden",
-			}}
-		>
-			{/* user preview popover */}
-			<Popover
-				anchorOrigin={{ vertical: "top", horizontal: "right" }}
-				transformOrigin={{ vertical: "bottom", horizontal: "left" }}
-				anchorEl={userPreviewEl}
-				open={Boolean(userPreviewEl)}
-				onClose={() => {
-					setUserPreviewEl(null);
-					setUserPreviewUser(null);
-				}}
-				sx={{ mb: 2 }}
-			>
-				<ProfileCard self={authState.userId === userPreviewUser?.id} user={userPreviewUser} width="300px" passStyle={{ maxWidth: "300px" }} />
-			</Popover>
-
-			{/* menus */}
-			<ChatRoomMenu anchorEl={roomAnchorEl} setAnchorEl={setRoomAnchorEl} channels={channels} setMessages={setMessages} />
-			<UserListMenu anchorEl={userListAnchorEl} setAnchorEl={setUserListAnchorEl} users={users} />
-			<MessageContextMenu
-				anchorPosition={msgMenuPos}
-				setAnchorPosition={closeMessageMenu}
-				onEdit={startEditSelectedMessage}
-				onDelete={confirmDeleteSelectedMessage}
-				allowEdit={selectedMessage?.sender?._id === authState.userId}
-			/>
-
-			{/* shell */}
-			<Paper
-				sx={{
-					position: "relative",
-					display: "flex",
-					flexDirection: "column",
-					width: "100%",
-					flexGrow: 1,
-					height: "100%",
-				}}
-			>
-				{/* header */}
-				<Box
-					sx={{
-						display: "flex",
-						alignItems: "center",
-						p: 1,
-						height: `calc(56px * ${theme.spacing(2)})`,
-					}}
-				>
-					<Button variant="outlined" color="secondary" startIcon={<Icons.MenuRounded />} onClick={clickRoomSelect} sx={{ textTransform: "initial" }}>
-						<Typography variant="h6" align="center">
-							{channels[authState.socketInfo.currentRoom]?.name || "No Room"}
-						</Typography>
-					</Button>
-					<Box flexGrow={1} />
-					<Button variant="outlined" color="secondary" endIcon={<Icons.PeopleRounded />} onClick={clickUserList} sx={{ textTransform: "initial" }}>
-						<Typography variant="h6" align="center">
-							{users.length}
-						</Typography>
-					</Button>
-				</Box>
-
-				<Divider />
-
-				{/* messages */}
-				<Box sx={{ flexGrow: 1, position: "relative", width: "100%" }}>
-					<ChatArea
-						messages={messages}
-						previewUser={previewUser}
-						onContextMenu={openMessageMenu}
-						editingMessageId={editingMessageId}
-						editingText={editingText}
-						setEditingText={setEditingText}
-						commitEdit={commitEditMessage}
-						cancelEdit={cancelEditMessage}
-					/>
-				</Box>
-
-				{/* input */}
-				<ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} />
-			</Paper>
-		</Box>
-	);
+        {/* input */}
+        <ChatInput
+          message={message}
+          setMessage={setMessage}
+          sendMessage={sendMessage}
+        />
+      </Paper>
+    </Box>
+  );
 }
 
 export default React.memo(ChatPage);
