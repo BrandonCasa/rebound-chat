@@ -16,17 +16,17 @@ import socketIoHelper from "./helpers/socket";
 import { setLoggedIn, setLoggingIn, setSocketStatus } from "./slices/authSlice";
 import { addSnackbar } from "./slices/snackbarSlice";
 
-import useCustomAppBar from "components/CustomAppBar/useCustomAppBar";
-import useWindowDimensions from "helpers/useWindowDimensions";
+import useCustomAppBar from "./components/CustomAppBar/useCustomAppBar";
+import useWindowDimensions from "./helpers/useWindowDimensions";
 import AutoUpdate from "./components/AutoUpdate";
 
 const LandingPage = lazy(() => import("./routes/LandingPage/LandingPage.route"));
-const ProfilePage = lazy(() => import("routes/ProfilePage/ProfilePage.route"));
-const ChatPage = lazy(() => import("routes/ChatPage/ChatPage"));
-const ServersPage = lazy(() => import("routes/ServersPage/ServersPage.route"));
-const TestingPage = lazy(() => import("routes/TestingPage/TestingPage.route"));
-const SettingsPage = lazy(() => import("routes/SettingsPage/SettingsPage.route"));
-const FriendPage = lazy(() => import("routes/FriendPage/FriendPage.route"));
+const ProfilePage = lazy(() => import("./routes/ProfilePage/ProfilePage.route"));
+const ChatPage = lazy(() => import("./routes/ChatPage/ChatPage"));
+const ServersPage = lazy(() => import("./routes/ServersPage/ServersPage.route"));
+const TestingPage = lazy(() => import("./routes/TestingPage/TestingPage.route"));
+const SettingsPage = lazy(() => import("./routes/SettingsPage/SettingsPage.route"));
+const FriendPage = lazy(() => import("./routes/FriendPage/FriendPage.route"));
 
 const PageNotFoundContainer = styled("div")({
 	maxWidth: "100%",

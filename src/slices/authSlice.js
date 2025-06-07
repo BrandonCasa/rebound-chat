@@ -1,6 +1,6 @@
 import { createSlice } from "@reduxjs/toolkit";
 
-import socketIoHelper from "helpers/socket";
+import socketIoHelper from "../helpers/socket";
 
 const initialState = {
 	authToken: window.localStorage.getItem("auth-token"),

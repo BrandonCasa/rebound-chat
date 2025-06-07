@@ -2,11 +2,11 @@ import { Box, Chip, Divider, Stack } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import React from "react";
 
-import FeatureCard from "components/FeatureCard";
-import LandingHeader from "components/LandingHeader";
-import { ItemBox } from "routes/LandingPage/utils/ItemBox";
-import { scrollbarStyles } from "routes/LandingPage/utils/scrollbarStyles";
-import { TransitionGrid } from "routes/LandingPage/utils/TransitionGrid";
+import FeatureCard from "../../components/FeatureCard";
+import LandingHeader from "../../components/LandingHeader";
+import { ItemBox } from "./utils/ItemBox";
+import { scrollbarStyles } from "./utils/scrollbarStyles";
+import { TransitionGrid } from "./utils/TransitionGrid";
 
 function LandingPage(_props) {
 	return (

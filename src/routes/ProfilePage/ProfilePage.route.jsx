@@ -4,7 +4,7 @@ import { styled, useTheme } from "@mui/material/styles";
 import React from "react";
 import { useSelector } from "react-redux";
 
-import ProfileCard from "components/User/ProfileCard";
+import ProfileCard from "../../components/User/ProfileCard";
 
 const ItemPaper = styled(Box)(({ theme }) => ({
 	...theme.typography.body2,

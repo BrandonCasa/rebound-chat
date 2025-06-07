@@ -1,10 +1,10 @@
-import socketIoHelper from "helpers/socket";
+import socketIoHelper from "../../helpers/socket";
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
-import { setLoggedIn } from "slices/authSlice";
-import { setDialogOpened } from "slices/dialogSlice";
-import { addSnackbar } from "slices/snackbarSlice";
+import { setLoggedIn } from "../../slices/authSlice";
+import { setDialogOpened } from "../../slices/dialogSlice";
+import { addSnackbar } from "../../slices/snackbarSlice";
 
 export default function useCustomAppBar(width) {
 	const loggedInState = useSelector((state) => state.auth.loggedIn);

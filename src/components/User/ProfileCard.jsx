@@ -4,9 +4,9 @@ import { Avatar, Box, Button, ButtonGroup, IconButton, Paper, Stack, TextField, 
 import axios from "axios";
 import { useSelector, useDispatch } from "react-redux";
 
-import socketIoHelper from "helpers/socket";
-import { addSnackbar } from "slices/snackbarSlice";
-import { setLoggedIn } from "slices/authSlice";
+import socketIoHelper from "../../helpers/socket";
+import { addSnackbar } from "../../slices/snackbarSlice";
+import { setLoggedIn } from "../../slices/authSlice";
 
 /* -------------------------------------------------- */
 /*  Constants & helpers                              */

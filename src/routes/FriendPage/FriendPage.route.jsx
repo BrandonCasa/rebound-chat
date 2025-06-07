@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import socketIoHelper from "helpers/socket";
+import socketIoHelper from "../../helpers/socket";
 import { Box, Paper, Avatar, Typography, Button, Stack, Tooltip, Popover } from "@mui/material";
 import ChatIcon from "@mui/icons-material/Chat";
 import PersonRemoveIcon from "@mui/icons-material/PersonRemove";
@@ -11,7 +11,7 @@ import CancelIcon from "@mui/icons-material/Cancel";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import HighlightOffIcon from "@mui/icons-material/HighlightOff";
 import ProfileCard from "../../components/User/ProfileCard";
-import { setSocketRoom } from "slices/authSlice";
+import { setSocketRoom } from "../../slices/authSlice";
 
 // API base configuration
 const REQUEST_BASE = process.env.NODE_ENV === "development" ? "http://localhost:6001/api" : globalThis.IN_ELECTRON_ENV ? "https://rebound.nexus/api" : "/api";

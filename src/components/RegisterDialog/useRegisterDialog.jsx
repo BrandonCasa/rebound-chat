@@ -3,8 +3,10 @@ import axios from "axios";
 import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
-import { setAuthState, setLoggedIn } from "slices/authSlice";
-import { setDialogOpened } from "slices/dialogSlice";
+import { setAuthState, setLoggedIn } from "../../slices/authSlice";
+import { setDialogOpened } from "../../slices/dialogSlice";
+
+import { addSnackbar } from "../../slices/snackbarSlice";
 
 const useRegisterDialog = () => {
 	const dispatch = useDispatch();
@@ -23,23 +25,26 @@ const useRegisterDialog = () => {
 		displayNameErrors: {},
 		usernameErrors: {},
 		passwordErrors: {},
-		regErrors: [],
 	});
 
-	const validateBio = (value) => {
+	const validateBio = (value, altError) => {
 		let errors = {};
 
 		if (value.length > 256) {
 			errors.long = true;
 		}
+		if (altError) {
+			errors = { ...errors, altError: `Bio ${altError}` };
+		}
 		return errors;
 	};
 
-	const validateEmail = (value) => {
+	const validateEmail = (value, altError) => {
 		let errors = {};
 
 		if (value === undefined || value === null || value === "") {
 			errors.undefined = true;
+			return errors;
 		}
 		if (typeof value === "string" && value.toString().includes(" ")) {
 			errors.spaces = true;
@@ -53,14 +58,18 @@ const useRegisterDialog = () => {
 		if (value.length > 128) {
 			errors.long = true;
 		}
+		if (altError) {
+			errors = { ...errors, altError: `Email ${altError}` };
+		}
 		return errors;
 	};
 
-	const validateUsername = (value) => {
+	const validateUsername = (value, altError) => {
 		let errors = {};
 
-		if (value === undefined || value === null || value === "") {
+		if (value === undefined || value === null || value == "") {
 			errors.undefined = true;
+			return errors;
 		}
 		if (typeof value === "string" && value.toString().includes(" ")) {
 			errors.spaces = true;
@@ -74,14 +83,18 @@ const useRegisterDialog = () => {
 		if (value.length > 24) {
 			errors.long = true;
 		}
+		if (altError) {
+			errors = { ...errors, altError: `Username ${altError}` };
+		}
 		return errors;
 	};
 
-	const validatePassword = (value) => {
+	const validatePassword = (value, altError) => {
 		let errors = {};
 
 		if (value === undefined || value === null || value === "") {
 			errors.undefined = true;
+			return errors;
 		}
 		if (typeof value === "string" && value.toString().includes(" ")) {
 			errors.spaces = true;
@@ -92,14 +105,18 @@ const useRegisterDialog = () => {
 		if (value.length > 50) {
 			errors.long = true;
 		}
+		if (altError) {
+			errors = { ...errors, altError: `Password ${altError}` };
+		}
 		return errors;
 	};
 
-	const validateDisplayName = (value) => {
+	const validateDisplayName = (value, altError) => {
 		let errors = {};
 
 		if (value === undefined || value === null || value === "") {
 			errors.undefined = true;
+			return errors;
 		}
 		if (typeof value === "string" && (value.toString().startsWith(" ") || value.toString().endsWith(" "))) {
 			errors.spaces = true;
@@ -110,19 +127,21 @@ const useRegisterDialog = () => {
 		if (value.length > 16) {
 			errors.long = true;
 		}
+		if (altError) {
+			errors = { ...errors, altError: `Display Name ${altError}` };
+		}
 		return errors;
 	};
 
-	const handleFormDataChange = (field, value, _errors = {}) => {
+	const handleFormDataChange = (field, value, errors = {}) => {
 		setFormData({
 			...formData,
 			[field]: value,
-			bioErrors: field === "bio" ? { ...validateBio(value) } : { ...formData.bioErrors },
-			emailErrors: field === "email" ? { ...validateEmail(value) } : { ...formData.emailErrors },
-			usernameErrors: field === "username" ? { ...validateUsername(value) } : { ...formData.usernameErrors },
-			passwordErrors: field === "password" ? { ...validatePassword(value) } : { ...formData.passwordErrors },
-			displayNameErrors: field === "displayName" ? { ...validateDisplayName(value) } : { ...formData.displayNameErrors },
-			regErrors: [],
+			bioErrors: field === "bio" || errors?.bio ? { ...validateBio(value, errors?.bio) } : { ...formData.bioErrors },
+			emailErrors: field === "email" || errors?.email ? { ...validateEmail(value, errors?.email) } : { ...formData.emailErrors },
+			usernameErrors: field === "username" || errors?.username ? { ...validateUsername(value, errors?.username) } : { ...formData.usernameErrors },
+			passwordErrors: field === "password" || errors?.password ? { ...validatePassword(value, errors?.password) } : { ...formData.passwordErrors },
+			displayNameErrors: field === "displayName" || errors?.displayName ? { ...validateDisplayName(value, errors?.displayName) } : { ...formData.displayNameErrors },
 		});
 	};
 
@@ -157,15 +176,28 @@ const useRegisterDialog = () => {
 						newState: false,
 					})
 				);
-				setFormData({ ...formData, regErrors: [] });
+				setFormData({ ...formData });
 			}
 		} catch (error) {
-			if (error.response) {
-				console.log(error.response.data.errors);
-				//let regErrors = error.response.data.errors.map((error) => error.msg);
-				//setFormData({ ...formData, regErrors });
-				setActiveStep(0);
+			if (!error?.response?.data?.errors) {
+				dispatch(
+					addSnackbar({
+						snackbarMsg: `Registration Failed! ${JSON.stringify(error?.response?.data?.errors || error?.message || "An unknown error occurred.")}`,
+						snackbarSeverity: "error",
+						autoHideDuration: 4,
+					})
+				);
+			} else {
+				console.log(error?.response?.data?.errors || error?.message || "An unknown error occurred during registration.");
+				handleFormDataChange("password", formData.password, {});
+				handleFormDataChange("bio", formData.bio, {});
+				handleFormDataChange("email", formData.email, {});
+				handleFormDataChange("displayName", formData.displayName, {});
+				handleFormDataChange("username", formData.username, {});
+
+				handleFormDataChange("requestErrors", undefined, error?.response?.data?.errors);
 			}
+			setActiveStep(0);
 		}
 	};
 
@@ -198,7 +230,6 @@ const useRegisterDialog = () => {
 				displayNameErrors: {},
 				usernameErrors: {},
 				passwordErrors: {},
-				regErrors: [],
 			});
 			setActiveStep(0);
 		} else {
@@ -220,7 +251,6 @@ const useRegisterDialog = () => {
 			displayNameErrors: {},
 			usernameErrors: {},
 			passwordErrors: {},
-			regErrors: [],
 		});
 		setActiveStep(0);
 	};
@@ -245,43 +275,9 @@ const useRegisterDialog = () => {
 			displayNameErrors: {},
 			usernameErrors: {},
 			passwordErrors: {},
-			regErrors: [],
 		});
 		setActiveStep(0);
 	};
-
-	const errorMessages = [
-		formData.bioErrors.long && "Bio is too long.",
-
-		formData.emailErrors.spaces && "Email must not contain spaces.",
-		formData.emailErrors.undefined && "Email is required.",
-		formData.emailErrors.emailFormat && "Email has invalid format.",
-		formData.emailErrors.long && "Email is too long.",
-		formData.emailErrors.case && "Email must be lowercase.",
-
-		formData.displayNameErrors.spaces && "Display name must not start or end with spaces.",
-		formData.displayNameErrors.undefined && "Display name is required.",
-		formData.displayNameErrors.short && "Display name must be at least 3 characters long.",
-		formData.displayNameErrors.long && "Display name cannot be longer than 16 characters.",
-
-		formData.usernameErrors.spaces && "Username must not contain spaces.",
-		formData.usernameErrors.undefined && "Username is required.",
-		formData.usernameErrors.short && "Username must be at least 3 characters long.",
-		formData.usernameErrors.long && "Username cannot be longer than 24 characters.",
-		formData.usernameErrors.case && "Username must be lowercase.",
-
-		formData.passwordErrors.spaces && "Password must not contain spaces.",
-		formData.passwordErrors.undefined && "Password is required.",
-		formData.passwordErrors.short && "Password must be at least 5 characters long.",
-		formData.passwordErrors.long && "Password cannot be longer than 50 characters.",
-		...formData.regErrors,
-	]
-		.filter(Boolean)
-		.map((errorMessage) => (
-			<Typography key={errorMessage} variant="subtitle" color="error" fontWeight={900}>
-				- {errorMessage}
-			</Typography>
-		));
 
 	return {
 		registerDialogState,
@@ -295,7 +291,6 @@ const useRegisterDialog = () => {
 		handleNextStep,
 		handleBackButton,
 		handleDialogClose,
-		errorMessages,
 		handleToLogin,
 	};
 };

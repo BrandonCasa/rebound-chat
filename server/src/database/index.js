@@ -16,13 +16,10 @@ class DatabaseServer {
 		const isDevelopment = process.env.NODE_ENV === "development";
 		const mongoUri = isDevelopment ? await this.startDevelopmentServer() : this.getProductionUri();
 
-		const mongooseOpts = {
-			useNewUrlParser: true,
-			useUnifiedTopology: true,
-		};
+		const mongooseOpts = {};
 		mongoose.set("strictQuery", false);
 
-		await mongoose.connect(mongoUri, mongooseOpts, () => {});
+		await mongoose.connect(mongoUri, mongooseOpts);
 		this.setupEventListeners(mongoUri, mongooseOpts);
 	}
 

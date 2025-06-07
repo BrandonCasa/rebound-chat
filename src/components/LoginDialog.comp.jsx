@@ -6,7 +6,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { setLoggedIn } from "../slices/authSlice";
 import { setDialogOpened } from "../slices/dialogSlice";
 
-import { addSnackbar } from "slices/snackbarSlice";
+import { addSnackbar } from "../slices/snackbarSlice";
 
 const LoginDialog = () => {
 	const loginDialogState = useSelector((state) => state.dialogs.loginDialogOpen);
@@ -55,10 +55,10 @@ const LoginDialog = () => {
 				}
 			})
 			.catch((error) => {
-				console.log(error.response.data.errors);
+				console.log(error?.response?.data?.errors || error?.message || "An unknown error occurred during login.");
 				dispatch(
 					addSnackbar({
-						snackbarMsg: `Login Failed! ${JSON.stringify(error.response.data.errors)}`,
+						snackbarMsg: `Login Failed! ${JSON.stringify(error?.response?.data?.errors || error?.message || "An unknown error occurred.")}`,
 						snackbarSeverity: "error",
 						autoHideDuration: 4000,
 					})
