@@ -142,7 +142,7 @@ export default function useFriendPage() {
         socket.off("watched_user_saved");
       }
     };
-  }, [auth.authToken, auth.userId, auth.loggedIn]);
+  }, [auth.authToken, auth.userId, auth.loggedIn, auth.socketInfo.connected]);
 
   const callApi = async (ep, data, onSuccessId) => {
     try {

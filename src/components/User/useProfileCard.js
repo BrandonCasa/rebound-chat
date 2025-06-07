@@ -77,12 +77,11 @@ export default function useProfileCard(user, forceSelf) {
     rawData.avatarUrl,
     rawData.bannerUrl,
   ]);
-
-  const socket = socketIoHelper.getSocket();
   const watchRef = useRef(null);
   const watchId = profile.id;
 
   useEffect(() => {
+    const socket = socketIoHelper.getSocket();
     if (!socket?.connected) return;
     if (watchRef.current && (watchRef.current !== watchId || editMode)) {
       socket.emit("unwatch_user", watchRef.current);
@@ -98,9 +97,10 @@ export default function useProfileCard(user, forceSelf) {
         watchRef.current = null;
       }
     };
-  }, [socket, watchId, editMode]);
+  }, [auth.socketInfo.connected, watchId, editMode]);
 
   useEffect(() => {
+    const socket = socketIoHelper.getSocket();
     if (!socket) return;
     const onSaved = ([id, data]) => {
       if (id !== watchId) return;
@@ -116,7 +116,7 @@ export default function useProfileCard(user, forceSelf) {
     return () => {
       socket.off("watched_user_saved", onSaved);
     };
-  }, [socket, watchId, avatar, banner]);
+  }, [auth.socketInfo.connected, watchId, avatar, banner]);
 
   const { status, friendId } = useMemo(() => {
     if (isSelf) return { status: "self", friendId: null };

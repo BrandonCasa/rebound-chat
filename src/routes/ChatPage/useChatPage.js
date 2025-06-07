@@ -72,9 +72,8 @@ export default function useChatPage() {
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingText, setEditingText] = useState("");
 
-  const socket = socketIoHelper.getSocket();
-
   useEffect(() => {
+    const socket = socketIoHelper.getSocket();
     if (authState.loggedIn && socket) {
       socket.on("room_list", ([idMap, roomObjs]) => {
         setChannels(roomObjs);
@@ -134,7 +133,7 @@ export default function useChatPage() {
     authState.loggingIn,
     authState.socketInfo.currentRoom,
     authState.userId,
-    socket,
+    authState.socketInfo.connected,
     dispatch,
   ]);
 

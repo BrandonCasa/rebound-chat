@@ -94,10 +94,9 @@ const App = () => {
           let requestString = `${requestStringBase}/users/verify`;
 
           try {
-            const response = await axios.post(requestString, {
+            const response = await axios.post(requestString, null, {
               headers: {
                 "Content-Type": "application/json",
-                "Allow-Control-Allow-Origin": "*",
                 authorization: `Bearer ${authState.authToken}`,
               },
             });
