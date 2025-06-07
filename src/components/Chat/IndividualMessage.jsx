@@ -118,8 +118,8 @@ function IndividualMessage({
 			>
 				<Box
 					sx={{
-						paddingLeft: hoveredMessage === currentMsg && hoveredBlock === currentBlock ? 1 : 0,
-						background: hoveredMessage === currentMsg && hoveredBlock === currentBlock ? `${theme.palette.text.secondary}20` : "inherit",
+						paddingLeft: hoveredMessage === currentMsg && hoveredBlock === currentBlock && editingMessageId !== msg._id ? 1 : 0,
+						background: (hoveredMessage === currentMsg && hoveredBlock === currentBlock) || editingMessageId === msg._id ? `${theme.palette.text.secondary}20` : "inherit",
 						borderRadius: 1,
 						transition: "padding-left 0.1s ease-in-out, background 0.05s ease-in-out",
 						display: "flex",
@@ -127,11 +127,12 @@ function IndividualMessage({
 					}}
 				>
 					{editingMessageId === msg._id ? (
-						<Box sx={{ display: "flex", gap: 1, width: "100%", justifyContent: "space-between", alignItems: "center", pr: 1 }}>
+						<Box sx={{ display: "flex", gap: 1, width: "100%", justifyContent: "space-between", alignItems: "center", padding: 1 }}>
 							<TextField
 								size="small"
 								fullWidth
 								multiline
+								maxRows={8}
 								value={editingText}
 								onChange={(e) => setEditingText(e.target.value)}
 								onKeyDown={(e) => {
