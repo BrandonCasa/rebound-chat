@@ -171,6 +171,7 @@ router.post("/admin/friends/cleanup", async function (req, res, next) {
 
       // Remove invalid friend references from users
       const users = await UserModel.find({}).session(session);
+      const userMap = new Map();
       for (const user of users) {
         const filtered = user.friends.filter((id) =>
           validIds.has(id.toString()),
@@ -180,17 +181,45 @@ router.post("/admin/friends/cleanup", async function (req, res, next) {
           await user.save({ session });
           logger.info(`Cleaned friend list for user ${user._id}`);
         }
+        userMap.set(user._id.toString(), user);
       }
 
       // Delete orphan friend documents
       for (const friend of allFriends) {
-        const isReferenced = await UserModel.exists(
-          { friends: friend._id },
-          { session },
-        );
-        if (!isReferenced) {
+        const requester = userMap.get(friend.requester.toString());
+        const recipient = userMap.get(friend.recipient.toString());
+
+        const requesterHas =
+          requester &&
+          requester.friends.some(
+            (id) => id.toString() === friend._id.toString(),
+          );
+        const recipientHas =
+          recipient &&
+          recipient.friends.some(
+            (id) => id.toString() === friend._id.toString(),
+          );
+
+        if (!requesterHas && !recipientHas) {
           await friend.deleteOne({ session });
           logger.info(`Deleted orphan friend document ${friend._id}`);
+          continue;
+        }
+
+        if (requester && !requesterHas) {
+          requester.friends.push(friend._id);
+          await requester.save({ session });
+          logger.info(
+            `Added friend document ${friend._id} to user ${requester._id}`,
+          );
+        }
+
+        if (recipient && !recipientHas) {
+          recipient.friends.push(friend._id);
+          await recipient.save({ session });
+          logger.info(
+            `Added friend document ${friend._id} to user ${recipient._id}`,
+          );
         }
       }
     });
