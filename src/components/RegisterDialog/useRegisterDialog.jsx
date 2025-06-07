@@ -1,4 +1,3 @@
-import { Typography } from "@mui/material";
 import axios from "axios";
 import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -133,105 +132,187 @@ const useRegisterDialog = () => {
 		return errors;
 	};
 
-	const handleFormDataChange = (field, value, errors = {}) => {
-		setFormData({
-			...formData,
-			[field]: value,
-			bioErrors: field === "bio" || errors?.bio ? { ...validateBio(value, errors?.bio) } : { ...formData.bioErrors },
-			emailErrors: field === "email" || errors?.email ? { ...validateEmail(value, errors?.email) } : { ...formData.emailErrors },
-			usernameErrors: field === "username" || errors?.username ? { ...validateUsername(value, errors?.username) } : { ...formData.usernameErrors },
-			passwordErrors: field === "password" || errors?.password ? { ...validatePassword(value, errors?.password) } : { ...formData.passwordErrors },
-			displayNameErrors: field === "displayName" || errors?.displayName ? { ...validateDisplayName(value, errors?.displayName) } : { ...formData.displayNameErrors },
-		});
-	};
+        const handleFormDataChange = (field, value, errors = {}) => {
+                setFormData((prev) => {
+                        const next = { ...prev, [field]: value };
+                        next.bioErrors =
+                                field === "bio" || errors?.bio
+                                        ? { ...validateBio(field === "bio" ? value : prev.bio, errors?.bio) }
+                                        : { ...prev.bioErrors };
+                        next.emailErrors =
+                                field === "email" || errors?.email
+                                        ? { ...validateEmail(field === "email" ? value : prev.email, errors?.email) }
+                                        : { ...prev.emailErrors };
+                        next.usernameErrors =
+                                field === "username" || errors?.username
+                                        ? { ...validateUsername(field === "username" ? value : prev.username, errors?.username) }
+                                        : { ...prev.usernameErrors };
+                        next.passwordErrors =
+                                field === "password" || errors?.password
+                                        ? { ...validatePassword(field === "password" ? value : prev.password, errors?.password) }
+                                        : { ...prev.passwordErrors };
+                        next.displayNameErrors =
+                                field === "displayName" || errors?.displayName
+                                        ? {
+                                                  ...validateDisplayName(
+                                                          field === "displayName" ? value : prev.displayName,
+                                                          errors?.displayName,
+                                                  ),
+                                          }
+                                        : { ...prev.displayNameErrors };
+                        return next;
+                });
+        };
 
-	const handleStayLoggedInChange = (event) => {
-		setFormData({ ...formData, stayLoggedIn: event.target.checked });
-	};
+const handleStayLoggedInChange = (event) => {
+        setFormData((prev) => ({ ...prev, stayLoggedIn: event.target.checked }));
+};
 
-	const handleUserRegister = async () => {
-		let requestString = process.env.NODE_ENV === "development" ? `http://localhost:6001/api/users/register` : `/api/users/register`;
-		requestString = process.env.NODE_ENV !== "development" && window.isElectron ? `https://rebound.nexus/api/users/register` : requestString;
+        const stepHasErrors = (step) => {
+                if (step === 0) {
+                        return (
+                                Object.keys(formData.usernameErrors).length > 0 ||
+                                Object.keys(formData.emailErrors).length > 0 ||
+                                Object.keys(formData.passwordErrors).length > 0
+                        );
+                }
+                if (step === 1) {
+                        return (
+                                Object.keys(formData.displayNameErrors).length > 0 ||
+                                Object.keys(formData.bioErrors).length > 0
+                        );
+                }
+                return false;
+        };
 
-		try {
-			const response = await axios.post(requestString, {
-				user: {
-					username: formData.username,
-					email: formData.email,
-					displayName: formData.displayName,
-					bio: formData.bio,
-					password: formData.password,
-					//formData.stayLoggedIn,
-				},
-			});
+        const hasAnyErrors = () =>
+                [
+                        formData.usernameErrors,
+                        formData.emailErrors,
+                        formData.passwordErrors,
+                        formData.displayNameErrors,
+                        formData.bioErrors,
+                ].some((err) => Object.keys(err).length > 0);
 
-			if (response.status === 200) {
-				const authToken = response.data.user.token;
-				window.localStorage.setItem("auth-token", authToken);
-				dispatch(setAuthState({ authToken }));
-				dispatch(setLoggedIn({ loggedIn: true }));
-				dispatch(
-					setDialogOpened({
-						dialogName: "registerDialogOpen",
-						newState: false,
-					})
-				);
-				setFormData({ ...formData });
-			}
-		} catch (error) {
-			if (!error?.response?.data?.errors) {
-				dispatch(
-					addSnackbar({
-						snackbarMsg: `Registration Failed! ${JSON.stringify(error?.response?.data?.errors || error?.message || "An unknown error occurred.")}`,
-						snackbarSeverity: "error",
-						autoHideDuration: 4000,
-					})
-				);
-			} else {
-				handleFormDataChange("password", formData.password, {});
-				handleFormDataChange("bio", formData.bio, {});
-				handleFormDataChange("email", formData.email, {});
-				handleFormDataChange("displayName", formData.displayName, {});
-				handleFormDataChange("username", formData.username, {});
+        const handleUserRegister = async () => {
+                let requestString = process.env.NODE_ENV === "development" ? `http://localhost:6001/api/users/register` : `/api/users/register`;
+                requestString = process.env.NODE_ENV !== "development" && window.isElectron ? `https://rebound.nexus/api/users/register` : requestString;
 
-				handleFormDataChange("requestErrors", undefined, error?.response?.data?.errors);
+                try {
+                        const response = await axios.post(requestString, {
+                                user: {
+                                        username: formData.username,
+                                        email: formData.email,
+                                        displayName: formData.displayName,
+                                        bio: formData.bio,
+                                        password: formData.password,
+                                        //formData.stayLoggedIn,
+                                },
+                        });
 
-				if (error?.response?.data?.errors) {
-					// display a snackbar for each error and prefix the error with the field name
-					for (const [field, errorMessages] of Object.entries(error?.response?.data?.errors)) {
-						if (Array.isArray(errorMessages)) {
-							errorMessages.forEach((errorMessage) => {
-								dispatch(
-									addSnackbar({
-										snackbarMsg: `${field.charAt(0).toUpperCase() + field.slice(1)} ${errorMessage}`,
-										snackbarSeverity: "error",
-										autoHideDuration: 4000,
-									})
-								);
-							});
-						} else {
-							dispatch(
-								addSnackbar({
-									snackbarMsg: `${field.charAt(0).toUpperCase() + field.slice(1)} ${errorMessages}`,
-									snackbarSeverity: "error",
-									autoHideDuration: 4000,
-								})
-							);
-						}
-					}
-				}
-			}
-			setActiveStep(0);
-		}
-	};
+                        if (response.status === 200) {
+                                const authToken = response.data.user.token;
+                                window.localStorage.setItem("auth-token", authToken);
+                                dispatch(setAuthState({ authToken }));
+                                dispatch(setLoggedIn({ loggedIn: true }));
+                                dispatch(
+                                        setDialogOpened({
+                                                dialogName: "registerDialogOpen",
+                                                newState: false,
+                                        })
+                                );
+                                setFormData({ ...formData });
+                                dispatch(
+                                        addSnackbar({
+                                                snackbarMsg: "Registration Successful!",
+                                                snackbarSeverity: "success",
+                                                autoHideDuration: 4000,
+                                        })
+                                );
+                        }
+                } catch (error) {
+                        const serverErrors = error?.response?.data?.errors;
+                        if (!serverErrors) {
+                                dispatch(
+                                        addSnackbar({
+                                                snackbarMsg: `Registration Failed! ${error?.message || "Unknown error."}`,
+                                                snackbarSeverity: "error",
+                                                autoHideDuration: 4000,
+                                        })
+                                );
+                        } else {
+                                const updateErrors = {};
+                                Object.entries(serverErrors).forEach(([field, msg]) => {
+                                        if (!msg) return;
+                                        const message = Array.isArray(msg) ? msg.join(", ") : msg;
+                                        updateErrors[field] = message;
+                                        dispatch(
+                                                addSnackbar({
+                                                        snackbarMsg: `${field.charAt(0).toUpperCase() + field.slice(1)} ${message}`,
+                                                        snackbarSeverity: "error",
+                                                        autoHideDuration: 4000,
+                                                })
+                                        );
+                                });
 
-	const handleNextStep = () => {
-		if (activeStep < 2) {
-			setActiveStep((prevActiveStep) => prevActiveStep + 1);
-		} else {
-			handleUserRegister();
-		}
-	};
+                                // apply all server errors at once
+                                setFormData((prev) => {
+                                        const next = { ...prev };
+                                        if (updateErrors.username)
+                                                next.usernameErrors = {
+                                                        ...validateUsername(prev.username, updateErrors.username),
+                                                };
+                                        if (updateErrors.email)
+                                                next.emailErrors = {
+                                                        ...validateEmail(prev.email, updateErrors.email),
+                                                };
+                                        if (updateErrors.password)
+                                                next.passwordErrors = {
+                                                        ...validatePassword(prev.password, updateErrors.password),
+                                                };
+                                        if (updateErrors.displayName)
+                                                next.displayNameErrors = {
+                                                        ...validateDisplayName(prev.displayName, updateErrors.displayName),
+                                                };
+                                        if (updateErrors.bio)
+                                                next.bioErrors = {
+                                                        ...validateBio(prev.bio, updateErrors.bio),
+                                                };
+                                        return next;
+                                });
+                        }
+                        setActiveStep(0);
+                }
+        };
+
+        const handleNextStep = () => {
+                if (stepHasErrors(activeStep)) {
+                        dispatch(
+                                addSnackbar({
+                                        snackbarMsg: "Please resolve validation errors before continuing.",
+                                        snackbarSeverity: "warning",
+                                        autoHideDuration: 4000,
+                                })
+                        );
+                        return;
+                }
+
+                if (activeStep < 2) {
+                        setActiveStep((prevActiveStep) => prevActiveStep + 1);
+                } else {
+                        if (hasAnyErrors()) {
+                                dispatch(
+                                        addSnackbar({
+                                                snackbarMsg: "Please resolve validation errors before registering.",
+                                                snackbarSeverity: "warning",
+                                                autoHideDuration: 4000,
+                                        })
+                                );
+                                return;
+                        }
+                        handleUserRegister();
+                }
+        };
 
 	const handleBackButton = () => {
 		if (activeStep === 0) {
