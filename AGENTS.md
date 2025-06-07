@@ -5,12 +5,7 @@
 - Use **Node.js** with `pnpm`.
 - Run `pnpm install` from the repo root; this installs frontend dependencies and, via the `postinstall` script, installs server dependencies and prepares the build directory.
 
-## Testing
-
-- **Frontend**: `pnpm test` (when ran from the project root folder) (runs Vitest via the root `package.json`).
-- **Backend**: `pnpm test` (when ran from the server folder) (runs Mocha/Chai in `server/tests`).
-
-Run these test commands before committing any changes.
+Run test commands before committing any changes.
 
 ## Coding Guidelines
 
