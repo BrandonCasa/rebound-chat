@@ -111,16 +111,13 @@ jobs:
         run: |
           ssh ubuntu@${{ secrets.EC2_INSTANCE_IP }} << EOF
             set -e
-            APP_DIR="${{ github.event.inputs.appDirectory }}"
-            REPO_URL="${{ github.event.inputs.repositoryURL }}"
-            SERVER_DIR="${{ github.event.inputs.serverSubdirectory }}"
             NEW_CLONE=false
 
-            mkdir -p "${APP_DIR}"
-            if [ -d "${APP_DIR}/.git" ]; then
-              cd "${APP_DIR}"
+            mkdir -p "${{ github.event.inputs.appDirectory }}"
+            if [ -d "${{ github.event.inputs.appDirectory }}/.git" ]; then
+              cd "${{ github.event.inputs.appDirectory }}"
               CURRENT_URL=$(git config --get remote.origin.url || echo "")
-              if [ "${CURRENT_URL}" = "${REPO_URL}" ]; then
+              if [ "${CURRENT_URL}" = "${{ github.event.inputs.repositoryURL }}" ]; then
                 if [ -n "$(git status --porcelain)" ]; then
                   git restore .
                   git clean -fd
@@ -128,19 +125,19 @@ jobs:
                 git pull origin dev
               else
                 cd ..
-                rm -rf "${APP_DIR}"
-                git clone "${REPO_URL}" "${APP_DIR}"
+                rm -rf "${{ github.event.inputs.appDirectory }}"
+                git clone "${{ github.event.inputs.repositoryURL }}" "${{ github.event.inputs.appDirectory }}"
                 NEW_CLONE=true
-                cd "${APP_DIR}"
+                cd "${{ github.event.inputs.appDirectory }}"
               fi
             else
-              rm -rf "${APP_DIR}"
-              git clone "${REPO_URL}" "${APP_DIR}"
+              rm -rf "${{ github.event.inputs.appDirectory }}"
+              git clone "${{ github.event.inputs.repositoryURL }}" "${{ github.event.inputs.appDirectory }}"
               NEW_CLONE=true
-              cd "${APP_DIR}"
+              cd "${{ github.event.inputs.appDirectory }}"
             fi
 
-            cd "${SERVER_DIR}"
+            cd "${{ github.event.inputs.serverSubdirectory }}"
 
             echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
 
