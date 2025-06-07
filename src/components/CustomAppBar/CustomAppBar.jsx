@@ -9,9 +9,7 @@ import { useSelector } from "react-redux";
 
 function CustomAppBar({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, handleIconClick, loggedInState, anchorEl, open, handleClose, handleLogout, children }) {
 	const theme = useTheme();
-	console.log(theme.spacing(1));
 	const auth = useSelector((s) => s.auth);
-	//console.log(auth);
 
 	return (
 		<Box

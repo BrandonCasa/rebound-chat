@@ -6,81 +6,88 @@ import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 import React from "react";
 
-const StyledMenu = styled((props) => (
-  <Menu
-    elevation={5}
-    anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-    transformOrigin={{ vertical: "top", horizontal: "right" }}
-    {...props}
-  />
-))(({ theme }) => ({
-  "& .MuiPaper-root": {
-    borderRadius: 6,
-    marginTop: theme.spacing(1),
-    minWidth: 150,
-    color: theme.palette.text.primary,
-    boxShadow:
-      "rgb(255, 255, 255) 0px 0px 0px 0px, rgba(0, 0, 0, 0.05) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 10px 15px -3px, rgba(0, 0, 0, 0.05) 0px 4px 6px -2px",
-    "& .MuiMenu-list": {
-      padding: "4px 0",
-    },
-    "& .MuiMenuItem-root": {
-      "& .MuiSvgIcon-root": {
-        fontSize: 18,
-        color: theme.palette.text.secondary,
-        marginRight: theme.spacing(1.5),
-      },
-      "&:active": {
-        backgroundColor: alpha(theme.palette.primary.main, theme.palette.action.selectedOpacity),
-      },
-    },
-  },
-}));
+const StyledMenu = styled((props) => <Menu elevation={5} anchorOrigin={{ vertical: "bottom", horizontal: "right" }} transformOrigin={{ vertical: "top", horizontal: "right" }} {...props} />)(
+	({ theme }) => ({
+		"& .MuiPaper-root": {
+			borderRadius: 6,
+			marginTop: theme.spacing(1),
+			minWidth: 150,
+			color: theme.palette.text.primary,
+			boxShadow: "rgb(255, 255, 255) 0px 0px 0px 0px, rgba(0, 0, 0, 0.05) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 10px 15px -3px, rgba(0, 0, 0, 0.05) 0px 4px 6px -2px",
+			"& .MuiMenu-list": {
+				padding: "4px 0",
+			},
+			"& .MuiMenuItem-root": {
+				"& .MuiSvgIcon-root": {
+					fontSize: 18,
+					color: theme.palette.text.secondary,
+					marginRight: theme.spacing(1.5),
+				},
+				"&:active": {
+					backgroundColor: alpha(theme.palette.primary.main, theme.palette.action.selectedOpacity),
+				},
+			},
+		},
+	})
+);
 
 export default function MessageContextMenu({ anchorPosition, setAnchorPosition, onEdit, onDelete, allowEdit }) {
-  const [confirming, setConfirming] = React.useState(false);
-  const open = Boolean(anchorPosition);
-  const handleClose = () => {
-    setConfirming(false);
-    setAnchorPosition(null);
-  };
+	const [confirming, setConfirming] = React.useState(false);
+	const open = Boolean(anchorPosition);
+	const handleClose = () => {
+		setConfirming(false);
+		setAnchorPosition(null);
+	};
 
-  return (
-    <StyledMenu
-      id="message-context-menu"
-      anchorReference="anchorPosition"
-      anchorPosition={anchorPosition ? { top: anchorPosition.y, left: anchorPosition.x } : undefined}
-      open={open}
-      onClose={handleClose}
-    >
-      {confirming ? (
-        <div style={{ padding: 8 }}>
-          <Typography sx={{ mb: 1 }}>Are you sure?</Typography>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={() => {
-              handleClose();
-              onDelete();
-            }}
-            sx={{ mr: 1 }}
-          >
-            Yes
-          </Button>
-          <Button variant="outlined" color="error" onClick={handleClose}>
-            No
-          </Button>
-        </div>
-      ) : (
-        <>
-          <MenuItem disabled={!allowEdit} onClick={() => { handleClose(); onEdit(); }} disableRipple>
-            <Icons.Edit /> Edit
-          </MenuItem>
-          <MenuItem disabled={!allowEdit} onClick={() => { setConfirming(true); }} disableRipple>
-            <Icons.Delete /> Delete
-          </MenuItem>
-        </>
-      )}
-    </StyledMenu>
-  );
+	return (
+		<StyledMenu
+			id="message-context-menu"
+			anchorReference="anchorPosition"
+			anchorPosition={anchorPosition ? { top: anchorPosition.y, left: anchorPosition.x } : undefined}
+			open={open}
+			onClose={handleClose}
+		>
+			{confirming ? (
+				<div style={{ padding: 8 }}>
+					<Typography sx={{ mb: 1 }}>Are you sure?</Typography>
+					<Button
+						variant="contained"
+						color="error"
+						onClick={() => {
+							handleClose();
+							onDelete();
+						}}
+						sx={{ mr: 1 }}
+					>
+						Yes
+					</Button>
+					<Button variant="outlined" color="error" onClick={handleClose}>
+						No
+					</Button>
+				</div>
+			) : (
+				[
+					<MenuItem
+						disabled={!allowEdit}
+						onClick={() => {
+							handleClose();
+							onEdit();
+						}}
+						disableRipple
+					>
+						<Icons.Edit /> Edit
+					</MenuItem>,
+					<MenuItem
+						disabled={!allowEdit}
+						onClick={() => {
+							setConfirming(true);
+						}}
+						disableRipple
+					>
+						<Icons.Delete /> Delete
+					</MenuItem>,
+				]
+			)}
+		</StyledMenu>
+	);
 }

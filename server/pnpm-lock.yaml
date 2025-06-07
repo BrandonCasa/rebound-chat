@@ -3957,6 +3957,7 @@ snapshots:
       method-override: 3.0.0
       mime: 4.0.7
       mongodb: 6.17.0(@aws-sdk/credential-providers@3.826.0)(socks@2.8.4)
+      mongodb-memory-server: 10.1.4(@aws-sdk/credential-providers@3.826.0)(socks@2.8.4)
       mongoose: 8.15.1(@aws-sdk/credential-providers@3.826.0)(socks@2.8.4)
       mongoose-unique-validator: 4.0.1(mongoose@8.15.1(@aws-sdk/credential-providers@3.826.0)(socks@2.8.4))
       morgan: 1.10.0

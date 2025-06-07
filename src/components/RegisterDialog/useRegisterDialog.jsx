@@ -184,11 +184,10 @@ const useRegisterDialog = () => {
 					addSnackbar({
 						snackbarMsg: `Registration Failed! ${JSON.stringify(error?.response?.data?.errors || error?.message || "An unknown error occurred.")}`,
 						snackbarSeverity: "error",
-						autoHideDuration: 4,
+						autoHideDuration: 4000,
 					})
 				);
 			} else {
-				console.log(error?.response?.data?.errors || error?.message || "An unknown error occurred during registration.");
 				handleFormDataChange("password", formData.password, {});
 				handleFormDataChange("bio", formData.bio, {});
 				handleFormDataChange("email", formData.email, {});
@@ -196,6 +195,31 @@ const useRegisterDialog = () => {
 				handleFormDataChange("username", formData.username, {});
 
 				handleFormDataChange("requestErrors", undefined, error?.response?.data?.errors);
+
+				if (error?.response?.data?.errors) {
+					// display a snackbar for each error and prefix the error with the field name
+					for (const [field, errorMessages] of Object.entries(error?.response?.data?.errors)) {
+						if (Array.isArray(errorMessages)) {
+							errorMessages.forEach((errorMessage) => {
+								dispatch(
+									addSnackbar({
+										snackbarMsg: `${field.charAt(0).toUpperCase() + field.slice(1)} ${errorMessage}`,
+										snackbarSeverity: "error",
+										autoHideDuration: 4000,
+									})
+								);
+							});
+						} else {
+							dispatch(
+								addSnackbar({
+									snackbarMsg: `${field.charAt(0).toUpperCase() + field.slice(1)} ${errorMessages}`,
+									snackbarSeverity: "error",
+									autoHideDuration: 4000,
+								})
+							);
+						}
+					}
+				}
 			}
 			setActiveStep(0);
 		}

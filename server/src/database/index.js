@@ -19,8 +19,8 @@ class DatabaseServer {
 		const mongooseOpts = {};
 		mongoose.set("strictQuery", false);
 
-		await mongoose.connect(mongoUri, mongooseOpts);
 		this.setupEventListeners(mongoUri, mongooseOpts);
+		await mongoose.connect(mongoUri, mongooseOpts);
 	}
 
 	async startDevelopmentServer() {

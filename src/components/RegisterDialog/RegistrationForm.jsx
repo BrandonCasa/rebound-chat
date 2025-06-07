@@ -107,7 +107,6 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
 							readOnly: true,
 							onFocus: (e) => {
 								if (e.target.hasAttribute("readonly")) {
-									console.log("Focus on readonly input, removing attribute.");
 									e.target.removeAttribute("readonly");
 									// fix for mobile safari to show virtual keyboard
 									e.target.blur();
@@ -144,7 +143,6 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
 							readOnly: true,
 							onFocus: (e) => {
 								if (e.target.hasAttribute("readonly")) {
-									console.log("Focus on readonly input, removing attribute.");
 									e.target.removeAttribute("readonly");
 									// fix for mobile safari to show virtual keyboard
 									e.target.blur();
@@ -181,7 +179,6 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
 							readOnly: true,
 							onFocus: (e) => {
 								if (e.target.hasAttribute("readonly")) {
-									console.log("Focus on readonly input, removing attribute.");
 									e.target.removeAttribute("readonly");
 									// fix for mobile safari to show virtual keyboard
 									e.target.blur();
@@ -224,7 +221,6 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
 							readOnly: true,
 							onFocus: (e) => {
 								if (e.target.hasAttribute("readonly")) {
-									console.log("Focus on readonly input, removing attribute.");
 									e.target.removeAttribute("readonly");
 									// fix for mobile safari to show virtual keyboard
 									e.target.blur();
@@ -260,7 +256,6 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
 							readOnly: true,
 							onFocus: (e) => {
 								if (e.target.hasAttribute("readonly")) {
-									console.log("Focus on readonly input, removing attribute.");
 									e.target.removeAttribute("readonly");
 									// fix for mobile safari to show virtual keyboard
 									e.target.blur();

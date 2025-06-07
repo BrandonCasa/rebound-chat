@@ -1,7 +1,10 @@
-const fs = require("fs");
-const path = require("path");
+import fs from "fs";
+import path, { dirname } from "path";
+import { fileURLToPath } from "url";
+import packageJson from "../package.json" with { type: "json" };
 
-const packageJson = require("../package.json");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const buildDir = path.join(__dirname, "..", "build");
 const appDir = path.join(__dirname, "..", "app");
@@ -12,10 +15,9 @@ try {
 		fs.mkdirSync(appDir);
 	} else {
 		// Clear out the app directory.
-		const filesApp = fs.readdirSync(appDir);
-		filesApp.forEach((fileApp) => {
-			fs.rmSync(path.join(appDir, fileApp), { recursive: true, force: true });
-		});
+		for (const file of fs.readdirSync(appDir)) {
+			fs.rmSync(path.join(appDir, file), { recursive: true, force: true });
+		}
 	}
 
 	// Copy buildDir into appDir.
@@ -24,15 +26,15 @@ try {
 	}
 
 	// Create the new package.json for the desktop client.
-	const oldPackageJson = packageJson;
+	const { version, author, dependencies } = packageJson;
 	const newPackageJson = {
 		name: "rebound-desktop",
-		version: oldPackageJson.version,
+		version,
 		private: false,
 		main: "build/electron.js",
 		description: "Rebound Nexus official desktop client.",
-		author: oldPackageJson.author,
-		dependencies: oldPackageJson.dependencies,
+		author,
+		dependencies,
 	};
 
 	// Write the new package.json with formatting.
@@ -41,3 +43,4 @@ try {
 	console.error("Error during clean build:", err);
 	process.exit(1);
 }
+console.log("Clean build completed successfully.");
