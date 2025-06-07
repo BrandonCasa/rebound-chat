@@ -65,13 +65,15 @@ export default function useChatPage() {
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingText, setEditingText] = useState("");
   const listRef = useRef(null);
+  const fetchingRef = useRef(false);
   const CHUNK_SIZE = 40;
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
 
   const fetchChunk = useCallback(
     async (newOffset = 0) => {
-      if (!authState.socketInfo.currentRoom) return;
+      if (!authState.socketInfo.currentRoom || fetchingRef.current) return;
+      fetchingRef.current = true;
       try {
         const { data } = await axios.get(
           `${REQUEST_BASE}/rooms/${authState.socketInfo.currentRoom}/messages`,
@@ -90,6 +92,8 @@ export default function useChatPage() {
         setHasMore(data.messages.length === CHUNK_SIZE);
       } catch (err) {
         console.error("load messages error", err);
+      } finally {
+        fetchingRef.current = false;
       }
     },
     [authState.socketInfo.currentRoom, authState.authToken],
@@ -270,7 +274,8 @@ export default function useChatPage() {
   const handleScroll = () => {
     const el = listRef.current;
     if (!el || !hasMore) return;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
+    const distanceFromTop = el.scrollHeight - el.clientHeight - el.scrollTop;
+    if (distanceFromTop <= 100) {
       fetchChunk(offset + CHUNK_SIZE);
     }
   };
