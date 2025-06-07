@@ -13,6 +13,8 @@ function ChatArea({
   setEditingText,
   commitEdit,
   cancelEdit,
+  onScroll,
+  listRef,
 }) {
   const boxStyles = useMemo(
     () => ({
@@ -32,7 +34,7 @@ function ChatArea({
   );
 
   return (
-    <Box sx={boxStyles}>
+    <Box sx={boxStyles} onScroll={onScroll} ref={listRef}>
       <List disablePadding>
         <ConstructedMessages
           relevantMsgs={messages}

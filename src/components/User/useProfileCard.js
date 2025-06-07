@@ -4,6 +4,7 @@ import { useSelector, useDispatch } from "react-redux";
 import socketIoHelper from "../../helpers/socket";
 import { addSnackbar } from "../../slices/snackbarSlice";
 import { setLoggedIn } from "../../slices/authSlice";
+import cacheMedia from "../../helpers/cacheMedia";
 
 const REQUEST_BASE =
   process.env.NODE_ENV === "development"
@@ -13,17 +14,9 @@ const REQUEST_BASE =
       : "/api";
 const API_BASE = `${REQUEST_BASE}/users`;
 
-const cache = (u) => {
-  if (!u) return null;
-  const cleaned = u.replace(/([?&])t=\d+(&)?/, (_, sep, trailing) =>
-    trailing ? sep : "",
-  );
-  return `${cleaned}${cleaned.includes("?") ? "&" : "?"}t=${Date.now()}`;
-};
-
 export function useFilePreview(initialUrl) {
   const [file, setFile] = useState(null);
-  const [preview, setPrev] = useState(cache(initialUrl));
+  const [preview, setPrev] = useState(cacheMedia(initialUrl));
 
   const onChange = (e) => {
     const f = e.target.files?.[0];
@@ -34,7 +27,7 @@ export function useFilePreview(initialUrl) {
 
   const reset = (url) => {
     setFile(null);
-    setPrev(cache(url));
+    setPrev(cacheMedia(url));
   };
 
   return { file, preview, onChange, reset };
@@ -104,8 +97,12 @@ export default function useProfileCard(user, forceSelf) {
     if (!socket) return;
     const onSaved = ([id, data]) => {
       if (id !== watchId) return;
-      const av = data.avatarUrl ? cache(REQUEST_BASE + data.avatarUrl) : null;
-      const bn = data.bannerUrl ? cache(REQUEST_BASE + data.bannerUrl) : null;
+      const av = data.avatarUrl
+        ? cacheMedia(REQUEST_BASE + data.avatarUrl)
+        : null;
+      const bn = data.bannerUrl
+        ? cacheMedia(REQUEST_BASE + data.bannerUrl)
+        : null;
       setProfile((p) => ({ ...p, ...data, avatarUrl: av, bannerUrl: bn }));
       avatar.reset(av);
       banner.reset(bn);
@@ -169,8 +166,12 @@ export default function useProfileCard(user, forceSelf) {
         const u = data.user;
         const full = {
           ...u,
-          avatarUrl: u.avatarUrl ? cache(REQUEST_BASE + u.avatarUrl) : null,
-          bannerUrl: u.bannerUrl ? cache(REQUEST_BASE + u.bannerUrl) : null,
+          avatarUrl: u.avatarUrl
+            ? cacheMedia(REQUEST_BASE + u.avatarUrl)
+            : null,
+          bannerUrl: u.bannerUrl
+            ? cacheMedia(REQUEST_BASE + u.bannerUrl)
+            : null,
         };
         dispatch(
           setLoggedIn({
