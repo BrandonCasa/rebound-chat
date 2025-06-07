@@ -111,27 +111,45 @@ jobs:
         run: |
           ssh ubuntu@${{ secrets.EC2_INSTANCE_IP }} << EOF
             set -e
-            if [ ! -d "${{ github.event.inputs.appDirectory }}" ]; then
-              mkdir -p "${{ github.event.inputs.appDirectory }}"
-              cd "${{ github.event.inputs.appDirectory }}"
-              git restore .
-              git clone ${{ github.event.inputs.repositoryURL }} ./
-              cd ${{ github.event.inputs.serverSubdirectory }}
-              pnpm install --frozen-lockfile --ignore-scripts
+            APP_DIR="${{ github.event.inputs.appDirectory }}"
+            REPO_URL="${{ github.event.inputs.repositoryURL }}"
+            SERVER_DIR="${{ github.event.inputs.serverSubdirectory }}"
+            NEW_CLONE=false
 
-              echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
+            mkdir -p "${APP_DIR}"
+            if [ -d "${APP_DIR}/.git" ]; then
+              cd "${APP_DIR}"
+              CURRENT_URL=$(git config --get remote.origin.url || echo "")
+              if [ "${CURRENT_URL}" = "${REPO_URL}" ]; then
+                if [ -n "$(git status --porcelain)" ]; then
+                  git restore .
+                  git clean -fd
+                fi
+                git pull origin dev
+              else
+                cd ..
+                rm -rf "${APP_DIR}"
+                git clone "${REPO_URL}" "${APP_DIR}"
+                NEW_CLONE=true
+                cd "${APP_DIR}"
+              fi
+            else
+              rm -rf "${APP_DIR}"
+              git clone "${REPO_URL}" "${APP_DIR}"
+              NEW_CLONE=true
+              cd "${APP_DIR}"
+            fi
 
+            cd "${SERVER_DIR}"
+
+            echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
+
+            pnpm install --frozen-lockfile --ignore-scripts
+
+            if [ "${NEW_CLONE}" = true ]; then
               pm2 start ecosystem.config.cjs
               pm2 save
             else
-              cd "${{ github.event.inputs.appDirectory }}"
-              git pull origin dev || exit 1
-              cd ${{ github.event.inputs.serverSubdirectory }}
-
-              echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
-
-              pnpm install --frozen-lockfile --ignore-scripts
-
               pm2 restart ${{ github.event.inputs.pm2ProcessName }}
             fi
 
