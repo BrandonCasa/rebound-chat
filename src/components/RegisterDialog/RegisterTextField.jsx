@@ -1,4 +1,4 @@
-import * as Icons from "@mui/icons-material";
+import PriorityHighRounded from "@mui/icons-material/PriorityHighRounded";
 import {
   TextField,
   InputAdornment,
@@ -101,7 +101,7 @@ const RegisterTextField = ({
                     style={{ color: "rgba(0, 0, 0, 0.26)" }}
                   >
                     {hasErrors ? (
-                      <Icons.PriorityHighRounded
+                      <PriorityHighRounded
                         style={{ color: "rgba(255, 0, 0, 0.52)" }}
                       />
                     ) : (

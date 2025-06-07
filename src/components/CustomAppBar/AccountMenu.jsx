@@ -1,4 +1,6 @@
-import * as Icons from "@mui/icons-material";
+import PersonAddRounded from "@mui/icons-material/PersonAddRounded";
+import PersonRemoveRounded from "@mui/icons-material/PersonRemoveRounded";
+import LogoutRounded from "@mui/icons-material/LogoutRounded";
 import {
   Menu,
   MenuList,
@@ -28,7 +30,7 @@ const AccountMenu = ({ anchorEl, open, handleClose, handleLogout, theme }) => (
       <Divider />
       <MenuItem>
         <ListItemIcon>
-          <Icons.PersonAddRounded
+          <PersonAddRounded
             fontSize="small"
             sx={{ color: theme.palette.text.secondary }}
           />
@@ -37,7 +39,7 @@ const AccountMenu = ({ anchorEl, open, handleClose, handleLogout, theme }) => (
       </MenuItem>
       <MenuItem>
         <ListItemIcon>
-          <Icons.PersonRemoveRounded
+          <PersonRemoveRounded
             fontSize="small"
             sx={{ color: theme.palette.text.secondary }}
           />
@@ -47,7 +49,7 @@ const AccountMenu = ({ anchorEl, open, handleClose, handleLogout, theme }) => (
       <Divider />
       <MenuItem onClick={handleLogout}>
         <ListItemIcon>
-          <Icons.LogoutRounded
+          <LogoutRounded
             fontSize="small"
             sx={{ color: theme.palette.text.secondary }}
           />

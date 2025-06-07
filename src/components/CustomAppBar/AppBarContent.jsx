@@ -1,4 +1,4 @@
-import * as Icons from "@mui/icons-material";
+import AccountCircleRounded from "@mui/icons-material/AccountCircleRounded";
 import { AppBar, Toolbar, Typography, IconButton, Avatar } from "@mui/material";
 
 const AppBarContent = ({
@@ -31,7 +31,7 @@ const AppBarContent = ({
         onClick={handleIconClick}
         sx={{ mr: theme.spacing(-1) }}
       >
-        <Icons.AccountCircleRounded
+        <AccountCircleRounded
           sx={{
             height: drawerWidth - 16,
             width: drawerWidth - 16,

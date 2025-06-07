@@ -1,5 +1,6 @@
 import React, { useState, useCallback, memo } from "react";
-import * as Icons from "@mui/icons-material";
+import Edit from "@mui/icons-material/Edit";
+import Delete from "@mui/icons-material/Delete";
 import {
   Menu,
   MenuItem,
@@ -117,14 +118,14 @@ function MessageContextMenu({
       >
         <MenuItem disabled={!allowEdit} onClick={handleEdit}>
           <ListItemIcon>
-            <Icons.Edit fontSize="small" />
+            <Edit fontSize="small" />
           </ListItemIcon>
           <ListItemText>Edit</ListItemText>
         </MenuItem>
 
         <MenuItem disabled={!allowEdit} onClick={handleDeleteClick}>
           <ListItemIcon>
-            <Icons.Delete fontSize="small" />
+            <Delete fontSize="small" />
           </ListItemIcon>
           <ListItemText>Delete</ListItemText>
         </MenuItem>

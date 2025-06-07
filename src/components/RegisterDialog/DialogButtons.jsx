@@ -1,4 +1,6 @@
-import * as Icons from "@mui/icons-material";
+import KeyboardArrowLeftRounded from "@mui/icons-material/KeyboardArrowLeftRounded";
+import DoneRounded from "@mui/icons-material/DoneRounded";
+import KeyboardDoubleArrowRightRounded from "@mui/icons-material/KeyboardDoubleArrowRightRounded";
 import {
   FormGroup,
   FormControlLabel,
@@ -48,7 +50,7 @@ const DialogButtons = ({
             transition: "ease-in-out opacity 125ms",
           }}
         >
-          <Icons.KeyboardArrowLeftRounded />
+          <KeyboardArrowLeftRounded />
         </Button>
         <Button
           variant="contained"
@@ -56,9 +58,9 @@ const DialogButtons = ({
           sx={{ width: "64px", height: "36px" }}
         >
           {activeStep === 2 ? (
-            <Icons.DoneRounded />
+            <DoneRounded />
           ) : (
-            <Icons.KeyboardDoubleArrowRightRounded />
+            <KeyboardDoubleArrowRightRounded />
           )}
         </Button>
       </Box>

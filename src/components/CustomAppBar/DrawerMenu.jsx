@@ -1,4 +1,11 @@
-import * as Icons from "@mui/icons-material";
+import HomeRounded from "@mui/icons-material/HomeRounded";
+import PeopleAltRounded from "@mui/icons-material/PeopleAltRounded";
+import MessageRounded from "@mui/icons-material/MessageRounded";
+import DnsRounded from "@mui/icons-material/DnsRounded";
+import PersonRounded from "@mui/icons-material/PersonRounded";
+import ScienceTwoTone from "@mui/icons-material/ScienceTwoTone";
+import SettingsRounded from "@mui/icons-material/SettingsRounded";
+import ChevronLeftRounded from "@mui/icons-material/ChevronLeftRounded";
 import {
   Toolbar,
   List,
@@ -63,7 +70,7 @@ function DrawerMenu({
             sx={{ opacity: isActive("/") ? 0.5 : 1.0 }}
             onClick={() => navigate("/")}
           >
-            <Icons.HomeRounded sx={{ color: theme.palette.secondary.light }} />
+            <HomeRounded sx={{ color: theme.palette.secondary.light }} />
           </ListItemIcon>
         </ListItemWithTooltip>
       </Toolbar>
@@ -80,37 +87,37 @@ function DrawerMenu({
             key: "friends",
             title: "Friends",
             path: "/friends",
-            Icon: Icons.PeopleAltRounded,
+            Icon: PeopleAltRounded,
           },
           {
             key: "chat",
             title: "Chat",
             path: "/chat",
-            Icon: Icons.MessageRounded,
+            Icon: MessageRounded,
           },
           {
             key: "servers",
             title: "Servers",
             path: "/servers",
-            Icon: Icons.DnsRounded,
+            Icon: DnsRounded,
           },
           {
             key: "profile",
             title: "Profile",
             path: "/profile",
-            Icon: Icons.PersonRounded,
+            Icon: PersonRounded,
           },
           {
             key: "testing",
             title: "Testing",
             path: "/testing",
-            Icon: Icons.ScienceTwoTone,
+            Icon: ScienceTwoTone,
           },
           {
             key: "settings",
             title: "Settings",
             path: "/settings",
-            Icon: Icons.SettingsRounded,
+            Icon: SettingsRounded,
           },
         ].map(({ key, title, path, Icon }) => (
           <ListItemWithTooltip key={key} title={title} placement="right">
@@ -144,7 +151,7 @@ function DrawerMenu({
             onClick={() => setDrawerOpen(!drawerOpen)}
           >
             <ListItemIcon>
-              <Icons.ChevronLeftRounded />
+              <ChevronLeftRounded />
             </ListItemIcon>
           </ListItemButton>
         </ListItemWithTooltip>
