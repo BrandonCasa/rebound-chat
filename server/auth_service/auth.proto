@@ -1,3 +1,17 @@
 syntax = "proto3";
 
-service AuthService {}
+option go_package = "github.com/BrandonCasa/rebound-chat;auth_service";
+
+service AuthService {
+  rpc VerifyToken (VerifyTokenInbound) returns (VerifyTokenOutbound) {}
+}
+
+message VerifyTokenInbound {
+	string token = 1;
+}
+
+message VerifyTokenOutbound {
+	bool valid = 1;
+	string User = 2;
+	string status = 3;
+}
