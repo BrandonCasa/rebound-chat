@@ -1,0 +1,32 @@
+syntax = "proto3";
+package chat;
+option go_package = "rebound-chat/microservices/proto/chat;chatpb";
+
+service ChatService {
+  rpc SendMessage(MessageRequest) returns (MessageResponse);
+  rpc ListMessages(ListRequest) returns (MessageListResponse);
+}
+
+message MessageRequest {
+  string room_id = 1;
+  string user_id = 2;
+  string content = 3;
+}
+
+message MessageResponse {
+  string message_id = 1;
+}
+
+message ListRequest {
+  string room_id = 1;
+}
+
+message MessageItem {
+  string message_id = 1;
+  string user_id = 2;
+  string content = 3;
+}
+
+message MessageListResponse {
+  repeated MessageItem messages = 1;
+}
