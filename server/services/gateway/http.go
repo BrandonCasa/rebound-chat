@@ -1,86 +1,83 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
+	"crypto/rand"
+	"encoding/hex"
+	"io"
 	"log"
 	"net/http"
-	"strings"
 	"time"
-
-	authpb "github.com/BrandonCasa/rebound-chat/services/common/genproto/auth"
-	"google.golang.org/grpc"
 )
 
-// httpServer exposes a minimal HTTP API that forwards requests to other
-// services using gRPC. Only the `/users/verify` endpoint is implemented.
-// Additional routes can be added following the same pattern.
-type httpServer struct {
-	addr       string
-	authClient authpb.AuthServiceClient
+type gatewayServer struct {
+	addr     string
+	services map[string]string // path prefix -> base URL
+	client   *http.Client
 }
 
-func NewHTTPServer(addr string, conn *grpc.ClientConn) *httpServer {
-	return &httpServer{
-		addr:       addr,
-		authClient: authpb.NewAuthServiceClient(conn),
+func NewGateway(addr string, services map[string]string) *gatewayServer {
+	return &gatewayServer{
+		addr:     addr,
+		services: services,
+		client:   &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
-func (s *httpServer) Run() error {
+func (g *gatewayServer) Run() error {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/users/verify", s.handleVerify)
+	mux.HandleFunc("/api/", g.handle)
 
-	srv := &http.Server{
-		Addr:    s.addr,
-		Handler: mux,
-	}
-
-	log.Printf("HTTP server running on %s", s.addr)
+	srv := &http.Server{Addr: g.addr, Handler: mux}
+	log.Printf("Gateway server running on %s", g.addr)
 	return srv.ListenAndServe()
 }
 
-func (s *httpServer) handleVerify(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+func (g *gatewayServer) handle(w http.ResponseWriter, r *http.Request) {
+	target, ok := g.targetFor(r.URL.Path)
+	if !ok {
+		http.NotFound(w, r)
 		return
 	}
 
-	token := extractToken(r.Header.Get("Authorization"))
-	if token == "" {
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte("missing token"))
+	id := generateID()
+	r.Header.Set("X-Request-ID", id)
+
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, target+r.URL.Path, r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	req.Header = r.Header.Clone()
 
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
+	resp, err := g.client.Do(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
 
-	resp, err := s.authClient.VerifyToken(ctx, &authpb.VerifyTokenInbound{Token: token})
-	if err != nil || !resp.Valid {
-		w.WriteHeader(http.StatusUnauthorized)
-		if err != nil {
-			w.Write([]byte(err.Error()))
-		} else {
-			w.Write([]byte(resp.Status))
+	for k, vv := range resp.Header {
+		for _, v := range vv {
+			w.Header().Add(k, v)
 		}
-		return
 	}
-
-	payload := map[string]any{
-		"user":   resp.User,
-		"status": resp.Status,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(payload)
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
 }
 
-// extractToken strips the bearer prefix from an Authorization header value.
-func extractToken(h string) string {
-	parts := strings.SplitN(h, " ", 2)
-	if len(parts) == 2 {
-		return parts[1]
+func (g *gatewayServer) targetFor(path string) (string, bool) {
+	for prefix, target := range g.services {
+		if len(path) >= len(prefix) && path[:len(prefix)] == prefix {
+			return target, true
+		}
 	}
-	return h
+	return "", false
+}
+
+func generateID() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(b)
 }
