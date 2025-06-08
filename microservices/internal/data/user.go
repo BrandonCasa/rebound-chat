@@ -13,31 +13,39 @@ type User struct {
 	Token       string
 }
 
-// UserStore provides simple in-memory storage for users.
-type UserStore struct {
+// UserStore defines basic operations for user storage.
+type UserStore interface {
+	Add(u *User)
+	Get(id string) (*User, bool)
+	FindByEmail(email string) (*User, bool)
+	FindByToken(token string) (*User, bool)
+}
+
+// InMemoryUserStore provides simple in-memory storage for users.
+type InMemoryUserStore struct {
 	mu    sync.RWMutex
 	users map[string]*User
 }
 
 // NewUserStore returns an in-memory user store.
-func NewUserStore() *UserStore {
-	return &UserStore{users: make(map[string]*User)}
+func NewUserStore() *InMemoryUserStore {
+	return &InMemoryUserStore{users: make(map[string]*User)}
 }
 
-func (s *UserStore) Add(u *User) {
+func (s *InMemoryUserStore) Add(u *User) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.users[u.ID] = u
 }
 
-func (s *UserStore) Get(id string) (*User, bool) {
+func (s *InMemoryUserStore) Get(id string) (*User, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	u, ok := s.users[id]
 	return u, ok
 }
 
-func (s *UserStore) FindByEmail(email string) (*User, bool) {
+func (s *InMemoryUserStore) FindByEmail(email string) (*User, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, u := range s.users {
@@ -48,7 +56,7 @@ func (s *UserStore) FindByEmail(email string) (*User, bool) {
 	return nil, false
 }
 
-func (s *UserStore) FindByToken(token string) (*User, bool) {
+func (s *InMemoryUserStore) FindByToken(token string) (*User, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, u := range s.users {

@@ -5,8 +5,11 @@ microservices. It provides two basic services and a gateway that also offers a
 REST interface:
 
 - **User Service** (`cmd/usersvc`) – handles registration, login and profile
-  retrieval. Data is stored in-memory for demonstration purposes.
-- **Chat Service** (`cmd/chatsvc`) – stores and lists messages for rooms.
+  retrieval. Data can be stored in-memory or in PostgreSQL when the
+  `POSTGRES_DSN` environment variable is provided.
+- **Chat Service** (`cmd/chatsvc`) – stores and lists messages for rooms. When
+  `CASSANDRA_HOSTS` and `CASSANDRA_KEYSPACE` are set, messages are persisted in
+  Cassandra; otherwise an in-memory store is used.
 - **Gateway** (`cmd/gateway`) – exposes the gRPC services over HTTP using
   grpc‑gateway. Clients can call endpoints like `/users/verify` and the gateway
   forwards the request to the appropriate microservice over gRPC.
@@ -33,3 +36,9 @@ backend.bat
 The scripts launch the user service, chat service and gateway on their default
 ports. Override `USERSVC_PORT`, `CHATSVC_PORT` and `GATEWAY_PORT` to change the
 listening ports.
+
+### Database configuration
+
+Set `POSTGRES_DSN` to enable PostgreSQL storage for the user service. For the
+chat service, provide `CASSANDRA_HOSTS` (comma separated) and
+`CASSANDRA_KEYSPACE` to store messages in Cassandra.

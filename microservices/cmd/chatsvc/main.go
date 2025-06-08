@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -15,7 +16,7 @@ import (
 
 type chatServer struct {
 	chatpb.UnimplementedChatServiceServer
-	store *data.MessageStore
+	store data.MessageStore
 }
 
 type MessageStore = data.MessageStore
@@ -54,7 +55,20 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
-	store := data.NewMessageStore()
+	var store data.MessageStore
+	cassHosts := os.Getenv("CASSANDRA_HOSTS")
+	keyspace := os.Getenv("CASSANDRA_KEYSPACE")
+	if cassHosts != "" && keyspace != "" {
+		hosts := strings.Split(cassHosts, ",")
+		cs, err := data.NewCassandraMessageStore(hosts, keyspace)
+		if err != nil {
+			log.Fatalf("failed to connect cassandra: %v", err)
+		}
+		store = cs
+		defer cs.Close()
+	} else {
+		store = data.NewMessageStore()
+	}
 	chatpb.RegisterChatServiceServer(s, &chatServer{store: store})
 	log.Printf("chat service listening on :%s", port)
 	if err := s.Serve(lis); err != nil {

@@ -17,7 +17,7 @@ import (
 
 type userServer struct {
 	userpb.UnimplementedUserServiceServer
-	store *data.UserStore
+	store data.UserStore
 }
 
 type UserStore = data.UserStore
@@ -77,7 +77,18 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
-	store := data.NewUserStore()
+	var store data.UserStore
+	dsn := os.Getenv("POSTGRES_DSN")
+	if dsn != "" {
+		pgStore, err := data.NewPostgresUserStore(dsn)
+		if err != nil {
+			log.Fatalf("failed to connect postgres: %v", err)
+		}
+		store = pgStore
+		defer pgStore.Close()
+	} else {
+		store = data.NewUserStore()
+	}
 	userpb.RegisterUserServiceServer(s, &userServer{store: store})
 	log.Printf("user service listening on :%s", port)
 	if err := s.Serve(lis); err != nil {
