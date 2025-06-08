@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net"
+	"os"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -44,14 +45,18 @@ func (s *chatServer) ListMessages(ctx context.Context, req *chatpb.ListRequest) 
 }
 
 func main() {
-	lis, err := net.Listen("tcp", ":50052")
+	port := os.Getenv("CHATSVC_PORT")
+	if port == "" {
+		port = "50052"
+	}
+	lis, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
 	store := data.NewMessageStore()
 	chatpb.RegisterChatServiceServer(s, &chatServer{store: store})
-	log.Println("chat service listening on :50052")
+	log.Printf("chat service listening on :%s", port)
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
