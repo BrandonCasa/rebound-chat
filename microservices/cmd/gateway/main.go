@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
@@ -20,15 +21,29 @@ func main() {
 	mux := runtime.NewServeMux()
 	opts := []grpc.DialOption{grpc.WithInsecure()}
 
-	if err := userpb.RegisterUserServiceHandlerFromEndpoint(ctx, mux, "localhost:50051", opts); err != nil {
+	userAddr := os.Getenv("USERSVC_ADDR")
+	if userAddr == "" {
+		userAddr = "localhost:50051"
+	}
+	chatAddr := os.Getenv("CHATSVC_ADDR")
+	if chatAddr == "" {
+		chatAddr = "localhost:50052"
+	}
+
+	if err := userpb.RegisterUserServiceHandlerFromEndpoint(ctx, mux, userAddr, opts); err != nil {
 		log.Fatalf("failed to register user service: %v", err)
 	}
-	if err := chatpb.RegisterChatServiceHandlerFromEndpoint(ctx, mux, "localhost:50052", opts); err != nil {
+	if err := chatpb.RegisterChatServiceHandlerFromEndpoint(ctx, mux, chatAddr, opts); err != nil {
 		log.Fatalf("failed to register chat service: %v", err)
 	}
 
-	log.Println("gateway listening on :8080")
-	if err := http.ListenAndServe(":8080", mux); err != nil {
+	port := os.Getenv("GATEWAY_PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	log.Printf("gateway listening on :%s", port)
+	if err := http.ListenAndServe(":"+port, mux); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
 }

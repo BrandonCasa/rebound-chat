@@ -4,9 +4,12 @@ import (
 	"context"
 	"log"
 	"net"
+	"os"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"rebound-chat/microservices/internal/data"
 	userpb "rebound-chat/microservices/proto/user"
@@ -17,7 +20,7 @@ type userServer struct {
 	store *data.UserStore
 }
 
-type UserStore = data.userStore
+type UserStore = data.UserStore
 
 func (s *userServer) Register(ctx context.Context, req *userpb.RegisterRequest) (*userpb.AuthResponse, error) {
 	id := uuid.NewString()
@@ -37,7 +40,7 @@ func (s *userServer) Login(ctx context.Context, req *userpb.LoginRequest) (*user
 	if u, ok := s.store.FindByEmail(req.Email); ok && u.Password == req.Password {
 		return &userpb.AuthResponse{UserId: u.ID, Token: "token-placeholder"}, nil
 	}
-	return nil, grpc.Errorf(grpc.Code(grpc.Unauthenticated), "invalid credentials")
+	return nil, status.Errorf(codes.Unauthenticated, "invalid credentials")
 }
 
 func (s *userServer) GetProfile(ctx context.Context, req *userpb.ProfileRequest) (*userpb.ProfileResponse, error) {
@@ -49,18 +52,22 @@ func (s *userServer) GetProfile(ctx context.Context, req *userpb.ProfileRequest)
 			Bio:         u.Bio,
 		}, nil
 	}
-	return nil, grpc.Errorf(grpc.Code(grpc.NotFound), "user not found")
+	return nil, status.Errorf(codes.NotFound, "user not found")
 }
 
 func main() {
-	lis, err := net.Listen("tcp", ":50051")
+	port := os.Getenv("USERSVC_PORT")
+	if port == "" {
+		port = "50051"
+	}
+	lis, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
 	store := data.NewUserStore()
 	userpb.RegisterUserServiceServer(s, &userServer{store: store})
-	log.Println("user service listening on :50051")
+	log.Printf("user service listening on :%s", port)
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
