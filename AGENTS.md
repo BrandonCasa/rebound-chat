@@ -10,11 +10,19 @@
 - Run test commands before committing any changes.
 - Frontend testing: (when ran from the repo root folder) `pnpm test`
 - Backend testing: (when ran from the server folder) `pnpm test`
+- Frontend test scripts are located in `src/__tests__`
+- Backend test scripts are located in `server/tests/`
+
+## Documentation
+
+- Backend documentation is located in `server_docs/`
+- Frontend documentation doesn't exist yet
 
 ## Coding Guidelines
 
 - Keep tests and documentation in sync with code changes.
-- Check for tests which reference components you modify, and if your changes require those tests to be updated, if so, update the tests.
+- When modifying frontend code, ensure any affected frontend tests are also updated to cover your changes.
+- When modifying backend code, ensure any affected backend tests are also updated to cover your changes.
 
 ## Search Tips
 
