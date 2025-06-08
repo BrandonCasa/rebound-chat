@@ -10,6 +10,7 @@ type User struct {
 	DisplayName string
 	Bio         string
 	Password    string
+	Token       string
 }
 
 // UserStore provides simple in-memory storage for users.
@@ -41,6 +42,17 @@ func (s *UserStore) FindByEmail(email string) (*User, bool) {
 	defer s.mu.RUnlock()
 	for _, u := range s.users {
 		if u.Email == email {
+			return u, true
+		}
+	}
+	return nil, false
+}
+
+func (s *UserStore) FindByToken(token string) (*User, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, u := range s.users {
+		if u.Token == token {
 			return u, true
 		}
 	}

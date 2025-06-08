@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.3.0
 // - protoc             v3.21.12
-// source: proto/user/user.proto
+// source: user/user.proto
 
 package userpb
 
@@ -22,6 +22,7 @@ const (
 	UserService_Register_FullMethodName   = "/user.UserService/Register"
 	UserService_Login_FullMethodName      = "/user.UserService/Login"
 	UserService_GetProfile_FullMethodName = "/user.UserService/GetProfile"
+	UserService_Verify_FullMethodName     = "/user.UserService/Verify"
 )
 
 // UserServiceClient is the client API for UserService service.
@@ -31,6 +32,7 @@ type UserServiceClient interface {
 	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*AuthResponse, error)
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*AuthResponse, error)
 	GetProfile(ctx context.Context, in *ProfileRequest, opts ...grpc.CallOption) (*ProfileResponse, error)
+	Verify(ctx context.Context, in *VerifyRequest, opts ...grpc.CallOption) (*VerifyResponse, error)
 }
 
 type userServiceClient struct {
@@ -68,6 +70,15 @@ func (c *userServiceClient) GetProfile(ctx context.Context, in *ProfileRequest, 
 	return out, nil
 }
 
+func (c *userServiceClient) Verify(ctx context.Context, in *VerifyRequest, opts ...grpc.CallOption) (*VerifyResponse, error) {
+	out := new(VerifyResponse)
+	err := c.cc.Invoke(ctx, UserService_Verify_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // UserServiceServer is the server API for UserService service.
 // All implementations must embed UnimplementedUserServiceServer
 // for forward compatibility
@@ -75,6 +86,7 @@ type UserServiceServer interface {
 	Register(context.Context, *RegisterRequest) (*AuthResponse, error)
 	Login(context.Context, *LoginRequest) (*AuthResponse, error)
 	GetProfile(context.Context, *ProfileRequest) (*ProfileResponse, error)
+	Verify(context.Context, *VerifyRequest) (*VerifyResponse, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
 
@@ -90,6 +102,9 @@ func (UnimplementedUserServiceServer) Login(context.Context, *LoginRequest) (*Au
 }
 func (UnimplementedUserServiceServer) GetProfile(context.Context, *ProfileRequest) (*ProfileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetProfile not implemented")
+}
+func (UnimplementedUserServiceServer) Verify(context.Context, *VerifyRequest) (*VerifyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Verify not implemented")
 }
 func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
 
@@ -158,6 +173,24 @@ func _UserService_GetProfile_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_Verify_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).Verify(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_Verify_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).Verify(ctx, req.(*VerifyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -177,7 +210,11 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "GetProfile",
 			Handler:    _UserService_GetProfile_Handler,
 		},
+		{
+			MethodName: "Verify",
+			Handler:    _UserService_Verify_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/user/user.proto",
+	Metadata: "user/user.proto",
 }

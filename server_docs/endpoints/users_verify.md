@@ -10,3 +10,4 @@ Validates a JWT sent in the `Authorization` header and returns authentication da
   - `401` – invalid token or deactivated account.
 
 Internally the endpoint decodes the token with the server secret, loads the user and ensures the account is active.
+When the Go microservice backend is running, this request is handled by the gateway which forwards it to the `Verify` gRPC method on the user service.

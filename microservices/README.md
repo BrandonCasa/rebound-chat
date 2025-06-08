@@ -1,13 +1,15 @@
 # Microservices
 
 This directory contains a prototype Go implementation of the backend using gRPC
-microservices. It provides two basic services and a gateway:
+microservices. It provides two basic services and a gateway that also offers a
+REST interface:
 
 - **User Service** (`cmd/usersvc`) – handles registration, login and profile
   retrieval. Data is stored in-memory for demonstration purposes.
 - **Chat Service** (`cmd/chatsvc`) – stores and lists messages for rooms.
 - **Gateway** (`cmd/gateway`) – exposes the gRPC services over HTTP using
-  grpc‑gateway.
+  grpc‑gateway. Clients can call endpoints like `/users/verify` and the gateway
+  forwards the request to the appropriate microservice over gRPC.
 
 Protobuf definitions are under `proto/` and can be regenerated with `make proto`.
 

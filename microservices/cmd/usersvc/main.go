@@ -24,6 +24,7 @@ type UserStore = data.UserStore
 
 func (s *userServer) Register(ctx context.Context, req *userpb.RegisterRequest) (*userpb.AuthResponse, error) {
 	id := uuid.NewString()
+	token := uuid.NewString()
 	s.store.Add(&data.User{
 		ID:          id,
 		Username:    req.Username,
@@ -31,20 +32,24 @@ func (s *userServer) Register(ctx context.Context, req *userpb.RegisterRequest) 
 		DisplayName: req.DisplayName,
 		Bio:         req.Bio,
 		Password:    req.Password,
+		Token:       token,
 	})
-	// token generation skipped for brevity
-	return &userpb.AuthResponse{UserId: id, Token: "token-placeholder"}, nil
+	return &userpb.AuthResponse{UserId: id, Token: token}, nil
 }
 
 func (s *userServer) Login(ctx context.Context, req *userpb.LoginRequest) (*userpb.AuthResponse, error) {
 	if u, ok := s.store.FindByEmail(req.Email); ok && u.Password == req.Password {
-		return &userpb.AuthResponse{UserId: u.ID, Token: "token-placeholder"}, nil
+		u.Token = uuid.NewString()
+		return &userpb.AuthResponse{UserId: u.ID, Token: u.Token}, nil
 	}
 	return nil, status.Errorf(codes.Unauthenticated, "invalid credentials")
 }
 
 func (s *userServer) GetProfile(ctx context.Context, req *userpb.ProfileRequest) (*userpb.ProfileResponse, error) {
 	if u, ok := s.store.Get(req.Id); ok {
+		if req.Token != "" && u.Token != req.Token {
+			return nil, status.Errorf(codes.PermissionDenied, "invalid token")
+		}
 		return &userpb.ProfileResponse{
 			UserId:      u.ID,
 			Username:    u.Username,
@@ -53,6 +58,13 @@ func (s *userServer) GetProfile(ctx context.Context, req *userpb.ProfileRequest)
 		}, nil
 	}
 	return nil, status.Errorf(codes.NotFound, "user not found")
+}
+
+func (s *userServer) Verify(ctx context.Context, req *userpb.VerifyRequest) (*userpb.VerifyResponse, error) {
+	if u, ok := s.store.FindByToken(req.Token); ok {
+		return &userpb.VerifyResponse{UserId: u.ID, Valid: true}, nil
+	}
+	return &userpb.VerifyResponse{Valid: false}, nil
 }
 
 func main() {

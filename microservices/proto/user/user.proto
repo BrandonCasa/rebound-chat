@@ -1,11 +1,32 @@
 syntax = "proto3";
 package user;
 option go_package = "rebound-chat/microservices/proto/user;userpb";
+import "google/api/annotations.proto";
 
 service UserService {
-  rpc Register(RegisterRequest) returns (AuthResponse);
-  rpc Login(LoginRequest) returns (AuthResponse);
-  rpc GetProfile(ProfileRequest) returns (ProfileResponse);
+  rpc Register(RegisterRequest) returns (AuthResponse) {
+    option (google.api.http) = {
+      post: "/users/register"
+      body: "*"
+    };
+  }
+  rpc Login(LoginRequest) returns (AuthResponse) {
+    option (google.api.http) = {
+      post: "/users/login"
+      body: "*"
+    };
+  }
+  rpc GetProfile(ProfileRequest) returns (ProfileResponse) {
+    option (google.api.http) = {
+      get: "/users/profile"
+    };
+  }
+  rpc Verify(VerifyRequest) returns (VerifyResponse) {
+    option (google.api.http) = {
+      post: "/users/verify"
+      body: "*"
+    };
+  }
 }
 
 message RegisterRequest {
@@ -36,4 +57,13 @@ message ProfileResponse {
   string username = 2;
   string display_name = 3;
   string bio = 4;
+}
+
+message VerifyRequest {
+  string token = 1;
+}
+
+message VerifyResponse {
+  string user_id = 1;
+  bool valid = 2;
 }

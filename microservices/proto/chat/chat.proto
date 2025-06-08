@@ -1,10 +1,20 @@
 syntax = "proto3";
 package chat;
 option go_package = "rebound-chat/microservices/proto/chat;chatpb";
+import "google/api/annotations.proto";
 
 service ChatService {
-  rpc SendMessage(MessageRequest) returns (MessageResponse);
-  rpc ListMessages(ListRequest) returns (MessageListResponse);
+  rpc SendMessage(MessageRequest) returns (MessageResponse) {
+    option (google.api.http) = {
+      post: "/rooms/{room_id}/messages"
+      body: "*"
+    };
+  }
+  rpc ListMessages(ListRequest) returns (MessageListResponse) {
+    option (google.api.http) = {
+      get: "/rooms/{room_id}/messages"
+    };
+  }
 }
 
 message MessageRequest {
