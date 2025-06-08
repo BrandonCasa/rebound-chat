@@ -148,3 +148,7 @@ npm test
 
 Test helpers currently contain placeholders that will be filled out when the
 scenarios listed in `tests-todo.txt` are implemented.
+
+### API Reference
+
+Detailed backend documentation, including per-endpoint descriptions and Socket.IO events, is available in [server_docs](server_docs/README.md).
