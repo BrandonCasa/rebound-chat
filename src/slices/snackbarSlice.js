@@ -1,35 +1,34 @@
 import { createSlice } from "@reduxjs/toolkit";
 
 const initialState = {
-  snackbarList: {},
+	snackbarList: {},
 };
 
 const snackbarSlice = createSlice({
-  name: "snackbars",
-  initialState,
-  reducers: {
-    removeSnackbar: (state, action) => {
-      // action.payload = {snackbarId}
-      delete state.snackbarList[action.payload.snackbarId];
-    },
-    addSnackbar: (state, action) => {
-      // [snackbarMsg, snackbarSeverity, autoHideDuration]
-      const snackbarNewId =
-        new Date().getTime() + Math.floor(Math.random() * 500);
-      state.snackbarList[snackbarNewId] = {
-        snackbarProps: {
-          open: true,
-          autoHideDuration: action.payload.autoHideDuration,
-        },
-        alertProps: {
-          severity: action.payload.snackbarSeverity,
-          variant: action.payload?.snackbarVariant || "filled",
-          sx: { width: "100%" },
-        },
-        childText: action.payload.snackbarMsg,
-      };
-    },
-  },
+	name: "snackbars",
+	initialState,
+	reducers: {
+		removeSnackbar: (state, action) => {
+			// action.payload = {snackbarId}
+			delete state.snackbarList[action.payload.snackbarId];
+		},
+		addSnackbar: (state, action) => {
+			// [snackbarMsg, snackbarSeverity, autoHideDuration]
+			const snackbarNewId = new Date().getTime() + Math.floor(Math.random() * 500);
+			state.snackbarList[snackbarNewId] = {
+				snackbarProps: {
+					open: true,
+					autoHideDuration: action.payload.autoHideDuration,
+				},
+				alertProps: {
+					severity: action.payload.snackbarSeverity,
+					variant: action.payload?.snackbarVariant || "filled",
+					sx: { width: "100%" },
+				},
+				childText: action.payload.snackbarMsg,
+			};
+		},
+	},
 });
 
 export const { addSnackbar, removeSnackbar } = snackbarSlice.actions;

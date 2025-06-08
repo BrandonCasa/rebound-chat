@@ -5,14 +5,16 @@
 - Use **Node.js** with `pnpm`.
 - Run `pnpm install` from the repo root; this installs frontend dependencies and, via the `postinstall` script, installs server dependencies and prepares the build directory.
 
-Run test commands before committing any changes.
+## Testing
+
+- Run test commands before committing any changes.
+- Frontend testing: (when ran from the repo root folder) `pnpm test`
+- Backend testing: (when ran from the server folder) `pnpm test`
 
 ## Coding Guidelines
 
-- Anytime you finish working on a file, prior to commiting it (if the file is JavaScript/JSX) run `pnpm prettier {the file --write` on it.
-- Avoid committing build artifacts (`dist/`, `app/`, etc., already ignored).
 - Keep tests and documentation in sync with code changes.
-- Check for tests which reference components you modify, and if your changes require those tests to be updated.
+- Check for tests which reference components you modify, and if your changes require those tests to be updated, if so, update the tests.
 
 ## Search Tips
 
@@ -24,3 +26,4 @@ Run test commands before committing any changes.
   - `app/`
   - `server/dev/`
   - `server/logs/`
+  - Also ignore any other directories you think should be ignored for what you're doing.

@@ -10,40 +10,40 @@ import "dotenv/config";
 const router = Router();
 
 router.put("/dev/database/wipe", async function (req, res, _next) {
-  if (process.env.NODE_ENV !== "development") {
-    return res.sendStatus(403);
-  }
+	if (process.env.NODE_ENV !== "development") {
+		return res.sendStatus(403);
+	}
 
-  await FriendModel.deleteMany({});
-  await UserModel.deleteMany({});
-  await RoomModel.deleteMany({});
-  await MessageModel.deleteMany({});
+	await FriendModel.deleteMany({});
+	await UserModel.deleteMany({});
+	await RoomModel.deleteMany({});
+	await MessageModel.deleteMany({});
 
-  logger.info("Development Database Wiped.");
+	logger.info("Development Database Wiped.");
 
-  return res.sendStatus(200);
+	return res.sendStatus(200);
 });
 
 router.post("/dev/database/testroom", async function (req, res, next) {
-  if (process.env.NODE_ENV !== "development") {
-    return res.sendStatus(403);
-  }
+	if (process.env.NODE_ENV !== "development") {
+		return res.sendStatus(403);
+	}
 
-  let testRoom = new RoomModel();
-  testRoom.name = "Test Room";
-  testRoom.description = "The testing chat room.";
+	let testRoom = new RoomModel();
+	testRoom.name = "Test Room";
+	testRoom.description = "The testing chat room.";
 
-  testRoom
-    .save()
-    .then(function () {
-      logger.info("Test Room Created.");
+	testRoom
+		.save()
+		.then(function () {
+			logger.info("Test Room Created.");
 
-      return res.status(200).json({ roomId: testRoom._id });
-    })
-    .catch((err) => {
-      next(err);
-      return res.sendStatus(500);
-    });
+			return res.status(200).json({ roomId: testRoom._id });
+		})
+		.catch((err) => {
+			next(err);
+			return res.sendStatus(500);
+		});
 });
 
 export default router;

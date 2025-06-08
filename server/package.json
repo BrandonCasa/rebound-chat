@@ -9,7 +9,7 @@
 	"main": "./src/app.js",
 	"scripts": {
 		"dev": "npx kill-port 6001 && npx kill-port 27017 && cross-env NODE_ENV=development nodemon ./src/app.js",
-		"test": "cross-env NODE_ENV=test mocha \"./tests/**/*.spec.js\" --timeout 60000 --exit"
+		"test": "cross-env NODE_ENV=test mocha \"./tests/**/*.spec.js\" --timeout 20000 --exit"
 	},
 	"author": {
 		"name": "Brandon Casamichana",

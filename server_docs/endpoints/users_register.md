@@ -7,13 +7,13 @@ Creates a new user account.
 - **Request Body**:
   ```json
   {
-    "user": {
-      "username": "name",
-      "email": "user@example.com",
-      "displayName": "Name",
-      "bio": "Optional bio",
-      "password": "atLeast8Chars"
-    }
+  	"user": {
+  		"username": "name",
+  		"email": "user@example.com",
+  		"displayName": "Name",
+  		"bio": "Optional bio",
+  		"password": "atLeast8Chars"
+  	}
   }
   ```
 - **Responses**:

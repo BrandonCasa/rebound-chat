@@ -4,7 +4,7 @@ import { setupListeners } from "@reduxjs/toolkit/query";
 import rootReducer from "./slices";
 
 const store = configureStore({
-  reducer: rootReducer,
+	reducer: rootReducer,
 });
 
 setupListeners(store.dispatch);

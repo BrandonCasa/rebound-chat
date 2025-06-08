@@ -6,10 +6,10 @@ import settingsReducer from "./settingsSlice";
 import snackbarReducer from "./snackbarSlice";
 
 const rootReducer = combineReducers({
-  dialogs: dialogReducer,
-  auth: authReducer,
-  snackbars: snackbarReducer,
-  settings: settingsReducer,
+	dialogs: dialogReducer,
+	auth: authReducer,
+	snackbars: snackbarReducer,
+	settings: settingsReducer,
 });
 
 export default rootReducer;

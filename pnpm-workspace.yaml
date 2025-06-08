@@ -1,6 +1,6 @@
 packages:
-  - '.'
-  - 'server'
+  - "."
+  - "server"
 
 onlyBuiltDependencies:
   - esbuild

@@ -7,10 +7,10 @@ Authenticates a user with email and password using Passport's local strategy.
 - **Request Body**:
   ```json
   {
-    "user": {
-      "email": "user@example.com",
-      "password": "secret"
-    }
+  	"user": {
+  		"email": "user@example.com",
+  		"password": "secret"
+  	}
   }
   ```
 - **Responses**:

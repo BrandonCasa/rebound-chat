@@ -10,15 +10,15 @@ After a successful connection the server emits:
 
 Client‑initiated events handled in `server/src/socketio/rooms.js`:
 
-| Event | Arguments | Description |
-|-------|-----------|-------------|
-| `list_rooms` | – | Request the list of available chat rooms. Server replies with `room_list`. |
-| `make_room` | `name`, `description` | Create a new chat room. Server replies with `room_created`. |
-| `join_room` | `roomId` | Join an existing room. Server emits `joined_room` with the room id and message history and broadcasts `user_list` to all sockets in the room. |
-| `leave_room` | `roomId?` | Leave a specific room or all joined rooms. |
-| `message_room` | `roomId`, `content` | Send a message to a room. Sender receives `message_sent`; others get `new_message`. |
-| `edit_message` | `roomId`, `messageId`, `content` | Edit a previously sent message. Room participants receive `messages_updated`. |
-| `delete_message` | `roomId`, `messageId` | Delete one of the sender's messages. Room participants receive `messages_updated`. |
+| Event            | Arguments                        | Description                                                                                                                                   |
+| ---------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_rooms`     | –                                | Request the list of available chat rooms. Server replies with `room_list`.                                                                    |
+| `make_room`      | `name`, `description`            | Create a new chat room. Server replies with `room_created`.                                                                                   |
+| `join_room`      | `roomId`                         | Join an existing room. Server emits `joined_room` with the room id and message history and broadcasts `user_list` to all sockets in the room. |
+| `leave_room`     | `roomId?`                        | Leave a specific room or all joined rooms.                                                                                                    |
+| `message_room`   | `roomId`, `content`              | Send a message to a room. Sender receives `message_sent`; others get `new_message`.                                                           |
+| `edit_message`   | `roomId`, `messageId`, `content` | Edit a previously sent message. Room participants receive `messages_updated`.                                                                 |
+| `delete_message` | `roomId`, `messageId`            | Delete one of the sender's messages. Room participants receive `messages_updated`.                                                            |
 
 Server‑emitted events related to rooms:
 
@@ -35,12 +35,11 @@ Server‑emitted events related to rooms:
 
 Handlers in `server/src/socketio/watchers.js` let sockets watch user profiles for changes.
 
-| Event | Arguments | Description |
-|-------|-----------|-------------|
-| `watch_user` | `userId` | Start receiving updates when that user's profile changes. |
-| `unwatch_user` | `userId` | Stop watching a user. |
+| Event          | Arguments | Description                                               |
+| -------------- | --------- | --------------------------------------------------------- |
+| `watch_user`   | `userId`  | Start receiving updates when that user's profile changes. |
+| `unwatch_user` | `userId`  | Stop watching a user.                                     |
 
 When a watched user saves changes, the server emits to each watcher:
 
 - `watched_user_saved` – `[userId, publicInfo, privateInfo]` where `publicInfo` contains the public profile fields computed for the watcher and `privateInfo` contains private fields only if the watcher is the owner.
-

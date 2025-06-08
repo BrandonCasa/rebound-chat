@@ -7,4 +7,3 @@ The server runs an HTTP API alongside a Socket.IO real‑time service. It uses a
 3. **Routing** – all API routes are mounted under `/api`. File downloads are served from `/content/:filename`.
 4. **Socket.IO** – a separate Socket.IO instance listens on port `6002`. JWT tokens are validated during the WebSocket handshake. When a client connects the server wires up chat room and watcher handlers and emits a `connected` event.
 5. **Graceful Shutdown** – `ServerBackend` exposes `startBackend`, `stopBackend` and `handleShutdown` to close the Socket.IO server, database and HTTP server in order.
-

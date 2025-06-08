@@ -75,7 +75,8 @@ const App = () => {
 			const verifyUser = async () => {
 				if (authState.authToken && !authState.loggedIn) {
 					dispatch(setLoggingIn({ loggingIn: true }));
-					let requestStringBase = process.env.NODE_ENV === "development" ? `http://localhost:6001/api` : window.isElectron ? `https://rebound.nexus/api` : "/api";
+					let requestStringBase =
+						process.env.NODE_ENV === "development" ? `http://localhost:6001/api` : window.isElectron ? `https://rebound.nexus/api` : "/api";
 					let requestString = `${requestStringBase}/users/verify`;
 
 					try {

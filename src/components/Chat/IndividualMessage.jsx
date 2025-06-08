@@ -71,15 +71,13 @@ function IndividualMessage({
 			}}
 			onContextMenu={handleContext}
 			onTouchStart={handleTouchStart}
-			onTouchEnd={handleTouchEnd}
-		>
+			onTouchEnd={handleTouchEnd}>
 			<Box
 				sx={{
 					display: shouldDisplayAvatar ? "inherit" : "none",
 					marginBottom: "-12px",
 					width: "100%",
-				}}
-			>
+				}}>
 				<Avatar
 					alt="User"
 					src={msg.sender.avatarUrl || (window.isElectron ? "defaultpfp.webp" : "/defaultpfp.webp")}
@@ -100,8 +98,7 @@ function IndividualMessage({
 					underline="hover"
 					variant="h6"
 					ref={messageRef}
-					onClick={() => onClickMessage(messageRef, msg.sender)}
-				>
+					onClick={() => onClickMessage(messageRef, msg.sender)}>
 					{msg.sender.displayName}
 				</Link>
 				<Typography fontSize={11} sx={{ color: theme.palette.text.secondary }} variant="overline" textTransform="initial">
@@ -114,18 +111,19 @@ function IndividualMessage({
 					paddingLeft: "48px",
 				}}
 				onMouseEnter={onHoverStart}
-				onMouseLeave={onHoverEnd}
-			>
+				onMouseLeave={onHoverEnd}>
 				<Box
 					sx={{
 						paddingLeft: hoveredMessage === currentMsg && hoveredBlock === currentBlock && editingMessageId !== msg._id ? 1 : 0,
-						background: (hoveredMessage === currentMsg && hoveredBlock === currentBlock) || editingMessageId === msg._id ? `${theme.palette.text.secondary}20` : "inherit",
+						background:
+							(hoveredMessage === currentMsg && hoveredBlock === currentBlock) || editingMessageId === msg._id
+								? `${theme.palette.text.secondary}20`
+								: "inherit",
 						borderRadius: 1,
 						transition: "padding-left 0.1s ease-in-out, background 0.05s ease-in-out",
 						display: "flex",
 						justifyContent: "space-between",
-					}}
-				>
+					}}>
 					{editingMessageId === msg._id ? (
 						<Box sx={{ display: "flex", gap: 1, width: "100%", justifyContent: "space-between", alignItems: "center", padding: 1 }}>
 							<TextField

@@ -5,14 +5,14 @@ import { startServer, stopServer } from "./helpers/server.js";
 chai.use(chaiHttp);
 
 before(async () => {
-  await startServer();
+	await startServer();
 });
 
 after(async () => {
-  await stopServer();
+	await stopServer();
 });
 
 describe("Development utilities", () => {
-  it("wipes the database");
-  it("creates a test room");
+	it("wipes the database");
+	it("creates a test room");
 });
