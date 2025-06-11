@@ -1,5 +1,23 @@
-export default function cacheMedia(url) {
-	if (!url) return null;
-	const cleaned = url.replace(/([?&])t=\d+(&)?/, (_, sep, trailing) => (trailing ? sep : ""));
-	return `${cleaned}${cleaned.includes("?") ? "&" : "?"}t=${Date.now()}`;
+export default async function cacheMedia(url) {
+    if (!url) return null;
+    if (typeof window === "undefined" || !("caches" in window)) {
+        return url;
+    }
+    try {
+        const cache = await caches.open("media-cache");
+        let response = await cache.match(url);
+        if (!response) {
+            response = await fetch(url, { credentials: "include" });
+            if (response.ok) {
+                cache.put(url, response.clone());
+            } else {
+                return url;
+            }
+        }
+        const blob = await response.blob();
+        return URL.createObjectURL(blob);
+    } catch (err) {
+        console.error("cacheMedia failed", err);
+        return url;
+    }
 }

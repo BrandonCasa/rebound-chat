@@ -22,8 +22,8 @@ export const fetchUserProfile = createAsyncThunk(
                 id: u.id,
                 profile: {
                     ...u,
-                    avatarUrl: u.avatarUrl ? cacheMedia(base + u.avatarUrl) : null,
-                    bannerUrl: u.bannerUrl ? cacheMedia(base + u.bannerUrl) : null,
+                    avatarUrl: u.avatarUrl ? await cacheMedia(base + u.avatarUrl) : null,
+                    bannerUrl: u.bannerUrl ? await cacheMedia(base + u.bannerUrl) : null,
                 },
             };
         } catch (err) {
@@ -45,8 +45,8 @@ export const modifyProfile = createAsyncThunk(
                 id: u.id,
                 profile: {
                     ...u,
-                    avatarUrl: u.avatarUrl ? cacheMedia(base + u.avatarUrl) : null,
-                    bannerUrl: u.bannerUrl ? cacheMedia(base + u.bannerUrl) : null,
+                    avatarUrl: u.avatarUrl ? await cacheMedia(base + u.avatarUrl) : null,
+                    bannerUrl: u.bannerUrl ? await cacheMedia(base + u.bannerUrl) : null,
                 },
             };
         } catch (err) {

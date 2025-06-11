@@ -2,12 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { fetchUserProfile, friendAction } from "../../slices/userApiSlice";
 import socketIoHelper from "../../helpers/socket";
-import cacheMedia from "../../helpers/cacheMedia";
-import { getApiBase } from "../../helpers/api";
-
-const REQUEST_BASE = getApiBase();
-const API_BASE = `${REQUEST_BASE}/users`;
-
 async function getUserInfo(userId, authToken, dispatch) {
         try {
                 const { profile } = await dispatch(

@@ -5,14 +5,16 @@ import cacheMedia from "../helpers/cacheMedia";
 
 const base = getApiBase();
 
-export const mapMessages = (msgs) =>
-    msgs.map((m) => ({
-        ...m,
-        sender: {
-            ...m.sender,
-            avatarUrl: m.sender?.avatarUrl ? cacheMedia(base + m.sender.avatarUrl) : null,
-        },
-    }));
+export const mapMessages = async (msgs) =>
+    Promise.all(
+        msgs.map(async (m) => ({
+            ...m,
+            sender: {
+                ...m.sender,
+                avatarUrl: m.sender?.avatarUrl ? await cacheMedia(base + m.sender.avatarUrl) : null,
+            },
+        }))
+    );
 
 export const fetchRoomMessages = createAsyncThunk(
     "chatApi/fetchRoomMessages",
@@ -21,7 +23,7 @@ export const fetchRoomMessages = createAsyncThunk(
             const { data } = await axios.get(`${base}/rooms/${roomId}/messages`, {
                 headers: { Authorization: `Bearer ${authToken}` },
             });
-            return { roomId, messages: mapMessages(data.messages) };
+            return { roomId, messages: await mapMessages(data.messages) };
         } catch (err) {
             return rejectWithValue(err.response?.data || err.message);
         }

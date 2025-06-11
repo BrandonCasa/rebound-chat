@@ -59,18 +59,18 @@ export default function useChatPage() {
 					);
 				}
 			});
-			socket.on("joined_room", (_id, msgs) => {
-				setMessages(mapMessages(msgs));
-			});
-			socket.on("message_sent", (_id, msgs) => {
-				setMessages(mapMessages(msgs));
-			});
-			socket.on("new_message", (_id, msgs) => {
-				setMessages(mapMessages(msgs));
-			});
-			socket.on("messages_updated", (_id, msgs) => {
-				setMessages(mapMessages(msgs));
-			});
+                        socket.on("joined_room", async (_id, msgs) => {
+                                setMessages(await mapMessages(msgs));
+                        });
+                        socket.on("message_sent", async (_id, msgs) => {
+                                setMessages(await mapMessages(msgs));
+                        });
+                        socket.on("new_message", async (_id, msgs) => {
+                                setMessages(await mapMessages(msgs));
+                        });
+                        socket.on("messages_updated", async (_id, msgs) => {
+                                setMessages(await mapMessages(msgs));
+                        });
 			socket.on("user_list", (_roomId, list, sender, evt) => {
 				if (sender.id !== authState.userId) {
 					dispatch(
