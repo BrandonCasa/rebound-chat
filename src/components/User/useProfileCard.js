@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import axios from "axios";
 import { useSelector, useDispatch } from "react-redux";
 import socketIoHelper from "../../helpers/socket";
 import { addSnackbar } from "../../slices/snackbarSlice";
 import { setLoggedIn } from "../../slices/authSlice";
+import { friendAction, modifyProfile } from "../../slices/userApiSlice";
 import cacheMedia from "../../helpers/cacheMedia";
 import { getApiBase } from "../../helpers/api";
 
@@ -110,79 +110,64 @@ export default function useProfileCard(user, forceSelf) {
 		return rel.requester === auth.userId ? { status: "sent", friendId: rel._id } : { status: "received", friendId: rel._id };
 	}, [profile.friends, isSelf, auth.userId]);
 
-	const callApi = (ep, data, msg, sev = "success") =>
-		axios
-			.put(`${API_BASE}/${ep}`, data, {
-				headers: { Authorization: `Bearer ${auth.authToken}` },
-			})
-			.then(() =>
-				dispatch(
-					addSnackbar({
-						snackbarMsg: msg,
-						snackbarSeverity: sev,
-						autoHideDuration: 1500,
-					})
-				)
-			)
-			.catch(() =>
-				dispatch(
-					addSnackbar({
-						snackbarMsg: "Error",
-						snackbarSeverity: "error",
-						autoHideDuration: 1500,
-					})
-				)
-			);
+       const callApi = (ep, data, msg, sev = "success") => {
+               dispatch(
+                       friendAction({
+                               ep,
+                               data,
+                               authToken: auth.authToken,
+                               message: msg,
+                               severity: sev,
+                       })
+               );
+       };
 
-	const saveProfile = () => {
-		const fd = new FormData();
-		fd.append("displayName", name);
-		fd.append("bio", bio);
-		if (banner.file) fd.append("banner", banner.file);
-		if (avatar.file) fd.append("avatar", avatar.file);
+       const saveProfile = () => {
+               const fd = new FormData();
+               fd.append("displayName", name);
+               fd.append("bio", bio);
+               if (banner.file) fd.append("banner", banner.file);
+               if (avatar.file) fd.append("avatar", avatar.file);
 
-		axios
-			.put(`${API_BASE}/modify`, fd, {
-				headers: { Authorization: `Bearer ${auth.authToken}` },
-			})
-			.then(({ data }) => {
-				const u = data.user;
-				const full = {
-					...u,
-					avatarUrl: u.avatarUrl ? cacheMedia(REQUEST_BASE + u.avatarUrl) : null,
-					bannerUrl: u.bannerUrl ? cacheMedia(REQUEST_BASE + u.bannerUrl) : null,
-				};
-				dispatch(
-					setLoggedIn({
-						avatarUrl: full.avatarUrl,
-						bannerUrl: full.bannerUrl,
-						displayName: full.displayName,
-						username: full.username,
-						bio: full.bio,
-					})
-				);
-				setProfile((p) => ({ ...p, ...full }));
-				dispatch(
-					addSnackbar({
-						snackbarMsg: "Profile updated",
-						snackbarSeverity: "success",
-						autoHideDuration: 1500,
-					})
-				);
-				setEdit(false);
-				avatar.reset(full.avatarUrl);
-				banner.reset(full.bannerUrl);
-			})
-			.catch(() =>
-				dispatch(
-					addSnackbar({
-						snackbarMsg: "Update failed",
-						snackbarSeverity: "error",
-						autoHideDuration: 1500,
-					})
-				)
-			);
-	};
+               dispatch(modifyProfile({ formData: fd, authToken: auth.authToken }))
+                       .unwrap()
+                       .then(({ profile: u }) => {
+                               const full = {
+                                       ...u,
+                                       avatarUrl: u.avatarUrl ? cacheMedia(REQUEST_BASE + u.avatarUrl) : null,
+                                       bannerUrl: u.bannerUrl ? cacheMedia(REQUEST_BASE + u.bannerUrl) : null,
+                               };
+                               dispatch(
+                                       setLoggedIn({
+                                               avatarUrl: full.avatarUrl,
+                                               bannerUrl: full.bannerUrl,
+                                               displayName: full.displayName,
+                                               username: full.username,
+                                               bio: full.bio,
+                                       })
+                               );
+                               setProfile((p) => ({ ...p, ...full }));
+                               dispatch(
+                                       addSnackbar({
+                                               snackbarMsg: "Profile updated",
+                                               snackbarSeverity: "success",
+                                               autoHideDuration: 1500,
+                                       })
+                               );
+                               setEdit(false);
+                               avatar.reset(full.avatarUrl);
+                               banner.reset(full.bannerUrl);
+                       })
+                       .catch(() =>
+                               dispatch(
+                                       addSnackbar({
+                                               snackbarMsg: "Update failed",
+                                               snackbarSeverity: "error",
+                                               autoHideDuration: 1500,
+                                       })
+                               )
+                       );
+       };
 
 	return {
 		isSelf,

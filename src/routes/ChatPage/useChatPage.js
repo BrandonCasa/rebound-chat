@@ -1,46 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import useWindowDimensions from "../../helpers/useWindowDimensions";
 import { useDispatch, useSelector } from "react-redux";
-import axios from "axios";
+import { fetchRoomMessages, mapMessages } from "../../slices/chatApiSlice";
+import { fetchUserProfile } from "../../slices/userApiSlice";
 import socketIoHelper from "../../helpers/socket";
 import { setSocketRoom } from "../../slices/authSlice";
 import { addSnackbar } from "../../slices/snackbarSlice";
-import cacheMedia from "../../helpers/cacheMedia";
 import { getApiBase } from "../../helpers/api";
 
 const REQUEST_BASE = getApiBase();
-
-const mapMessages = (msgs) =>
-	msgs.map((m) => ({
-		...m,
-		sender: {
-			...m.sender,
-			avatarUrl: m.sender?.avatarUrl ? cacheMedia(REQUEST_BASE + m.sender.avatarUrl) : null,
-		},
-	}));
-
-async function getUserInfo(userId, authToken) {
-	const url = `${REQUEST_BASE}/users/profile`;
-	try {
-		const { data } = await axios.get(url, {
-			headers: {
-				"Content-Type": "application/json",
-				"Allow-Control-Allow-Origin": "*",
-				Authorization: `Bearer ${authToken}`,
-			},
-			params: { id: userId },
-		});
-		const u = data.user;
-		return {
-			...u,
-			avatarUrl: u.avatarUrl ? cacheMedia(REQUEST_BASE + u.avatarUrl) : null,
-			bannerUrl: u.bannerUrl ? cacheMedia(REQUEST_BASE + u.bannerUrl) : null,
-		};
-	} catch (err) {
-		console.error(err);
-		return null;
-	}
-}
 
 export default function useChatPage() {
 	const authState = useSelector((state) => state.auth);
@@ -62,20 +30,20 @@ export default function useChatPage() {
 	const listRef = useRef(null);
 	const fetchingRef = useRef(false);
 
-	const fetchMessages = useCallback(async () => {
-		if (!authState.socketInfo.currentRoom || fetchingRef.current) return;
-		fetchingRef.current = true;
-		try {
-			const { data } = await axios.get(`${REQUEST_BASE}/rooms/${authState.socketInfo.currentRoom}/messages`, {
-				headers: { Authorization: `Bearer ${authState.authToken}` },
-			});
-			setMessages(mapMessages(data.messages));
-		} catch (err) {
-			console.error("load messages error", err);
-		} finally {
-			fetchingRef.current = false;
-		}
-	}, [authState.socketInfo.currentRoom, authState.authToken]);
+       const fetchMessages = useCallback(async () => {
+                if (!authState.socketInfo.currentRoom || fetchingRef.current) return;
+                fetchingRef.current = true;
+                try {
+                        const { messages: msgs } = await dispatch(
+                                fetchRoomMessages({ roomId: authState.socketInfo.currentRoom, authToken: authState.authToken })
+                        ).unwrap();
+                        setMessages(msgs);
+                } catch (err) {
+                        console.error("load messages error", err);
+                } finally {
+                        fetchingRef.current = false;
+                }
+        }, [authState.socketInfo.currentRoom, authState.authToken, dispatch]);
 
 	useEffect(() => {
 		const socket = socketIoHelper.getSocket();
@@ -175,19 +143,25 @@ export default function useChatPage() {
 		setRoomAnchorEl(null);
 	};
 
-	const previewUser = async (elRef, u) => {
-		if (!elRef?.current) {
-			setUserPreviewEl(null);
-			setUserPreviewUser(null);
-			return;
-		}
-		if (!u?._id) return;
-		const info = await getUserInfo(u._id, authState.authToken);
-		if (info) {
-			setUserPreviewEl(elRef.current);
-			setUserPreviewUser(info);
-		}
-	};
+       const previewUser = async (elRef, u) => {
+                if (!elRef?.current) {
+                        setUserPreviewEl(null);
+                        setUserPreviewUser(null);
+                        return;
+                }
+                if (!u?._id) return;
+                try {
+                        const { profile: info } = await dispatch(
+                                fetchUserProfile({ userId: u._id, authToken: authState.authToken })
+                        ).unwrap();
+                        if (info) {
+                                setUserPreviewEl(elRef.current);
+                                setUserPreviewUser(info);
+                        }
+                } catch (err) {
+                        console.error(err);
+                }
+        };
 
 	const openMessageMenu = (msg, pos) => {
 		setSelectedMessage(msg);
