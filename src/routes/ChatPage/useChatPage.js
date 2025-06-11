@@ -6,8 +6,9 @@ import socketIoHelper from "../../helpers/socket";
 import { setSocketRoom } from "../../slices/authSlice";
 import { addSnackbar } from "../../slices/snackbarSlice";
 import cacheMedia from "../../helpers/cacheMedia";
+import { getApiBase } from "../../helpers/api";
 
-const REQUEST_BASE = process.env.NODE_ENV === "development" ? `http://localhost:6001/api` : globalThis.IN_ELECTRON_ENV ? `https://rebound.nexus/api` : "/api";
+const REQUEST_BASE = getApiBase();
 
 const mapMessages = (msgs) =>
 	msgs.map((m) => ({

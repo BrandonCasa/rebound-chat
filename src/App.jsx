@@ -1,6 +1,5 @@
 import { CssBaseline, ThemeProvider } from "@mui/material";
 import { styled } from "@mui/material/styles";
-import axios from "axios";
 import React, { useEffect, Suspense, lazy } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { BrowserRouter, HashRouter, Route, Routes } from "react-router-dom";
@@ -13,7 +12,7 @@ import RegisterDialog from "./components/RegisterDialog";
 import SnackbarMapper from "./components/SnackbarMapper";
 import useDarkTheme from "./helpers/darkTheme";
 import socketIoHelper from "./helpers/socket";
-import { setLoggedIn, setLoggingIn, setSocketStatus } from "./slices/authSlice";
+import { setLoggedIn, setLoggingIn, setSocketStatus, verifyUser } from "./slices/authSlice";
 import { addSnackbar } from "./slices/snackbarSlice";
 
 import useCustomAppBar from "./components/CustomAppBar/useCustomAppBar";
@@ -70,69 +69,35 @@ const App = () => {
 		}, [loggedIn, authToken]);
 	};
 
-	const useVerifyUser = (authState) => {
-		useEffect(() => {
-			const verifyUser = async () => {
-				if (authState.authToken && !authState.loggedIn) {
-					dispatch(setLoggingIn({ loggingIn: true }));
-					let requestStringBase =
-						process.env.NODE_ENV === "development" ? `http://localhost:6001/api` : window.isElectron ? `https://rebound.nexus/api` : "/api";
-					let requestString = `${requestStringBase}/users/verify`;
-
-					try {
-						const response = await axios.post(requestString, {
-							headers: {
-								"Content-Type": "application/json",
-								authorization: `Bearer ${authState.authToken}`,
-							},
-						});
-						dispatch(
-							setLoggedIn({
-								loggedIn: true,
-								userId: response.data.user.id,
-								username: response.data.user.username,
-								displayName: response.data.user.displayName,
-								bio: response.data.user.bio,
-								authToken: authState.authToken,
-								friends: response.data.user.friends,
-								bannerUrl:
-									response?.data?.user?.bannerUrl && response?.data?.user?.bannerUrl !== ""
-										? requestStringBase + response.data.user.bannerUrl
-										: globalThis.IN_ELECTRON_ENV
-											? "banner.webp"
-											: "/banner.webp",
-								avatarUrl:
-									response?.data?.user?.avatarUrl && response?.data?.user?.avatarUrl !== ""
-										? requestStringBase + response.data.user.avatarUrl
-										: globalThis.IN_ELECTRON_ENV
-											? "defaultpfp.webp"
-											: "/defaultpfp.webp",
-							})
-						);
-						dispatch(
-							addSnackbar({
-								snackbarMsg: `Hello ${response.data.user.displayName}!`,
-								snackbarSeverity: "success",
-								autoHideDuration: 1000,
-							})
-						);
-					} catch (error) {
-						dispatch(
-							addSnackbar({
-								snackbarMsg: "Failed to verify user. Please try logging in again.",
-								snackbarSeverity: "error",
-								autoHideDuration: 5000,
-							})
-						);
-						window.localStorage.removeItem("auth-token");
-						dispatch(setLoggedIn({ loggedIn: false, token: null }));
-					}
-				}
-			};
-
-			verifyUser();
-		}, [authState.authToken, authState.loggedIn]);
-	};
+        const useVerifyUser = (authState) => {
+                useEffect(() => {
+                        if (authState.authToken && !authState.loggedIn) {
+                                dispatch(setLoggingIn({ loggingIn: true }));
+                                dispatch(verifyUser(authState.authToken))
+                                        .unwrap()
+                                        .then((user) => {
+                                                dispatch(
+                                                        addSnackbar({
+                                                                snackbarMsg: `Hello ${user.displayName}!`,
+                                                                snackbarSeverity: "success",
+                                                                autoHideDuration: 1000,
+                                                        })
+                                                );
+                                        })
+                                        .catch(() => {
+                                                dispatch(
+                                                        addSnackbar({
+                                                                snackbarMsg: "Failed to verify user. Please try logging in again.",
+                                                                snackbarSeverity: "error",
+                                                                autoHideDuration: 5000,
+                                                        })
+                                                );
+                                                window.localStorage.removeItem("auth-token");
+                                                dispatch(setLoggedIn({ loggedIn: false, token: null }));
+                                        });
+                        }
+                }, [authState.authToken, authState.loggedIn, dispatch]);
+        };
 
 	useSocketConnection(authState.authToken, authState.loggedIn);
 	useVerifyUser(authState);

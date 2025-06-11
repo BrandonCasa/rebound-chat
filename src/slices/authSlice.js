@@ -1,6 +1,8 @@
-import { createSlice } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import axios from "axios";
 
 import socketIoHelper from "../helpers/socket";
+import { getApiBase } from "../helpers/api";
 
 const initialState = {
 	authToken: window.localStorage.getItem("auth-token"),
@@ -18,6 +20,88 @@ const initialState = {
 	bannerUrl: null,
 	avatarUrl: null,
 };
+
+export const verifyUser = createAsyncThunk("auth/verifyUser", async (token, { rejectWithValue }) => {
+	const base = getApiBase();
+	try {
+		const { data } = await axios.post(
+			`${base}/users/verify`,
+			{},
+			{
+				headers: {
+					"Content-Type": "application/json",
+					authorization: `Bearer ${token}`,
+				},
+			}
+		);
+		const u = data.user;
+		return {
+			loggedIn: true,
+			authToken: token,
+			userId: u.id,
+			username: u.username,
+			displayName: u.displayName,
+			bio: u.bio,
+			friends: u.friends,
+			bannerUrl: u?.bannerUrl && u.bannerUrl !== "" ? base + u.bannerUrl : globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp",
+			avatarUrl: u?.avatarUrl && u.avatarUrl !== "" ? base + u.avatarUrl : globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp",
+		};
+	} catch (err) {
+		return rejectWithValue(err.response?.data || err.message);
+	}
+});
+
+export const loginUser = createAsyncThunk("auth/loginUser", async ({ email, password }, { rejectWithValue }) => {
+	const base = getApiBase();
+	try {
+		const { data } = await axios.post(`${base}/users/login`, {
+			user: { email, password },
+		});
+		const u = data.user;
+		return {
+			loggedIn: true,
+			authToken: u.token,
+			userId: u.id,
+			username: u.username,
+			displayName: u.displayName,
+			bio: u.bio,
+			friends: u.friends,
+			bannerUrl: u?.bannerUrl && u.bannerUrl !== "" ? base + u.bannerUrl : globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp",
+			avatarUrl: u?.avatarUrl && u.avatarUrl !== "" ? base + u.avatarUrl : globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp",
+		};
+	} catch (err) {
+		return rejectWithValue(err.response?.data || err.message);
+	}
+});
+
+export const registerUser = createAsyncThunk(
+	"auth/registerUser",
+	async ({ username, email, displayName, bio, password, stayLoggedIn }, { rejectWithValue }) => {
+		const base = getApiBase();
+		try {
+			const { data } = await axios.post(`${base}/users/register`, {
+				user: { username, email, displayName, bio, password },
+			});
+			const u = data.user;
+			if (stayLoggedIn) {
+				window.localStorage.setItem("auth-token", u.token);
+			}
+			return {
+				loggedIn: true,
+				authToken: u.token,
+				userId: u.id,
+				username: u.username,
+				displayName: u.displayName,
+				bio: u.bio,
+				friends: u.friends,
+				bannerUrl: u?.bannerUrl && u.bannerUrl !== "" ? base + u.bannerUrl : globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp",
+				avatarUrl: u?.avatarUrl && u.avatarUrl !== "" ? base + u.avatarUrl : globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp",
+			};
+		} catch (err) {
+			return rejectWithValue(err.response?.data || err.message);
+		}
+	}
+);
 
 const authSlice = createSlice({
 	name: "auth",
@@ -93,7 +177,69 @@ const authSlice = createSlice({
 			}
 		},
 	},
+	extraReducers: (builder) => {
+		builder
+			.addCase(verifyUser.pending, (state) => {
+				state.loggingIn = true;
+			})
+			.addCase(verifyUser.fulfilled, (state, action) => {
+				state.loggingIn = false;
+				state.loggedIn = true;
+				state.authToken = action.payload.authToken;
+				state.userId = action.payload.userId;
+				state.username = action.payload.username;
+				state.displayName = action.payload.displayName;
+				state.bio = action.payload.bio;
+				state.friends = action.payload.friends;
+				state.bannerUrl = action.payload.bannerUrl;
+				state.avatarUrl = action.payload.avatarUrl;
+			})
+			.addCase(verifyUser.rejected, (state) => {
+				state.loggingIn = false;
+				state.loggedIn = false;
+			})
+			.addCase(registerUser.pending, (state) => {
+				state.loggingIn = true;
+			})
+			.addCase(registerUser.fulfilled, (state, action) => {
+				state.loggingIn = false;
+				state.loggedIn = true;
+				state.authToken = action.payload.authToken;
+				state.userId = action.payload.userId;
+				state.username = action.payload.username;
+				state.displayName = action.payload.displayName;
+				state.bio = action.payload.bio;
+				state.friends = action.payload.friends;
+				state.bannerUrl = action.payload.bannerUrl;
+				state.avatarUrl = action.payload.avatarUrl;
+			})
+			.addCase(registerUser.rejected, (state) => {
+				state.loggingIn = false;
+				state.loggedIn = false;
+			})
+			.addCase(loginUser.pending, (state) => {
+				state.loggingIn = true;
+			})
+			.addCase(loginUser.fulfilled, (state, action) => {
+				state.loggingIn = false;
+				state.loggedIn = true;
+				state.authToken = action.payload.authToken;
+				state.userId = action.payload.userId;
+				state.username = action.payload.username;
+				state.displayName = action.payload.displayName;
+				state.bio = action.payload.bio;
+				state.friends = action.payload.friends;
+				state.bannerUrl = action.payload.bannerUrl;
+				state.avatarUrl = action.payload.avatarUrl;
+				window.localStorage.setItem("auth-token", action.payload.authToken);
+			})
+			.addCase(loginUser.rejected, (state) => {
+				state.loggingIn = false;
+				state.loggedIn = false;
+			});
+	},
 });
 
 export const { setAuthState, setLoggedIn, setLoggingIn, setSocketStatus, setSocketRoom } = authSlice.actions;
+
 export default authSlice.reducer;
