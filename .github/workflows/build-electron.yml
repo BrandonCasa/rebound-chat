@@ -106,4 +106,4 @@ jobs:
         env:
           PUBLIC_URL: "."
       - name: Run Dist Command for ${{ matrix.platform }}
-        run: pnpm run dist -- ${{ matrix.builderFlag }} ${{ matrix.archFlag }} --publish always
+        run: pnpm run dist ${{ matrix.builderFlag }} ${{ matrix.archFlag }} --publish always
