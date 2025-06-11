@@ -85,7 +85,7 @@ jobs:
 
       - name: Install Packages and Build App
         run: |
-          pnpm install
+          pnpm install --no-frozen-lockfile
           pnpm run build
         env:
           CI: false
