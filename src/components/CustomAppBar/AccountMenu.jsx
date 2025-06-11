@@ -3,7 +3,7 @@ import PersonRemoveRounded from "@mui/icons-material/PersonRemoveRounded";
 import LogoutRounded from "@mui/icons-material/LogoutRounded";
 import { Menu, MenuList, MenuItem, ListItemIcon, ListItemText, Divider, Avatar } from "@mui/material";
 
-const AccountMenu = ({ anchorEl, open, handleClose, handleLogout, theme }) => (
+const AccountMenu = ({ anchorEl, open, handleClose, handleLogout, theme, avatarUrl }) => (
 	<Menu
 		anchorEl={anchorEl}
 		open={open}
@@ -14,22 +14,9 @@ const AccountMenu = ({ anchorEl, open, handleClose, handleLogout, theme }) => (
 		<MenuList>
 			<MenuItem>
 				<ListItemIcon>
-					<Avatar sx={{ width: "28px", height: "28px" }} />
+					<Avatar src={avatarUrl} sx={{ width: "28px", height: "28px" }} />
 				</ListItemIcon>
 				<ListItemText>Main Profile</ListItemText>
-			</MenuItem>
-			<Divider />
-			<MenuItem>
-				<ListItemIcon>
-					<PersonAddRounded fontSize="small" sx={{ color: theme.palette.text.secondary }} />
-				</ListItemIcon>
-				<ListItemText>Add Profile</ListItemText>
-			</MenuItem>
-			<MenuItem>
-				<ListItemIcon>
-					<PersonRemoveRounded fontSize="small" sx={{ color: theme.palette.text.secondary }} />
-				</ListItemIcon>
-				<ListItemText>Remove Profile</ListItemText>
 			</MenuItem>
 			<Divider />
 			<MenuItem onClick={handleLogout}>

@@ -10,32 +10,32 @@ import { getApiBase } from "../../helpers/api";
 const REQUEST_BASE = getApiBase();
 
 export function useFilePreview(initialUrl) {
-    const [file, setFile] = useState(null);
-    const [preview, setPrev] = useState(null);
+	const [file, setFile] = useState(null);
+	const [preview, setPrev] = useState(null);
 
-    useEffect(() => {
-        let alive = true;
-        cacheMedia(initialUrl).then((u) => {
-            if (alive) setPrev(u);
-        });
-        return () => {
-            alive = false;
-        };
-    }, [initialUrl]);
+	useEffect(() => {
+		let alive = true;
+		cacheMedia(initialUrl).then((u) => {
+			if (alive) setPrev(u);
+		});
+		return () => {
+			alive = false;
+		};
+	}, [initialUrl]);
 
-    const onChange = (e) => {
-        const f = e.target.files?.[0];
-        if (!f) return;
-        setFile(f);
-        setPrev(URL.createObjectURL(f));
-    };
+	const onChange = (e) => {
+		const f = e.target.files?.[0];
+		if (!f) return;
+		setFile(f);
+		setPrev(URL.createObjectURL(f));
+	};
 
-    const reset = (url) => {
-        setFile(null);
-        cacheMedia(url).then(setPrev);
-    };
+	const reset = (url) => {
+		setFile(null);
+		cacheMedia(url).then(setPrev);
+	};
 
-    return { file, preview, onChange, reset };
+	return { file, preview, onChange, reset };
 }
 
 export default function useProfileCard(user, forceSelf) {
@@ -94,17 +94,17 @@ export default function useProfileCard(user, forceSelf) {
 	useEffect(() => {
 		const socket = socketIoHelper.getSocket();
 		if (!socket) return;
-                const onSaved = async ([id, pubData, privData]) => {
-                        if (id !== watchId) return;
-                        const data = id === auth.userId ? privData : pubData;
-                        const av = data?.avatarUrl ? await cacheMedia(REQUEST_BASE + data.avatarUrl) : null;
-                        const bn = data?.bannerUrl ? await cacheMedia(REQUEST_BASE + data.bannerUrl) : null;
-                        setProfile((p) => ({ ...p, ...data, avatarUrl: av, bannerUrl: bn }));
-                        avatar.reset(av);
-                        banner.reset(bn);
-                        setName(data.displayName);
-                        setBio(data.bio);
-                };
+		const onSaved = async ([id, pubData, privData]) => {
+			if (id !== watchId) return;
+			const data = id === auth.userId ? privData : pubData;
+			const av = data?.avatarUrl ? await cacheMedia(REQUEST_BASE + data.avatarUrl) : null;
+			const bn = data?.bannerUrl ? await cacheMedia(REQUEST_BASE + data.bannerUrl) : null;
+			setProfile((p) => ({ ...p, ...data, avatarUrl: av, bannerUrl: bn }));
+			avatar.reset(av);
+			banner.reset(bn);
+			setName(data.displayName);
+			setBio(data.bio);
+		};
 		socket.on("watched_user_saved", onSaved);
 		return () => {
 			socket.off("watched_user_saved", onSaved);
@@ -119,64 +119,64 @@ export default function useProfileCard(user, forceSelf) {
 		return rel.requester === auth.userId ? { status: "sent", friendId: rel._id } : { status: "received", friendId: rel._id };
 	}, [profile.friends, isSelf, auth.userId]);
 
-       const callApi = (ep, data, msg, sev = "success") => {
-               dispatch(
-                       friendAction({
-                               ep,
-                               data,
-                               authToken: auth.authToken,
-                               message: msg,
-                               severity: sev,
-                       })
-               );
-       };
+	const callApi = (ep, data, msg, sev = "success") => {
+		dispatch(
+			friendAction({
+				ep,
+				data,
+				authToken: auth.authToken,
+				message: msg,
+				severity: sev,
+			})
+		);
+	};
 
-       const saveProfile = () => {
-               const fd = new FormData();
-               fd.append("displayName", name);
-               fd.append("bio", bio);
-               if (banner.file) fd.append("banner", banner.file);
-               if (avatar.file) fd.append("avatar", avatar.file);
+	const saveProfile = () => {
+		const fd = new FormData();
+		fd.append("displayName", name);
+		fd.append("bio", bio);
+		if (banner.file) fd.append("banner", banner.file);
+		if (avatar.file) fd.append("avatar", avatar.file);
 
-               dispatch(modifyProfile({ formData: fd, authToken: auth.authToken }))
-                       .unwrap()
-                       .then(async ({ profile: u }) => {
-                               const full = {
-                                       ...u,
-                                       avatarUrl: u.avatarUrl ? await cacheMedia(REQUEST_BASE + u.avatarUrl) : null,
-                                       bannerUrl: u.bannerUrl ? await cacheMedia(REQUEST_BASE + u.bannerUrl) : null,
-                               };
-                               dispatch(
-                                       setLoggedIn({
-                                               avatarUrl: full.avatarUrl,
-                                               bannerUrl: full.bannerUrl,
-                                               displayName: full.displayName,
-                                               username: full.username,
-                                               bio: full.bio,
-                                       })
-                               );
-                               setProfile((p) => ({ ...p, ...full }));
-                               dispatch(
-                                       addSnackbar({
-                                               snackbarMsg: "Profile updated",
-                                               snackbarSeverity: "success",
-                                               autoHideDuration: 1500,
-                                       })
-                               );
-                               setEdit(false);
-                               avatar.reset(full.avatarUrl);
-                               banner.reset(full.bannerUrl);
-                       })
-                       .catch(() =>
-                               dispatch(
-                                       addSnackbar({
-                                               snackbarMsg: "Update failed",
-                                               snackbarSeverity: "error",
-                                               autoHideDuration: 1500,
-                                       })
-                               )
-                       );
-       };
+		dispatch(modifyProfile({ formData: fd, authToken: auth.authToken }))
+			.unwrap()
+			.then(async ({ profile: u }) => {
+				const full = {
+					...u,
+					avatarUrl: u.avatarUrl ? await cacheMedia(REQUEST_BASE + u.avatarUrl) : null,
+					bannerUrl: u.bannerUrl ? await cacheMedia(REQUEST_BASE + u.bannerUrl) : null,
+				};
+				dispatch(
+					setLoggedIn({
+						avatarUrl: full.avatarUrl,
+						bannerUrl: full.bannerUrl,
+						displayName: full.displayName,
+						username: full.username,
+						bio: full.bio,
+					})
+				);
+				setProfile((p) => ({ ...p, ...full }));
+				dispatch(
+					addSnackbar({
+						snackbarMsg: "Profile updated",
+						snackbarSeverity: "success",
+						autoHideDuration: 1500,
+					})
+				);
+				setEdit(false);
+				avatar.reset(full.avatarUrl);
+				banner.reset(full.bannerUrl);
+			})
+			.catch(() =>
+				dispatch(
+					addSnackbar({
+						snackbarMsg: "Update failed",
+						snackbarSeverity: "error",
+						autoHideDuration: 1500,
+					})
+				)
+			);
+	};
 
 	return {
 		isSelf,

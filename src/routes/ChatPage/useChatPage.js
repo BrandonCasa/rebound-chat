@@ -30,20 +30,18 @@ export default function useChatPage() {
 	const listRef = useRef(null);
 	const fetchingRef = useRef(false);
 
-       const fetchMessages = useCallback(async () => {
-                if (!authState.socketInfo.currentRoom || fetchingRef.current) return;
-                fetchingRef.current = true;
-                try {
-                        const { messages: msgs } = await dispatch(
-                                fetchRoomMessages({ roomId: authState.socketInfo.currentRoom, authToken: authState.authToken })
-                        ).unwrap();
-                        setMessages(msgs);
-                } catch (err) {
-                        console.error("load messages error", err);
-                } finally {
-                        fetchingRef.current = false;
-                }
-        }, [authState.socketInfo.currentRoom, authState.authToken, dispatch]);
+	const fetchMessages = useCallback(async () => {
+		if (!authState.socketInfo.currentRoom || fetchingRef.current) return;
+		fetchingRef.current = true;
+		try {
+			const { messages: msgs } = await dispatch(fetchRoomMessages({ roomId: authState.socketInfo.currentRoom, authToken: authState.authToken })).unwrap();
+			setMessages(msgs);
+		} catch (err) {
+			console.error("load messages error", err);
+		} finally {
+			fetchingRef.current = false;
+		}
+	}, [authState.socketInfo.currentRoom, authState.authToken, dispatch]);
 
 	useEffect(() => {
 		const socket = socketIoHelper.getSocket();
@@ -59,18 +57,18 @@ export default function useChatPage() {
 					);
 				}
 			});
-                        socket.on("joined_room", async (_id, msgs) => {
-                                setMessages(await mapMessages(msgs));
-                        });
-                        socket.on("message_sent", async (_id, msgs) => {
-                                setMessages(await mapMessages(msgs));
-                        });
-                        socket.on("new_message", async (_id, msgs) => {
-                                setMessages(await mapMessages(msgs));
-                        });
-                        socket.on("messages_updated", async (_id, msgs) => {
-                                setMessages(await mapMessages(msgs));
-                        });
+			socket.on("joined_room", async (_id, msgs) => {
+				setMessages(await mapMessages(msgs));
+			});
+			socket.on("message_sent", async (_id, msgs) => {
+				setMessages(await mapMessages(msgs));
+			});
+			socket.on("new_message", async (_id, msgs) => {
+				setMessages(await mapMessages(msgs));
+			});
+			socket.on("messages_updated", async (_id, msgs) => {
+				setMessages(await mapMessages(msgs));
+			});
 			socket.on("user_list", (_roomId, list, sender, evt) => {
 				if (sender.id !== authState.userId) {
 					dispatch(
@@ -143,25 +141,23 @@ export default function useChatPage() {
 		setRoomAnchorEl(null);
 	};
 
-       const previewUser = async (elRef, u) => {
-                if (!elRef?.current) {
-                        setUserPreviewEl(null);
-                        setUserPreviewUser(null);
-                        return;
-                }
-                if (!u?._id) return;
-                try {
-                        const { profile: info } = await dispatch(
-                                fetchUserProfile({ userId: u._id, authToken: authState.authToken })
-                        ).unwrap();
-                        if (info) {
-                                setUserPreviewEl(elRef.current);
-                                setUserPreviewUser(info);
-                        }
-                } catch (err) {
-                        console.error(err);
-                }
-        };
+	const previewUser = async (elRef, u) => {
+		if (!elRef?.current) {
+			setUserPreviewEl(null);
+			setUserPreviewUser(null);
+			return;
+		}
+		if (!u?._id) return;
+		try {
+			const { profile: info } = await dispatch(fetchUserProfile({ userId: u._id, authToken: authState.authToken })).unwrap();
+			if (info) {
+				setUserPreviewEl(elRef.current);
+				setUserPreviewUser(info);
+			}
+		} catch (err) {
+			console.error(err);
+		}
+	};
 
 	const openMessageMenu = (msg, pos) => {
 		setSelectedMessage(msg);

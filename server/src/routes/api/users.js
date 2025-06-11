@@ -199,7 +199,7 @@ router.put(
 				// 5) File‐upload helper
 				const uploadToGrid = async (file, fieldName) => {
 					const ext = file.originalname.split(".").pop();
-					const filename = `${fieldName}-${decoded.id}-${Date.now()}.${ext}`;
+					const filename = `${fieldName}-${decoded.id}-${Math.floor(Math.random() * 1000)}-${Date.now()}.${ext}`;
 					const uploadStream = databaseServer.gridfsBucket.openUploadStream(filename, { contentType: file.mimetype });
 					uploadStream.end(file.buffer);
 					await once(uploadStream, "finish");
