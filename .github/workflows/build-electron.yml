@@ -103,7 +103,5 @@ jobs:
         run: pnpm install --no-frozen-lockfile
       - name: Run Build Command
         run: pnpm run build
-        env:
-          PUBLIC_URL: "."
       - name: Run Dist Command for ${{ matrix.platform }}
         run: pnpm run dist ${{ matrix.builderFlag }} ${{ matrix.archFlag }} --publish always
