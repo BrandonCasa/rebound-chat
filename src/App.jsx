@@ -69,35 +69,35 @@ const App = () => {
 		}, [loggedIn, authToken]);
 	};
 
-        const useVerifyUser = (authState) => {
-                useEffect(() => {
-                        if (authState.authToken && !authState.loggedIn) {
-                                dispatch(setLoggingIn({ loggingIn: true }));
-                                dispatch(verifyUser(authState.authToken))
-                                        .unwrap()
-                                        .then((user) => {
-                                                dispatch(
-                                                        addSnackbar({
-                                                                snackbarMsg: `Hello ${user.displayName}!`,
-                                                                snackbarSeverity: "success",
-                                                                autoHideDuration: 1000,
-                                                        })
-                                                );
-                                        })
-                                        .catch(() => {
-                                                dispatch(
-                                                        addSnackbar({
-                                                                snackbarMsg: "Failed to verify user. Please try logging in again.",
-                                                                snackbarSeverity: "error",
-                                                                autoHideDuration: 5000,
-                                                        })
-                                                );
-                                                window.localStorage.removeItem("auth-token");
-                                                dispatch(setLoggedIn({ loggedIn: false, token: null }));
-                                        });
-                        }
-                }, [authState.authToken, authState.loggedIn, dispatch]);
-        };
+	const useVerifyUser = (authState) => {
+		useEffect(() => {
+			if (authState.authToken && !authState.loggedIn) {
+				dispatch(setLoggingIn({ loggingIn: true }));
+				dispatch(verifyUser(authState.authToken))
+					.unwrap()
+					.then((user) => {
+						dispatch(
+							addSnackbar({
+								snackbarMsg: `Hello ${user.displayName}!`,
+								snackbarSeverity: "success",
+								autoHideDuration: 1000,
+							})
+						);
+					})
+					.catch(() => {
+						dispatch(
+							addSnackbar({
+								snackbarMsg: "Failed to verify user. Please try logging in again.",
+								snackbarSeverity: "error",
+								autoHideDuration: 5000,
+							})
+						);
+						window.localStorage.removeItem("auth-token");
+						dispatch(setLoggedIn({ loggedIn: false, token: null }));
+					});
+			}
+		}, [authState.authToken, authState.loggedIn, dispatch]);
+	};
 
 	useSocketConnection(authState.authToken, authState.loggedIn);
 	useVerifyUser(authState);
