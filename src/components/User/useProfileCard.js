@@ -1,18 +1,27 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import axios from "axios";
 import { useSelector, useDispatch } from "react-redux";
 import socketIoHelper from "../../helpers/socket";
 import { addSnackbar } from "../../slices/snackbarSlice";
 import { setLoggedIn } from "../../slices/authSlice";
+import { friendAction, modifyProfile } from "../../slices/userApiSlice";
 import cacheMedia from "../../helpers/cacheMedia";
 import { getApiBase } from "../../helpers/api";
 
 const REQUEST_BASE = getApiBase();
-const API_BASE = `${REQUEST_BASE}/users`;
 
 export function useFilePreview(initialUrl) {
 	const [file, setFile] = useState(null);
-	const [preview, setPrev] = useState(cacheMedia(initialUrl));
+	const [preview, setPrev] = useState(null);
+
+	useEffect(() => {
+		let alive = true;
+		cacheMedia(initialUrl).then((u) => {
+			if (alive) setPrev(u);
+		});
+		return () => {
+			alive = false;
+		};
+	}, [initialUrl]);
 
 	const onChange = (e) => {
 		const f = e.target.files?.[0];
@@ -23,7 +32,7 @@ export function useFilePreview(initialUrl) {
 
 	const reset = (url) => {
 		setFile(null);
-		setPrev(cacheMedia(url));
+		cacheMedia(url).then(setPrev);
 	};
 
 	return { file, preview, onChange, reset };
@@ -85,11 +94,11 @@ export default function useProfileCard(user, forceSelf) {
 	useEffect(() => {
 		const socket = socketIoHelper.getSocket();
 		if (!socket) return;
-		const onSaved = ([id, pubData, privData]) => {
+		const onSaved = async ([id, pubData, privData]) => {
 			if (id !== watchId) return;
 			const data = id === auth.userId ? privData : pubData;
-			const av = data?.avatarUrl ? cacheMedia(REQUEST_BASE + data.avatarUrl) : null;
-			const bn = data?.bannerUrl ? cacheMedia(REQUEST_BASE + data.bannerUrl) : null;
+			const av = data?.avatarUrl ? await cacheMedia(REQUEST_BASE + data.avatarUrl) : null;
+			const bn = data?.bannerUrl ? await cacheMedia(REQUEST_BASE + data.bannerUrl) : null;
 			setProfile((p) => ({ ...p, ...data, avatarUrl: av, bannerUrl: bn }));
 			avatar.reset(av);
 			banner.reset(bn);
@@ -110,29 +119,17 @@ export default function useProfileCard(user, forceSelf) {
 		return rel.requester === auth.userId ? { status: "sent", friendId: rel._id } : { status: "received", friendId: rel._id };
 	}, [profile.friends, isSelf, auth.userId]);
 
-	const callApi = (ep, data, msg, sev = "success") =>
-		axios
-			.put(`${API_BASE}/${ep}`, data, {
-				headers: { Authorization: `Bearer ${auth.authToken}` },
+	const callApi = (ep, data, msg, sev = "success") => {
+		dispatch(
+			friendAction({
+				ep,
+				data,
+				authToken: auth.authToken,
+				message: msg,
+				severity: sev,
 			})
-			.then(() =>
-				dispatch(
-					addSnackbar({
-						snackbarMsg: msg,
-						snackbarSeverity: sev,
-						autoHideDuration: 1500,
-					})
-				)
-			)
-			.catch(() =>
-				dispatch(
-					addSnackbar({
-						snackbarMsg: "Error",
-						snackbarSeverity: "error",
-						autoHideDuration: 1500,
-					})
-				)
-			);
+		);
+	};
 
 	const saveProfile = () => {
 		const fd = new FormData();
@@ -141,16 +138,13 @@ export default function useProfileCard(user, forceSelf) {
 		if (banner.file) fd.append("banner", banner.file);
 		if (avatar.file) fd.append("avatar", avatar.file);
 
-		axios
-			.put(`${API_BASE}/modify`, fd, {
-				headers: { Authorization: `Bearer ${auth.authToken}` },
-			})
-			.then(({ data }) => {
-				const u = data.user;
+		dispatch(modifyProfile({ formData: fd, authToken: auth.authToken }))
+			.unwrap()
+			.then(async ({ profile: u }) => {
 				const full = {
 					...u,
-					avatarUrl: u.avatarUrl ? cacheMedia(REQUEST_BASE + u.avatarUrl) : null,
-					bannerUrl: u.bannerUrl ? cacheMedia(REQUEST_BASE + u.bannerUrl) : null,
+					avatarUrl: u.avatarUrl ? await cacheMedia(REQUEST_BASE + u.avatarUrl) : null,
+					bannerUrl: u.bannerUrl ? await cacheMedia(REQUEST_BASE + u.bannerUrl) : null,
 				};
 				dispatch(
 					setLoggedIn({

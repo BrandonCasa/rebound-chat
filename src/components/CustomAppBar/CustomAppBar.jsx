@@ -40,7 +40,7 @@ function CustomAppBar({
 				avatarUrl={auth.avatarUrl}
 				theme={theme}
 			/>
-			<AccountMenu anchorEl={anchorEl} open={open} handleClose={handleClose} handleLogout={handleLogout} theme={theme} />
+			<AccountMenu anchorEl={anchorEl} open={open} handleClose={handleClose} handleLogout={handleLogout} theme={theme} avatarUrl={auth.avatarUrl} />
 			<DrawerMenu drawerWidth={drawerWidth} iconWidth={iconWidth} drawerOpen={drawerOpen} setDrawerOpen={setDrawerOpen} theme={theme} />
 			<MainContent drawerWidth={drawerWidth} drawerOpen={drawerOpen} iconWidth={iconWidth} setDrawerOpen={setDrawerOpen}>
 				{children}
