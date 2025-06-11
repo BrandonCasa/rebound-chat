@@ -3,8 +3,9 @@ import { useSelector } from "react-redux";
 import axios from "axios";
 import socketIoHelper from "../../helpers/socket";
 import cacheMedia from "../../helpers/cacheMedia";
+import { getApiBase } from "../../helpers/api";
 
-const REQUEST_BASE = process.env.NODE_ENV === "development" ? "http://localhost:6001/api" : globalThis.IN_ELECTRON_ENV ? "https://rebound.nexus/api" : "/api";
+const REQUEST_BASE = getApiBase();
 const API_BASE = `${REQUEST_BASE}/users`;
 
 async function getUserInfo(userId, authToken) {

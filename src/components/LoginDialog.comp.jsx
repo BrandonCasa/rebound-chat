@@ -1,9 +1,8 @@
 import { Dialog, Box, Typography, TextField, DialogActions, Button, FormGroup, FormControlLabel, Checkbox } from "@mui/material";
-import axios from "axios";
 import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
-import { setLoggedIn } from "../slices/authSlice";
+import { loginUser } from "../slices/authSlice";
 import { setDialogOpened } from "../slices/dialogSlice";
 
 import { addSnackbar } from "../slices/snackbarSlice";
@@ -16,64 +15,33 @@ const LoginDialog = () => {
 	const [password, setPassword] = useState("");
 	const [stayLoggedIn, setStayLoggedIn] = useState(true);
 
-	const handleUserLogin = () => {
-		let requestStringBase = process.env.NODE_ENV === "development" ? `http://localhost:6001/api` : window.isElectron ? `https://rebound.nexus/api` : "/api";
-		let requestString = `${requestStringBase}/users/login`;
-
-		axios
-			.post(requestString, {
-				user: {
-					email: email,
-					password: password,
-					//stayLoggedIn
-				},
-			})
-			.then((res) => {
-				if (res.status === 200) {
-					window.localStorage.setItem("auth-token", res.data.user.token);
-					dispatch(
-						setLoggedIn({
-							loggedIn: true,
-							userId: res.data.user.id,
-							username: res.data.user.username,
-							displayName: res.data.user.displayName,
-							bio: res.data.user.bio,
-							authToken: res.data.user.token,
-							bannerUrl:
-								res?.data?.user?.bannerUrl && res?.data?.user?.bannerUrl !== ""
-									? requestStringBase + res.data.user.bannerUrl
-									: globalThis.IN_ELECTRON_ENV
-										? "banner.webp"
-										: "/banner.webp",
-							avatarUrl:
-								res?.data?.user?.avatarUrl && res?.data?.user?.avatarUrl !== ""
-									? requestStringBase + res.data.user.avatarUrl
-									: globalThis.IN_ELECTRON_ENV
-										? "defaultpfp.webp"
-										: "/defaultpfp.webp",
-						})
-					);
-					dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
-					dispatch(
-						addSnackbar({
-							snackbarMsg: `Login Successful. Hello ${res.data.user.displayName}`,
-							snackbarSeverity: "success",
-							autoHideDuration: 2000,
-						})
-					);
-				}
-			})
-			.catch((error) => {
-				console.log(error?.response?.data?.errors || error?.message || "An unknown error occurred during login.");
-				dispatch(
-					addSnackbar({
-						snackbarMsg: `Login Failed! ${JSON.stringify(error?.response?.data?.errors || error?.message || "An unknown error occurred.")}`,
-						snackbarSeverity: "error",
-						autoHideDuration: 4000,
-					})
-				);
-			});
-	};
+        const handleUserLogin = () => {
+                dispatch(loginUser({ email, password }))
+                        .unwrap()
+                        .then((user) => {
+                                if (stayLoggedIn) {
+                                        window.localStorage.setItem("auth-token", user.authToken);
+                                }
+                                dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
+                                dispatch(
+                                        addSnackbar({
+                                                snackbarMsg: `Login Successful. Hello ${user.displayName}`,
+                                                snackbarSeverity: "success",
+                                                autoHideDuration: 2000,
+                                        })
+                                );
+                        })
+                        .catch((error) => {
+                                console.log(error);
+                                dispatch(
+                                        addSnackbar({
+                                                snackbarMsg: `Login Failed! ${JSON.stringify(error)}`,
+                                                snackbarSeverity: "error",
+                                                autoHideDuration: 4000,
+                                        })
+                                );
+                        });
+        };
 
 	return (
 		<Dialog open={loginDialogState} onClose={() => dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }))}>

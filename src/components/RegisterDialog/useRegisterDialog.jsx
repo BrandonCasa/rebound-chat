@@ -1,8 +1,7 @@
-import axios from "axios";
 import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
-import { setAuthState, setLoggedIn } from "../../slices/authSlice";
+import { registerUser } from "../../slices/authSlice";
 import { setDialogOpened } from "../../slices/dialogSlice";
 
 import { addSnackbar } from "../../slices/snackbarSlice";
@@ -183,54 +182,46 @@ const useRegisterDialog = () => {
 			(err) => Object.keys(err).length > 0
 		);
 
-	const handleUserRegister = async () => {
-		let requestString = process.env.NODE_ENV === "development" ? `http://localhost:6001/api/users/register` : `/api/users/register`;
-		requestString = process.env.NODE_ENV !== "development" && window.isElectron ? `https://rebound.nexus/api/users/register` : requestString;
-
-		try {
-			const response = await axios.post(requestString, {
-				user: {
-					username: formData.username,
-					email: formData.email,
-					displayName: formData.displayName,
-					bio: formData.bio,
-					password: formData.password,
-					//formData.stayLoggedIn,
-				},
-			});
-
-			if (response.status === 200) {
-				const authToken = response.data.user.token;
-				window.localStorage.setItem("auth-token", authToken);
-				dispatch(setAuthState({ authToken }));
-				dispatch(setLoggedIn({ loggedIn: true }));
-				dispatch(
-					setDialogOpened({
-						dialogName: "registerDialogOpen",
-						newState: false,
-					})
-				);
-				setFormData({ ...formData });
-				dispatch(
-					addSnackbar({
-						snackbarMsg: "Registration Successful!",
-						snackbarSeverity: "success",
-						autoHideDuration: 4000,
-					})
-				);
-			}
-		} catch (error) {
-			const serverErrors = error?.response?.data?.errors;
-			if (!serverErrors) {
-				dispatch(
-					addSnackbar({
-						snackbarMsg: `Registration Failed! ${error?.message || "Unknown error."}`,
-						snackbarSeverity: "error",
-						autoHideDuration: 4000,
-					})
-				);
-			} else {
-				const updateErrors = {};
+        const handleUserRegister = async () => {
+                dispatch(
+                        registerUser({
+                                username: formData.username,
+                                email: formData.email,
+                                displayName: formData.displayName,
+                                bio: formData.bio,
+                                password: formData.password,
+                                stayLoggedIn: formData.stayLoggedIn,
+                        })
+                )
+                        .unwrap()
+                        .then(() => {
+                                dispatch(
+                                        setDialogOpened({
+                                                dialogName: "registerDialogOpen",
+                                                newState: false,
+                                        })
+                                );
+                                setFormData({ ...formData });
+                                dispatch(
+                                        addSnackbar({
+                                                snackbarMsg: "Registration Successful!",
+                                                snackbarSeverity: "success",
+                                                autoHideDuration: 4000,
+                                        })
+                                );
+                        })
+                        .catch((error) => {
+                                const serverErrors = error?.errors;
+                                if (!serverErrors) {
+                                        dispatch(
+                                                addSnackbar({
+                                                        snackbarMsg: `Registration Failed! ${error?.message || "Unknown error."}`,
+                                                        snackbarSeverity: "error",
+                                                        autoHideDuration: 4000,
+                                                })
+                                        );
+                                } else {
+                                        const updateErrors = {};
 				Object.entries(serverErrors).forEach(([field, msg]) => {
 					if (!msg) return;
 					const message = Array.isArray(msg) ? msg.join(", ") : msg;

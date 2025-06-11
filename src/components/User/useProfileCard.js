@@ -5,8 +5,9 @@ import socketIoHelper from "../../helpers/socket";
 import { addSnackbar } from "../../slices/snackbarSlice";
 import { setLoggedIn } from "../../slices/authSlice";
 import cacheMedia from "../../helpers/cacheMedia";
+import { getApiBase } from "../../helpers/api";
 
-const REQUEST_BASE = process.env.NODE_ENV === "development" ? "http://localhost:6001/api" : globalThis.IN_ELECTRON_ENV ? "https://rebound.nexus/api" : "/api";
+const REQUEST_BASE = getApiBase();
 const API_BASE = `${REQUEST_BASE}/users`;
 
 export function useFilePreview(initialUrl) {
