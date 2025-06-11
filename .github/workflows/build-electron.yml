@@ -100,7 +100,7 @@ jobs:
           version: 10
           run_install: false
       - name: Install Dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install
       - name: Run Build Command
         run: pnpm run build
         env:
