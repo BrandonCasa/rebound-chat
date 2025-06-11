@@ -15,33 +15,50 @@ const LoginDialog = () => {
 	const [password, setPassword] = useState("");
 	const [stayLoggedIn, setStayLoggedIn] = useState(true);
 
-        const handleUserLogin = () => {
-                dispatch(loginUser({ email, password }))
-                        .unwrap()
-                        .then((user) => {
-                                if (stayLoggedIn) {
-                                        window.localStorage.setItem("auth-token", user.authToken);
-                                }
-                                dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
-                                dispatch(
-                                        addSnackbar({
-                                                snackbarMsg: `Login Successful. Hello ${user.displayName}`,
-                                                snackbarSeverity: "success",
-                                                autoHideDuration: 2000,
-                                        })
-                                );
-                        })
-                        .catch((error) => {
-                                console.log(error);
-                                dispatch(
-                                        addSnackbar({
-                                                snackbarMsg: `Login Failed! ${JSON.stringify(error)}`,
-                                                snackbarSeverity: "error",
-                                                autoHideDuration: 4000,
-                                        })
-                                );
-                        });
-        };
+	const handleUserLogin = () => {
+		dispatch(loginUser({ email, password }))
+			.unwrap()
+			.then((user) => {
+				if (stayLoggedIn) {
+					window.localStorage.setItem("auth-token", user.authToken);
+				}
+				dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
+				dispatch(
+					addSnackbar({
+						snackbarMsg: `Login Successful. Hello ${user.displayName}`,
+						snackbarSeverity: "success",
+						autoHideDuration: 2000,
+					})
+				);
+			})
+			.catch((error) => {
+				console.log(error);
+				const loginErrors = error?.errors;
+				if (!loginErrors) {
+					dispatch(
+						addSnackbar({
+							snackbarMsg: `Login failed, ${JSON.stringify(error) || "Unknown error."}!`,
+							snackbarSeverity: "error",
+							autoHideDuration: 4000,
+						})
+					);
+				} else {
+					const updateErrors = {};
+					Object.entries(loginErrors).forEach(([field, msg]) => {
+						if (!msg) return;
+						const message = Array.isArray(msg) ? msg.join(", ") : msg;
+						updateErrors[field] = message;
+						dispatch(
+							addSnackbar({
+								snackbarMsg: `Login failed, ${field.charAt(0).toUpperCase() + field.slice(1)} ${message}!`,
+								snackbarSeverity: "error",
+								autoHideDuration: 4000,
+							})
+						);
+					});
+				}
+			});
+	};
 
 	return (
 		<Dialog open={loginDialogState} onClose={() => dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }))}>

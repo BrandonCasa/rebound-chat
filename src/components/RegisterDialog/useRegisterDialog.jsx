@@ -182,87 +182,87 @@ const useRegisterDialog = () => {
 			(err) => Object.keys(err).length > 0
 		);
 
-        const handleUserRegister = async () => {
-                dispatch(
-                        registerUser({
-                                username: formData.username,
-                                email: formData.email,
-                                displayName: formData.displayName,
-                                bio: formData.bio,
-                                password: formData.password,
-                                stayLoggedIn: formData.stayLoggedIn,
-                        })
-                )
-                        .unwrap()
-                        .then(() => {
-                                dispatch(
-                                        setDialogOpened({
-                                                dialogName: "registerDialogOpen",
-                                                newState: false,
-                                        })
-                                );
-                                setFormData({ ...formData });
-                                dispatch(
-                                        addSnackbar({
-                                                snackbarMsg: "Registration Successful!",
-                                                snackbarSeverity: "success",
-                                                autoHideDuration: 4000,
-                                        })
-                                );
-                        })
-                        .catch((error) => {
-                                const serverErrors = error?.errors;
-                                if (!serverErrors) {
-                                        dispatch(
-                                                addSnackbar({
-                                                        snackbarMsg: `Registration Failed! ${error?.message || "Unknown error."}`,
-                                                        snackbarSeverity: "error",
-                                                        autoHideDuration: 4000,
-                                                })
-                                        );
-                                } else {
-                                        const updateErrors = {};
-				Object.entries(serverErrors).forEach(([field, msg]) => {
-					if (!msg) return;
-					const message = Array.isArray(msg) ? msg.join(", ") : msg;
-					updateErrors[field] = message;
+	const handleUserRegister = async () => {
+		dispatch(
+			registerUser({
+				username: formData.username,
+				email: formData.email,
+				displayName: formData.displayName,
+				bio: formData.bio,
+				password: formData.password,
+				stayLoggedIn: formData.stayLoggedIn,
+			})
+		)
+			.unwrap()
+			.then(() => {
+				dispatch(
+					setDialogOpened({
+						dialogName: "registerDialogOpen",
+						newState: false,
+					})
+				);
+				setFormData({ ...formData });
+				dispatch(
+					addSnackbar({
+						snackbarMsg: "Registration Successful!",
+						snackbarSeverity: "success",
+						autoHideDuration: 4000,
+					})
+				);
+			})
+			.catch((error) => {
+				const serverErrors = error?.errors;
+				if (!serverErrors) {
 					dispatch(
 						addSnackbar({
-							snackbarMsg: `${field.charAt(0).toUpperCase() + field.slice(1)} ${message}`,
+							snackbarMsg: `Registration failed, ${error?.message || "Unknown error."}!`,
 							snackbarSeverity: "error",
 							autoHideDuration: 4000,
 						})
 					);
-				});
+				} else {
+					const updateErrors = {};
+					Object.entries(serverErrors).forEach(([field, msg]) => {
+						if (!msg) return;
+						const message = Array.isArray(msg) ? msg.join(", ") : msg;
+						updateErrors[field] = message;
+						dispatch(
+							addSnackbar({
+								snackbarMsg: `Registration failed, ${field.charAt(0).toUpperCase() + field.slice(1)} ${message}!`,
+								snackbarSeverity: "error",
+								autoHideDuration: 4000,
+							})
+						);
+					});
 
-				// apply all server errors at once
-				setFormData((prev) => {
-					const next = { ...prev };
-					if (updateErrors.username)
-						next.usernameErrors = {
-							...validateUsername(prev.username, updateErrors.username),
-						};
-					if (updateErrors.email)
-						next.emailErrors = {
-							...validateEmail(prev.email, updateErrors.email),
-						};
-					if (updateErrors.password)
-						next.passwordErrors = {
-							...validatePassword(prev.password, updateErrors.password),
-						};
-					if (updateErrors.displayName)
-						next.displayNameErrors = {
-							...validateDisplayName(prev.displayName, updateErrors.displayName),
-						};
-					if (updateErrors.bio)
-						next.bioErrors = {
-							...validateBio(prev.bio, updateErrors.bio),
-						};
-					return next;
-				});
-			}
-			setActiveStep(0);
-		}
+					// apply all server errors at once
+					setFormData((prev) => {
+						const next = { ...prev };
+						if (updateErrors.username)
+							next.usernameErrors = {
+								...validateUsername(prev.username, updateErrors.username),
+							};
+						if (updateErrors.email)
+							next.emailErrors = {
+								...validateEmail(prev.email, updateErrors.email),
+							};
+						if (updateErrors.password)
+							next.passwordErrors = {
+								...validatePassword(prev.password, updateErrors.password),
+							};
+						if (updateErrors.displayName)
+							next.displayNameErrors = {
+								...validateDisplayName(prev.displayName, updateErrors.displayName),
+							};
+						if (updateErrors.bio)
+							next.bioErrors = {
+								...validateBio(prev.bio, updateErrors.bio),
+							};
+						return next;
+					});
+				}
+				setActiveStep(0);
+			});
 	};
 
 	const handleNextStep = () => {
