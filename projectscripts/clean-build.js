@@ -25,21 +25,6 @@ try {
 		fs.cpSync(buildDir, path.join(appDir, "build"), { recursive: true });
 	}
 
-	// 3) patch index.html to use relative "./" URLs
-	const indexPath = path.join(appDir, "build", "index.html");
-	if (fs.existsSync(indexPath)) {
-		let html = fs.readFileSync(indexPath, "utf-8");
-
-		// assets folder
-		html = html.replace(/(href|src)="\/assets\//g, '$1="./assets/');
-		// favicon, icons, manifest
-		html = html.replace(/href="\/favicon\.ico"/g, 'href="./favicon.ico"');
-		html = html.replace(/href="\/logo192\.png"/g, 'href="./logo192.png"');
-		html = html.replace(/href="\/manifest\.json"/g, 'href="./manifest.json"');
-
-		fs.writeFileSync(indexPath, html, "utf-8");
-	}
-
 	// 4) write new package.json
 	const { version, author, dependencies } = packageJson;
 	const newPkg = {
@@ -52,12 +37,6 @@ try {
 		dependencies,
 	};
 	fs.writeFileSync(path.join(appDir, "package.json"), JSON.stringify(newPkg, null, 2));
-
-	// 5) copy lockfiles/workspace if exist
-	const lockfile = path.join(__dirname, "..", "pnpm-lock.yaml");
-	const workspace = path.join(__dirname, "..", "pnpm-workspace.yaml");
-	if (fs.existsSync(lockfile)) fs.copyFileSync(lockfile, path.join(appDir, "pnpm-lock.yaml"));
-	if (fs.existsSync(workspace)) fs.copyFileSync(workspace, path.join(appDir, "pnpm-workspace.yaml"));
 
 	console.log("Clean build completed successfully.");
 } catch (err) {
