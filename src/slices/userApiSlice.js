@@ -2,7 +2,6 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { addSnackbar } from "./snackbarSlice";
 import { getApiBase } from "../helpers/api";
-import cacheMedia from "../helpers/cacheMedia";
 
 const initialState = {
 	profiles: {},
@@ -16,14 +15,14 @@ export const fetchUserProfile = createAsyncThunk("userApi/fetchUserProfile", asy
 			params: userId ? { id: userId } : undefined,
 		});
 		const u = data.user;
-		return {
-			id: u.id,
-			profile: {
-				...u,
-				avatarUrl: u.avatarUrl ? await cacheMedia(base + u.avatarUrl) : null,
-				bannerUrl: u.bannerUrl ? await cacheMedia(base + u.bannerUrl) : null,
-			},
-		};
+                return {
+                        id: u.id,
+                        profile: {
+                                ...u,
+                                avatarUrl: u.avatarUrl ? base + u.avatarUrl : null,
+                                bannerUrl: u.bannerUrl ? base + u.bannerUrl : null,
+                        },
+                };
 	} catch (err) {
 		return rejectWithValue(err.response?.data || err.message);
 	}
@@ -37,14 +36,14 @@ export const modifyProfile = createAsyncThunk("userApi/modifyProfile", async ({ 
 		});
 		const u = data.user;
 		console.log(u.avatarUrl);
-		return {
-			id: u.id,
-			profile: {
-				...u,
-				avatarUrl: u.avatarUrl ? await cacheMedia(base + u.avatarUrl) : null,
-				bannerUrl: u.bannerUrl ? await cacheMedia(base + u.bannerUrl) : null,
-			},
-		};
+                return {
+                        id: u.id,
+                        profile: {
+                                ...u,
+                                avatarUrl: u.avatarUrl ? base + u.avatarUrl : null,
+                                bannerUrl: u.bannerUrl ? base + u.bannerUrl : null,
+                        },
+                };
 	} catch (err) {
 		return rejectWithValue(err.response?.data || err.message);
 	}

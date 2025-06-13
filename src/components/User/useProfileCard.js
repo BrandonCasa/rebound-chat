@@ -4,7 +4,6 @@ import socketIoHelper from "../../helpers/socket";
 import { addSnackbar } from "../../slices/snackbarSlice";
 import { setLoggedIn } from "../../slices/authSlice";
 import { friendAction, modifyProfile } from "../../slices/userApiSlice";
-import cacheMedia from "../../helpers/cacheMedia";
 import { getApiBase } from "../../helpers/api";
 
 const REQUEST_BASE = getApiBase();
@@ -13,15 +12,9 @@ export function useFilePreview(initialUrl) {
 	const [file, setFile] = useState(null);
 	const [preview, setPrev] = useState(null);
 
-	useEffect(() => {
-		let alive = true;
-		cacheMedia(initialUrl).then((u) => {
-			if (alive) setPrev(u);
-		});
-		return () => {
-			alive = false;
-		};
-	}, [initialUrl]);
+        useEffect(() => {
+                setPrev(initialUrl);
+        }, [initialUrl]);
 
 	const onChange = (e) => {
 		const f = e.target.files?.[0];
@@ -30,10 +23,10 @@ export function useFilePreview(initialUrl) {
 		setPrev(URL.createObjectURL(f));
 	};
 
-	const reset = (url) => {
-		setFile(null);
-		cacheMedia(url).then(setPrev);
-	};
+        const reset = (url) => {
+                setFile(null);
+                setPrev(url);
+        };
 
 	return { file, preview, onChange, reset };
 }
@@ -94,17 +87,17 @@ export default function useProfileCard(user, forceSelf) {
 	useEffect(() => {
 		const socket = socketIoHelper.getSocket();
 		if (!socket) return;
-		const onSaved = async ([id, pubData, privData]) => {
-			if (id !== watchId) return;
-			const data = id === auth.userId ? privData : pubData;
-			const av = data?.avatarUrl ? await cacheMedia(REQUEST_BASE + data.avatarUrl) : null;
-			const bn = data?.bannerUrl ? await cacheMedia(REQUEST_BASE + data.bannerUrl) : null;
-			setProfile((p) => ({ ...p, ...data, avatarUrl: av, bannerUrl: bn }));
-			avatar.reset(av);
-			banner.reset(bn);
-			setName(data.displayName);
-			setBio(data.bio);
-		};
+                const onSaved = ([id, pubData, privData]) => {
+                        if (id !== watchId) return;
+                        const data = id === auth.userId ? privData : pubData;
+                        const av = data?.avatarUrl ? REQUEST_BASE + data.avatarUrl : null;
+                        const bn = data?.bannerUrl ? REQUEST_BASE + data.bannerUrl : null;
+                        setProfile((p) => ({ ...p, ...data, avatarUrl: av, bannerUrl: bn }));
+                        avatar.reset(av);
+                        banner.reset(bn);
+                        setName(data.displayName);
+                        setBio(data.bio);
+                };
 		socket.on("watched_user_saved", onSaved);
 		return () => {
 			socket.off("watched_user_saved", onSaved);
@@ -140,12 +133,12 @@ export default function useProfileCard(user, forceSelf) {
 
 		dispatch(modifyProfile({ formData: fd, authToken: auth.authToken }))
 			.unwrap()
-			.then(async ({ profile: u }) => {
-				const full = {
-					...u,
-					avatarUrl: u.avatarUrl ? await cacheMedia(REQUEST_BASE + u.avatarUrl) : null,
-					bannerUrl: u.bannerUrl ? await cacheMedia(REQUEST_BASE + u.bannerUrl) : null,
-				};
+                        .then(({ profile: u }) => {
+                                const full = {
+                                        ...u,
+                                        avatarUrl: u.avatarUrl ? REQUEST_BASE + u.avatarUrl : null,
+                                        bannerUrl: u.bannerUrl ? REQUEST_BASE + u.bannerUrl : null,
+                                };
 				dispatch(
 					setLoggedIn({
 						avatarUrl: full.avatarUrl,
