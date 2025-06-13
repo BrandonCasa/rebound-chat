@@ -7,11 +7,12 @@ export default defineConfig(({ mode }) => ({
 	resolve: {
 		alias: {
 			slices: path.resolve(__dirname, "./src/slices"),
-			...(process.env.VITEST
-				? {
-						"@mui/icons-material": path.resolve(__dirname, "./src/muiIconsStub.js"),
-					}
-				: {}),
+                        ...(process.env.VITEST
+                                ? {
+                                                "@mui/icons-material": path.resolve(__dirname, "./src/muiIconsStub.js"),
+                                                "@mui/icons-material/*": path.resolve(__dirname, "./src/muiIconsStub.js"),
+                                        }
+                                : {}),
 		},
 	},
 	plugins: [react()],
