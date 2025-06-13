@@ -1,5 +1,4 @@
 const CACHE_NAME = 'media-cache-v1';
-const MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -17,17 +16,24 @@ function isMediaRequest(request) {
   return ['image', 'video', 'audio'].includes(request.destination);
 }
 
+function isServerContentRequest(request) {
+  try {
+    const url = new URL(request.url);
+    return url.pathname.startsWith('/content/');
+  } catch {
+    return false;
+  }
+}
+
 async function fetchAndCache(request) {
   const response = await fetch(request);
   if (!response || !response.ok) return response;
   const cache = await caches.open(CACHE_NAME);
-  const headers = new Headers(response.headers);
-  headers.set('x-sw-cache-time', Date.now().toString());
   const data = await response.clone().blob();
   const cachedResponse = new Response(data, {
     status: response.status,
     statusText: response.statusText,
-    headers,
+    headers: response.headers,
   });
   cache.put(request, cachedResponse.clone());
   return cachedResponse;
@@ -35,7 +41,11 @@ async function fetchAndCache(request) {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  if (request.method !== 'GET' || !isMediaRequest(request)) {
+  if (
+    request.method !== 'GET' ||
+    !isMediaRequest(request) ||
+    !isServerContentRequest(request)
+  ) {
     return;
   }
   event.respondWith(
@@ -43,11 +53,7 @@ self.addEventListener('fetch', (event) => {
       const cache = await caches.open(CACHE_NAME);
       const cached = await cache.match(request);
       if (cached) {
-        const ts = parseInt(cached.headers.get('x-sw-cache-time') || '0', 10);
-        if (!isNaN(ts) && Date.now() - ts < MAX_AGE) {
-          return cached;
-        }
-        await cache.delete(request);
+        return cached;
       }
       try {
         return await fetchAndCache(request);
