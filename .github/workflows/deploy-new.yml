@@ -43,6 +43,8 @@ env:
   DB_AUTH: ${{ secrets.DB_AUTH }}
   DB_NAME: ${{ secrets.DB_NAME }}
   PORT: ${{ secrets.PORT }}
+  GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+  GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
 
 jobs:
   deploy:
