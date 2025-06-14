@@ -45,9 +45,9 @@ const EditableDiv = styled("div")(({ theme }) => ({
 	},
 	// mention highlight
 	"& .mention": {
-		backgroundColor: theme.palette.warning.main,
+		backgroundColor: `${theme.palette.warning.main}80`,
 		color: theme.palette.common.white,
-		borderRadius: 2,
+		borderRadius: 4,
 		padding: "0 2px",
 	},
 }));

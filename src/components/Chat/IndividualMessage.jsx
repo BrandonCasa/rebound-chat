@@ -2,6 +2,7 @@ import { Box, ListItem, Avatar, Typography, useTheme, Link, TextField, Button } 
 import { scrollbarStyles } from "../../routes/LandingPage/utils/scrollbarStyles";
 import React from "react";
 import { highlightMentions } from "../../helpers/mentions";
+import { profileMediaUrl } from "../../helpers/mediaUrl";
 
 const formatDate = (timestamp) => {
 	const messageDate = new Date(timestamp);
@@ -81,7 +82,7 @@ function IndividualMessage({
 				}}>
 				<Avatar
 					alt="User"
-					src={msg.sender.avatarUrl || (window.isElectron ? "defaultpfp.webp" : "/defaultpfp.webp")}
+					src={profileMediaUrl(msg.sender.avatarUrl, "defaultpfp.webp")}
 					sx={{ height: "40px", width: "40px", cursor: "pointer" }}
 					onClick={() => onClickMessage(messageRef, msg.sender)}
 				/>
@@ -150,16 +151,22 @@ function IndividualMessage({
 								Cancel
 							</Button>
 						</Box>
-                                        ) : (
-                                                <Typography variant="subtitle1" sx={{ color: theme.palette.text.secondary }}>
-                                                        {highlightMentions(msg.content, msg.mentions || []).map((p) => (
-                                                                <span key={p.key} style={p.mention ? { backgroundColor: theme.palette.warning.main, color: theme.palette.common.white, padding: "0 2px" } : {}}>
-                                                                        {p.text}
-                                                                </span>
-                                                        ))}
-                                                </Typography>
-                                        )}
-                                </Box>
+					) : (
+						<Typography variant="subtitle1" sx={{ color: theme.palette.text.secondary }}>
+							{highlightMentions(msg.content, msg.mentions || []).map((p) => (
+								<span
+									key={p.key}
+									style={
+										p.mention
+											? { backgroundColor: `${theme.palette.warning.main}80`, color: theme.palette.common.white, borderRadius: 4, padding: "0 2px" }
+											: {}
+									}>
+									{p.text}
+								</span>
+							))}
+						</Typography>
+					)}
+				</Box>
 			</Box>
 		</ListItem>
 	);
