@@ -37,9 +37,9 @@ export default function DirectMessagePage() {
 		previewUser,
 	} = useDirectMessagePage(userId);
 
-	const pfpRef = React.useRef(null);
-
 	if (!auth.loggedIn) return <Typography>Please login.</Typography>;
+
+	const pfpRef = React.useRef(null);
 
 	return (
 		<Box sx={{ display: "flex", flexGrow: 1, flexDirection: "column", overflow: "hidden" }}>

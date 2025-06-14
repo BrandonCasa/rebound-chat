@@ -21,7 +21,8 @@ import "dotenv/config";
 
 const router = Router();
 
-const upload = multer({ storage: multer.memoryStorage() });
+const MAX_FILE_SIZE = 8 * 1024 * 1024; // 2 MB
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FILE_SIZE } });
 
 // ─── AUTH RATE LIMITER ────────────────────────────────────────────────────────
 // max 10 login/register attempts per hour per IP
@@ -213,10 +214,26 @@ router.put(
 
 				// 6) Banner & avatar
 				if (req.files?.banner?.[0]) {
+					if (user.bannerUrl && user.bannerUrl.startsWith("/content/")) {
+						const oldBanner = user.bannerUrl.replace("/content/", "");
+						const [fileDoc] = await databaseServer.gridfsBucket.find({ filename: oldBanner }).toArray();
+						if (fileDoc) {
+							await databaseServer.gridfsBucket.delete(fileDoc._id);
+						}
+					}
+
 					const storedName = await uploadToGrid(req.files.banner[0], "banner");
 					user.bannerUrl = `/content/${storedName}`;
 				}
 				if (req.files?.avatar?.[0]) {
+					if (user.avatarUrl && user.avatarUrl.startsWith("/content/")) {
+						const oldAvatar = user.avatarUrl.replace("/content/", "");
+						const [fileDoc] = await databaseServer.gridfsBucket.find({ filename: oldAvatar }).toArray();
+						if (fileDoc) {
+							await databaseServer.gridfsBucket.delete(fileDoc._id);
+						}
+					}
+
 					const storedName = await uploadToGrid(req.files.avatar[0], "avatar");
 					user.avatarUrl = `/content/${storedName}`;
 				}

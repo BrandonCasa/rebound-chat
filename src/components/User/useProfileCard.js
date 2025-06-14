@@ -157,15 +157,27 @@ export default function useProfileCard(user, forceSelf) {
 				avatar.reset(profileMediaUrl(full.avatarUrl, "defaultpfp.webp"));
 				banner.reset(profileMediaUrl(full.bannerUrl, "banner.webp"));
 			})
-			.catch(() =>
-				dispatch(
-					addSnackbar({
-						snackbarMsg: "Update failed",
-						snackbarSeverity: "error",
-						autoHideDuration: 1500,
-					})
-				)
-			);
+			.catch((err) => {
+				banner.reset(profileMediaUrl(rawData.bannerUrl, "banner.webp"));
+				avatar.reset(profileMediaUrl(rawData.avatarUrl, "defaultpfp.webp"));
+				if (err?.error) {
+					dispatch(
+						addSnackbar({
+							snackbarMsg: err.error,
+							snackbarSeverity: "error",
+							autoHideDuration: 2000,
+						})
+					);
+				} else {
+					dispatch(
+						addSnackbar({
+							snackbarMsg: "Error modifying profile.",
+							snackbarSeverity: "error",
+							autoHideDuration: 2000,
+						})
+					);
+				}
+			});
 	};
 
 	return {
