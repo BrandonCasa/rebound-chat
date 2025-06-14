@@ -11,7 +11,7 @@ const buildDir = path.join(__dirname, "..", "build");
 const appDir = path.join(__dirname, "..", "app");
 
 try {
-	// 1) ensure/clear appDir
+        // 1) ensure/clear appDir
 	if (!fs.existsSync(appDir)) {
 		fs.mkdirSync(appDir);
 	} else {
@@ -20,12 +20,12 @@ try {
 		}
 	}
 
-	// 2) copy build → app/build
+        // 2) copy build → app/build
 	if (fs.existsSync(buildDir)) {
 		fs.cpSync(buildDir, path.join(appDir, "build"), { recursive: true });
 	}
 
-	// 4) write new package.json
+        // 3) write new package.json
 	const { version, author, dependencies } = packageJson;
 	const newPkg = {
 		name: "rebound-desktop",
