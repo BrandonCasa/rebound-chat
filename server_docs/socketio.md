@@ -31,6 +31,21 @@ Server‑emitted events related to rooms:
 - `new_message` – updated messages broadcast to others in the room.
 - `messages_updated` – emitted after edits or deletions.
 
+## Direct Messages
+
+Client‑initiated events handled in `server/src/socketio/dms.js`:
+
+| Event        | Arguments               | Description                                        |
+| ------------ | ----------------------- | -------------------------------------------------- |
+| `join_dm`    | `userId`                | Join or create a DM thread with the given user. The server replies with `dm_joined`. |
+| `message_dm` | `threadId`, `content`   | Post a message in the DM thread. Sender receives `dm_sent`; the other participant gets `dm_new_message`. |
+
+Server‑emitted events related to direct messages:
+
+- `dm_joined` – thread id and existing messages when a socket joins a DM.
+- `dm_sent` – updated message list sent back to the sender after posting.
+- `dm_new_message` – updated messages broadcast to the other participant.
+
 ## Watchers
 
 Handlers in `server/src/socketio/watchers.js` let sockets watch user profiles for changes.

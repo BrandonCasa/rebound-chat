@@ -4,6 +4,7 @@ import adminApi from "./admin.js";
 import devApi from "./dev.js";
 import usersApi from "./users.js";
 import chatApi from "./chat.js";
+import dmApi from "./dms.js";
 import contentRoutes from "../content.js";
 
 const router = Router();
@@ -15,6 +16,7 @@ router.use("/", devApi);
 router.use("/", adminApi);
 
 router.use("/", chatApi);
+router.use("/", dmApi);
 
 router.use("/", contentRoutes);
 

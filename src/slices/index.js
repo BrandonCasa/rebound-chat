@@ -6,14 +6,16 @@ import settingsReducer from "./settingsSlice";
 import snackbarReducer from "./snackbarSlice";
 import userApiReducer from "./userApiSlice";
 import chatApiReducer from "./chatApiSlice";
+import dmApiReducer from "./dmApiSlice";
 
 const rootReducer = combineReducers({
 	dialogs: dialogReducer,
 	auth: authReducer,
 	snackbars: snackbarReducer,
 	settings: settingsReducer,
-	userApi: userApiReducer,
-	chatApi: chatApiReducer,
+        userApi: userApiReducer,
+        chatApi: chatApiReducer,
+        dmApi: dmApiReducer,
 });
 
 export default rootReducer;
