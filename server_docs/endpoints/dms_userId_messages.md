@@ -17,8 +17,13 @@ Send a direct message to `userId`.
 - **Authentication**: required JWT.
 - **Request Body**:
   ```json
-  { "content": "Hello" }
+  {
+    "content": "Hello",
+    "mentions": [ { "user": "<userId>", "start": 0, "end": 5 } ]
+  }
   ```
 - **Responses**:
   - `200` – JSON `{ threadId: <id>, messages: [...] }` updated list.
   - `404` – other user not found.
+
+Messages returned include a `mentions` array if any users were referenced in the content.

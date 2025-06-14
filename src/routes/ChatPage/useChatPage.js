@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import useWindowDimensions from "../../helpers/useWindowDimensions";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchRoomMessages, mapMessages } from "../../slices/chatApiSlice";
+import { parseMentions } from "../../helpers/mentions";
 import { fetchUserProfile } from "../../slices/userApiSlice";
 import socketIoHelper from "../../helpers/socket";
 import { setSocketRoom } from "../../slices/authSlice";
@@ -123,13 +124,14 @@ export default function useChatPage() {
 		[dispatch]
 	);
 
-	const sendMessage = (e) => {
-		e?.preventDefault();
-		if (!message || !authState.socketInfo.currentRoom) return;
-		const s = socketIoHelper.getSocket();
-		s.emit("message_room", [authState.socketInfo.currentRoom, message]);
-		setMessage("");
-	};
+        const sendMessage = (e) => {
+                e?.preventDefault();
+                if (!message || !authState.socketInfo.currentRoom) return;
+                const s = socketIoHelper.getSocket();
+                const mentions = parseMentions(message, users);
+                s.emit("message_room", [authState.socketInfo.currentRoom, message, mentions]);
+                setMessage("");
+        };
 
 	const clickRoomSelect = (e) => {
 		setRoomAnchorEl(e.currentTarget);
@@ -183,13 +185,14 @@ export default function useChatPage() {
 		closeMessageMenu();
 	};
 
-	const commitEditMessage = () => {
-		if (!editingMessageId) return;
-		const s = socketIoHelper.getSocket();
-		s.emit("edit_message", authState.socketInfo.currentRoom, editingMessageId, editingText);
-		setEditingMessageId(null);
-		setEditingText("");
-	};
+        const commitEditMessage = () => {
+                if (!editingMessageId) return;
+                const s = socketIoHelper.getSocket();
+                const mentions = parseMentions(editingText, users);
+                s.emit("edit_message", authState.socketInfo.currentRoom, editingMessageId, editingText, mentions);
+                setEditingMessageId(null);
+                setEditingText("");
+        };
 
 	const cancelEditMessage = () => {
 		setEditingMessageId(null);

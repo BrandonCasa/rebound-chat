@@ -16,8 +16,8 @@ Client‑initiated events handled in `server/src/socketio/rooms.js`:
 | `make_room`      | `name`, `description`            | Create a new chat room. Server replies with `room_created`.                                                                                   |
 | `join_room`      | `roomId`                         | Join an existing room. Server emits `joined_room` with the room id and message history and broadcasts `user_list` to all sockets in the room. |
 | `leave_room`     | `roomId?`                        | Leave a specific room or all joined rooms.                                                                                                    |
-| `message_room`   | `roomId`, `content`              | Send a message to a room. Sender receives `message_sent`; others get `new_message`.                                                           |
-| `edit_message`   | `roomId`, `messageId`, `content` | Edit a previously sent message. Room participants receive `messages_updated`.                                                                 |
+| `message_room`   | `roomId`, `content`, `mentions?` | Send a message to a room. Sender receives `message_sent`; others get `new_message`.                                                           |
+| `edit_message`   | `roomId`, `messageId`, `content`, `mentions?` | Edit a previously sent message. Room participants receive `messages_updated`.                                                                 |
 | `delete_message` | `roomId`, `messageId`            | Delete one of the sender's messages. Room participants receive `messages_updated`.                                                            |
 
 Server‑emitted events related to rooms:
@@ -38,7 +38,7 @@ Client‑initiated events handled in `server/src/socketio/dms.js`:
 | Event        | Arguments               | Description                                        |
 | ------------ | ----------------------- | -------------------------------------------------- |
 | `join_dm`    | `userId`                | Join or create a DM thread with the given user. The server replies with `dm_joined`. |
-| `message_dm` | `threadId`, `content`   | Post a message in the DM thread. Sender receives `dm_sent`; the other participant gets `dm_new_message`. |
+| `message_dm` | `threadId`, `content`, `mentions?`   | Post a message in the DM thread. Sender receives `dm_sent`; the other participant gets `dm_new_message`. |
 
 Server‑emitted events related to direct messages:
 

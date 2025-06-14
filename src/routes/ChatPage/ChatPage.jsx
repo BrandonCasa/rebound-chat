@@ -131,7 +131,7 @@ function ChatPage() {
 				</Box>
 
 				{/* input */}
-				<ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} />
+                                <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} users={users} />
 			</Paper>
 		</Box>
 	);
