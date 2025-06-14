@@ -36,18 +36,8 @@ export const verifyUser = createAsyncThunk("auth/verifyUser", async (token, { re
 		);
 		const u = data.user;
 
-                const bannerUrl =
-                        u?.bannerUrl && u.bannerUrl !== ""
-                                ? base + u.bannerUrl
-                                : globalThis.IN_ELECTRON_ENV
-                                ? "banner.webp"
-                                : "/banner.webp";
-                const avatarUrl =
-                        u?.avatarUrl && u.avatarUrl !== ""
-                                ? base + u.avatarUrl
-                                : globalThis.IN_ELECTRON_ENV
-                                ? "defaultpfp.webp"
-                                : "/defaultpfp.webp";
+		const bannerUrl = u?.bannerUrl && u.bannerUrl !== "" ? base + u.bannerUrl : globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp";
+		const avatarUrl = u?.avatarUrl && u.avatarUrl !== "" ? base + u.avatarUrl : globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp";
 
 		return {
 			loggedIn: true,
@@ -73,18 +63,8 @@ export const loginUser = createAsyncThunk("auth/loginUser", async ({ email, pass
 		});
 		const u = data.user;
 
-                const bannerUrl =
-                        u?.bannerUrl && u.bannerUrl !== ""
-                                ? base + u.bannerUrl
-                                : globalThis.IN_ELECTRON_ENV
-                                ? "banner.webp"
-                                : "/banner.webp";
-                const avatarUrl =
-                        u?.avatarUrl && u.avatarUrl !== ""
-                                ? base + u.avatarUrl
-                                : globalThis.IN_ELECTRON_ENV
-                                ? "defaultpfp.webp"
-                                : "/defaultpfp.webp";
+		const bannerUrl = u?.bannerUrl && u.bannerUrl !== "" ? base + u.bannerUrl : globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp";
+		const avatarUrl = u?.avatarUrl && u.avatarUrl !== "" ? base + u.avatarUrl : globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp";
 
 		return {
 			loggedIn: true,
@@ -116,18 +96,8 @@ export const registerUser = createAsyncThunk(
 				window.localStorage.setItem("auth-token", u.token);
 			}
 
-                        const bannerUrl =
-                                u?.bannerUrl && u.bannerUrl !== ""
-                                        ? base + u.bannerUrl
-                                        : globalThis.IN_ELECTRON_ENV
-                                        ? "banner.webp"
-                                        : "/banner.webp";
-                        const avatarUrl =
-                                u?.avatarUrl && u.avatarUrl !== ""
-                                        ? base + u.avatarUrl
-                                        : globalThis.IN_ELECTRON_ENV
-                                        ? "defaultpfp.webp"
-                                        : "/defaultpfp.webp";
+			const bannerUrl = u?.bannerUrl && u.bannerUrl !== "" ? base + u.bannerUrl : globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp";
+			const avatarUrl = u?.avatarUrl && u.avatarUrl !== "" ? base + u.avatarUrl : globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp";
 
 			return {
 				loggedIn: true,
