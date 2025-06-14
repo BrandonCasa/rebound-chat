@@ -112,6 +112,15 @@ router.get("/users/profile", generalLimiter, auth.required, async (req, res, nex
  * /users/login
  * Log in a user using passport local strategy.
  */
+router.get("/users/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+router.get(
+        "/users/google/callback",
+        passport.authenticate("google", { session: false, failureRedirect: "/" }),
+        (req, res) => {
+                const token = req.user.generateJWT();
+                res.redirect(`/?token=${token}`);
+        }
+);
 router.post("/users/login", authLimiter, (req, res, next) => {
 	if (!req.body?.user?.email) {
 		return res.status(422).json({ errors: { email: "is required" } });

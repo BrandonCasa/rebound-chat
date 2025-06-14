@@ -1,5 +1,7 @@
 import { Dialog, Box, Typography, TextField, DialogActions, Button, FormGroup, FormControlLabel, Checkbox } from "@mui/material";
 import React, { useState } from "react";
+import GoogleButton from "react-google-button";
+import { getApiBase } from "../helpers/api";
 import { useDispatch, useSelector } from "react-redux";
 
 import { loginUser } from "../slices/authSlice";
@@ -97,15 +99,22 @@ const LoginDialog = () => {
 					}}
 					autoComplete="current-password"
 				/>
-				<FormGroup>
-					<FormControlLabel
-						control={<Checkbox defaultChecked />}
-						label="Stay Logged In"
-						onChange={(e) => setStayLoggedIn(e.target.checked)}
-						value={stayLoggedIn}
-					/>
-				</FormGroup>
-			</Box>
+                                <FormGroup>
+                                        <FormControlLabel
+                                                control={<Checkbox defaultChecked />}
+                                                label="Stay Logged In"
+                                                onChange={(e) => setStayLoggedIn(e.target.checked)}
+                                                value={stayLoggedIn}
+                                        />
+                                </FormGroup>
+                                <Box sx={{ display: "flex", justifyContent: "center", py: 1 }}>
+                                        <GoogleButton
+                                                onClick={() => {
+                                                        window.location.href = `${getApiBase()}/users/google`;
+                                                }}
+                                        />
+                                </Box>
+                        </Box>
 			<DialogActions>
 				<Button
 					variant="outlined"

@@ -1,6 +1,7 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
+import crypto from "crypto";
 import UserModel from "../models/User.js";
 
 class CustomPassport {
@@ -25,20 +26,54 @@ class CustomPassport {
 						})
 						.catch(done);
 				}
-			)
-			//new GoogleStrategy(
-			//	{
-			//		clientID: GOOGLE_CLIENT_ID,
-			//		clientSecret: GOOGLE_CLIENT_SECRET,
-			//		callbackURL: "http://www.example.com/auth/google/callback",
-			//	},
-			//	function (accessToken, refreshToken, profile, cb) {
-			//		User.findOrCreate({ googleId: profile.id }, function (err, user) {
-			//			return cb(err, user);
-			//		});
-			//	}
-			//)
-		);
+                        );
+                passport.use(
+                        new GoogleStrategy(
+                                {
+                                        clientID: process.env.GOOGLE_CLIENT_ID,
+                                        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+                                        callbackURL: "/api/users/google/callback",
+                                },
+                                async function (accessToken, refreshToken, profile, cb) {
+                                        try {
+                                                let user = await UserModel.findOne({ googleId: profile.id });
+                                                if (!user) {
+                                                        const email = profile.emails?.[0]?.value;
+                                                        if (email) {
+                                                                user = await UserModel.findOne({ email });
+                                                        }
+                                                        if (!user) {
+                                                                let base = profile.displayName
+                                                                        ? profile.displayName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()
+                                                                        : "user";
+                                                                if (base === "") base = "user";
+                                                                let username = base;
+                                                                let count = 0;
+                                                                while (await UserModel.findOne({ username })) {
+                                                                        count++;
+                                                                        username = `${base}${count}`;
+                                                                }
+                                                                user = new UserModel({
+                                                                        username,
+                                                                        email,
+                                                                        displayName: profile.displayName || username,
+                                                                        googleId: profile.id,
+                                                                });
+                                                                const randPass = crypto.randomBytes(16).toString("hex");
+                                                                user.setPassword(randPass);
+                                                                await user.save();
+                                                        } else if (!user.googleId) {
+                                                                user.googleId = profile.id;
+                                                                await user.save();
+                                                        }
+                                                }
+                                                return cb(null, user);
+                                        } catch (err) {
+                                                return cb(err);
+                                        }
+                                }
+                        )
+                );
 	}
 }
 
