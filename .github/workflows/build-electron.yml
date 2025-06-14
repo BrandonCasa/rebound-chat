@@ -106,4 +106,6 @@ jobs:
       - name: Run Build Command
         run: pnpm run build
       - name: Run Dist Command for ${{ matrix.platform }}
-        run: pnpm run dist ${{ matrix.builderFlag }} ${{ matrix.archFlag }} --publish always
+        run: |
+          pnpm run predist
+          pnpm electron-builder ${{ matrix.builderFlag }} ${{ matrix.archFlag }} --publish always
