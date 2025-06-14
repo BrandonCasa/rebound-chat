@@ -24,13 +24,13 @@ class ServerBackend {
 		this.server = http.createServer(this.app);
 	}
 
-        _initMiddleware() {
-                // Trust the reverse proxy (e.g. Nginx) when determining
-                // protocol and other forwarding headers
-                this.app.set("trust proxy", true);
+	_initMiddleware() {
+		// Trust the reverse proxy (e.g. Nginx) when determining
+		// protocol and other forwarding headers
+		this.app.set("trust proxy", 1);
 
-                // CORS
-                this.app.use(cors({ optionsSuccessStatus: 200 }));
+		// CORS
+		this.app.use(cors({ optionsSuccessStatus: 200 }));
 		// ─── GLOBAL RATE LIMITER ───────────────────────────────────────────────────
 		// limit each IP to 150 requests per 5 minutes
 		const globalLimiter = rateLimit({

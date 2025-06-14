@@ -33,7 +33,8 @@ class CustomPassport {
 				{
 					clientID: process.env.GOOGLE_CLIENT_ID,
 					clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-					callbackURL: "/api/users/google/callback",
+					callbackURL:
+						process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/google/callback" : "https://rebound.nexus/api/users/google/callback",
 				},
 				async function (accessToken, refreshToken, profile, cb) {
 					try {
