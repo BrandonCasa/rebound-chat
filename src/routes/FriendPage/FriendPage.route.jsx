@@ -13,7 +13,7 @@ export default function FriendsPage() {
 	const { friendItems, loading, paperRefs, userPreviewEl, setUserPreviewEl, userPreviewUser, setUserPreviewUser, handleProfilePreview, callApi } =
 		useFriendPage();
 
-	const handleChat = () => navigate("/chat");
+	const handleChat = (profileId) => navigate(`/dm/${profileId}`);
 
 	if (!auth.loggedIn) return <Typography>Please login.</Typography>;
 	if (loading) return <Typography>Loading friends...</Typography>;

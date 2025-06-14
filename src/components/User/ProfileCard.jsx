@@ -6,6 +6,7 @@ import PersonRemove from "@mui/icons-material/PersonRemove";
 import { Avatar, Box, Button, ButtonGroup, Divider, Fab, IconButton, Paper, Stack, TextField, Typography } from "@mui/material";
 import useProfileCard from "./useProfileCard";
 import { useNavigate, useLocation } from "react-router-dom";
+import { profileMediaUrl } from "../../helpers/mediaUrl";
 
 /* -------------------------------------------------- */
 
@@ -114,7 +115,7 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 				<Box position="relative">
 					<Box
 						component="img"
-						src={banner.preview || (window.isElectron ? "banner.webp" : "/banner.webp")}
+						src={profileMediaUrl(banner.preview, "banner.webp")}
 						alt="banner"
 						sx={{
 							width: "100%",
@@ -122,7 +123,7 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 							borderRadius: 1,
 							objectFit: "cover",
 						}}
-						key={banner.preview}
+						key={profileMediaUrl(banner.preview, "banner.webp")}
 					/>
 					{isSelf && editMode && (
 						<CameraInput
@@ -140,7 +141,7 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 				{/* Avatar + Name */}
 				<Stack direction="row" spacing={2} alignItems="center">
 					<Box position="relative">
-						<Avatar src={avatar.preview || (window.isElectron ? "defaultpfp.webp" : "/defaultpfp.webp")} sx={{ width: 56, height: 56 }} />
+						<Avatar src={profileMediaUrl(avatar.preview, "defaultpfp.webp")} sx={{ width: 56, height: 56 }} />
 						{isSelf && editMode && (
 							<CameraInput
 								onChange={avatar.onChange}

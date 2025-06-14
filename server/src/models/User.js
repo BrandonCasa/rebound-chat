@@ -16,15 +16,15 @@ const UserSchema = new Schema(
 			match: [/^[a-zA-Z0-9]+$/, "is invalid"],
 			index: true,
 		},
-                email: {
-                        type: String,
-                        lowercase: true,
-                        unique: true,
-                        required: [true, "is required"],
-                        match: [/\S+@\S+\.\S+/, "is invalid"],
-                        index: true,
-                },
-                googleId: { type: String, unique: true, sparse: true },
+		email: {
+			type: String,
+			lowercase: true,
+			unique: true,
+			required: [true, "is required"],
+			match: [/\S+@\S+\.\S+/, "is invalid"],
+			index: true,
+		},
+		googleId: { type: String, unique: true, sparse: true },
 
 		// —— newly added image fields ——
 		bannerUrl: { type: String, default: "" },
