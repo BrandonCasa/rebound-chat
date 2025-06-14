@@ -2,21 +2,24 @@ import ChevronRightRounded from "@mui/icons-material/ChevronRightRounded";
 import { Toolbar, Box, IconButton, Tooltip } from "@mui/material";
 import { styled, useTheme } from "@mui/material/styles";
 
+const offset = typeof window !== "undefined" && window.isElectron ? 32 : 0;
+
 const MainBox = styled(Box)(({ theme }) => ({
-	position: "absolute",
-	flexGrow: 1,
-	padding: 2,
-	height: "100%",
-	display: "flex",
-	flexDirection: "column",
+        position: "absolute",
+        flexGrow: 1,
+        padding: 2,
+        height: `calc(100% - ${offset}px)`,
+        display: "flex",
+        flexDirection: "column",
+        top: `${offset}px`,
 }));
 
 const IconBox = styled(Box)(({ theme }) => ({
-	backgroundColor: theme.palette.primary.main,
-	position: "fixed",
-	left: 0,
-	p: 0,
-	top: 0,
+        backgroundColor: theme.palette.primary.main,
+        position: "fixed",
+        left: 0,
+        p: 0,
+        top: offset,
 }));
 
 function MainContent({ drawerWidth, drawerOpen, iconWidth, setDrawerOpen, children }) {

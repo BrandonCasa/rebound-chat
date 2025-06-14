@@ -23,15 +23,17 @@ function CustomAppBar({
 	const theme = useTheme();
 	const auth = useSelector((s) => s.auth);
 
-	return (
-		<Box
-			sx={{
-				display: "flex",
-				height: "100%",
-				width: "100%",
-				position: "fixed",
-				top: 0,
-			}}>
+        const titleOffset = window.isElectron ? 32 : 0;
+
+        return (
+                <Box
+                        sx={{
+                                display: "flex",
+                                height: "100%",
+                                width: "100%",
+                                position: "fixed",
+                                top: `${titleOffset}px`,
+                        }}>
 			<AppBarContent
 				handleIconClick={handleIconClick}
 				iconWidth={iconWidth}

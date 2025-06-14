@@ -27,15 +27,17 @@ function sendStatus(channel, payload = {}) {
 async function createWindow() {
 	const preloadPath = join(__dirname, "preload.js");
 
-	mainWindow = new BrowserWindow({
-		width: 1280,
-		height: 720,
-		webPreferences: {
-			nodeIntegration: false,
-			contextIsolation: true,
-			preload: preloadPath,
-		},
-	});
+        mainWindow = new BrowserWindow({
+                width: 1280,
+                height: 720,
+                frame: false,
+                titleBarStyle: "hidden",
+                webPreferences: {
+                        nodeIntegration: false,
+                        contextIsolation: true,
+                        preload: preloadPath,
+                },
+        });
 
 	if (isDev) {
 		mainWindow.loadURL("http://localhost:3000");

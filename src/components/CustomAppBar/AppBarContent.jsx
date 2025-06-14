@@ -2,13 +2,14 @@ import AccountCircleRounded from "@mui/icons-material/AccountCircleRounded";
 import { AppBar, Toolbar, Typography, IconButton, Avatar } from "@mui/material";
 
 const AppBarContent = ({ handleIconClick, drawerWidth, loggedInState, avatarUrl, theme }) => (
-	<AppBar
-		position="fixed"
-		sx={{
-			width: `calc(100% - ${drawerWidth}px)`,
-			ml: `${drawerWidth}px`,
-			boxShadow: "none",
-		}}>
+        <AppBar
+                position="fixed"
+                sx={{
+                        width: `calc(100% - ${drawerWidth}px)`,
+                        ml: `${drawerWidth}px`,
+                        boxShadow: "none",
+                        top: `${window.isElectron ? 32 : 0}px`,
+                }}>
 		<Toolbar
 			variant="dense"
 			sx={{

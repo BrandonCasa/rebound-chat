@@ -7,6 +7,7 @@ import { BrowserRouter, HashRouter, Route, Routes } from "react-router-dom";
 import "./App.css";
 
 import CustomAppBar from "./components/CustomAppBar/CustomAppBar";
+import TitleBar from "./components/TitleBar";
 import LoginDialog from "./components/LoginDialog.comp";
 import RegisterDialog from "./components/RegisterDialog";
 import SnackbarMapper from "./components/SnackbarMapper";
@@ -106,9 +107,10 @@ const App = () => {
 		<ThemeProvider theme={darkTheme}>
 			{window.isElectron && <AutoUpdate />}
 			<CssBaseline />
-			<SnackbarMapper drawerWidth={customAppBarProps.drawerWidth} drawerOpen={customAppBarProps.drawerOpen} />
-			<AppRouter>
-				<RegisterDialog />
+                        <SnackbarMapper drawerWidth={customAppBarProps.drawerWidth} drawerOpen={customAppBarProps.drawerOpen} />
+                        <AppRouter>
+                                {window.isElectron && <TitleBar />}
+                                <RegisterDialog />
 				<LoginDialog />
 				<CustomAppBar {...customAppBarProps}>
 					{!authState.loggingIn ? (

@@ -10,17 +10,19 @@ import { Toolbar, List, Divider, Drawer, Tooltip, ListItem, ListItemButton, List
 import { useNavigate, useLocation } from "react-router-dom";
 
 const drawerStyles = (drawerWidth, iconWidth) => ({
-	width: drawerWidth,
-	flexShrink: 0,
-	"& .MuiDrawer-paper": {
-		width: `${drawerWidth}px`,
-		boxSizing: "border-box",
-	},
-	".MuiSvgIcon-root": {
-		width: `${iconWidth}px`,
-		height: `${iconWidth}px`,
-		margin: `${(drawerWidth - iconWidth) / 2}px`,
-	},
+        width: drawerWidth,
+        flexShrink: 0,
+        top: `${window.isElectron ? 32 : 0}px`,
+        "& .MuiDrawer-paper": {
+                width: `${drawerWidth}px`,
+                boxSizing: "border-box",
+                top: `${window.isElectron ? 32 : 0}px`,
+        },
+        ".MuiSvgIcon-root": {
+                width: `${iconWidth}px`,
+                height: `${iconWidth}px`,
+                margin: `${(drawerWidth - iconWidth) / 2}px`,
+        },
 });
 
 const ListItemWithTooltip = ({ title, placement, children }) => (
