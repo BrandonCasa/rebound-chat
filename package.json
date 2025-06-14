@@ -11,6 +11,7 @@
 		"url": "https://github.com/BrandonCasa"
 	},
 	"dependencies": {
+		"dompurify": "^3.2.6",
 		"@emotion/react": "^11.14.0",
 		"@emotion/styled": "^11.14.0",
 		"@fontsource/roboto": "^5.2.5",
