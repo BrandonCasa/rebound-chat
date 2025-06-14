@@ -37,12 +37,12 @@ class ServerDMs {
 			}
 		});
 
-		socket.on("message_dm", async (threadId, content) => {
+                socket.on("message_dm", async (threadId, content, mentions) => {
 			try {
 				const thread = await DmThreadModel.findById(threadId);
 				if (!thread) return;
 				if (!thread.participants.some((p) => p.toString() === socket.user.id)) return;
-				const msg = new MessageModel({ sender: socket.user.id, content });
+                                const msg = new MessageModel({ sender: socket.user.id, content, mentions });
 				await msg.save();
 				thread.messages.push(msg);
 				await thread.save();
@@ -64,7 +64,7 @@ class ServerDMs {
 			}
 		});
 
-		socket.on("dm_edit_message", async (threadId, messageId, content) => {
+                socket.on("dm_edit_message", async (threadId, messageId, content, mentions) => {
 			try {
 				const thread = await DmThreadModel.findById(threadId);
 				if (!thread) return;
@@ -74,8 +74,9 @@ class ServerDMs {
 				if (!msg) return;
 				if (msg.sender.toString() !== socket.user.id) return;
 
-				msg.content = content;
-				await msg.save();
+                                msg.content = content;
+                                msg.mentions = mentions;
+                                await msg.save();
 
 				const msgDoc = await msg.populate({
 					path: "sender",

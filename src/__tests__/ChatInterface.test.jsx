@@ -6,7 +6,7 @@ import ChatArea from "../components/Chat/ChatArea.jsx";
 
 // Mock ChatInput to avoid loading MUI icon components
 vi.mock("../components/Chat/ChatInput.jsx", () => ({
-	default: ({ sendMessage }) => <button onClick={sendMessage}>Send</button>,
+        default: ({ sendMessage }) => <button onClick={sendMessage}>Send</button>,
 }));
 
 beforeEach(() => {

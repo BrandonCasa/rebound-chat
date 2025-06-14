@@ -10,4 +10,4 @@ Returns all messages in the specified room.
   - `200` – JSON `{ messages: [...], total: <count> }` sorted by creation time.
   - `404` – room not found.
 
-Messages are populated with the sender's display name and avatar.
+Messages are populated with the sender's display name and avatar. Each message may also include a `mentions` array describing which portions of the content reference specific users.

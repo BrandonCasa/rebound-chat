@@ -164,18 +164,19 @@ class ServerRooms {
 		});
 
 		// Client sends a message to a room
-		socket.on("message_room", async (arg1, arg2) => {
+                socket.on("message_room", async (arg1, arg2, arg3) => {
 			try {
 				const [idToName] = await this.getRoomList();
-				let roomId, content;
+                                let roomId, content, mentions;
 
 				// Support both ( [roomId, content] ) or ( roomId, content ) signatures
-				if (Array.isArray(arg1) && arg2 === undefined) {
-					[roomId, content] = arg1;
-				} else {
-					roomId = arg1;
-					content = arg2;
-				}
+                                if (Array.isArray(arg1) && arg2 === undefined) {
+                                        [roomId, content, mentions] = arg1;
+                                } else {
+                                        roomId = arg1;
+                                        content = arg2;
+                                        mentions = arg3;
+                                }
 
 				if (!idToName[roomId]) {
 					throw new Error("Room not found by ID.");
@@ -185,7 +186,7 @@ class ServerRooms {
 				const sender = await UserModel.findById(socket.user.id);
 				if (!sender) throw new Error("Sender not found.");
 
-				const msg = new MessageModel({ sender, content });
+                                const msg = new MessageModel({ sender, content, mentions });
 				await msg.save();
 
 				const roomDoc = await RoomModel.findById(roomId);
@@ -215,7 +216,7 @@ class ServerRooms {
 		});
 
 		// Client edits an existing message
-		socket.on("edit_message", async (roomId, messageId, content) => {
+                socket.on("edit_message", async (roomId, messageId, content, mentions) => {
 			try {
 				const [idToName] = await this.getRoomList();
 				if (!idToName[roomId]) {
@@ -226,8 +227,9 @@ class ServerRooms {
 				if (!msg) return;
 				if (msg.sender.toString() !== socket.user.id) return;
 
-				msg.content = content;
-				await msg.save();
+                                msg.content = content;
+                                msg.mentions = mentions;
+                                await msg.save();
 
 				const roomDoc = await RoomModel.findById(roomId).populate({
 					path: "messages",

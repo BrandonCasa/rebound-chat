@@ -96,7 +96,7 @@ export default function DirectMessagePage() {
 						listRef={listRef}
 					/>
 				</Box>
-				<ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} />
+                                <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} users={[otherUser].filter(Boolean)} />
 			</Paper>
 		</Box>
 	);

@@ -4,6 +4,7 @@ import { fetchDmMessages } from "../../slices/dmApiSlice";
 import { fetchUserProfile } from "../../slices/userApiSlice";
 import socketIoHelper from "../../helpers/socket";
 import { mapMessages } from "../../slices/chatApiSlice";
+import { parseMentions } from "../../helpers/mentions";
 
 export default function useDirectMessagePage(otherId) {
 	const auth = useSelector((state) => state.auth);
@@ -77,13 +78,14 @@ export default function useDirectMessagePage(otherId) {
 			.catch(() => {});
 	}, [otherId, auth.loggedIn, auth.authToken, dispatch]);
 
-	const sendMessage = (e) => {
-		e?.preventDefault();
-		if (!message || !threadId) return;
-		const s = socketIoHelper.getSocket();
-		s.emit("message_dm", threadId, message);
-		setMessage("");
-	};
+        const sendMessage = (e) => {
+                e?.preventDefault();
+                if (!message || !threadId) return;
+                const s = socketIoHelper.getSocket();
+                const mentions = parseMentions(message, [otherUser].filter(Boolean));
+                s.emit("message_dm", threadId, message, mentions);
+                setMessage("");
+        };
 
 	const openMessageMenu = (msg, pos) => {
 		setSelectedMessage(msg);
@@ -102,13 +104,14 @@ export default function useDirectMessagePage(otherId) {
 		closeMessageMenu();
 	};
 
-	const commitEditMessage = () => {
-		if (!editingMessageId) return;
-		const s = socketIoHelper.getSocket();
-		s.emit("dm_edit_message", threadId, editingMessageId, editingText);
-		setEditingMessageId(null);
-		setEditingText("");
-	};
+        const commitEditMessage = () => {
+                if (!editingMessageId) return;
+                const s = socketIoHelper.getSocket();
+                const mentions = parseMentions(editingText, [otherUser].filter(Boolean));
+                s.emit("dm_edit_message", threadId, editingMessageId, editingText, mentions);
+                setEditingMessageId(null);
+                setEditingText("");
+        };
 
 	const cancelEditMessage = () => {
 		setEditingMessageId(null);
