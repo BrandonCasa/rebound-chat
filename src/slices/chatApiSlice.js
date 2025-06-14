@@ -5,13 +5,13 @@ import { getApiBase } from "../helpers/api";
 const base = getApiBase();
 
 export const mapMessages = (msgs) =>
-        msgs.map((m) => ({
-                ...m,
-                sender: {
-                        ...m.sender,
-                        avatarUrl: m.sender?.avatarUrl ? base + m.sender.avatarUrl : null,
-                },
-        }));
+	msgs.map((m) => ({
+		...m,
+		sender: {
+			...m.sender,
+			avatarUrl: m.sender?.avatarUrl ? base + m.sender.avatarUrl : null,
+		},
+	}));
 
 export const fetchRoomMessages = createAsyncThunk("chatApi/fetchRoomMessages", async ({ roomId, authToken }, { rejectWithValue }) => {
 	try {
