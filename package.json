@@ -1,6 +1,6 @@
 {
 	"name": "rebound-web",
-	"version": "1.0.22",
+	"version": "1.0.23",
 	"private": true,
 	"type": "module",
 	"main": "public/electron.js",
