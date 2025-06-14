@@ -5,6 +5,7 @@ import "dotenv/config";
 
 import logger from "../logger.js";
 import serverRooms from "./rooms.js";
+import serverDMs from "./dms.js";
 import serverWatchers from "./watchers.js";
 import UserModel from "../models/User.js";
 
@@ -53,8 +54,11 @@ class SocketBackend {
 		logger.info(`User connected: '${socket.user.username}'`);
 		socket.emit("connected");
 
-		// start handling room events
-		serverRooms.startListeners(socket);
+                // start handling room events
+                serverRooms.startListeners(socket);
+
+                // start handling direct message events
+                serverDMs.startListeners(socket);
 
 		// start handling watcher events
 		serverWatchers.init(socket);

@@ -15,12 +15,14 @@ export const fetchUserProfile = createAsyncThunk("userApi/fetchUserProfile", asy
 			params: userId ? { id: userId } : undefined,
 		});
 		const u = data.user;
+		const bannerUrl = u.bannerUrl ? base + u.bannerUrl : globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp";
+		const avatarUrl = u.avatarUrl ? base + u.avatarUrl : globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp";
 		return {
 			id: u.id,
 			profile: {
 				...u,
-				avatarUrl: u.avatarUrl ? base + u.avatarUrl : null,
-				bannerUrl: u.bannerUrl ? base + u.bannerUrl : null,
+				avatarUrl: avatarUrl,
+				bannerUrl: bannerUrl,
 			},
 		};
 	} catch (err) {
