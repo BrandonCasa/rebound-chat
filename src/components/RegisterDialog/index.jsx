@@ -30,12 +30,10 @@ const RegisterDialog = () => {
 					p: 2,
 					flexDirection: "column",
 					textAlign: "center",
-					minHeight: "400px",
 				}}
 				component="form">
-				<Typography variant="h4">Welcome to Rebound</Typography>
-				<Typography variant="subtitle" sx={{ pb: 2 }}>
-					Register to join a communication network like no other.
+				<Typography variant="h4" sx={{ pb: 2 }}>
+					Welcome to Rebound
 				</Typography>
 				<StepContent activeStep={activeStep} />
 				<RegistrationForm activeStep={activeStep} formData={formData} handleFormDataChange={handleFormDataChange} />

@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { getApiBase } from "../helpers/api";
+import { profileMediaUrl } from "../helpers/mediaUrl";
 
 const base = getApiBase();
 
@@ -9,7 +10,7 @@ export const mapMessages = (msgs) =>
 		...m,
 		sender: {
 			...m.sender,
-			avatarUrl: m.sender?.avatarUrl ? base + m.sender.avatarUrl : null,
+			avatarUrl: profileMediaUrl(m?.sender?.avatarUrl, "defaultpfp.webp"),
 		},
 	}));
 

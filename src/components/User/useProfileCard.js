@@ -5,6 +5,7 @@ import { addSnackbar } from "../../slices/snackbarSlice";
 import { setLoggedIn } from "../../slices/authSlice";
 import { friendAction, modifyProfile } from "../../slices/userApiSlice";
 import { getApiBase } from "../../helpers/api";
+import { profileMediaUrl } from "../../helpers/mediaUrl";
 
 const REQUEST_BASE = getApiBase();
 
@@ -52,15 +53,15 @@ export default function useProfileCard(user, forceSelf) {
 	const [editMode, setEdit] = useState(false);
 	const [name, setName] = useState(rawData.displayName);
 	const [bio, setBio] = useState(rawData.bio);
-	const banner = useFilePreview(rawData.bannerUrl);
-	const avatar = useFilePreview(rawData.avatarUrl);
+	const banner = useFilePreview(profileMediaUrl(rawData.bannerUrl, "banner.webp"));
+	const avatar = useFilePreview(profileMediaUrl(rawData.avatarUrl, "defaultpfp.webp"));
 
 	useEffect(() => {
 		setProfile(rawData);
 		setName(rawData.displayName);
 		setBio(rawData.bio);
-		banner.reset(rawData.bannerUrl);
-		avatar.reset(rawData.avatarUrl);
+		banner.reset(profileMediaUrl(rawData.bannerUrl, "banner.webp"));
+		avatar.reset(profileMediaUrl(rawData.avatarUrl, "defaultpfp.webp"));
 	}, [rawData.id, rawData.displayName, rawData.bio, rawData.avatarUrl, rawData.bannerUrl]);
 	const watchRef = useRef(null);
 	const watchId = profile.id;
@@ -90,8 +91,8 @@ export default function useProfileCard(user, forceSelf) {
 		const onSaved = ([id, pubData, privData]) => {
 			if (id !== watchId) return;
 			const data = id === auth.userId ? privData : pubData;
-			const av = data?.avatarUrl ? REQUEST_BASE + data.avatarUrl : null;
-			const bn = data?.bannerUrl ? REQUEST_BASE + data.bannerUrl : null;
+			const av = profileMediaUrl(data.avatarUrl, "defaultpfp.webp");
+			const bn = profileMediaUrl(data.bannerUrl, "banner.webp");
 			setProfile((p) => ({ ...p, ...data, avatarUrl: av, bannerUrl: bn }));
 			avatar.reset(av);
 			banner.reset(bn);
@@ -137,8 +138,8 @@ export default function useProfileCard(user, forceSelf) {
 				const full = u;
 				dispatch(
 					setLoggedIn({
-						avatarUrl: full.avatarUrl,
-						bannerUrl: full.bannerUrl,
+						avatarUrl: profileMediaUrl(full.avatarUrl, "defaultpfp.webp"),
+						bannerUrl: profileMediaUrl(full.bannerUrl, "banner.webp"),
 						displayName: full.displayName,
 						username: full.username,
 						bio: full.bio,
@@ -153,18 +154,30 @@ export default function useProfileCard(user, forceSelf) {
 					})
 				);
 				setEdit(false);
-				avatar.reset(full.avatarUrl);
-				banner.reset(full.bannerUrl);
+				avatar.reset(profileMediaUrl(full.avatarUrl, "defaultpfp.webp"));
+				banner.reset(profileMediaUrl(full.bannerUrl, "banner.webp"));
 			})
-			.catch(() =>
-				dispatch(
-					addSnackbar({
-						snackbarMsg: "Update failed",
-						snackbarSeverity: "error",
-						autoHideDuration: 1500,
-					})
-				)
-			);
+			.catch((err) => {
+				banner.reset(profileMediaUrl(rawData.bannerUrl, "banner.webp"));
+				avatar.reset(profileMediaUrl(rawData.avatarUrl, "defaultpfp.webp"));
+				if (err?.error) {
+					dispatch(
+						addSnackbar({
+							snackbarMsg: err.error,
+							snackbarSeverity: "error",
+							autoHideDuration: 2000,
+						})
+					);
+				} else {
+					dispatch(
+						addSnackbar({
+							snackbarMsg: "Error modifying profile.",
+							snackbarSeverity: "error",
+							autoHideDuration: 2000,
+						})
+					);
+				}
+			});
 	};
 
 	return {

@@ -6,6 +6,7 @@ import PersonRemove from "@mui/icons-material/PersonRemove";
 import { Avatar, Box, Button, ButtonGroup, Divider, Fab, IconButton, Paper, Stack, TextField, Typography } from "@mui/material";
 import useProfileCard from "./useProfileCard";
 import { useNavigate, useLocation } from "react-router-dom";
+import { profileMediaUrl } from "../../helpers/mediaUrl";
 
 /* -------------------------------------------------- */
 
@@ -95,7 +96,63 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 	}
 
 	if (type === "mini") return <Paper>mini</Paper>;
-	if (type === "popout") return <Paper>popout</Paper>;
+	if (type === "preview") {
+		return (
+			<Paper
+				sx={{
+					width,
+					maxHeight: passStyle?.maxHeight,
+					display: "flex",
+					flexDirection: "column",
+					overflow: "hidden",
+					textAlign: "start",
+					border: "3px solid rgba(0, 0, 0, 0.3)",
+					...passStyle,
+				}}
+				variant={"outlined"}>
+				<Stack spacing={1} sx={{ p: 1, flex: 1 }}>
+					{/* Banner */}
+					<Box position="relative">
+						<Box
+							component="img"
+							src={profileMediaUrl(banner.preview, "banner.webp")}
+							alt="banner"
+							sx={{
+								width: "100%",
+								height: 120,
+								borderRadius: 1,
+								objectFit: "cover",
+							}}
+							key={profileMediaUrl(banner.preview, "banner.webp")}
+						/>
+					</Box>
+
+					{/* Avatar + Name */}
+					<Stack direction="row" spacing={2} alignItems="center">
+						<Box position="relative">
+							<Avatar src={profileMediaUrl(avatar.preview, "defaultpfp.webp")} sx={{ width: 56, height: 56 }} />
+						</Box>
+						<Box flex={1} minWidth={0}>
+							<Typography variant="h6" noWrap>
+								{profile.displayName || "Display Name"}
+							</Typography>
+							<Typography variant="body2" color="text.secondary">
+								@{profile.username || "username"}
+							</Typography>
+						</Box>
+					</Stack>
+
+					{/* Bio */}
+					<Paper variant="outlined" sx={{ p: 1, flex: 1, minHeight: 80 }}>
+						<Typography variant="subtitle2">About Me</Typography>
+						<Typography variant="body2" color="text.secondary">
+							{profile.bio || "This user hasn’t written a bio yet."}
+						</Typography>
+					</Paper>
+				</Stack>
+			</Paper>
+		);
+	}
 
 	/* ---------- main render ---------- */
 	return (
@@ -114,7 +171,7 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 				<Box position="relative">
 					<Box
 						component="img"
-						src={banner.preview || (window.isElectron ? "banner.webp" : "/banner.webp")}
+						src={profileMediaUrl(banner.preview, "banner.webp")}
 						alt="banner"
 						sx={{
 							width: "100%",
@@ -122,7 +179,7 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 							borderRadius: 1,
 							objectFit: "cover",
 						}}
-						key={banner.preview}
+						key={profileMediaUrl(banner.preview, "banner.webp")}
 					/>
 					{isSelf && editMode && (
 						<CameraInput
@@ -140,7 +197,7 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 				{/* Avatar + Name */}
 				<Stack direction="row" spacing={2} alignItems="center">
 					<Box position="relative">
-						<Avatar src={avatar.preview || (window.isElectron ? "defaultpfp.webp" : "/defaultpfp.webp")} sx={{ width: 56, height: 56 }} />
+						<Avatar src={profileMediaUrl(avatar.preview, "defaultpfp.webp")} sx={{ width: 56, height: 56 }} />
 						{isSelf && editMode && (
 							<CameraInput
 								onChange={avatar.onChange}

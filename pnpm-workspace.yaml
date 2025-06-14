@@ -1,3 +1,7 @@
+packages:
+  - "."
+  - "./server"
+
 onlyBuiltDependencies:
   - "@parcel/watcher"
   - electron-winstaller

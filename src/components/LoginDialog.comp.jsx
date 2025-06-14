@@ -1,5 +1,7 @@
 import { Dialog, Box, Typography, TextField, DialogActions, Button, FormGroup, FormControlLabel, Checkbox } from "@mui/material";
 import React, { useState } from "react";
+import GoogleButton from "react-google-button";
+import { getApiBase } from "../helpers/api";
 import { useDispatch, useSelector } from "react-redux";
 
 import { loginUser } from "../slices/authSlice";
@@ -13,15 +15,12 @@ const LoginDialog = () => {
 
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
-	const [stayLoggedIn, setStayLoggedIn] = useState(true);
 
 	const handleUserLogin = () => {
 		dispatch(loginUser({ email, password }))
 			.unwrap()
 			.then((user) => {
-				if (stayLoggedIn) {
-					window.localStorage.setItem("auth-token", user.authToken);
-				}
+				window.localStorage.setItem("auth-token", user.authToken);
 				dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
 				dispatch(
 					addSnackbar({
@@ -72,9 +71,8 @@ const LoginDialog = () => {
 					textAlign: "center",
 				}}
 				component="form">
-				<Typography variant="h4">Welcome Back</Typography>
-				<Typography variant="subtitle" sx={{ pb: 2 }}>
-					Login to your existing Rebound account.
+				<Typography variant="h4" sx={{ pb: 2 }}>
+					Rebound Login
 				</Typography>
 				<TextField
 					sx={{ pb: 2 }}
@@ -97,18 +95,19 @@ const LoginDialog = () => {
 					}}
 					autoComplete="current-password"
 				/>
-				<FormGroup>
-					<FormControlLabel
-						control={<Checkbox defaultChecked />}
-						label="Stay Logged In"
-						onChange={(e) => setStayLoggedIn(e.target.checked)}
-						value={stayLoggedIn}
+
+				<Box sx={{ display: "flex", justifyContent: "center", py: 1 }}>
+					<GoogleButton
+						onClick={() => {
+							window.location.href = `${getApiBase()}/users/google`;
+						}}
 					/>
-				</FormGroup>
+				</Box>
 			</Box>
 			<DialogActions>
 				<Button
 					variant="outlined"
+					fullWidth
 					onClick={() =>
 						dispatch(
 							setDialogOpened({
@@ -118,7 +117,7 @@ const LoginDialog = () => {
 							})
 						)
 					}>
-					Make Account
+					New Account
 				</Button>
 				<Button variant="contained" onClick={handleUserLogin}>
 					Login

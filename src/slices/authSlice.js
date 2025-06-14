@@ -3,6 +3,7 @@ import axios from "axios";
 
 import socketIoHelper from "../helpers/socket";
 import { getApiBase } from "../helpers/api";
+import { profileMediaUrl } from "../helpers/mediaUrl";
 
 const initialState = {
 	authToken: window.localStorage.getItem("auth-token"),
@@ -36,9 +37,6 @@ export const verifyUser = createAsyncThunk("auth/verifyUser", async (token, { re
 		);
 		const u = data.user;
 
-		const bannerUrl = u?.bannerUrl && u.bannerUrl !== "" ? base + u.bannerUrl : globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp";
-		const avatarUrl = u?.avatarUrl && u.avatarUrl !== "" ? base + u.avatarUrl : globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp";
-
 		return {
 			loggedIn: true,
 			authToken: token,
@@ -47,8 +45,8 @@ export const verifyUser = createAsyncThunk("auth/verifyUser", async (token, { re
 			displayName: u.displayName,
 			bio: u.bio,
 			friends: u.friends,
-			bannerUrl,
-			avatarUrl,
+			bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
+			avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
 		};
 	} catch (err) {
 		return rejectWithValue(err.response?.data || err.message);
@@ -63,9 +61,6 @@ export const loginUser = createAsyncThunk("auth/loginUser", async ({ email, pass
 		});
 		const u = data.user;
 
-		const bannerUrl = u?.bannerUrl && u.bannerUrl !== "" ? base + u.bannerUrl : globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp";
-		const avatarUrl = u?.avatarUrl && u.avatarUrl !== "" ? base + u.avatarUrl : globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp";
-
 		return {
 			loggedIn: true,
 			authToken: u.token,
@@ -74,8 +69,8 @@ export const loginUser = createAsyncThunk("auth/loginUser", async ({ email, pass
 			displayName: u.displayName,
 			bio: u.bio,
 			friends: u.friends,
-			bannerUrl,
-			avatarUrl,
+			bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
+			avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
 		};
 	} catch (err) {
 		return rejectWithValue(err.response?.data || err.message);
@@ -96,9 +91,6 @@ export const registerUser = createAsyncThunk(
 				window.localStorage.setItem("auth-token", u.token);
 			}
 
-			const bannerUrl = u?.bannerUrl && u.bannerUrl !== "" ? base + u.bannerUrl : globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp";
-			const avatarUrl = u?.avatarUrl && u.avatarUrl !== "" ? base + u.avatarUrl : globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp";
-
 			return {
 				loggedIn: true,
 				authToken: u.token,
@@ -107,8 +99,8 @@ export const registerUser = createAsyncThunk(
 				displayName: u.displayName,
 				bio: u.bio,
 				friends: u.friends,
-				bannerUrl,
-				avatarUrl,
+				bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
+				avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
 			};
 		} catch (err) {
 			return rejectWithValue(err.response?.data || err.message);

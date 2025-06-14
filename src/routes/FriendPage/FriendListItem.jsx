@@ -1,7 +1,7 @@
 import React from "react";
 import { Paper, Box, Avatar, Typography, Button, Stack, Tooltip } from "@mui/material";
-import ChatIcon from "@mui/icons-material/Chat";
 import PersonRemoveIcon from "@mui/icons-material/PersonRemove";
+import ChatRoundedIcon from "@mui/icons-material/ChatRounded";
 import CancelIcon from "@mui/icons-material/Cancel";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import HighlightOffIcon from "@mui/icons-material/HighlightOff";
@@ -48,7 +48,7 @@ const FriendListItem = React.forwardRef(({ relation, profile, status, onPreview,
 			{status === "friends" && (
 				<>
 					<Tooltip title="Start Chat">
-						<Button startIcon={<ChatIcon />} variant="contained" color="info" size="small" onClick={() => onChat(profile.id)}>
+						<Button startIcon={<ChatRoundedIcon />} variant="contained" color="info" size="small" onClick={() => onChat(profile.id)}>
 							Chat
 						</Button>
 					</Tooltip>

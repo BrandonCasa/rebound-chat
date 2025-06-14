@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { addSnackbar } from "./snackbarSlice";
 import { getApiBase } from "../helpers/api";
+import { profileMediaUrl } from "../helpers/mediaUrl";
 
 const initialState = {
 	profiles: {},
@@ -15,14 +16,13 @@ export const fetchUserProfile = createAsyncThunk("userApi/fetchUserProfile", asy
 			params: userId ? { id: userId } : undefined,
 		});
 		const u = data.user;
-		const bannerUrl = u.bannerUrl ? base + u.bannerUrl : globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp";
-		const avatarUrl = u.avatarUrl ? base + u.avatarUrl : globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp";
+
 		return {
 			id: u.id,
 			profile: {
 				...u,
-				avatarUrl: avatarUrl,
-				bannerUrl: bannerUrl,
+				bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
+				avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
 			},
 		};
 	} catch (err) {
@@ -41,8 +41,8 @@ export const modifyProfile = createAsyncThunk("userApi/modifyProfile", async ({ 
 			id: u.id,
 			profile: {
 				...u,
-				avatarUrl: u.avatarUrl ? base + u.avatarUrl : null,
-				bannerUrl: u.bannerUrl ? base + u.bannerUrl : null,
+				bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
+				avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
 			},
 		};
 	} catch (err) {

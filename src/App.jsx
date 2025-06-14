@@ -12,7 +12,7 @@ import RegisterDialog from "./components/RegisterDialog";
 import SnackbarMapper from "./components/SnackbarMapper";
 import useDarkTheme from "./helpers/darkTheme";
 import socketIoHelper from "./helpers/socket";
-import { setLoggedIn, setLoggingIn, setSocketStatus, verifyUser } from "./slices/authSlice";
+import { setLoggedIn, setLoggingIn, setSocketStatus, verifyUser, setAuthState } from "./slices/authSlice";
 import { addSnackbar } from "./slices/snackbarSlice";
 
 import useCustomAppBar from "./components/CustomAppBar/useCustomAppBar";
@@ -43,6 +43,19 @@ const App = () => {
 	const darkTheme = useDarkTheme();
 	const dispatch = useDispatch();
 	const customAppBarProps = useCustomAppBar(useWindowDimensions().width);
+
+	useEffect(() => {
+		const params = new URLSearchParams(window.location.search);
+		const token = params.get("token");
+		if (token) {
+			window.localStorage.setItem("auth-token", token);
+			dispatch(setAuthState({ authToken: token }));
+			params.delete("token");
+			const newSearch = params.toString();
+			const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "");
+			window.history.replaceState({}, "", newUrl);
+		}
+	}, [dispatch]);
 
 	const useSocketConnection = (authToken, loggedIn) => {
 		useEffect(() => {
@@ -118,8 +131,8 @@ const App = () => {
 								<Route path="/" element={<LandingPage />} />
 								<Route path="/friends" element={<FriendPage />} />
 								<Route path="/profile" element={<ProfilePage />} />
-                                                                <Route path="/chat" element={<ChatPage />} />
-                                                                <Route path="/dm/:userId" element={<DirectMessagePage />} />
+								<Route path="/chat" element={<ChatPage />} />
+								<Route path="/dm/:userId" element={<DirectMessagePage />} />
 								<Route path="/servers" element={<ServersPage />} />
 								<Route path="/testing" element={<TestingPage />} />
 								<Route path="/settings" element={<SettingsPage />} />

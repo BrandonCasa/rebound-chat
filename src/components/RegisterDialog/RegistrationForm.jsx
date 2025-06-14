@@ -4,6 +4,8 @@ import KeyRounded from "@mui/icons-material/KeyRounded";
 import NoteRounded from "@mui/icons-material/NoteRounded";
 import { Box } from "@mui/material";
 import RegisterTextField from "./RegisterTextField";
+import ProfileCard from "../../components/User/ProfileCard";
+import { profileMediaUrl } from "../../helpers/mediaUrl";
 
 const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
 	if (activeStep === 0) {
@@ -68,7 +70,22 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
 	}
 
 	if (activeStep === 2) {
-		return <Box sx={{ height: "181.81px" }}>Profile Preview WIP</Box>;
+		const tempUser = {
+			id: "0",
+			username: formData.username,
+			displayName: formData.displayName,
+			bio: formData.bio,
+			bannerUrl: profileMediaUrl(null, "banner.webp"),
+			avatarUrl: profileMediaUrl(null, "defaultpfp.webp"),
+			friends: [],
+			blocked: [],
+			servers: [],
+		};
+		return (
+			<Box sx={{ pb: 2, display: "flex" }}>
+				<ProfileCard forceSelf={true} type="preview" user={tempUser}></ProfileCard>
+			</Box>
+		);
 	}
 
 	return null;

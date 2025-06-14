@@ -13,9 +13,9 @@ const rootReducer = combineReducers({
 	auth: authReducer,
 	snackbars: snackbarReducer,
 	settings: settingsReducer,
-        userApi: userApiReducer,
-        chatApi: chatApiReducer,
-        dmApi: dmApiReducer,
+	userApi: userApiReducer,
+	chatApi: chatApiReducer,
+	dmApi: dmApiReducer,
 });
 
 export default rootReducer;

@@ -24,6 +24,7 @@ const UserSchema = new Schema(
 			match: [/\S+@\S+\.\S+/, "is invalid"],
 			index: true,
 		},
+		googleId: { type: String, unique: true, sparse: true },
 
 		// —— newly added image fields ——
 		bannerUrl: { type: String, default: "" },
