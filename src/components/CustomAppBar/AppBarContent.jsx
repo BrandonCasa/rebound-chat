@@ -1,5 +1,6 @@
 import AccountCircleRounded from "@mui/icons-material/AccountCircleRounded";
 import { AppBar, Toolbar, Typography, IconButton, Avatar } from "@mui/material";
+import logo from "../../logo.svg";
 
 const AppBarContent = ({ handleIconClick, drawerWidth, loggedInState, avatarUrl, theme }) => (
 	<AppBar
@@ -11,14 +12,18 @@ const AppBarContent = ({ handleIconClick, drawerWidth, loggedInState, avatarUrl,
 		}}>
 		<Toolbar
 			variant="dense"
+			disableGutters
 			sx={{
 				height: drawerWidth,
 				minHeight: drawerWidth,
+				pr: 2,
+				display: "flex",
 			}}>
-			<Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
+			<img src={logo} alt="logo" style={{ height: "100%", padding: theme.spacing(0.5), filter: "drop-shadow( 3px 3px 2px rgba(0, 0, 0, .7))" }} />
+			<Typography variant="h6" noWrap component="div">
 				Rebound
 			</Typography>
-			<IconButton color="secondary" onClick={handleIconClick} sx={{ mr: theme.spacing(-1) }}>
+			<IconButton color="secondary" onClick={handleIconClick} sx={{ mr: theme.spacing(-1), ml: "auto" }}>
 				<AccountCircleRounded
 					sx={{
 						height: drawerWidth - 16,
