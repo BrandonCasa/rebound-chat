@@ -3,8 +3,9 @@ import CameraAlt from "@mui/icons-material/CameraAlt";
 import PersonAdd from "@mui/icons-material/PersonAdd";
 import PersonOff from "@mui/icons-material/PersonOff";
 import PersonRemove from "@mui/icons-material/PersonRemove";
-import { Avatar, Box, Button, ButtonGroup, IconButton, Paper, Stack, TextField, Typography } from "@mui/material";
+import { Avatar, Box, Button, ButtonGroup, Divider, Fab, IconButton, Paper, Stack, TextField, Typography } from "@mui/material";
 import useProfileCard from "./useProfileCard";
+import { useNavigate, useLocation } from "react-router-dom";
 
 /* -------------------------------------------------- */
 
@@ -84,6 +85,9 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 		user,
 		forceSelf
 	);
+
+	const navigate = useNavigate();
+	const location = useLocation();
 
 	/* ---------- placeholder when no user ---------- */
 	if (!user && !forceSelf) {
@@ -176,7 +180,7 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 				</Paper>
 
 				{/* Actions */}
-				<Box sx={{ pt: 1 }}>
+				<Box>
 					{isSelf ? (
 						editMode ? (
 							<Stack direction="row" spacing={1}>
@@ -193,7 +197,14 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 							</Button>
 						)
 					) : (
-						<FriendButtons status={status} friendId={friendId} profile={profile} onAction={callApi} />
+						<Stack direction="row" spacing={1} sx={{ width: "100%" }}>
+							<FriendButtons status={status} friendId={friendId} profile={profile} onAction={callApi} />
+							{location.pathname !== `/dm/${profile.id}` && (
+								<Button variant="outlined" size="small" color="info" onClick={() => navigate(`/dm/${profile.id}`)}>
+									Chat
+								</Button>
+							)}
+						</Stack>
 					)}
 				</Box>
 			</Stack>
