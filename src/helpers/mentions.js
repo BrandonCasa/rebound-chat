@@ -5,7 +5,6 @@ export function parseMentions(text, users = []) {
 		const regex = new RegExp(`@${u.displayName}\\b`, "g");
 		let m;
 		while ((m = regex.exec(text)) !== null) {
-			console.log(m);
 			mentions.push({ user: u.id, start: m.index, end: m.index + m[0].length });
 		}
 	});
