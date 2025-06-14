@@ -1,20 +1,17 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { getApiBase } from "../helpers/api";
-import cacheMedia from "../helpers/cacheMedia";
 
 const base = getApiBase();
 
-export const mapMessages = async (msgs) =>
-	Promise.all(
-		msgs.map(async (m) => ({
-			...m,
-			sender: {
-				...m.sender,
-				avatarUrl: m.sender?.avatarUrl ? await cacheMedia(base + m.sender.avatarUrl) : null,
-			},
-		}))
-	);
+export const mapMessages = (msgs) =>
+        msgs.map((m) => ({
+                ...m,
+                sender: {
+                        ...m.sender,
+                        avatarUrl: m.sender?.avatarUrl ? base + m.sender.avatarUrl : null,
+                },
+        }));
 
 export const fetchRoomMessages = createAsyncThunk("chatApi/fetchRoomMessages", async ({ roomId, authToken }, { rejectWithValue }) => {
 	try {

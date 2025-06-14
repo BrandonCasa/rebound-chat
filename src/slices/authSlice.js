@@ -3,7 +3,6 @@ import axios from "axios";
 
 import socketIoHelper from "../helpers/socket";
 import { getApiBase } from "../helpers/api";
-import cacheMedia from "../helpers/cacheMedia";
 
 const initialState = {
 	authToken: window.localStorage.getItem("auth-token"),
@@ -37,13 +36,8 @@ export const verifyUser = createAsyncThunk("auth/verifyUser", async (token, { re
 		);
 		const u = data.user;
 
-		// build raw URLs
-		const rawBanner = u?.bannerUrl && u.bannerUrl !== "" ? base + u.bannerUrl : globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp";
-		const rawAvatar = u?.avatarUrl && u.avatarUrl !== "" ? base + u.avatarUrl : globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp";
-
-		// run through cacheMedia
-		const bannerUrl = await cacheMedia(rawBanner);
-		const avatarUrl = await cacheMedia(rawAvatar);
+		const bannerUrl = u?.bannerUrl && u.bannerUrl !== "" ? base + u.bannerUrl : globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp";
+		const avatarUrl = u?.avatarUrl && u.avatarUrl !== "" ? base + u.avatarUrl : globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp";
 
 		return {
 			loggedIn: true,
@@ -69,11 +63,8 @@ export const loginUser = createAsyncThunk("auth/loginUser", async ({ email, pass
 		});
 		const u = data.user;
 
-		const rawBanner = u?.bannerUrl && u.bannerUrl !== "" ? base + u.bannerUrl : globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp";
-		const rawAvatar = u?.avatarUrl && u.avatarUrl !== "" ? base + u.avatarUrl : globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp";
-
-		const bannerUrl = await cacheMedia(rawBanner);
-		const avatarUrl = await cacheMedia(rawAvatar);
+		const bannerUrl = u?.bannerUrl && u.bannerUrl !== "" ? base + u.bannerUrl : globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp";
+		const avatarUrl = u?.avatarUrl && u.avatarUrl !== "" ? base + u.avatarUrl : globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp";
 
 		return {
 			loggedIn: true,
@@ -105,11 +96,8 @@ export const registerUser = createAsyncThunk(
 				window.localStorage.setItem("auth-token", u.token);
 			}
 
-			const rawBanner = u?.bannerUrl && u.bannerUrl !== "" ? base + u.bannerUrl : globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp";
-			const rawAvatar = u?.avatarUrl && u.avatarUrl !== "" ? base + u.avatarUrl : globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp";
-
-			const bannerUrl = await cacheMedia(rawBanner);
-			const avatarUrl = await cacheMedia(rawAvatar);
+			const bannerUrl = u?.bannerUrl && u.bannerUrl !== "" ? base + u.bannerUrl : globalThis.IN_ELECTRON_ENV ? "banner.webp" : "/banner.webp";
+			const avatarUrl = u?.avatarUrl && u.avatarUrl !== "" ? base + u.avatarUrl : globalThis.IN_ELECTRON_ENV ? "defaultpfp.webp" : "/defaultpfp.webp";
 
 			return {
 				loggedIn: true,
