@@ -141,7 +141,7 @@ jobs:
 
             cd "${{ github.event.inputs.serverSubdirectory }}"
 
-            echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}" > .env
+            echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}\nGOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}\nGOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" > .env
 
             pnpm install --frozen-lockfile --ignore-scripts
 
