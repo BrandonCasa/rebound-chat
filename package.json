@@ -38,7 +38,6 @@
 	"scripts": {
 		"start": "vite",
 		"build": "vite build",
-		"test": "vitest run --testTimeout 10000",
 		"electron": "electron .",
 		"electron-dev": "concurrently \"cross-env BROWSER=none pnpm run start\" \"cd server && pnpm run dev\" \"wait-on http://localhost:3000 && pnpm run electron\"",
 		"predist": "node projectscripts/clean-build.js && cd app && pnpm install --prod --no-frozen-lockfile && cd ../",
@@ -107,7 +106,6 @@
 		"prettier": "^3.5.3",
 		"sass": "^1.89.1",
 		"vite": "^6.3.5",
-		"vitest": "^3.2.2",
 		"wait-on": "^8.0.3"
 	}
 }
