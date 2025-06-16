@@ -1,6 +1,7 @@
 import { Box, ListItem, Avatar, Typography, useTheme, Link, TextField, Button } from "@mui/material";
 import { scrollbarStyles } from "../../routes/LandingPage/utils/scrollbarStyles";
 import React from "react";
+import useLongPress from "../../helpers/useLongPress";
 import { highlightMentions } from "../../helpers/mentions";
 import { profileMediaUrl } from "../../helpers/mediaUrl";
 
@@ -39,7 +40,7 @@ function IndividualMessage({
 	const theme = useTheme();
 	let sendTimeText = requestedTime ? formatDate(requestedTime) : formatDate(msg.createdAt);
 	const messageRef = React.useRef(null);
-	const touchTimer = React.useRef(null);
+	const longPressHandlers = useLongPress(({ x, y }) => onContextMenu(msg, { x, y }));
 
 	const onHoverStart = (_event) => {
 		onHoverMessage(currentMsg);
@@ -53,15 +54,6 @@ function IndividualMessage({
 		onContextMenu(msg, { x: e.clientX, y: e.clientY });
 	};
 
-	const handleTouchStart = (e) => {
-		const { clientX, clientY } = e.touches[0];
-		touchTimer.current = setTimeout(() => onContextMenu(msg, { x: clientX, y: clientY }), 500);
-	};
-
-	const handleTouchEnd = () => {
-		clearTimeout(touchTimer.current);
-	};
-
 	return (
 		<ListItem
 			disablePadding
@@ -72,8 +64,7 @@ function IndividualMessage({
 				width: "100%",
 			}}
 			onContextMenu={handleContext}
-			onTouchStart={handleTouchStart}
-			onTouchEnd={handleTouchEnd}>
+			{...longPressHandlers}>
 			<Box
 				sx={{
 					display: shouldDisplayAvatar ? "inherit" : "none",

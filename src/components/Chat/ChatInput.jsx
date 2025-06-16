@@ -27,10 +27,11 @@ const ChatForm = styled("form")(({ theme }) => ({
 
 const EditableDiv = styled("div")(({ theme }) => ({
 	flex: 1,
-	minHeight: 42,
+	minHeight: 16,
 	maxHeight: 180,
 	overflowY: "auto",
-	padding: theme.spacing(1),
+	alignContent: "center",
+	padding: theme.spacing(1, 1),
 	border: `1px solid ${theme.palette.primary.main}`,
 	borderRadius: theme.shape.borderRadius,
 	outline: "none",
