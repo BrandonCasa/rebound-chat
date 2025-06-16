@@ -15,7 +15,6 @@
 		"email": "brandoncasawork8@gmail.com",
 		"url": "https://github.com/BrandonCasa"
 	},
-	"license": "GNU AFFERO GPLV3",
 	"type": "module",
 	"dependencies": {
 		"body-parser": "^2.2.0",
