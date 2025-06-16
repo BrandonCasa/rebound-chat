@@ -39,12 +39,16 @@ Client‑initiated events handled in `server/src/socketio/dms.js`:
 | ------------ | ----------------------- | -------------------------------------------------- |
 | `join_dm`    | `userId`                | Join or create a DM thread with the given user. The server replies with `dm_joined`. |
 | `message_dm` | `threadId`, `content`, `mentions?`   | Post a message in the DM thread. Sender receives `dm_sent`; the other participant gets `dm_new_message`. |
+| `dm_edit_message` | `threadId`, `messageId`, `content`, `mentions?` | Edit a previously sent DM message. All participants receive `dm_message_edited`. |
+| `dm_delete_message` | `threadId`, `messageId` | Delete a previously sent DM message. All participants receive `dm_delete_message`. |
 
 Server‑emitted events related to direct messages:
 
 - `dm_joined` – thread id and existing messages when a socket joins a DM.
 - `dm_sent` – updated message list sent back to the sender after posting.
 - `dm_new_message` – updated messages broadcast to the other participant.
+- `dm_message_edited` – emitted after a DM message is edited.
+- `dm_delete_message` – emitted after a DM message is deleted.
 
 ## Watchers
 

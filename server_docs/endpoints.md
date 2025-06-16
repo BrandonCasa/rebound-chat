@@ -25,6 +25,13 @@ All API routes are served under the `/api` prefix. Authentication is handled via
 | ------ | --------------------------------------------------------------- | ---------------------------------------------------------- |
 | GET    | [`/rooms/:roomId/messages`](endpoints/rooms_roomId_messages.md) | Retrieve all messages in a room, ordered by creation time. |
 
+## Direct Messages
+
+| Method | Path                                                     | Description                                                                      |
+| ------ | -------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| GET    | [`/dms/:userId/messages`](endpoints/dms_userId_messages.md)  | Return messages with `userId`, creating a thread if none exists.                 |
+| POST   | [`/dms/:userId/messages`](endpoints/dms_userId_messages.md) | Post a new direct message and return the updated thread.                         |
+
 ## Admin
 
 | Method | Path                                                           | Description                                            |
