@@ -145,12 +145,9 @@ jobs:
 
             pnpm install --frozen-lockfile --ignore-scripts
 
-            if [ "${NEW_CLONE}" = true ]; then
-              pm2 start ecosystem.config.cjs
-              pm2 save
-            else
-              pm2 restart ${{ github.event.inputs.pm2ProcessName }}
-            fi
+            pm2 delete ecosystem.config.cjs
+            pm2 start ecosystem.config.cjs
+            pm2 save --force
 
             if ! cmp -s "${{ github.event.inputs.nginxConfig }}" "${{ github.event.inputs.appDirectory }}/${{ github.event.inputs.serverSubdirectory }}/nginx/default"; then
               sudo cp "${{ github.event.inputs.appDirectory }}/${{ github.event.inputs.serverSubdirectory }}/nginx/default" "${{ github.event.inputs.nginxConfig }}"
