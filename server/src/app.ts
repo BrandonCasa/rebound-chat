@@ -16,23 +16,22 @@ import socketBackend from "./socketio/index.js";
 configDotenv();
 
 class ServerBackend {
+	public app: express.Express;
+	private server: http.Server;
+
 	constructor() {
 		this.app = express();
-		customPassport.setupPassport();
+		new customPassport().setupPassport();
 		this._initMiddleware();
 		this._initRoutes();
 		this.server = http.createServer(this.app);
 	}
 
 	_initMiddleware() {
-		// Trust the reverse proxy (e.g. Nginx) when determining
-		// protocol and other forwarding headers
-		this.app.set("trust proxy", 1);
-
-		// CORS
+		this.app.set("trust proxy", 1); // trust nginx proxy
 		this.app.use(cors({ optionsSuccessStatus: 200 }));
-		// ─── GLOBAL RATE LIMITER ───────────────────────────────────────────────────
-		// limit each IP to 150 requests per 5 minutes
+
+		// GLOBAL RATE LIMITER
 		const globalLimiter = rateLimit({
 			windowMs: 5 * 60 * 1000, // 5 minutes
 			max: 150,
