@@ -145,13 +145,11 @@ jobs:
             echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}\nGOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}\nGOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" > .env
 
             pnpm install --frozen-lockfile
+            pnpm run build
 
-            if [ "${NEW_CLONE}" = true ]; then
-              pm2 start ecosystem.config.cjs
-              pm2 save
-            else
-              pm2 restart ${{ github.event.inputs.pm2ProcessName }}
-            fi
+            pm2 delete ecosystem.config.cjs
+            pm2 start ecosystem.config.cjs
+            pm2 save
 
             if ! cmp -s "${{ github.event.inputs.nginxConfig }}" "${{ github.event.inputs.appDirectory }}/${{ github.event.inputs.serverSubdirectory }}/nginx/default"; then
               sudo cp "${{ github.event.inputs.appDirectory }}/${{ github.event.inputs.serverSubdirectory }}/nginx/default" "${{ github.event.inputs.nginxConfig }}"
