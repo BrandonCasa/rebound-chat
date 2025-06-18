@@ -6,11 +6,9 @@
 		"type": "git",
 		"url": "git+https://github.com/BrandonCasa/rebound-electron.git"
 	},
-	"main": "./build/app.js",
+	"main": "./src/app.js",
 	"scripts": {
-		"dev": "npx kill-port 6001 && npx kill-port 27017 && cross-env NODE_ENV=development tsx watch ./src/app.ts",
-		"build": "tsc",
-		"start": "npx kill-port 6001 && npx kill-port 27017 && cross-env NODE_ENV=development node ./build/app.js"
+		"dev": "npx kill-port 6001 && npx kill-port 27017 && cross-env NODE_ENV=development nodemon ./src/app.js"
 	},
 	"author": {
 		"name": "Brandon Casamichana",
@@ -55,8 +53,6 @@
 		"chai": "^5.2.0",
 		"chai-http": "^5.1.2",
 		"mocha": "^11.5.0",
-		"socket.io-client": "^4.8.1",
-		"tsx": "^4.20.3",
-		"typescript": "^5.8.3"
+		"socket.io-client": "^4.8.1"
 	}
 }

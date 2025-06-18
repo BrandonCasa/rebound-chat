@@ -5,7 +5,7 @@ import crypto from "crypto";
 import UserModel from "../models/User.js";
 
 class CustomPassport {
-	public setupPassport() {
+	setupPassport() {
 		passport.use(
 			new LocalStrategy(
 				{
@@ -81,4 +81,6 @@ class CustomPassport {
 	}
 }
 
-export default CustomPassport;
+const customPassport = new CustomPassport();
+
+export { customPassport as default };
