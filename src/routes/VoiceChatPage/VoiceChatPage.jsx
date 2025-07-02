@@ -27,6 +27,8 @@ import VoiceChatContext from "../../context/VoiceChatContext";
 import { callEnded } from "../../slices/voiceChatSlice";
 import useFriendProfiles from "../../helpers/useFriendProfiles";
 
+const defaultAvatar = window.isElectron ? "defaultpfp.webp" : "/defaultpfp.webp";
+
 export default function VoiceChatPage() {
 	const { startCall, acceptCall, endCall, toggleMute, remoteStream } = useContext(VoiceChatContext);
 	const dispatch = useDispatch();
@@ -60,7 +62,7 @@ export default function VoiceChatPage() {
 							}
 							sx={{ borderRadius: 1, mb: 1 }}>
 							<ListItemAvatar>
-								<Avatar src={f.avatarUrl} />
+								<Avatar src={f.avatarUrl || defaultAvatar} />
 							</ListItemAvatar>
 							<ListItemText primary={f.displayName || f.username} />
 						</ListItem>
@@ -83,7 +85,7 @@ export default function VoiceChatPage() {
 					</Typography>
 					<Stack spacing={2}>
 						<Stack direction="row" spacing={1} alignItems="center">
-							<Avatar src={other?.avatarUrl} />
+							<Avatar src={other?.avatarUrl || defaultAvatar} />
 							<Typography>{other?.displayName || otherId}</Typography>
 						</Stack>
 						<Divider />
