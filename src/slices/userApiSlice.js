@@ -17,14 +17,14 @@ export const fetchUserProfile = createAsyncThunk("userApi/fetchUserProfile", asy
 		});
 		const u = data.user;
 
-		return {
-			id: u.id,
-			profile: {
-				...u,
-				bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
-				avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
-			},
-		};
+                return {
+                        id: u.id,
+                        profile: {
+                                ...u,
+                                bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
+                                avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
+                        },
+                };
 	} catch (err) {
 		return rejectWithValue(err.response?.data || err.message);
 	}

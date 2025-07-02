@@ -143,16 +143,21 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 					</Stack>
 
 					{/* Bio */}
-					<Paper variant="outlined" sx={{ p: 1, flex: 1, minHeight: 80 }}>
-						<Typography variant="subtitle2">About Me</Typography>
-						<Typography variant="body2" color="text.secondary">
-							{profile.bio || "This user hasn’t written a bio yet."}
-						</Typography>
-					</Paper>
-				</Stack>
-			</Paper>
-		);
-	}
+                                        <Paper variant="outlined" sx={{ p: 1, flex: 1, minHeight: 80 }}>
+                                                <Typography variant="subtitle2">About Me</Typography>
+                                                <Typography variant="body2" color="text.secondary">
+                                                        {profile.bio || "This user hasn’t written a bio yet."}
+                                                </Typography>
+                                        </Paper>
+                                        {profile.createdAt && (
+                                                <Typography variant="caption" color="text.secondary">
+                                                        Joined {new Date(profile.createdAt).toLocaleDateString()}
+                                                </Typography>
+                                        )}
+                                </Stack>
+                        </Paper>
+                );
+        }
 
 	/* ---------- main render ---------- */
 	return (
@@ -225,16 +230,21 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 				</Stack>
 
 				{/* Bio */}
-				<Paper variant="outlined" sx={{ p: 1, flex: 1, minHeight: 80 }}>
-					<Typography variant="subtitle2">About Me</Typography>
-					{editMode ? (
-						<TextField fullWidth multiline rows={4} label="Bio" value={bio} onChange={(e) => setBio(e.target.value)} />
-					) : (
-						<Typography variant="body2" color="text.secondary">
-							{profile.bio || "This user hasn’t written a bio yet."}
-						</Typography>
-					)}
-				</Paper>
+                                <Paper variant="outlined" sx={{ p: 1, flex: 1, minHeight: 80 }}>
+                                        <Typography variant="subtitle2">About Me</Typography>
+                                        {editMode ? (
+                                                <TextField fullWidth multiline rows={4} label="Bio" value={bio} onChange={(e) => setBio(e.target.value)} />
+                                        ) : (
+                                                <Typography variant="body2" color="text.secondary">
+                                                        {profile.bio || "This user hasn’t written a bio yet."}
+                                                </Typography>
+                                        )}
+                                </Paper>
+                                {profile.createdAt && !editMode && (
+                                        <Typography variant="caption" color="text.secondary">
+                                                Joined {new Date(profile.createdAt).toLocaleDateString()}
+                                        </Typography>
+                                )}
 
 				{/* Actions */}
 				<Box>

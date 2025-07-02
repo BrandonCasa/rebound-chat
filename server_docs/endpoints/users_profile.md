@@ -11,4 +11,7 @@ Returns a user's profile. The behaviour depends on the authenticated user and op
   - `404` – user not found.
   - `401` – invalid token.
 
+Both public and private profile objects now include a `createdAt` timestamp
+representing when the account was created.
+
 Profiles are generated via `toProfilePrivJSON` or `toProfilePubJSON` which include mutual friends and servers when applicable.
