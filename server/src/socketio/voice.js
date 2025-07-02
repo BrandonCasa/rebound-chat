@@ -17,6 +17,12 @@ class ServerVoice {
         try {
             const callee = await UserModel.findById(calleeId);
             if (!callee) return;
+            const sockets = await socketBackend.io.fetchSockets();
+            const online = sockets.some((s) => s.user.id === calleeId);
+            if (!online) {
+                socket.emit("call_failed", "User offline");
+                return;
+            }
             const callId = randomUUID();
             this.#calls.set(callId, { callerId: socket.user.id, calleeId });
             await this.#emitToUser(calleeId, "incoming_call", callId, socket.user.id);

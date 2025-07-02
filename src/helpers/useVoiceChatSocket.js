@@ -44,12 +44,22 @@ export default function useVoiceChatSocket() {
 				})
 			);
 		});
-		socket.on("call_started", (callId) => {
-			dispatch(
-				callStarted({
-					callId,
-					callerId: myId,
-					calleeId: pendingCallee.current,
+                socket.on("call_failed", (reason) => {
+                        pendingCallee.current = null;
+                        dispatch(
+                                addSnackbar({
+                                        snackbarMsg: reason || "Call failed",
+                                        snackbarSeverity: "error",
+                                        autoHideDuration: 2000,
+                                })
+                        );
+                });
+                socket.on("call_started", (callId) => {
+                        dispatch(
+                                callStarted({
+                                        callId,
+                                        callerId: myId,
+                                        calleeId: pendingCallee.current,
 				})
 			);
 			pendingCallee.current = null;
@@ -74,12 +84,12 @@ export default function useVoiceChatSocket() {
 		socket.on("voice_signal", (callId, signal) => {
 			if (callId === currentCallId) peer?.signal(signal);
 		});
-		socket.on("call_ended", (callId) => {
-			dispatch(callEnded({ callId }));
-			dispatch(
-				addSnackbar({
-					snackbarMsg: "Call ended",
-					snackbarSeverity: "warning",
+                socket.on("call_ended", (callId) => {
+                        dispatch(callEnded({ callId }));
+                        dispatch(
+                                addSnackbar({
+                                        snackbarMsg: "Call ended",
+                                        snackbarSeverity: "warning",
 					autoHideDuration: 1500,
 				})
 			);
@@ -87,7 +97,8 @@ export default function useVoiceChatSocket() {
 
 		return () => {
 			socket.off("incoming_call");
-			socket.off("call_started");
+                        socket.off("call_failed");
+                        socket.off("call_started");
 			socket.off("call_accepted");
 			socket.off("voice_signal");
 			socket.off("call_ended");
@@ -102,8 +113,18 @@ export default function useVoiceChatSocket() {
 
 		if (peer) return;
 
-		const initiator = call.callerId === myId;
-		const p = new Peer({ initiator, trickle: false, stream: localStream });
+                const initiator = call.callerId === myId;
+                const p = new Peer({
+                        initiator,
+                        trickle: false,
+                        stream: localStream,
+                        config: {
+                                iceServers: [
+                                        { urls: "stun:stun.l.google.com:19302" },
+                                        { urls: "stun:global.stun.twilio.com:3478?transport=udp" },
+                                ],
+                        },
+                });
 		p.on("signal", (data) => {
 			socketIoHelper.getSocket()?.emit("voice_signal", currentCallId, data);
 		});

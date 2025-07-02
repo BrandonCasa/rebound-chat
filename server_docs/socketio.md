@@ -65,13 +65,13 @@ When a watched user saves changes, the server emits to each watcher:
 
 ## Voice Calls
 
-Handlers in `server/src/socketio/voice.js` allow two users to establish a temporary voice call. No audio is handled by the server; it only relays call events for WebRTC signalling.
+Handlers in `server/src/socketio/voice.js` allow two users to establish a temporary voice call. No audio is handled by the server; it only relays call events for WebRTC signalling. The client uses public STUN servers for NAT traversal.
 
 Client‑initiated events:
 
 | Event         | Arguments    | Description |
 | ------------- | ------------ | ------------------------------------- |
-| `call_user`   | `userId`     | Start a voice call with the specified user. The callee receives `incoming_call`. |
+| `call_user`   | `userId`     | Start a voice call with the specified user. The callee receives `incoming_call`. If the user is offline the caller receives `call_failed`. |
 | `accept_call` | `callId`     | Accept an incoming call. Both parties receive `call_accepted`. |
 | `voice_signal` | `callId`, `signal` | Relay WebRTC signalling data to the other participant. |
 | `end_call`    | `callId`     | Terminate an active call. Both parties receive `call_ended`. |
@@ -80,6 +80,7 @@ Server‑emitted events:
 
 - `incoming_call` – `callId` and caller user id when someone requests a call.
 - `call_started` – confirmation sent back to the caller after issuing `call_user`.
+- `call_failed` – emitted to the caller if the callee is not online.
 - `call_accepted` – emitted to both participants when a call is accepted.
 - `call_ended` – emitted to both participants when a call is ended or a participant disconnects.
 - `voice_signal` – WebRTC signalling data forwarded between participants.
