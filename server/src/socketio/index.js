@@ -7,6 +7,7 @@ import logger from "../logger.js";
 import serverRooms from "./rooms.js";
 import serverDMs from "./dms.js";
 import serverWatchers from "./watchers.js";
+import serverVoice from "./voice.js";
 import UserModel from "../models/User.js";
 
 class SocketBackend {
@@ -59,6 +60,9 @@ class SocketBackend {
 
                 // start handling direct message events
                 serverDMs.startListeners(socket);
+
+                // start handling voice call events
+                serverVoice.startListeners(socket);
 
 		// start handling watcher events
 		serverWatchers.init(socket);
