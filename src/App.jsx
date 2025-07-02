@@ -27,6 +27,7 @@ const TestingPage = lazy(() => import("./routes/TestingPage/TestingPage.route"))
 const SettingsPage = lazy(() => import("./routes/SettingsPage/SettingsPage.route"));
 const FriendPage = lazy(() => import("./routes/FriendPage/FriendPage.route"));
 const DirectMessagePage = lazy(() => import("./routes/DirectMessagePage/DirectMessagePage"));
+const VoiceChatPage = lazy(() => import("./routes/VoiceChatPage/VoiceChatPage"));
 
 const PageNotFoundContainer = styled("div")({
 	maxWidth: "100%",
@@ -131,9 +132,10 @@ const App = () => {
 								<Route path="/" element={<LandingPage />} />
 								<Route path="/friends" element={<FriendPage />} />
 								<Route path="/profile" element={<ProfilePage />} />
-								<Route path="/chat" element={<ChatPage />} />
-								<Route path="/dm/:userId" element={<DirectMessagePage />} />
-								<Route path="/servers" element={<ServersPage />} />
+                                                               <Route path="/chat" element={<ChatPage />} />
+                                                               <Route path="/voicechat" element={<VoiceChatPage />} />
+                                                               <Route path="/dm/:userId" element={<DirectMessagePage />} />
+                                                               <Route path="/servers" element={<ServersPage />} />
 								<Route path="/testing" element={<TestingPage />} />
 								<Route path="/settings" element={<SettingsPage />} />
 								<Route path="*" element={<PageNotFoundContainer>PAGE NOT FOUND</PageNotFoundContainer>} />

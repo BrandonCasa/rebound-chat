@@ -1,6 +1,7 @@
 import HomeRounded from "@mui/icons-material/HomeRounded";
 import PeopleAltRounded from "@mui/icons-material/PeopleAltRounded";
 import MessageRounded from "@mui/icons-material/MessageRounded";
+import RecordVoiceOverRounded from "@mui/icons-material/RecordVoiceOverRounded";
 import DnsRounded from "@mui/icons-material/DnsRounded";
 import PersonRounded from "@mui/icons-material/PersonRounded";
 import ScienceTwoTone from "@mui/icons-material/ScienceTwoTone";
@@ -61,17 +62,23 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
 						path: "/friends",
 						Icon: PeopleAltRounded,
 					},
-					{
-						key: "chat",
-						title: "Chat",
-						path: "/chat",
-						Icon: MessageRounded,
-					},
-					{
-						key: "servers",
-						title: "Servers",
-						path: "/servers",
-						Icon: DnsRounded,
+                                        {
+                                                key: "chat",
+                                                title: "Chat",
+                                                path: "/chat",
+                                                Icon: MessageRounded,
+                                        },
+                                        {
+                                                key: "voicechat",
+                                                title: "Voice Chat",
+                                                path: "/voicechat",
+                                                Icon: RecordVoiceOverRounded,
+                                        },
+                                        {
+                                                key: "servers",
+                                                title: "Servers",
+                                                path: "/servers",
+                                                Icon: DnsRounded,
 					},
 					{
 						key: "profile",
