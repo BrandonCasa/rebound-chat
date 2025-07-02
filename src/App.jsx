@@ -10,6 +10,9 @@ import CustomAppBar from "./components/CustomAppBar/CustomAppBar";
 import LoginDialog from "./components/LoginDialog.comp";
 import RegisterDialog from "./components/RegisterDialog";
 import SnackbarMapper from "./components/SnackbarMapper";
+import VoiceChatOverlay from "./components/VoiceChatOverlay";
+import VoiceChatContext from "./context/VoiceChatContext";
+import useVoiceChatSocket from "./helpers/useVoiceChatSocket";
 import useDarkTheme from "./helpers/darkTheme";
 import socketIoHelper from "./helpers/socket";
 import { setLoggedIn, setLoggingIn, setSocketStatus, verifyUser, setAuthState } from "./slices/authSlice";
@@ -40,10 +43,11 @@ const AppRouter = ({ children }) => {
 };
 
 const App = () => {
-	const authState = useSelector((state) => state.auth);
-	const darkTheme = useDarkTheme();
-	const dispatch = useDispatch();
-	const customAppBarProps = useCustomAppBar(useWindowDimensions().width);
+        const authState = useSelector((state) => state.auth);
+        const darkTheme = useDarkTheme();
+        const dispatch = useDispatch();
+        const customAppBarProps = useCustomAppBar(useWindowDimensions().width);
+        const voiceChatValue = useVoiceChatSocket();
 
 	useEffect(() => {
 		const params = new URLSearchParams(window.location.search);
@@ -117,15 +121,17 @@ const App = () => {
 	useSocketConnection(authState.authToken, authState.loggedIn);
 	useVerifyUser(authState);
 
-	return (
-		<ThemeProvider theme={darkTheme}>
-			{window.isElectron && <AutoUpdate />}
-			<CssBaseline />
-			<SnackbarMapper drawerWidth={customAppBarProps.drawerWidth} drawerOpen={customAppBarProps.drawerOpen} />
-			<AppRouter>
-				<RegisterDialog />
-				<LoginDialog />
-				<CustomAppBar {...customAppBarProps}>
+        return (
+                <ThemeProvider theme={darkTheme}>
+                        {window.isElectron && <AutoUpdate />}
+                        <CssBaseline />
+                        <VoiceChatContext.Provider value={voiceChatValue}>
+                                <SnackbarMapper drawerWidth={customAppBarProps.drawerWidth} drawerOpen={customAppBarProps.drawerOpen} />
+                                <VoiceChatOverlay />
+                                <AppRouter>
+                                        <RegisterDialog />
+                                        <LoginDialog />
+                                        <CustomAppBar {...customAppBarProps}>
 					{!authState.loggingIn ? (
 						<Suspense fallback={<div>Loading...</div>}>
 							<Routes>
@@ -142,10 +148,11 @@ const App = () => {
 							</Routes>
 						</Suspense>
 					) : null}
-				</CustomAppBar>
-			</AppRouter>
-		</ThemeProvider>
-	);
+                                        </CustomAppBar>
+                                </AppRouter>
+                        </VoiceChatContext.Provider>
+                </ThemeProvider>
+        );
 };
 
 export default App;

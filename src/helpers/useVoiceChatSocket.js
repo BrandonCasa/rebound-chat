@@ -3,6 +3,7 @@ import Peer from "simple-peer";
 import { useDispatch, useSelector } from "react-redux";
 import socketIoHelper from "./socket";
 import { callStarted, incomingCall, callAccepted, callEnded, toggleMute } from "../slices/voiceChatSlice";
+import { addSnackbar } from "../slices/snackbarSlice";
 
 export default function useVoiceChatSocket() {
         const dispatch = useDispatch();
@@ -32,20 +33,47 @@ export default function useVoiceChatSocket() {
 		const socket = socketIoHelper.getSocket() ?? socketIoHelper.connectSocket(token);
 
 		// attach per‑feature listeners once
-		socket.on("incoming_call", (callId, callerId) => {
-			dispatch(incomingCall({ callId, callerId, calleeId: myId }));
-		});
-		socket.on("call_started", (callId) => {
-			// no state change needed; handled optimistically in startCall()
-		});
+                socket.on("incoming_call", (callId, callerId) => {
+                        dispatch(incomingCall({ callId, callerId, calleeId: myId }));
+                        dispatch(
+                                addSnackbar({
+                                        snackbarMsg: "Incoming call",
+                                        snackbarSeverity: "info",
+                                        autoHideDuration: 2000,
+                                })
+                        );
+                });
+                socket.on("call_started", () => {
+                        dispatch(
+                                addSnackbar({
+                                        snackbarMsg: "Calling...",
+                                        snackbarSeverity: "info",
+                                        autoHideDuration: 1000,
+                                })
+                        );
+                });
                 socket.on("call_accepted", (callId) => {
                         dispatch(callAccepted({ callId }));
+                        dispatch(
+                                addSnackbar({
+                                        snackbarMsg: "Call connected",
+                                        snackbarSeverity: "success",
+                                        autoHideDuration: 1500,
+                                })
+                        );
                 });
                 socket.on("voice_signal", (callId, signal) => {
                         if (callId === currentCallId) peer?.signal(signal);
                 });
                 socket.on("call_ended", (callId) => {
                         dispatch(callEnded({ callId }));
+                        dispatch(
+                                addSnackbar({
+                                        snackbarMsg: "Call ended",
+                                        snackbarSeverity: "warning",
+                                        autoHideDuration: 1500,
+                                })
+                        );
                 });
 
 		return () => {

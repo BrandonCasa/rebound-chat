@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useContext } from "react";
 import {
 	Box,
 	Typography,
@@ -23,11 +23,11 @@ import MicOffIcon from "@mui/icons-material/MicOff";
 import MicIcon from "@mui/icons-material/Mic";
 import VolumeUpIcon from "@mui/icons-material/VolumeUp";
 import { useSelector, useDispatch } from "react-redux";
-import useVoiceChatSocket from "../../helpers/useVoiceChatSocket";
+import VoiceChatContext from "../../context/VoiceChatContext";
 import { callStarted, callEnded } from "../../slices/voiceChatSlice";
 
 export default function VoiceChatPage() {
-        const { startCall, acceptCall, endCall, toggleMute, remoteStream } = useVoiceChatSocket();
+        const { startCall, acceptCall, endCall, toggleMute, remoteStream } = useContext(VoiceChatContext);
 	const dispatch = useDispatch();
 	const { incoming, currentCallId, calls } = useSelector((s) => s.voiceChat);
 	const myId = useSelector((s) => s.auth.user?.id);
