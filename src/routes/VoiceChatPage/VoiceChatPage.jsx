@@ -24,10 +24,10 @@ import MicIcon from "@mui/icons-material/Mic";
 import VolumeUpIcon from "@mui/icons-material/VolumeUp";
 import { useSelector, useDispatch } from "react-redux";
 import VoiceChatContext from "../../context/VoiceChatContext";
-import { callStarted, callEnded } from "../../slices/voiceChatSlice";
+import { callEnded } from "../../slices/voiceChatSlice";
 
 export default function VoiceChatPage() {
-        const { startCall, acceptCall, endCall, toggleMute, remoteStream } = useContext(VoiceChatContext);
+	const { startCall, acceptCall, endCall, toggleMute, remoteStream } = useContext(VoiceChatContext);
 	const dispatch = useDispatch();
 	const { incoming, currentCallId, calls } = useSelector((s) => s.voiceChat);
 	const myId = useSelector((s) => s.auth.user?.id);
@@ -37,8 +37,6 @@ export default function VoiceChatPage() {
 	const otherId = currentCall && (currentCall.callerId === myId ? currentCall.calleeId : currentCall.callerId);
 
 	const handleStartCall = (friendId) => {
-		const callId = crypto.randomUUID();
-		dispatch(callStarted({ callId, callerId: myId, calleeId: friendId }));
 		startCall(friendId);
 	};
 
@@ -75,13 +73,13 @@ export default function VoiceChatPage() {
 				</Box>
 			</Grid>
 
-                        {/* Call Panel - appears only when in a call */}
-                        {currentCallId && currentCall?.status !== "ended" && (
-                                <Grid item xs={4} sx={{ borderLeft: 1, borderColor: "divider", p: 2 }}>
-                                        <Typography variant="h6" gutterBottom>
-                                                In Call
-                                        </Typography>
-                                        <Stack spacing={2}>
+			{/* Call Panel - appears only when in a call */}
+			{currentCallId && currentCall?.status !== "ended" && (
+				<Grid item xs={4} sx={{ borderLeft: 1, borderColor: "divider", p: 2 }}>
+					<Typography variant="h6" gutterBottom>
+						In Call
+					</Typography>
+					<Stack spacing={2}>
 						<Stack direction="row" spacing={1} alignItems="center">
 							<Avatar src={`https://api.dicebear.com/8.x/identicon/svg?seed=${otherId}`} />
 							<Typography>{otherId}</Typography>
@@ -89,30 +87,30 @@ export default function VoiceChatPage() {
 						<Divider />
 						{/* Controls */}
 						<Stack direction="row" spacing={2} justifyContent="center">
-                                                        <IconButton onClick={toggleMute}>{currentCall?.muted ? <MicOffIcon /> : <MicIcon />}</IconButton>
-                                                        <IconButton
-                                                                onClick={() => {
-                                                                        endCall(currentCallId);
-                                                                        dispatch(callEnded({ callId: currentCallId }));
-                                                                }}
+							<IconButton onClick={toggleMute}>{currentCall?.muted ? <MicOffIcon /> : <MicIcon />}</IconButton>
+							<IconButton
+								onClick={() => {
+									endCall(currentCallId);
+									dispatch(callEnded({ callId: currentCallId }));
+								}}
 								color="error">
 								<CallEndIcon />
 							</IconButton>
 							<IconButton>
 								<VolumeUpIcon />
 							</IconButton>
-                                                </Stack>
-                                                {remoteStream && (
-                                                        <audio
-                                                                autoPlay
-                                                                ref={(el) => {
-                                                                        if (el) el.srcObject = remoteStream;
-                                                                }}
-                                                        />
-                                                )}
-                                        </Stack>
-                                </Grid>
-                        )}
+						</Stack>
+						{remoteStream && (
+							<audio
+								autoPlay
+								ref={(el) => {
+									if (el) el.srcObject = remoteStream;
+								}}
+							/>
+						)}
+					</Stack>
+				</Grid>
+			)}
 
 			{/* Incoming Call Dialog */}
 			{incoming && (
