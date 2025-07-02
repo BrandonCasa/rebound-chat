@@ -62,3 +62,22 @@ Handlers in `server/src/socketio/watchers.js` let sockets watch user profiles fo
 When a watched user saves changes, the server emits to each watcher:
 
 - `watched_user_saved` – `[userId, publicInfo, privateInfo]` where `publicInfo` contains the public profile fields computed for the watcher and `privateInfo` contains private fields only if the watcher is the owner.
+
+## Voice Calls
+
+Handlers in `server/src/socketio/voice.js` allow two users to establish a temporary voice call. No audio is handled by the server; it only relays call events for WebRTC signalling.
+
+Client‑initiated events:
+
+| Event         | Arguments    | Description |
+| ------------- | ------------ | ------------------------------------- |
+| `call_user`   | `userId`     | Start a voice call with the specified user. The callee receives `incoming_call`. |
+| `accept_call` | `callId`     | Accept an incoming call. Both parties receive `call_accepted`. |
+| `end_call`    | `callId`     | Terminate an active call. Both parties receive `call_ended`. |
+
+Server‑emitted events:
+
+- `incoming_call` – `callId` and caller user id when someone requests a call.
+- `call_started` – confirmation sent back to the caller after issuing `call_user`.
+- `call_accepted` – emitted to both participants when a call is accepted.
+- `call_ended` – emitted to both participants when a call is ended or a participant disconnects.
