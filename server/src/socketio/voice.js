@@ -37,6 +37,18 @@ class ServerVoice {
         }
     }
 
+    async #relaySignal(socket, callId, signal) {
+        try {
+            const call = this.#calls.get(callId);
+            if (!call) return;
+            const otherId =
+                call.callerId === socket.user.id ? call.calleeId : call.callerId;
+            await this.#emitToUser(otherId, "voice_signal", callId, signal);
+        } catch (err) {
+            logger.error("relay_signal error:", err);
+        }
+    }
+
     async #endCall(socket, callId) {
         try {
             const call = this.#calls.get(callId);
@@ -63,6 +75,9 @@ class ServerVoice {
     startListeners(socket) {
         socket.on("call_user", (otherId) => this.#startCall(socket, otherId));
         socket.on("accept_call", (callId) => this.#acceptCall(socket, callId));
+        socket.on("voice_signal", (callId, signal) =>
+            this.#relaySignal(socket, callId, signal)
+        );
         socket.on("end_call", (callId) => this.#endCall(socket, callId));
         socket.on("disconnect", () => this.#cleanupForSocket(socket));
     }
