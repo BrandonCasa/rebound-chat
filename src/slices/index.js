@@ -7,6 +7,7 @@ import snackbarReducer from "./snackbarSlice";
 import userApiReducer from "./userApiSlice";
 import chatApiReducer from "./chatApiSlice";
 import dmApiReducer from "./dmApiSlice";
+import voiceChatReducer from "./voiceChatSlice";
 
 const rootReducer = combineReducers({
 	dialogs: dialogReducer,
@@ -16,6 +17,7 @@ const rootReducer = combineReducers({
 	userApi: userApiReducer,
 	chatApi: chatApiReducer,
 	dmApi: dmApiReducer,
+	voiceChat: voiceChatReducer,
 });
 
 export default rootReducer;

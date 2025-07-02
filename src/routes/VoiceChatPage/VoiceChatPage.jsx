@@ -1,19 +1,128 @@
 import React from "react";
-import { Box, Typography } from "@mui/material";
-import useVoiceChatPage from "./useVoiceChatPage";
+import {
+	Box,
+	Typography,
+	List,
+	ListItem,
+	ListItemAvatar,
+	Avatar,
+	ListItemText,
+	IconButton,
+	Dialog,
+	DialogTitle,
+	DialogContent,
+	DialogActions,
+	Button,
+	Grid,
+	Stack,
+	Divider,
+} from "@mui/material";
+import CallIcon from "@mui/icons-material/Call";
+import CallEndIcon from "@mui/icons-material/CallEnd";
+import MicOffIcon from "@mui/icons-material/MicOff";
+import MicIcon from "@mui/icons-material/Mic";
+import VolumeUpIcon from "@mui/icons-material/VolumeUp";
+import { useSelector, useDispatch } from "react-redux";
+import useVoiceChatSocket from "../../helpers/useVoiceChatSocket";
+import { callStarted, callEnded } from "../../slices/voiceChatSlice";
 
 export default function VoiceChatPage() {
-    // Initialize placeholder hook
-    useVoiceChatPage();
+	const { startCall, acceptCall, endCall, toggleMute } = useVoiceChatSocket();
+	const dispatch = useDispatch();
+	const { incoming, currentCallId, calls } = useSelector((s) => s.voiceChat);
+	const myId = useSelector((s) => s.auth.user?.id);
+	const friends = useSelector((s) => s.auth.friends) || [];
 
-    return (
-        <Box sx={{ flexGrow: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-            <Typography variant="h4" gutterBottom>
-                Voice Chat
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-                Voice chat features will live here soon.
-            </Typography>
-        </Box>
-    );
+	const currentCall = currentCallId ? calls[currentCallId] : null;
+	const otherId = currentCall && (currentCall.callerId === myId ? currentCall.calleeId : currentCall.callerId);
+
+	const handleStartCall = (friendId) => {
+		const callId = crypto.randomUUID();
+		dispatch(callStarted({ callId, callerId: myId, calleeId: friendId }));
+		startCall(friendId);
+	};
+
+	return (
+		<Grid container sx={{ height: "100vh" }}>
+			{/* Friends Sidebar */}
+			<Grid item xs={2} sx={{ borderRight: 1, borderColor: "divider", p: 2 }}>
+				<Typography variant="h6" gutterBottom>
+					Friends
+				</Typography>
+				<List disablePadding sx={{ height: "80vh", overflowY: "auto" }}>
+					{friends.map((f) => (
+						<ListItem
+							key={f.id}
+							secondaryAction={
+								<IconButton onClick={() => handleStartCall(f.id)} disabled={!!currentCallId}>
+									<CallIcon />
+								</IconButton>
+							}
+							sx={{ borderRadius: 1, mb: 1 }}>
+							<ListItemAvatar>
+								<Avatar src={`https://api.dicebear.com/8.x/identicon/svg?seed=${f.id}`} />
+							</ListItemAvatar>
+							<ListItemText primary={f.name} />
+						</ListItem>
+					))}
+				</List>
+			</Grid>
+
+			{/* Chat Area */}
+			<Grid item xs={currentCallId ? 6 : 10} sx={{ p: 2 }}>
+				<Box id="chat-area" sx={{ height: "100%", borderRadius: 1, p: 2, overflowY: "auto", bgcolor: "background.paper" }}>
+					{/* Insert Chat component here */}
+				</Box>
+			</Grid>
+
+			{/* Call Panel - appears only when in a call */}
+			{currentCallId && currentCall?.status !== "ended" && (
+				<Grid item xs={4} sx={{ borderLeft: 1, borderColor: "divider", p: 2 }}>
+					<Typography variant="h6" gutterBottom>
+						In Call
+					</Typography>
+					<Stack spacing={2}>
+						<Stack direction="row" spacing={1} alignItems="center">
+							<Avatar src={`https://api.dicebear.com/8.x/identicon/svg?seed=${otherId}`} />
+							<Typography>{otherId}</Typography>
+						</Stack>
+						<Divider />
+						{/* Controls */}
+						<Stack direction="row" spacing={2} justifyContent="center">
+							<IconButton onClick={toggleMute}>{currentCall?.muted ? <MicOffIcon /> : <MicIcon />}</IconButton>
+							<IconButton
+								onClick={() => {
+									endCall(currentCallId);
+									dispatch(callEnded({ callId: currentCallId }));
+								}}
+								color="error">
+								<CallEndIcon />
+							</IconButton>
+							<IconButton>
+								<VolumeUpIcon />
+							</IconButton>
+						</Stack>
+					</Stack>
+				</Grid>
+			)}
+
+			{/* Incoming Call Dialog */}
+			{incoming && (
+				<Dialog open>
+					<DialogTitle>Incoming Call</DialogTitle>
+					<DialogContent>
+						<Typography>{incoming.callerId} is calling...</Typography>
+					</DialogContent>
+					<DialogActions>
+						<Button color="error" onClick={() => endCall(incoming.callId)} startIcon={<MicOffIcon />}>
+							Decline
+						</Button>
+						<Button onClick={() => acceptCall(incoming.callId)} startIcon={<CallIcon />}>
+							Accept
+						</Button>
+					</DialogActions>
+				</Dialog>
+			)}
+		</Grid>
+	);
 }
