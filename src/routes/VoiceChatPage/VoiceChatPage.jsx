@@ -27,7 +27,7 @@ import useVoiceChatSocket from "../../helpers/useVoiceChatSocket";
 import { callStarted, callEnded } from "../../slices/voiceChatSlice";
 
 export default function VoiceChatPage() {
-	const { startCall, acceptCall, endCall, toggleMute } = useVoiceChatSocket();
+        const { startCall, acceptCall, endCall, toggleMute, remoteStream } = useVoiceChatSocket();
 	const dispatch = useDispatch();
 	const { incoming, currentCallId, calls } = useSelector((s) => s.voiceChat);
 	const myId = useSelector((s) => s.auth.user?.id);
@@ -75,13 +75,13 @@ export default function VoiceChatPage() {
 				</Box>
 			</Grid>
 
-			{/* Call Panel - appears only when in a call */}
-			{currentCallId && currentCall?.status !== "ended" && (
-				<Grid item xs={4} sx={{ borderLeft: 1, borderColor: "divider", p: 2 }}>
-					<Typography variant="h6" gutterBottom>
-						In Call
-					</Typography>
-					<Stack spacing={2}>
+                        {/* Call Panel - appears only when in a call */}
+                        {currentCallId && currentCall?.status !== "ended" && (
+                                <Grid item xs={4} sx={{ borderLeft: 1, borderColor: "divider", p: 2 }}>
+                                        <Typography variant="h6" gutterBottom>
+                                                In Call
+                                        </Typography>
+                                        <Stack spacing={2}>
 						<Stack direction="row" spacing={1} alignItems="center">
 							<Avatar src={`https://api.dicebear.com/8.x/identicon/svg?seed=${otherId}`} />
 							<Typography>{otherId}</Typography>
@@ -89,22 +89,30 @@ export default function VoiceChatPage() {
 						<Divider />
 						{/* Controls */}
 						<Stack direction="row" spacing={2} justifyContent="center">
-							<IconButton onClick={toggleMute}>{currentCall?.muted ? <MicOffIcon /> : <MicIcon />}</IconButton>
-							<IconButton
-								onClick={() => {
-									endCall(currentCallId);
-									dispatch(callEnded({ callId: currentCallId }));
-								}}
+                                                        <IconButton onClick={toggleMute}>{currentCall?.muted ? <MicOffIcon /> : <MicIcon />}</IconButton>
+                                                        <IconButton
+                                                                onClick={() => {
+                                                                        endCall(currentCallId);
+                                                                        dispatch(callEnded({ callId: currentCallId }));
+                                                                }}
 								color="error">
 								<CallEndIcon />
 							</IconButton>
 							<IconButton>
 								<VolumeUpIcon />
 							</IconButton>
-						</Stack>
-					</Stack>
-				</Grid>
-			)}
+                                                </Stack>
+                                                {remoteStream && (
+                                                        <audio
+                                                                autoPlay
+                                                                ref={(el) => {
+                                                                        if (el) el.srcObject = remoteStream;
+                                                                }}
+                                                        />
+                                                )}
+                                        </Stack>
+                                </Grid>
+                        )}
 
 			{/* Incoming Call Dialog */}
 			{incoming && (

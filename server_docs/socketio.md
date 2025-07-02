@@ -73,6 +73,7 @@ Client‑initiated events:
 | ------------- | ------------ | ------------------------------------- |
 | `call_user`   | `userId`     | Start a voice call with the specified user. The callee receives `incoming_call`. |
 | `accept_call` | `callId`     | Accept an incoming call. Both parties receive `call_accepted`. |
+| `voice_signal` | `callId`, `signal` | Relay WebRTC signalling data to the other participant. |
 | `end_call`    | `callId`     | Terminate an active call. Both parties receive `call_ended`. |
 
 Server‑emitted events:
@@ -81,3 +82,4 @@ Server‑emitted events:
 - `call_started` – confirmation sent back to the caller after issuing `call_user`.
 - `call_accepted` – emitted to both participants when a call is accepted.
 - `call_ended` – emitted to both participants when a call is ended or a participant disconnects.
+- `voice_signal` – WebRTC signalling data forwarded between participants.
