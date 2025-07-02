@@ -97,19 +97,20 @@ UserSchema.methods.generateJWT = function () {
  * @returns {Object}
  */
 UserSchema.methods.toAuthJSON = function () {
-	return {
-		id: this._id,
-		username: this.username,
-		email: this.email,
-		displayName: this.displayName,
-		bio: this.bio,
-		bannerUrl: this.bannerUrl,
-		avatarUrl: this.avatarUrl,
-		token: this.generateJWT(),
-		friends: this.friends,
-		blocked: this.blocked,
-		serverInvites: this.serverInvites,
-	};
+        return {
+                id: this._id,
+                username: this.username,
+                email: this.email,
+                displayName: this.displayName,
+                bio: this.bio,
+                bannerUrl: this.bannerUrl,
+                avatarUrl: this.avatarUrl,
+                createdAt: this.createdAt,
+                token: this.generateJWT(),
+                friends: this.friends,
+                blocked: this.blocked,
+                serverInvites: this.serverInvites,
+        };
 };
 
 /**
@@ -125,19 +126,20 @@ UserSchema.methods.toProfilePrivJSON = async function (requestingUser, session =
 	await this.populate({ path: "friends", options: { session } });
 	await this.populate({ path: "serverInvites", options: { session } });
 
-	return {
-		id: this._id,
-		username: this.username,
-		email: this.email,
-		displayName: this.displayName,
-		bio: this.bio,
-		bannerUrl: this.bannerUrl,
-		avatarUrl: this.avatarUrl,
-		friends: this.friends,
-		blocked: this.blocked,
-		serverInvites: this.serverInvites,
-		servers: this.servers,
-	};
+        return {
+                id: this._id,
+                username: this.username,
+                email: this.email,
+                displayName: this.displayName,
+                bio: this.bio,
+                bannerUrl: this.bannerUrl,
+                avatarUrl: this.avatarUrl,
+                createdAt: this.createdAt,
+                friends: this.friends,
+                blocked: this.blocked,
+                serverInvites: this.serverInvites,
+                servers: this.servers,
+        };
 };
 
 /**
@@ -150,17 +152,18 @@ UserSchema.methods.toProfilePrivJSON = async function (requestingUser, session =
  */
 UserSchema.methods.toProfilePubJSON = async function (queryingUser, session = null) {
 	if (!queryingUser) {
-		return {
-			id: this._id,
-			username: this.username,
-			displayName: this.displayName,
-			bio: this.bio,
-			bannerUrl: this.bannerUrl,
-			avatarUrl: this.avatarUrl,
-			friends: [],
-			blocked: [],
-			servers: [],
-		};
+                return {
+                        id: this._id,
+                        username: this.username,
+                        displayName: this.displayName,
+                        bio: this.bio,
+                        bannerUrl: this.bannerUrl,
+                        avatarUrl: this.avatarUrl,
+                        createdAt: this.createdAt,
+                        friends: [],
+                        blocked: [],
+                        servers: [],
+                };
 	}
 
 	await this.populate({ path: "friends", options: { session } });
@@ -188,17 +191,18 @@ UserSchema.methods.toProfilePubJSON = async function (queryingUser, session = nu
 	const theirServers = queryingUser.servers.map((s) => s.toString());
 	const mutualServers = this.servers.filter((s) => theirServers.includes(s.toString()));
 
-	return {
-		id: this._id,
-		username: this.username,
-		displayName: this.displayName,
-		bio: this.bio,
-		bannerUrl: this.bannerUrl,
-		avatarUrl: this.avatarUrl,
-		friends: [friendInvite, ...mutualFriendIds].filter((x) => x != null),
-		blocked: blockedList,
-		servers: mutualServers,
-	};
+        return {
+                id: this._id,
+                username: this.username,
+                displayName: this.displayName,
+                bio: this.bio,
+                bannerUrl: this.bannerUrl,
+                avatarUrl: this.avatarUrl,
+                createdAt: this.createdAt,
+                friends: [friendInvite, ...mutualFriendIds].filter((x) => x != null),
+                blocked: blockedList,
+                servers: mutualServers,
+        };
 };
 
 /**

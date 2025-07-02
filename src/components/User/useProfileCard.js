@@ -39,15 +39,16 @@ export default function useProfileCard(user, forceSelf) {
 	const isSelf = forceSelf || user?.id === auth.userId;
 	const rawData = isSelf
 		? auth
-		: (user ?? {
-				id: null,
-				displayName: "",
-				username: "",
-				bio: "",
-				avatarUrl: null,
-				bannerUrl: null,
-				friends: [],
-			});
+                : (user ?? {
+                                id: null,
+                                displayName: "",
+                                username: "",
+                                bio: "",
+                                avatarUrl: null,
+                                bannerUrl: null,
+                                friends: [],
+                                createdAt: null,
+                        });
 
 	const [profile, setProfile] = useState(rawData);
 	const [editMode, setEdit] = useState(false);

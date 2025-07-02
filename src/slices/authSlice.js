@@ -12,8 +12,9 @@ const initialState = {
 	userId: null,
 	username: "",
 	displayName: "",
-	bio: "",
-	loggingIn: false,
+        bio: "",
+        createdAt: null,
+        loggingIn: false,
 	socketInfo: {
 		connected: false,
 		currentRoom: null,
@@ -37,17 +38,18 @@ export const verifyUser = createAsyncThunk("auth/verifyUser", async (token, { re
 		);
 		const u = data.user;
 
-		return {
-			loggedIn: true,
-			authToken: token,
-			userId: u.id,
-			username: u.username,
-			displayName: u.displayName,
-			bio: u.bio,
-			friends: u.friends,
-			bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
-			avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
-		};
+                return {
+                        loggedIn: true,
+                        authToken: token,
+                        userId: u.id,
+                        username: u.username,
+                        displayName: u.displayName,
+                        bio: u.bio,
+                        friends: u.friends,
+                        bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
+                        avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
+                        createdAt: u.createdAt,
+                };
 	} catch (err) {
 		return rejectWithValue(err.response?.data || err.message);
 	}
@@ -61,17 +63,18 @@ export const loginUser = createAsyncThunk("auth/loginUser", async ({ email, pass
 		});
 		const u = data.user;
 
-		return {
-			loggedIn: true,
-			authToken: u.token,
-			userId: u.id,
-			username: u.username,
-			displayName: u.displayName,
-			bio: u.bio,
-			friends: u.friends,
-			bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
-			avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
-		};
+                return {
+                        loggedIn: true,
+                        authToken: u.token,
+                        userId: u.id,
+                        username: u.username,
+                        displayName: u.displayName,
+                        bio: u.bio,
+                        friends: u.friends,
+                        bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
+                        avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
+                        createdAt: u.createdAt,
+                };
 	} catch (err) {
 		return rejectWithValue(err.response?.data || err.message);
 	}
@@ -91,17 +94,18 @@ export const registerUser = createAsyncThunk(
 				window.localStorage.setItem("auth-token", u.token);
 			}
 
-			return {
-				loggedIn: true,
-				authToken: u.token,
-				userId: u.id,
-				username: u.username,
-				displayName: u.displayName,
-				bio: u.bio,
-				friends: u.friends,
-				bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
-				avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
-			};
+                return {
+                        loggedIn: true,
+                        authToken: u.token,
+                        userId: u.id,
+                        username: u.username,
+                        displayName: u.displayName,
+                        bio: u.bio,
+                        friends: u.friends,
+                        bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
+                        avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
+                        createdAt: u.createdAt,
+                };
 		} catch (err) {
 			return rejectWithValue(err.response?.data || err.message);
 		}
@@ -149,12 +153,15 @@ const authSlice = createSlice({
 			if ("bio" in action.payload) {
 				state.bio = action.payload.bio;
 			}
-			if ("friends" in action.payload) {
-				state.friends = action.payload.friends;
-			}
-			if ("bannerUrl" in action.payload) {
-				state.bannerUrl = action.payload.bannerUrl;
-			}
+                        if ("friends" in action.payload) {
+                                state.friends = action.payload.friends;
+                        }
+                        if ("createdAt" in action.payload) {
+                                state.createdAt = action.payload.createdAt;
+                        }
+                        if ("bannerUrl" in action.payload) {
+                                state.bannerUrl = action.payload.bannerUrl;
+                        }
 			if ("avatarUrl" in action.payload) {
 				state.avatarUrl = action.payload.avatarUrl;
 			}
@@ -194,11 +201,12 @@ const authSlice = createSlice({
 				state.userId = action.payload.userId;
 				state.username = action.payload.username;
 				state.displayName = action.payload.displayName;
-				state.bio = action.payload.bio;
-				state.friends = action.payload.friends;
-				state.bannerUrl = action.payload.bannerUrl;
-				state.avatarUrl = action.payload.avatarUrl;
-			})
+                                state.bio = action.payload.bio;
+                                state.friends = action.payload.friends;
+                                state.bannerUrl = action.payload.bannerUrl;
+                                state.avatarUrl = action.payload.avatarUrl;
+                                state.createdAt = action.payload.createdAt;
+                        })
 			.addCase(verifyUser.rejected, (state) => {
 				state.loggingIn = false;
 				state.loggedIn = false;
@@ -214,10 +222,11 @@ const authSlice = createSlice({
 				state.username = action.payload.username;
 				state.displayName = action.payload.displayName;
 				state.bio = action.payload.bio;
-				state.friends = action.payload.friends;
-				state.bannerUrl = action.payload.bannerUrl;
-				state.avatarUrl = action.payload.avatarUrl;
-			})
+                                state.friends = action.payload.friends;
+                                state.bannerUrl = action.payload.bannerUrl;
+                                state.avatarUrl = action.payload.avatarUrl;
+                                state.createdAt = action.payload.createdAt;
+                        })
 			.addCase(registerUser.rejected, (state) => {
 				state.loggingIn = false;
 				state.loggedIn = false;
@@ -234,10 +243,11 @@ const authSlice = createSlice({
 				state.displayName = action.payload.displayName;
 				state.bio = action.payload.bio;
 				state.friends = action.payload.friends;
-				state.bannerUrl = action.payload.bannerUrl;
-				state.avatarUrl = action.payload.avatarUrl;
-				window.localStorage.setItem("auth-token", action.payload.authToken);
-			})
+                                state.bannerUrl = action.payload.bannerUrl;
+                                state.avatarUrl = action.payload.avatarUrl;
+                                state.createdAt = action.payload.createdAt;
+                                window.localStorage.setItem("auth-token", action.payload.authToken);
+                        })
 			.addCase(loginUser.rejected, (state) => {
 				state.loggingIn = false;
 				state.loggedIn = false;
