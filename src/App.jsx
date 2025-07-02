@@ -43,11 +43,11 @@ const AppRouter = ({ children }) => {
 };
 
 const App = () => {
-        const authState = useSelector((state) => state.auth);
-        const darkTheme = useDarkTheme();
-        const dispatch = useDispatch();
-        const customAppBarProps = useCustomAppBar(useWindowDimensions().width);
-        const voiceChatValue = useVoiceChatSocket();
+	const authState = useSelector((state) => state.auth);
+	const darkTheme = useDarkTheme();
+	const dispatch = useDispatch();
+	const customAppBarProps = useCustomAppBar(useWindowDimensions().width);
+	const voiceChatValue = useVoiceChatSocket();
 
 	useEffect(() => {
 		const params = new URLSearchParams(window.location.search);
@@ -121,38 +121,38 @@ const App = () => {
 	useSocketConnection(authState.authToken, authState.loggedIn);
 	useVerifyUser(authState);
 
-        return (
-                <ThemeProvider theme={darkTheme}>
-                        {window.isElectron && <AutoUpdate />}
-                        <CssBaseline />
-                        <VoiceChatContext.Provider value={voiceChatValue}>
-                                <SnackbarMapper drawerWidth={customAppBarProps.drawerWidth} drawerOpen={customAppBarProps.drawerOpen} />
-                                <VoiceChatOverlay />
-                                <AppRouter>
-                                        <RegisterDialog />
-                                        <LoginDialog />
-                                        <CustomAppBar {...customAppBarProps}>
-					{!authState.loggingIn ? (
-						<Suspense fallback={<div>Loading...</div>}>
-							<Routes>
-								<Route path="/" element={<LandingPage />} />
-								<Route path="/friends" element={<FriendPage />} />
-								<Route path="/profile" element={<ProfilePage />} />
-                                                               <Route path="/chat" element={<ChatPage />} />
-                                                               <Route path="/voicechat" element={<VoiceChatPage />} />
-                                                               <Route path="/dm/:userId" element={<DirectMessagePage />} />
-                                                               <Route path="/servers" element={<ServersPage />} />
-								<Route path="/testing" element={<TestingPage />} />
-								<Route path="/settings" element={<SettingsPage />} />
-								<Route path="*" element={<PageNotFoundContainer>PAGE NOT FOUND</PageNotFoundContainer>} />
-							</Routes>
-						</Suspense>
-					) : null}
-                                        </CustomAppBar>
-                                </AppRouter>
-                        </VoiceChatContext.Provider>
-                </ThemeProvider>
-        );
+	return (
+		<ThemeProvider theme={darkTheme}>
+			{window.isElectron && <AutoUpdate />}
+			<CssBaseline />
+			<VoiceChatContext.Provider value={voiceChatValue}>
+				<SnackbarMapper drawerWidth={customAppBarProps.drawerWidth} drawerOpen={customAppBarProps.drawerOpen} />
+				<AppRouter>
+					<VoiceChatOverlay />
+					<RegisterDialog />
+					<LoginDialog />
+					<CustomAppBar {...customAppBarProps}>
+						{!authState.loggingIn ? (
+							<Suspense fallback={<div>Loading...</div>}>
+								<Routes>
+									<Route path="/" element={<LandingPage />} />
+									<Route path="/friends" element={<FriendPage />} />
+									<Route path="/profile" element={<ProfilePage />} />
+									<Route path="/chat" element={<ChatPage />} />
+									<Route path="/voicechat" element={<VoiceChatPage />} />
+									<Route path="/dm/:userId" element={<DirectMessagePage />} />
+									<Route path="/servers" element={<ServersPage />} />
+									<Route path="/testing" element={<TestingPage />} />
+									<Route path="/settings" element={<SettingsPage />} />
+									<Route path="*" element={<PageNotFoundContainer>PAGE NOT FOUND</PageNotFoundContainer>} />
+								</Routes>
+							</Suspense>
+						) : null}
+					</CustomAppBar>
+				</AppRouter>
+			</VoiceChatContext.Provider>
+		</ThemeProvider>
+	);
 };
 
 export default App;
