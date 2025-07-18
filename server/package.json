@@ -37,7 +37,7 @@
 		"mongoose": "^8.15.1",
 		"mongoose-unique-validator": "^4.0.1",
 		"morgan": "^1.10.0",
-		"multer": "^2.0.1",
+		"multer": "^2.0.2",
 		"multer-gridfs-storage": "^5.0.2",
 		"nodemon": "^3.1.10",
 		"passport": "^0.7.0",
