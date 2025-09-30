@@ -1,9 +1,10 @@
 packages:
-  - "."
-  - "./server"
+  - .
+  - ./server
 
 onlyBuiltDependencies:
-  - "@parcel/watcher"
+  - '@parcel/watcher'
+  - electron
   - electron-winstaller
   - esbuild
-  - electron
+  - mongodb-memory-server
