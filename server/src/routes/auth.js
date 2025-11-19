@@ -16,13 +16,13 @@ function getTokenFromHeader(req) {
 
 const auth = {
 	required: jwt({
-		secret: process.env.SECRET,
+		secret: process.env.ACCESS_TOKEN_SECRET,
 		algorithms: ["HS256"],
 		userProperty: "payload",
 		getToken: getTokenFromHeader,
 	}),
 	optional: jwt({
-		secret: process.env.SECRET,
+		secret: process.env.ACCESS_TOKEN_SECRET,
 		algorithms: ["HS256"],
 		userProperty: "payload",
 		credentialsRequired: false,
