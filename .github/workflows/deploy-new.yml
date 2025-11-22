@@ -38,6 +38,8 @@ env:
   EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
   SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
   SECRET: ${{ secrets.SECRET }}
+  ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_TOKEN_SECRET }}
+  REFRESH_TOKEN_SECRET: ${{ secrets.REFRESH_TOKEN_SECRET }}
   DB_USER: ${{ secrets.DB_USER }}
   DB_PASS: ${{ secrets.DB_PASS }}
   DB_AUTH: ${{ secrets.DB_AUTH }}
@@ -141,7 +143,23 @@ jobs:
 
             cd "${{ github.event.inputs.serverSubdirectory }}"
 
-            echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}\nGOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}\nGOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" > .env
+            cat << EOF > .env
+              echo -e "SECRET=${{ secrets.SECRET }}"
+              echo -e "ACCESS_TOKEN_SECRET=${{ secrets.ACCESS_TOKEN_SECRET }}"
+              echo -e "REFRESH_TOKEN_SECRET=${{ secrets.REFRESH_TOKEN_SECRET }}"
+              echo -e "DB_USER=${{ secrets.DB_USER }}"
+              echo -e "DB_PASS=${{ secrets.DB_PASS }}"
+              echo -e "DB_AUTH=${{ secrets.DB_AUTH }}"
+              echo -e "DB_NAME=${{ secrets.DB_NAME }}"
+              echo -e "PORT=${{ secrets.PORT }}"
+              echo -e "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}"
+              echo -e "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}"
+              echo -e "PORT=${{ secrets.PORT }}"
+              echo -e "DB_PASS=${{ secrets.DB_PASS }}"
+              echo -e "DB_NAME=${{ secrets.DB_NAME }}"
+              echo -e "PORT=${{ secrets.PORT }}"
+              echo -e "DB_PASS=${{ secrets.DB_PASS }}"
+            echo "EOF"
 
             pnpm install --frozen-lockfile --ignore-scripts
 

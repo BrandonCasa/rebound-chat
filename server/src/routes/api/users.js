@@ -169,7 +169,7 @@ router.get("/users/profile", generalLimiter, auth.required, async (req, res, nex
  */
 router.get("/users/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 router.get("/users/google/callback", passport.authenticate("google", { session: false, failureRedirect: "/" }), (req, res) => {
-	const token = req.user.generateJWT();
+	const token = req.user.generateAccessToken();
 	res.redirect(`${process.env.NODE_ENV === "development" ? "http://localhost:3000" : ""}/?token=${token}`);
 });
 router.post("/users/login", authLimiter, (req, res, next) => {
