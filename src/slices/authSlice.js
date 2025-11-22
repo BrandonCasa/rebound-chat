@@ -259,22 +259,27 @@ const authSlice = createSlice({
 		setSocketStatus: (state, action) => {
 			state.socketInfo.connected = action.payload.connected;
 		},
-		setSocketRoom: (state, action) => {
-			const socketClient = socketIoHelper.getSocket();
+                setSocketRoom: (state, action) => {
+                        const socketClient = socketIoHelper.getSocket();
 
-			const roomToLeave = action.payload.lastRoom || state.socketInfo.currentRoom;
-			const roomToJoin = action.payload.currentRoom;
+                        const roomToLeave = action.payload.lastRoom || state.socketInfo.currentRoom;
+                        const roomToJoin = action.payload.currentRoom;
 
-			if (roomToLeave) {
-				socketClient.emit("leave_room", roomToLeave);
-				state.socketInfo.currentRoom = null;
-			}
+                        if (!socketClient) {
+                                state.socketInfo.currentRoom = roomToJoin || null;
+                                return;
+                        }
 
-			if (roomToJoin) {
-				socketClient.emit("join_room", roomToJoin);
-				state.socketInfo.currentRoom = roomToJoin;
-			}
-		},
+                        if (roomToLeave) {
+                                socketClient.emit("leave_room", roomToLeave);
+                                state.socketInfo.currentRoom = null;
+                        }
+
+                        if (roomToJoin) {
+                                socketClient.emit("join_room", roomToJoin);
+                                state.socketInfo.currentRoom = roomToJoin;
+                        }
+                },
         },
         extraReducers: (builder) => {
                 builder

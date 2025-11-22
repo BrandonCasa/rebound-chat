@@ -11,13 +11,27 @@ import { addSnackbar } from "../slices/snackbarSlice";
 
 const LoginDialog = () => {
 	const loginDialogState = useSelector((state) => state.dialogs.loginDialogOpen);
-	const dispatch = useDispatch();
+        const dispatch = useDispatch();
 
         const [email, setEmail] = useState("");
         const [password, setPassword] = useState("");
 
         const handleUserLogin = () => {
-                dispatch(loginUser({ email, password }))
+                const trimmedEmail = email.trim();
+                const trimmedPassword = password.trim();
+
+                if (!trimmedEmail || !trimmedPassword) {
+                        dispatch(
+                                addSnackbar({
+                                        snackbarMsg: "Please enter both email and password.",
+                                        snackbarSeverity: "error",
+                                        autoHideDuration: 3000,
+                                })
+                        );
+                        return;
+                }
+
+                dispatch(loginUser({ email: trimmedEmail, password: trimmedPassword }))
                         .unwrap()
                         .then((user) => {
                                 dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
