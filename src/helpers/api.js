@@ -1,9 +1,13 @@
-export const getApiBase = () =>
-        process.env.NODE_ENV === "development"
-                ? "http://localhost:6001/api"
-                : globalThis.IN_ELECTRON_ENV
-                  ? "https://rebound.nexus/api"
-                  : "/api";
+export const getApiBase = () => {
+        const envBase =
+                typeof import.meta !== "undefined" ? import.meta.env?.VITE_API_BASE_URL : undefined;
+
+        if (envBase) return envBase;
+
+        if (process.env.NODE_ENV === "development") return "/api";
+
+        return globalThis.IN_ELECTRON_ENV ? "https://rebound.nexus/api" : "/api";
+};
 
 const CSRF_COOKIE_NAME = "csrfToken";
 const CSRF_HEADER_NAME = "x-csrf-token";
