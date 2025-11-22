@@ -1,0 +1,49 @@
+{
+  "name": "@rebound/server-new",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Next-generation NestJS GraphQL service for Rebound.",
+  "scripts": {
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "build": "nest build",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\""
+  },
+  "dependencies": {
+    "@apollo/server": "^4.11.1",
+    "@nestjs/apollo": "^12.2.2",
+    "@nestjs/common": "^10.4.15",
+    "@nestjs/config": "^3.3.0",
+    "@nestjs/core": "^10.4.15",
+    "@nestjs/graphql": "^12.2.2",
+    "@nestjs/platform-express": "^10.4.15",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
+    "graphql": "^16.10.0",
+    "helmet": "^8.0.0",
+    "joi": "^17.13.3",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.4.7",
+    "@nestjs/schematics": "^10.1.3",
+    "@nestjs/testing": "^10.4.15",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.9.0",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
+    "eslint": "^9.15.0",
+    "eslint-config-prettier": "^10.0.1",
+    "eslint-import-resolver-typescript": "^3.6.3",
+    "eslint-plugin-import": "^2.31.0",
+    "prettier": "^3.5.3",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

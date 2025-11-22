@@ -1,6 +1,7 @@
 packages:
   - .
   - ./server
+  - ./server_new_impl
 
 onlyBuiltDependencies:
   - '@parcel/watcher'
