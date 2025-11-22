@@ -38,14 +38,13 @@ export default function useCustomAppBar(width) {
 		);
 	};
 
-	const handleLogout = () => {
-		window.localStorage.removeItem("auth-token");
-		const oldDisplayName = displayName;
-		dispatch(setLoggedIn({ loggedIn: false }));
-		const socketClient = socketIoHelper.getSocket();
-		if (socketClient && socketClient.connected) {
-			socketIoHelper.disconnectSocket();
-		}
+        const handleLogout = () => {
+                const oldDisplayName = displayName;
+                dispatch(setLoggedIn({ loggedIn: false, disableAutoLogin: true }));
+                const socketClient = socketIoHelper.getSocket();
+                if (socketClient && socketClient.connected) {
+                        socketIoHelper.disconnectSocket();
+                }
 		dispatch(
 			addSnackbar({
 				snackbarMsg: `Goodbye ${oldDisplayName}`,

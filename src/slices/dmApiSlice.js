@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
-import { getApiBase } from "../helpers/api";
+import { buildApiConfig, getApiBase } from "../helpers/api";
 import { mapMessages } from "./chatApiSlice";
 
 const base = getApiBase();
@@ -9,9 +9,10 @@ export const fetchDmMessages = createAsyncThunk(
   "dmApi/fetchDmMessages",
   async ({ userId, authToken }, { rejectWithValue }) => {
     try {
-      const { data } = await axios.get(`${base}/dms/${userId}/messages`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
+      const { data } = await axios.get(
+        `${base}/dms/${userId}/messages`,
+        buildApiConfig(authToken)
+      );
       return {
         userId,
         threadId: data.threadId,
