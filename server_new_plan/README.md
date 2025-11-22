@@ -11,10 +11,10 @@ This folder captures the high-level migration strategy for moving the Rebound ba
 
 ## Migration Phases (broad scope)
 1. **Foundation (NestJS bootstrap)**
-   - [ ] Create Nest workspace with pnpm; set up ESLint/Prettier aligned with repo style.
-   - [ ] Add GraphQL (Apollo driver) with code-first schema generation and automatic schema artifact publishing.
+   - [x] Create Nest workspace with pnpm; set up ESLint/Prettier aligned with repo style.
+   - [x] Add GraphQL (Apollo driver) with code-first schema generation and automatic schema artifact publishing.
    - [ ] Establish shared `@rebound/types` package for DTOs/entities used by frontend (exported via pnpm workspace).
-   - [ ] Wire configuration module (env validation, per-environment files) and logging (Nest Logger + Winston bridge).
+   - [x] Wire configuration module (env validation, per-environment files) and logging (Nest Logger + Winston bridge).
 
 2. **Auth & User Domain parity**
    - [ ] Rebuild authentication/authorization (JWT access/refresh, optional OAuth providers) mirroring current `auth.js` behavior (cookie + bearer token handling).
@@ -40,6 +40,17 @@ This folder captures the high-level migration strategy for moving the Rebound ba
    - [ ] Update GitHub Actions to build/test Nest apps, run GraphQL schema diffing, lint, and publish packages to npm registry or GitHub Packages.
    - [ ] Add e2e test harness (Jest + Supertest/GraphQL testing) and contract tests for Socket/WebSocket flows.
    - [ ] Provide local dev scripts (pnpm) and mocks for S3/Cloudflare (e.g., LocalStack/MinIO) plus database seeders.
+
+## Progress (this iteration)
+
+- Bootstrapped `server_new_impl` Nest app with GraphQL, validated configuration, and security middleware (helmet/CORS/validation pipe).
+- Added `Health` GraphQL resolver for liveness checks and initial `Users` module with a schema-level lookup stub to unblock frontend contracts.
+
+## Next considerations
+
+- Replace the in-memory `UsersService` placeholder with Prisma-backed PostgreSQL access and add dataloaders for relation-heavy queries.
+- Introduce authentication/authorization guards around user lookups before exposing broader profile fields.
+- Stand up the shared `@rebound/types` package so the frontend can adopt generated types without coupling to Nest internals.
 
 ## Notes & Considerations
 - **API surface:** Go fully GraphQL-first (plus WebSockets for realtime) and deprecate the legacy REST surface as the frontend is modernized.

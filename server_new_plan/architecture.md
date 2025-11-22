@@ -54,3 +54,13 @@
 - OpenTelemetry tracing with HTTP/WebSocket instrumentation; exporters for Jaeger/OTLP.
 - Metrics via Prometheus + NestJS meters; dashboards for request rates, resolver latency, pub/sub throughput.
 - Log correlation with Cloudflare request IDs.
+
+## Current implementation snapshot
+- Nest GraphQL bootstrap is live with code-first schema generation and schema sorting.
+- Health resolver returns liveness metadata for quick smoke tests.
+- Users module scaffolded with a validated `user` query backed by an in-memory store until Prisma + PostgreSQL land.
+
+## Near-term adjustments
+- Add `@ResolveField` patterns and dataloaders around `User` relations (friends, presence) as soon as persistence is in place.
+- Wire Nest Guards/interceptors to enforce auth/context on user lookups once JWT/CSRF flows are implemented.
+- Capture schema artifacts in CI for diffing against future iterations and to feed frontend codegen.

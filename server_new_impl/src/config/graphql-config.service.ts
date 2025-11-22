@@ -1,9 +1,10 @@
+import { join } from 'node:path';
+
+import { ApolloDriverConfig } from '@nestjs/apollo';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ApolloDriverConfig } from '@nestjs/apollo';
 import { GqlOptionsFactory } from '@nestjs/graphql';
 import { Request, Response } from 'express';
-import { join } from 'node:path';
 
 import { AppConfig } from './app.config';
 

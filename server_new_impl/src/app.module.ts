@@ -1,11 +1,12 @@
+import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { Module, Logger } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { GraphQLModule } from '@nestjs/graphql';
-import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 
 import { appConfig, validationSchema } from './config/app.config';
 import { GraphqlConfigService } from './config/graphql-config.service';
 import { HealthModule } from './health/health.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -20,7 +21,8 @@ import { HealthModule } from './health/health.module';
       imports: [ConfigModule],
       useClass: GraphqlConfigService
     }),
-    HealthModule
+    HealthModule,
+    UsersModule
   ],
   providers: [GraphqlConfigService, Logger]
 })
