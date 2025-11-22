@@ -53,7 +53,7 @@ const generalLimiter = rateLimit({
 	message: { error: "Too many requests, please try again later." },
 });
 
-router.post("/users/verify", generalLimiter, async (req, res, next) => {
+router.post("/users/verify", authLimiter, async (req, res, next) => {
 	const token = getTokenFromHeader(req);
 
 	try {
@@ -67,7 +67,6 @@ router.post("/users/verify", generalLimiter, async (req, res, next) => {
 			return res.status(401).json({ error: "Token no longer valid." });
 		}
 
-		// passwordChangedAt vs iat
 		if (user.passwordChangedAt && decoded.iat * 1000 < user.passwordChangedAt.getTime()) {
 			return res.status(401).json({ error: "Token issued before password change." });
 		}
@@ -80,7 +79,7 @@ router.post("/users/verify", generalLimiter, async (req, res, next) => {
 });
 
 router.post("/users/refresh", async (req, res, next) => {
-	const rawToken = req.cookies?.jid || req.body?.refreshToken;
+	const rawToken = req.cookies?.jid;
 	if (!rawToken) {
 		return res.status(401).json({ error: "Missing refresh token" });
 	}
@@ -89,7 +88,7 @@ router.post("/users/refresh", async (req, res, next) => {
 		const payload = jwt.verify(rawToken, process.env.REFRESH_TOKEN_SECRET);
 
 		const user = await UserModel.findById(payload.id);
-		if (!user || user.active === false) {
+		if (!user || !user.active) {
 			return res.status(401).json({ error: "Invalid user" });
 		}
 
@@ -168,7 +167,23 @@ router.get("/users/profile", generalLimiter, auth.required, async (req, res, nex
  * Log in a user using passport local strategy.
  */
 router.get("/users/google", passport.authenticate("google", { scope: ["profile", "email"] }));
-router.get("/users/google/callback", passport.authenticate("google", { session: false, failureRedirect: "/" }), (req, res) => {
+router.get("/users/google/callback", passport.authenticate("google", { session: false, failureRedirect: "/" }), async (req, res, next) => {
+	try {
+		const accessToken = req.user.generateAccessToken();
+		const refreshToken = await req.user.generateRefreshToken();
+
+		res.cookie("jid", refreshToken, {
+			httpOnly: true,
+			secure: process.env.NODE_ENV === "production",
+			sameSite: "strict",
+			path: "/api/users/refresh",
+		});
+
+		res.redirect(`${process.env.NODE_ENV === "development" ? "http://localhost:3000" : ""}/?token=${accessToken}`);
+	} catch (e) {
+		logger.error(`Google callback token error: ${e.message}`);
+		next(e);
+	}
 	const token = req.user.generateAccessToken();
 	res.redirect(`${process.env.NODE_ENV === "development" ? "http://localhost:3000" : ""}/?token=${token}`);
 });
