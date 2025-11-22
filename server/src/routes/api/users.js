@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { Router } from "express";
 
 import UserModel, { hashRefreshToken } from "../../models/User.js";
@@ -75,11 +76,25 @@ const REFRESH_COOKIE_OPTIONS = {
         path: "/api/users/refresh",
 };
 
+const CSRF_COOKIE_OPTIONS = {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/",
+};
+
+const setCsrfCookie = (res) => {
+        const csrfToken = crypto.randomBytes(32).toString("hex");
+        res.cookie("csrfToken", csrfToken, CSRF_COOKIE_OPTIONS);
+        return csrfToken;
+};
+
 const setAuthCookies = (res, accessToken, refreshToken) => {
         res.cookie("token", accessToken, ACCESS_COOKIE_OPTIONS);
         if (refreshToken) {
                 res.cookie("jid", refreshToken, REFRESH_COOKIE_OPTIONS);
         }
+        return setCsrfCookie(res);
 };
 
 const validateAccessToken = async (token) => {
@@ -158,12 +173,12 @@ router.post("/users/refresh", async (req, res, next) => {
 		user.refreshTokens = user.refreshTokens.filter((t) => t.tokenHash !== tokenHash);
 		await user.save();
 
-		const newAccessToken = user.generateAccessToken();
-		const newRefreshToken = await user.generateRefreshToken();
+                const newAccessToken = user.generateAccessToken();
+                const newRefreshToken = await user.generateRefreshToken();
 
-                setAuthCookies(res, newAccessToken, newRefreshToken);
+                const csrfToken = setAuthCookies(res, newAccessToken, newRefreshToken);
 
-                res.json({ token: newAccessToken });
+                res.json({ token: newAccessToken, csrfToken });
         } catch (err) {
                 logger.error(`Refresh error: ${err.message}`);
                 return res.status(401).json({ error: "Invalid refresh token" });
@@ -245,14 +260,14 @@ router.post("/users/login", authLimiter, (req, res, next) => {
                         const accessToken = user.generateAccessToken();
                         const refreshToken = await user.generateRefreshToken();
 
-                        setAuthCookies(res, accessToken, refreshToken);
+                        const csrfToken = setAuthCookies(res, accessToken, refreshToken);
 
-                        res.json({ user: user.toAuthJSON(accessToken) });
+                        res.json({ user: user.toAuthJSON(accessToken), csrfToken });
                 } catch (e) {
                         logger.error(`Token generation error: ${e.message}`);
                         return next(e);
                 }
-	})(req, res, next);
+        })(req, res, next);
 });
 
 /**
@@ -273,9 +288,9 @@ router.post("/users/register", authLimiter, async (req, res, next) => {
                 const accessToken = user.generateAccessToken();
                 const refreshToken = await user.generateRefreshToken();
 
-                setAuthCookies(res, accessToken, refreshToken);
+                const csrfToken = setAuthCookies(res, accessToken, refreshToken);
 
-                return res.json({ user: user.toAuthJSON(accessToken) });
+                return res.json({ user: user.toAuthJSON(accessToken), csrfToken });
         } catch (err) {
                 logger.error(`Registration error: ${err.message}`);
                 return next(err);

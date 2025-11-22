@@ -2,6 +2,7 @@
 import http from "http";
 import cors from "cors";
 import { configDotenv } from "dotenv";
+import crypto from "crypto";
 import express from "express";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
@@ -13,6 +14,16 @@ import databaseServer from "./database/index.js";
 import logger from "./logger.js";
 import routes from "./routes/index.js";
 import socketBackend from "./socketio/index.js";
+
+const CSRF_COOKIE_NAME = "csrfToken";
+const CSRF_HEADER_NAME = "x-csrf-token";
+const CSRF_PROTECTED_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const CSRF_COOKIE_OPTIONS = {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/",
+};
 
 configDotenv();
 
@@ -43,19 +54,43 @@ class ServerBackend {
 		});
 		this.app.use(globalLimiter);
 
-		// HTTP request logging
-		if (logger.stream) {
-			this.app.use(morgan("combined", { stream: logger.stream }));
-		}
+                // HTTP request logging
+                if (logger.stream) {
+                        this.app.use(morgan("combined", { stream: logger.stream }));
+                }
 
                 // Body parsing
                 this.app.use(cookieParser());
                 this.app.use(express.urlencoded({ extended: false }));
                 this.app.use(express.json());
 
-		// Method-override for PUT/DELETE in forms
-		this.app.use(methodOverride());
-	}
+                // CSRF protection (double-submit cookie)
+                this.app.use((req, res, next) => {
+                        let csrfToken = req.cookies?.[CSRF_COOKIE_NAME];
+                        if (!csrfToken) {
+                                csrfToken = crypto.randomBytes(32).toString("hex");
+                                res.cookie(CSRF_COOKIE_NAME, csrfToken, CSRF_COOKIE_OPTIONS);
+                        }
+                        req.csrfToken = csrfToken;
+                        next();
+                });
+
+                this.app.use((req, res, next) => {
+                        if (!CSRF_PROTECTED_METHODS.has(req.method)) return next();
+
+                        const cookieToken = req.cookies?.[CSRF_COOKIE_NAME];
+                        const headerToken = req.get(CSRF_HEADER_NAME);
+
+                        if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+                                return res.status(403).json({ error: "Invalid CSRF token" });
+                        }
+
+                        return next();
+                });
+
+                // Method-override for PUT/DELETE in forms
+                this.app.use(methodOverride());
+        }
 
 	_initRoutes() {
 		this.app.use(routes);
