@@ -1,5 +1,7 @@
 import mongoose, { Schema } from "mongoose";
 
+import serverWatchers from "../socketio/watchers.js";
+
 import UserModel from "./User.js";
 
 const FriendSchema = new mongoose.Schema(
@@ -19,9 +21,15 @@ const FriendSchema = new mongoose.Schema(
 	{ timestamps: true }
 );
 
-FriendSchema.post("save", async function (_doc) {
-	await (await UserModel.findById(this.requester._id)).save();
-	await (await UserModel.findById(this.recipient._id)).save();
+FriendSchema.post("save", async function (doc) {
+	if (doc.confirmed) {
+		await (await UserModel.findById(this.requester._id)).save();
+		await (await UserModel.findById(this.recipient._id)).save();
+	}
+	//await (await UserModel.findById(this.requester._id)).save();
+	//await (await UserModel.findById(this.recipient._id)).save();
+	//await serverWatchers.onUserSaved(this.requester._id);
+	//await serverWatchers.onUserSaved(this.recipient._id);
 });
 
 const FriendModel = mongoose.model("Friend", FriendSchema);

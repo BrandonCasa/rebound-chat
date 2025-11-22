@@ -82,16 +82,16 @@ function FriendButtons({ status, friendId, profile, onAction }) {
 }
 
 export default function ProfileCard({ user, self: forceSelf = false, type = "full", width = "auto", passStyle }) {
-        const { isSelf, profile, editMode, setEdit, name, setName, bio, setBio, banner, avatar, status, friendId, callApi, saveProfile } = useProfileCard(
-                user,
-                forceSelf
-        );
+	const { isSelf, profile, editMode, setEdit, name, setName, bio, setBio, banner, avatar, status, friendId, callApi, saveProfile } = useProfileCard(
+		user,
+		forceSelf
+	);
 
-        const confirmedFriends = Array.isArray(profile.friends) ? profile.friends.filter((f) => f.confirmed).length : 0;
-        const pendingFriends = Array.isArray(profile.friends) ? profile.friends.filter((f) => !f.confirmed).length : 0;
-        const mutualFriends = Array.isArray(profile.mutualFriends) ? profile.mutualFriends.length : 0;
-        const mutualServers = Array.isArray(profile.servers) ? profile.servers.length : 0;
-        const serverInvites = Array.isArray(profile.serverInvites) ? profile.serverInvites.length : 0;
+	const confirmedFriends = Array.isArray(profile.friends) ? profile.friends.filter((f) => f.confirmed).length : 0;
+	const pendingFriends = Array.isArray(profile.friends) ? profile.friends.filter((f) => !f.confirmed).length : 0;
+	const mutualFriends = Array.isArray(profile.mutualFriends) ? profile.mutualFriends.length : 0;
+	const mutualServers = Array.isArray(profile.servers) ? profile.servers.length : 0;
+	const serverInvites = Array.isArray(profile.serverInvites) ? profile.serverInvites.length : 0;
 
 	const navigate = useNavigate();
 	const location = useLocation();
@@ -149,21 +149,21 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 					</Stack>
 
 					{/* Bio */}
-                                        <Paper variant="outlined" sx={{ p: 1, flex: 1, minHeight: 80 }}>
-                                                <Typography variant="subtitle2">About Me</Typography>
-                                                <Typography variant="body2" color="text.secondary">
-                                                        {profile.bio || "This user hasn’t written a bio yet."}
-                                                </Typography>
-                                        </Paper>
-                                        {profile.createdAt && (
-                                                <Typography variant="caption" color="text.secondary">
-                                                        Joined {new Date(profile.createdAt).toLocaleDateString()}
-                                                </Typography>
-                                        )}
-                                </Stack>
-                        </Paper>
-                );
-        }
+					<Paper variant="outlined" sx={{ p: 1, flex: 1, minHeight: 80 }}>
+						<Typography variant="subtitle2">About Me</Typography>
+						<Typography variant="body2" color="text.secondary">
+							{profile.bio || "This user hasn’t written a bio yet."}
+						</Typography>
+					</Paper>
+					{profile.createdAt && (
+						<Typography variant="caption" color="text.secondary">
+							Joined {new Date(profile.createdAt).toLocaleDateString()}
+						</Typography>
+					)}
+				</Stack>
+			</Paper>
+		);
+	}
 
 	/* ---------- main render ---------- */
 	return (
@@ -236,36 +236,33 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 				</Stack>
 
 				{/* Bio */}
-                                <Paper variant="outlined" sx={{ p: 1, flex: 1, minHeight: 80 }}>
-                                        <Typography variant="subtitle2">About Me</Typography>
-                                        {editMode ? (
-                                                <TextField fullWidth multiline rows={4} label="Bio" value={bio} onChange={(e) => setBio(e.target.value)} />
-                                        ) : (
-                                                <Typography variant="body2" color="text.secondary">
-                                                        {profile.bio || "This user hasn’t written a bio yet."}
-                                                </Typography>
-                                        )}
-                                </Paper>
-                                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                                        {isSelf ? (
-                                                <>
-                                                        <Chip label={`Friends: ${confirmedFriends}`} size="small" />
-                                                        <Chip label={`Requests: ${pendingFriends}`} size="small" />
-                                                        <Chip label={`Invites: ${serverInvites}`} size="small" />
-                                                </>
-                                        ) : (
-                                                <>
-                                                        <Chip label={`Mutual friends: ${mutualFriends}`} size="small" />
-                                                        <Chip label={`Shared servers: ${mutualServers}`} size="small" />
-                                                        {status !== "none" && <Chip label={`Status: ${status}`} size="small" />}
-                                                </>
-                                        )}
-                                </Stack>
-                                {profile.createdAt && !editMode && (
-                                        <Typography variant="caption" color="text.secondary">
-                                                Joined {new Date(profile.createdAt).toLocaleDateString()}
-                                        </Typography>
-                                )}
+				<Paper variant="outlined" sx={{ p: 1, flex: 1, minHeight: 80 }}>
+					<Typography variant="subtitle2">About Me</Typography>
+					{editMode ? (
+						<TextField fullWidth multiline rows={4} label="Bio" value={bio} onChange={(e) => setBio(e.target.value)} />
+					) : (
+						<Typography variant="body2" color="text.secondary">
+							{profile.bio || "This user hasn’t written a bio yet."}
+						</Typography>
+					)}
+				</Paper>
+				<Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+					{isSelf ? (
+						<>
+							<Chip label={`Friends: ${confirmedFriends}`} size="small" />
+							<Chip label={`Pending: ${pendingFriends}`} size="small" /> {/** <Chip label={`Invites: ${serverInvites}`} size="small" /> **/}
+						</>
+					) : (
+						<>
+							<Chip label={`Mutual friends: ${mutualFriends}`} size="small" /> {/** <Chip label={`Shared servers: ${mutualServers}`} size="small" /> **/}
+						</>
+					)}
+				</Stack>
+				{profile.createdAt && !editMode && (
+					<Typography variant="caption" color="text.secondary">
+						Joined {new Date(profile.createdAt).toLocaleDateString()}
+					</Typography>
+				)}
 
 				{/* Actions */}
 				<Box>

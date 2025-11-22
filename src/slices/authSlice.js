@@ -9,226 +9,207 @@ const AUTO_LOGIN_BLOCK_KEY = "disable-auto-login";
 const AUTH_SESSION_MARKER = "auth-session-present";
 
 const setAutoLoginBlocked = (blocked) => {
-        if (typeof window === "undefined") return;
-        if (blocked) {
-                window.localStorage.setItem(AUTO_LOGIN_BLOCK_KEY, "true");
-                return;
-        }
-        window.localStorage.removeItem(AUTO_LOGIN_BLOCK_KEY);
+	if (typeof window === "undefined") return;
+	if (blocked) {
+		window.localStorage.setItem(AUTO_LOGIN_BLOCK_KEY, "true");
+		return;
+	}
+	window.localStorage.removeItem(AUTO_LOGIN_BLOCK_KEY);
 };
 
 const setAuthSessionPresent = (present) => {
-        if (typeof window === "undefined") return;
-        if (present) {
-                window.localStorage.setItem(AUTH_SESSION_MARKER, "true");
-                return;
-        }
-        window.localStorage.removeItem(AUTH_SESSION_MARKER);
+	if (typeof window === "undefined") return;
+	if (present) {
+		window.localStorage.setItem(AUTH_SESSION_MARKER, "true");
+		return;
+	}
+	window.localStorage.removeItem(AUTH_SESSION_MARKER);
 };
 
 const resetAuthFields = (state) => {
-        state.authToken = null;
-        state.userId = null;
-        state.username = "";
-        state.displayName = "";
-        state.bio = "";
-        state.friends = [];
-        state.createdAt = null;
-        state.bannerUrl = null;
-        state.avatarUrl = null;
-        state.socketInfo.currentRoom = null;
+	state.authToken = null;
+	state.userId = null;
+	state.username = "";
+	state.displayName = "";
+	state.bio = "";
+	state.friends = [];
+	state.createdAt = null;
+	state.bannerUrl = null;
+	state.avatarUrl = null;
+	state.socketInfo.currentRoom = null;
 };
 
 const initialState = {
-        authToken: null,
-        friends: [],
-        loggedIn: false,
-        userId: null,
-        username: "",
-        displayName: "",
-        bio: "",
-        createdAt: null,
-        initialized: false,
-        loggingIn: false,
-        refreshing: false,
-        skipAutoLogin: typeof window !== "undefined" && window.localStorage.getItem(AUTO_LOGIN_BLOCK_KEY) === "true",
-        socketInfo: {
-                connected: false,
-                currentRoom: null,
-        },
-        bannerUrl: null,
-        avatarUrl: null,
+	authToken: null,
+	friends: [],
+	loggedIn: false,
+	userId: null,
+	username: "",
+	displayName: "",
+	bio: "",
+	createdAt: null,
+	initialized: false,
+	loggingIn: false,
+	refreshing: false,
+	skipAutoLogin: typeof window !== "undefined" && window.localStorage.getItem(AUTO_LOGIN_BLOCK_KEY) === "true",
+	socketInfo: {
+		connected: false,
+		currentRoom: null,
+	},
+	bannerUrl: null,
+	avatarUrl: null,
 };
 
-export const verifyUser = createAsyncThunk(
-        "auth/verifyUser",
-        async (token, { getState, rejectWithValue }) => {
-                const base = getApiBase();
-                const authToken = token || getState().auth.authToken;
-                try {
-                        const { data } = await axios.post(
-                                `${base}/users/verify`,
-                                {},
-                                buildApiConfig(authToken, { headers: { "Content-Type": "application/json" } })
-                        );
-                        const u = data.user;
+export const verifyUser = createAsyncThunk("auth/verifyUser", async (token, { getState, rejectWithValue }) => {
+	const base = getApiBase();
+	const authToken = token || getState().auth.authToken;
+	try {
+		const { data } = await axios.post(`${base}/users/verify`, {}, buildApiConfig(authToken, { headers: { "Content-Type": "application/json" } }));
+		const u = data.user;
 
-                        return {
-                                loggedIn: true,
-                                authToken,
-                                userId: u.id,
-                                username: u.username,
-                                displayName: u.displayName,
-                                bio: u.bio,
-                                friends: u.friends,
-                                bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
-                                avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
-                                createdAt: u.createdAt,
-                        };
-                } catch (err) {
-                        return rejectWithValue(err.response?.data || err.message);
-                }
-        }
-);
+		return {
+			loggedIn: true,
+			authToken,
+			userId: u.id,
+			username: u.username,
+			displayName: u.displayName,
+			bio: u.bio,
+			friends: u.friends,
+			bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
+			avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
+			createdAt: u.createdAt,
+		};
+	} catch (err) {
+		return rejectWithValue(err.response?.data || err.message);
+	}
+});
 
 export const refreshAuthToken = createAsyncThunk("auth/refreshAuthToken", async (_, { rejectWithValue }) => {
-        const base = getApiBase();
-        try {
-                const { data } = await axios.post(
-                        `${base}/users/refresh`,
-                        {},
-                        buildApiConfig(null, { headers: { "Content-Type": "application/json" } })
-                );
+	const base = getApiBase();
+	try {
+		const { data } = await axios.post(`${base}/users/refresh`, {}, buildApiConfig(null, { headers: { "Content-Type": "application/json" } }));
 
-                setCsrfTokenCookie(data.csrfToken);
-                setAuthSessionPresent(true);
-                return { authToken: data.token };
-        } catch (err) {
-                return rejectWithValue(err.response?.data || err.message);
-        }
+		setCsrfTokenCookie(data.csrfToken);
+		setAuthSessionPresent(true);
+		return { authToken: data.token };
+	} catch (err) {
+		return rejectWithValue(err.response?.data || err.message);
+	}
 });
 
-export const bootstrapAuth = createAsyncThunk(
-        "auth/bootstrapAuth",
-        async (_, { dispatch, rejectWithValue }) => {
-                try {
-                        const hasSessionMarker =
-                                typeof window !== "undefined" &&
-                                window.localStorage.getItem(AUTH_SESSION_MARKER) === "true";
+export const bootstrapAuth = createAsyncThunk("auth/bootstrapAuth", async (_, { dispatch, rejectWithValue }) => {
+	try {
+		const hasSessionMarker = typeof window !== "undefined" && window.localStorage.getItem(AUTH_SESSION_MARKER) === "true";
 
-                        if (!hasSessionMarker) {
-                                return rejectWithValue("No prior auth session");
-                        }
+		if (!hasSessionMarker) {
+			return rejectWithValue("No prior auth session");
+		}
 
-                        const { authToken } = await dispatch(refreshAuthToken()).unwrap();
-                        return await dispatch(verifyUser(authToken)).unwrap();
-                } catch (err) {
-                        return rejectWithValue(err);
-                }
-        }
-);
+		const { authToken } = await dispatch(refreshAuthToken()).unwrap();
+		return await dispatch(verifyUser(authToken)).unwrap();
+	} catch (err) {
+		return rejectWithValue(err);
+	}
+});
 
 export const loginUser = createAsyncThunk("auth/loginUser", async ({ email, password }, { rejectWithValue }) => {
-        const base = getApiBase();
-        try {
-                const { data } = await axios.post(
-                        `${base}/users/login`,
-                        {
-                                user: { email, password },
-                        },
-                        buildApiConfig(null, { headers: { "Content-Type": "application/json" } })
-                );
-                const u = data.user;
-                setCsrfTokenCookie(data.csrfToken);
-                setAuthSessionPresent(true);
+	const base = getApiBase();
+	try {
+		const { data } = await axios.post(
+			`${base}/users/login`,
+			{
+				user: { email, password },
+			},
+			buildApiConfig(null, { headers: { "Content-Type": "application/json" } })
+		);
+		const u = data.user;
+		setCsrfTokenCookie(data.csrfToken);
+		setAuthSessionPresent(true);
 
-                return {
-                        loggedIn: true,
-                        authToken: u.token,
-                        userId: u.id,
-                        username: u.username,
-                        displayName: u.displayName,
-                        bio: u.bio,
-                        friends: u.friends,
-                        bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
-                        avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
-                        createdAt: u.createdAt,
-                };
-        } catch (err) {
-                return rejectWithValue(err.response?.data || err.message);
-        }
+		return {
+			loggedIn: true,
+			authToken: u.token,
+			userId: u.id,
+			username: u.username,
+			displayName: u.displayName,
+			bio: u.bio,
+			friends: u.friends,
+			bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
+			avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
+			createdAt: u.createdAt,
+		};
+	} catch (err) {
+		return rejectWithValue(err.response?.data || err.message);
+	}
 });
 
-export const registerUser = createAsyncThunk(
-        "auth/registerUser",
-        async ({ username, email, displayName, bio, password }, { rejectWithValue }) => {
-                const base = getApiBase();
-                try {
-                        const { data } = await axios.post(
-                                `${base}/users/register`,
-                                {
-                                        user: { username, email, displayName, bio, password },
-                                },
-                                buildApiConfig(null, { headers: { "Content-Type": "application/json" } })
-                        );
-                        const u = data.user;
-                        setCsrfTokenCookie(data.csrfToken);
-                        setAuthSessionPresent(true);
+export const registerUser = createAsyncThunk("auth/registerUser", async ({ username, email, displayName, bio, password }, { rejectWithValue }) => {
+	const base = getApiBase();
+	try {
+		const { data } = await axios.post(
+			`${base}/users/register`,
+			{
+				user: { username, email, displayName, bio, password },
+			},
+			buildApiConfig(null, { headers: { "Content-Type": "application/json" } })
+		);
+		const u = data.user;
+		setCsrfTokenCookie(data.csrfToken);
+		setAuthSessionPresent(true);
 
-                        return {
-                                loggedIn: true,
-                                authToken: u.token,
-                                userId: u.id,
-                                username: u.username,
-                                displayName: u.displayName,
-                                bio: u.bio,
-                                friends: u.friends,
-                                bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
-                                avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
-                                createdAt: u.createdAt,
-                        };
-                } catch (err) {
-                        return rejectWithValue(err.response?.data || err.message);
-                }
-        }
-);
+		return {
+			loggedIn: true,
+			authToken: u.token,
+			userId: u.id,
+			username: u.username,
+			displayName: u.displayName,
+			bio: u.bio,
+			friends: u.friends,
+			bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
+			avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
+			createdAt: u.createdAt,
+		};
+	} catch (err) {
+		return rejectWithValue(err.response?.data || err.message);
+	}
+});
 
 const authSlice = createSlice({
 	name: "auth",
 	initialState,
-        reducers: {
-                setAuthState: (state, action) => {
-                        if (action.payload.authToken !== undefined) {
-                                state.authToken = action.payload.authToken;
-                                if (action.payload.authToken) {
-                                        setAuthSessionPresent(true);
-                                }
-                        }
-                },
-                setLoggedIn: (state, action) => {
-                        if ("loggedIn" in action.payload) {
-                                state.loggingIn = false;
-                                state.loggedIn = action.payload.loggedIn;
+	reducers: {
+		setAuthState: (state, action) => {
+			if (action.payload.authToken !== undefined) {
+				state.authToken = action.payload.authToken;
+				if (action.payload.authToken) {
+					setAuthSessionPresent(true);
+				}
+			}
+		},
+		setLoggedIn: (state, action) => {
+			if ("loggedIn" in action.payload) {
+				state.loggingIn = false;
+				state.loggedIn = action.payload.loggedIn;
 
-                        if (action.payload.loggedIn === false) {
-                                clearAuthCookies();
-                                resetAuthFields(state);
-                                setAuthSessionPresent(false);
-                                if (action.payload.disableAutoLogin) {
-                                        state.skipAutoLogin = true;
-                                        setAutoLoginBlocked(true);
-                                        }
-                                }
-                        }
-                        if (action.payload.loggedIn) {
-                                state.skipAutoLogin = false;
-                                setAutoLoginBlocked(false);
-                                setAuthSessionPresent(true);
-                        }
-                        if ("authToken" in action.payload) {
-                                state.authToken = action.payload.authToken;
-                        }
-                        if ("userId" in action.payload) {
+				if (action.payload.loggedIn === false) {
+					clearAuthCookies();
+					resetAuthFields(state);
+					setAuthSessionPresent(false);
+					if (action.payload.disableAutoLogin) {
+						state.skipAutoLogin = true;
+						setAutoLoginBlocked(true);
+					}
+				}
+			}
+			if (action.payload.loggedIn) {
+				state.skipAutoLogin = false;
+				setAutoLoginBlocked(false);
+				setAuthSessionPresent(true);
+			}
+			if ("authToken" in action.payload) {
+				state.authToken = action.payload.authToken;
+			}
+			if ("userId" in action.payload) {
 				state.userId = action.payload.userId;
 			}
 			if ("username" in action.payload) {
@@ -240,15 +221,15 @@ const authSlice = createSlice({
 			if ("bio" in action.payload) {
 				state.bio = action.payload.bio;
 			}
-                        if ("friends" in action.payload) {
-                                state.friends = action.payload.friends;
-                        }
-                        if ("createdAt" in action.payload) {
-                                state.createdAt = action.payload.createdAt;
-                        }
-                        if ("bannerUrl" in action.payload) {
-                                state.bannerUrl = action.payload.bannerUrl;
-                        }
+			if ("friends" in action.payload) {
+				state.friends = action.payload.friends;
+			}
+			if ("createdAt" in action.payload) {
+				state.createdAt = action.payload.createdAt;
+			}
+			if ("bannerUrl" in action.payload) {
+				state.bannerUrl = action.payload.bannerUrl;
+			}
 			if ("avatarUrl" in action.payload) {
 				state.avatarUrl = action.payload.avatarUrl;
 			}
@@ -259,131 +240,131 @@ const authSlice = createSlice({
 		setSocketStatus: (state, action) => {
 			state.socketInfo.connected = action.payload.connected;
 		},
-                setSocketRoom: (state, action) => {
-                        const socketClient = socketIoHelper.getSocket();
+		setSocketRoom: (state, action) => {
+			const socketClient = socketIoHelper.getSocket();
 
-                        const roomToLeave = action.payload.lastRoom || state.socketInfo.currentRoom;
-                        const roomToJoin = action.payload.currentRoom;
+			const roomToLeave = action.payload.lastRoom || state.socketInfo.currentRoom;
+			const roomToJoin = action.payload.currentRoom;
 
-                        if (!socketClient) {
-                                state.socketInfo.currentRoom = roomToJoin || null;
-                                return;
-                        }
+			if (!socketClient) {
+				state.socketInfo.currentRoom = roomToJoin || null;
+				return;
+			}
 
-                        if (roomToLeave) {
-                                socketClient.emit("leave_room", roomToLeave);
-                                state.socketInfo.currentRoom = null;
-                        }
+			if (roomToLeave) {
+				socketClient.emit("leave_room", roomToLeave);
+				state.socketInfo.currentRoom = null;
+			}
 
-                        if (roomToJoin) {
-                                socketClient.emit("join_room", roomToJoin);
-                                state.socketInfo.currentRoom = roomToJoin;
-                        }
-                },
-        },
-        extraReducers: (builder) => {
-                builder
-                        .addCase(verifyUser.pending, (state) => {
-                                state.loggingIn = true;
-                        })
-                        .addCase(verifyUser.fulfilled, (state, action) => {
-                                state.loggingIn = false;
-                                state.loggedIn = true;
-                                state.skipAutoLogin = false;
-                                setAutoLoginBlocked(false);
-                                state.initialized = true;
-                                state.authToken = action.payload.authToken;
-                                state.userId = action.payload.userId;
-                                state.username = action.payload.username;
-                                state.displayName = action.payload.displayName;
-                                state.bio = action.payload.bio;
-                                state.friends = action.payload.friends;
-                                state.bannerUrl = action.payload.bannerUrl;
-                                state.avatarUrl = action.payload.avatarUrl;
-                                state.createdAt = action.payload.createdAt;
-                        })
-                        .addCase(verifyUser.rejected, (state) => {
-                                state.loggingIn = false;
-                                state.loggedIn = false;
-                                state.initialized = true;
-                                clearAuthCookies();
-                        })
-                        .addCase(refreshAuthToken.pending, (state) => {
-                                state.refreshing = true;
-                                state.loggingIn = true;
-                        })
-                        .addCase(refreshAuthToken.fulfilled, (state, action) => {
-                                state.refreshing = false;
-                                state.authToken = action.payload.authToken;
-                        })
-                        .addCase(refreshAuthToken.rejected, (state) => {
-                                state.refreshing = false;
-                                state.loggingIn = false;
-                                clearAuthCookies();
-                                setAuthSessionPresent(false);
-                                resetAuthFields(state);
-                        })
-                        .addCase(bootstrapAuth.pending, (state) => {
-                                state.loggingIn = true;
-                        })
-                        .addCase(bootstrapAuth.fulfilled, (state) => {
-                                state.loggingIn = false;
-                                state.initialized = true;
-                                state.skipAutoLogin = false;
-                                setAutoLoginBlocked(false);
-                        })
-                        .addCase(bootstrapAuth.rejected, (state) => {
-                                state.loggingIn = false;
-                                state.initialized = true;
-                        })
-                        .addCase(registerUser.pending, (state) => {
-                                state.loggingIn = true;
-                        })
-                        .addCase(registerUser.fulfilled, (state, action) => {
-                                state.loggingIn = false;
-                                state.loggedIn = true;
-                                state.skipAutoLogin = false;
-                                setAutoLoginBlocked(false);
-                                state.initialized = true;
-                                state.authToken = action.payload.authToken;
-                                state.userId = action.payload.userId;
-                                state.username = action.payload.username;
-                                state.displayName = action.payload.displayName;
-                                state.bio = action.payload.bio;
-                                state.friends = action.payload.friends;
-                                state.bannerUrl = action.payload.bannerUrl;
-                                state.avatarUrl = action.payload.avatarUrl;
-                                state.createdAt = action.payload.createdAt;
-                        })
-                        .addCase(registerUser.rejected, (state) => {
-                                state.loggingIn = false;
-                                state.loggedIn = false;
-                                state.initialized = true;
-                        })
-                        .addCase(loginUser.pending, (state) => {
-                                state.loggingIn = true;
-                        })
-                        .addCase(loginUser.fulfilled, (state, action) => {
-                                state.loggingIn = false;
-                                state.loggedIn = true;
-                                state.skipAutoLogin = false;
-                                setAutoLoginBlocked(false);
-                                state.initialized = true;
-                                state.authToken = action.payload.authToken;
-                                state.userId = action.payload.userId;
-                                state.username = action.payload.username;
-                                state.displayName = action.payload.displayName;
-                                state.bio = action.payload.bio;
-                                state.friends = action.payload.friends;
-                                state.bannerUrl = action.payload.bannerUrl;
-                                state.avatarUrl = action.payload.avatarUrl;
-                                state.createdAt = action.payload.createdAt;
-                        })
-                        .addCase(loginUser.rejected, (state) => {
-                                state.loggingIn = false;
-                                state.loggedIn = false;
-                                state.initialized = true;
-                        });
+			if (roomToJoin) {
+				socketClient.emit("join_room", roomToJoin);
+				state.socketInfo.currentRoom = roomToJoin;
+			}
+		},
+	},
+	extraReducers: (builder) => {
+		builder
+			.addCase(verifyUser.pending, (state) => {
+				state.loggingIn = true;
+			})
+			.addCase(verifyUser.fulfilled, (state, action) => {
+				state.loggingIn = false;
+				state.loggedIn = true;
+				state.skipAutoLogin = false;
+				setAutoLoginBlocked(false);
+				state.initialized = true;
+				state.authToken = action.payload.authToken;
+				state.userId = action.payload.userId;
+				state.username = action.payload.username;
+				state.displayName = action.payload.displayName;
+				state.bio = action.payload.bio;
+				state.friends = action.payload.friends;
+				state.bannerUrl = action.payload.bannerUrl;
+				state.avatarUrl = action.payload.avatarUrl;
+				state.createdAt = action.payload.createdAt;
+			})
+			.addCase(verifyUser.rejected, (state) => {
+				state.loggingIn = false;
+				state.loggedIn = false;
+				state.initialized = true;
+				clearAuthCookies();
+			})
+			.addCase(refreshAuthToken.pending, (state) => {
+				state.refreshing = true;
+				state.loggingIn = true;
+			})
+			.addCase(refreshAuthToken.fulfilled, (state, action) => {
+				state.refreshing = false;
+				state.authToken = action.payload.authToken;
+			})
+			.addCase(refreshAuthToken.rejected, (state) => {
+				state.refreshing = false;
+				state.loggingIn = false;
+				clearAuthCookies();
+				setAuthSessionPresent(false);
+				resetAuthFields(state);
+			})
+			.addCase(bootstrapAuth.pending, (state) => {
+				state.loggingIn = true;
+			})
+			.addCase(bootstrapAuth.fulfilled, (state) => {
+				state.loggingIn = false;
+				state.initialized = true;
+				state.skipAutoLogin = false;
+				setAutoLoginBlocked(false);
+			})
+			.addCase(bootstrapAuth.rejected, (state) => {
+				state.loggingIn = false;
+				state.initialized = true;
+			})
+			.addCase(registerUser.pending, (state) => {
+				state.loggingIn = true;
+			})
+			.addCase(registerUser.fulfilled, (state, action) => {
+				state.loggingIn = false;
+				state.loggedIn = true;
+				state.skipAutoLogin = false;
+				setAutoLoginBlocked(false);
+				state.initialized = true;
+				state.authToken = action.payload.authToken;
+				state.userId = action.payload.userId;
+				state.username = action.payload.username;
+				state.displayName = action.payload.displayName;
+				state.bio = action.payload.bio;
+				state.friends = action.payload.friends;
+				state.bannerUrl = action.payload.bannerUrl;
+				state.avatarUrl = action.payload.avatarUrl;
+				state.createdAt = action.payload.createdAt;
+			})
+			.addCase(registerUser.rejected, (state) => {
+				state.loggingIn = false;
+				state.loggedIn = false;
+				state.initialized = true;
+			})
+			.addCase(loginUser.pending, (state) => {
+				state.loggingIn = true;
+			})
+			.addCase(loginUser.fulfilled, (state, action) => {
+				state.loggingIn = false;
+				state.loggedIn = true;
+				state.skipAutoLogin = false;
+				setAutoLoginBlocked(false);
+				state.initialized = true;
+				state.authToken = action.payload.authToken;
+				state.userId = action.payload.userId;
+				state.username = action.payload.username;
+				state.displayName = action.payload.displayName;
+				state.bio = action.payload.bio;
+				state.friends = action.payload.friends;
+				state.bannerUrl = action.payload.bannerUrl;
+				state.avatarUrl = action.payload.avatarUrl;
+				state.createdAt = action.payload.createdAt;
+			})
+			.addCase(loginUser.rejected, (state) => {
+				state.loggingIn = false;
+				state.loggedIn = false;
+				state.initialized = true;
+			});
 	},
 });
 

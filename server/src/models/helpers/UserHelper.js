@@ -56,8 +56,9 @@ const sendFriendRequest = async (sender, recipient) => {
 	await newFriend.save();
 
 	sender.friends.push(newFriend._id);
-	await sender.save();
 	recipient.friends.push(newFriend._id);
+
+	await sender.save();
 	await recipient.save();
 
 	return { friendId: newFriend._id.toString() };
@@ -80,9 +81,11 @@ const declineFriend = async (friendId, currentUserId) => {
 
 	const sender = await validateUserById(friend.requester);
 	const recipient = await validateUserById(friend.recipient);
+
 	sender.friends.pull(friend._id);
-	await sender.save();
 	recipient.friends.pull(friend._id);
+
+	await sender.save();
 	await recipient.save();
 
 	await friend.deleteOne();
@@ -106,9 +109,11 @@ const cancelFriend = async (friendId, currentUserId) => {
 
 	const sender = await validateUserById(friend.requester);
 	const recipient = await validateUserById(friend.recipient);
+
 	sender.friends.pull(friend._id);
-	await sender.save();
 	recipient.friends.pull(friend._id);
+
+	await sender.save();
 	await recipient.save();
 
 	await friend.deleteOne();
@@ -132,9 +137,11 @@ const removeFriend = async (friendId, currentUserId) => {
 
 	const sender = await validateUserById(friend.requester);
 	const recipient = await validateUserById(friend.recipient);
+
 	sender.friends.pull(friend._id);
-	await sender.save();
 	recipient.friends.pull(friend._id);
+
+	await sender.save();
 	await recipient.save();
 
 	await friend.deleteOne();
