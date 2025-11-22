@@ -14,5 +14,4 @@
   - `app/`
   - `server/dev/`
   - `server/logs/`
-  - `server_docs/`
   - Also ignore any other directories you think should be ignored for what you're doing.
