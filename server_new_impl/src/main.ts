@@ -31,4 +31,4 @@ async function bootstrap() {
   logger.log(`🚀 GraphQL server ready at http://localhost:${port}/graphql`);
 }
 
-bootstrap();
+void bootstrap();
