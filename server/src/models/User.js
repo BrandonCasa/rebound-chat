@@ -428,4 +428,5 @@ UserSchema.post("save", function (doc) {
 });
 
 const UserModel = mongoose.model("User", UserSchema);
+export { hashRefreshToken };
 export default UserModel;
