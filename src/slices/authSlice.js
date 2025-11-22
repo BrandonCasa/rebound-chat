@@ -2,16 +2,11 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
 import socketIoHelper from "../helpers/socket";
-import {
-        buildApiConfig,
-        clearAuthCookies,
-        getApiBase,
-        setAuthTokenCookie,
-        setCsrfTokenCookie,
-} from "../helpers/api";
+import { buildApiConfig, clearAuthCookies, getApiBase, setCsrfTokenCookie } from "../helpers/api";
 import { profileMediaUrl } from "../helpers/mediaUrl";
 
 const AUTO_LOGIN_BLOCK_KEY = "disable-auto-login";
+const AUTH_SESSION_MARKER = "auth-session-present";
 
 const setAutoLoginBlocked = (blocked) => {
         if (typeof window === "undefined") return;
@@ -20,6 +15,15 @@ const setAutoLoginBlocked = (blocked) => {
                 return;
         }
         window.localStorage.removeItem(AUTO_LOGIN_BLOCK_KEY);
+};
+
+const setAuthSessionPresent = (present) => {
+        if (typeof window === "undefined") return;
+        if (present) {
+                window.localStorage.setItem(AUTH_SESSION_MARKER, "true");
+                return;
+        }
+        window.localStorage.removeItem(AUTH_SESSION_MARKER);
 };
 
 const resetAuthFields = (state) => {
@@ -97,7 +101,7 @@ export const refreshAuthToken = createAsyncThunk("auth/refreshAuthToken", async 
                 );
 
                 setCsrfTokenCookie(data.csrfToken);
-                setAuthTokenCookie(data.token);
+                setAuthSessionPresent(true);
                 return { authToken: data.token };
         } catch (err) {
                 return rejectWithValue(err.response?.data || err.message);
@@ -108,6 +112,14 @@ export const bootstrapAuth = createAsyncThunk(
         "auth/bootstrapAuth",
         async (_, { dispatch, rejectWithValue }) => {
                 try {
+                        const hasSessionMarker =
+                                typeof window !== "undefined" &&
+                                window.localStorage.getItem(AUTH_SESSION_MARKER) === "true";
+
+                        if (!hasSessionMarker) {
+                                return rejectWithValue("No prior auth session");
+                        }
+
                         const { authToken } = await dispatch(refreshAuthToken()).unwrap();
                         return await dispatch(verifyUser(authToken)).unwrap();
                 } catch (err) {
@@ -117,7 +129,7 @@ export const bootstrapAuth = createAsyncThunk(
 );
 
 export const loginUser = createAsyncThunk("auth/loginUser", async ({ email, password }, { rejectWithValue }) => {
-	const base = getApiBase();
+        const base = getApiBase();
         try {
                 const { data } = await axios.post(
                         `${base}/users/login`,
@@ -128,7 +140,7 @@ export const loginUser = createAsyncThunk("auth/loginUser", async ({ email, pass
                 );
                 const u = data.user;
                 setCsrfTokenCookie(data.csrfToken);
-                setAuthTokenCookie(u.token);
+                setAuthSessionPresent(true);
 
                 return {
                         loggedIn: true,
@@ -161,7 +173,7 @@ export const registerUser = createAsyncThunk(
                         );
                         const u = data.user;
                         setCsrfTokenCookie(data.csrfToken);
-                        setAuthTokenCookie(u.token);
+                        setAuthSessionPresent(true);
 
                         return {
                                 loggedIn: true,
@@ -188,7 +200,9 @@ const authSlice = createSlice({
                 setAuthState: (state, action) => {
                         if (action.payload.authToken !== undefined) {
                                 state.authToken = action.payload.authToken;
-                                setAuthTokenCookie(action.payload.authToken);
+                                if (action.payload.authToken) {
+                                        setAuthSessionPresent(true);
+                                }
                         }
                 },
                 setLoggedIn: (state, action) => {
@@ -196,18 +210,20 @@ const authSlice = createSlice({
                                 state.loggingIn = false;
                                 state.loggedIn = action.payload.loggedIn;
 
-                                if (action.payload.loggedIn === false) {
-                                        clearAuthCookies();
-                                        resetAuthFields(state);
-                                        if (action.payload.disableAutoLogin) {
-                                                state.skipAutoLogin = true;
-                                                setAutoLoginBlocked(true);
+                        if (action.payload.loggedIn === false) {
+                                clearAuthCookies();
+                                resetAuthFields(state);
+                                setAuthSessionPresent(false);
+                                if (action.payload.disableAutoLogin) {
+                                        state.skipAutoLogin = true;
+                                        setAutoLoginBlocked(true);
                                         }
                                 }
                         }
                         if (action.payload.loggedIn) {
                                 state.skipAutoLogin = false;
                                 setAutoLoginBlocked(false);
+                                setAuthSessionPresent(true);
                         }
                         if ("authToken" in action.payload) {
                                 state.authToken = action.payload.authToken;
@@ -299,6 +315,7 @@ const authSlice = createSlice({
                                 state.refreshing = false;
                                 state.loggingIn = false;
                                 clearAuthCookies();
+                                setAuthSessionPresent(false);
                                 resetAuthFields(state);
                         })
                         .addCase(bootstrapAuth.pending, (state) => {
