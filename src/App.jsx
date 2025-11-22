@@ -9,6 +9,7 @@ import "./App.css";
 import CustomAppBar from "./components/CustomAppBar/CustomAppBar";
 import LoginDialog from "./components/LoginDialog.comp";
 import RegisterDialog from "./components/RegisterDialog";
+import DraggableCallOverlay from "./components/CallOverlay/CallOverlay.comp";
 import SnackbarMapper from "./components/SnackbarMapper";
 import useDarkTheme from "./helpers/darkTheme";
 import socketIoHelper from "./helpers/socket";
@@ -122,8 +123,6 @@ const App = () => {
 			<CssBaseline />
 			<SnackbarMapper drawerWidth={customAppBarProps.drawerWidth} drawerOpen={customAppBarProps.drawerOpen} />
 			<AppRouter>
-				<RegisterDialog />
-				<LoginDialog />
 				<CustomAppBar {...customAppBarProps}>
 					{!authState.loggingIn ? (
 						<Suspense fallback={<div>Loading...</div>}>
@@ -141,6 +140,9 @@ const App = () => {
 						</Suspense>
 					) : null}
 				</CustomAppBar>
+				<RegisterDialog />
+				<LoginDialog />
+				<DraggableCallOverlay />
 			</AppRouter>
 		</ThemeProvider>
 	);

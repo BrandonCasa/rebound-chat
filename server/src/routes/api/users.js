@@ -53,23 +53,77 @@ const generalLimiter = rateLimit({
 	message: { error: "Too many requests, please try again later." },
 });
 
-/**
- * /users/verify
- * Verify a user via token. Checks that the account is active and returns authentication data.
- */
 router.post("/users/verify", generalLimiter, async (req, res, next) => {
 	const token = getTokenFromHeader(req);
 
 	try {
-		const decoded = jwt.verify(token, process.env.SECRET);
+		const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
 		const user = await UserModel.findById(decoded.id);
 		if (!user || user.active === false) {
 			return res.status(401).json({ error: "Invalid or deactivated account." });
 		}
-		return res.json({ user: user.toAuthJSON() });
+
+		if (decoded.tokenVersion !== user.tokenVersion) {
+			return res.status(401).json({ error: "Token no longer valid." });
+		}
+
+		// passwordChangedAt vs iat
+		if (user.passwordChangedAt && decoded.iat * 1000 < user.passwordChangedAt.getTime()) {
+			return res.status(401).json({ error: "Token issued before password change." });
+		}
+
+		return res.json({ user: user.toAuthJSON(token) });
 	} catch (err) {
 		logger.error(`Verification error: ${err.message}`);
 		return next(err);
+	}
+});
+
+router.post("/users/refresh", async (req, res, next) => {
+	const rawToken = req.cookies?.jid || req.body?.refreshToken;
+	if (!rawToken) {
+		return res.status(401).json({ error: "Missing refresh token" });
+	}
+
+	try {
+		const payload = jwt.verify(rawToken, process.env.REFRESH_TOKEN_SECRET);
+
+		const user = await UserModel.findById(payload.id);
+		if (!user || user.active === false) {
+			return res.status(401).json({ error: "Invalid user" });
+		}
+
+		// Check tokenVersion
+		if (user.tokenVersion !== payload.tokenVersion) {
+			return res.status(401).json({ error: "Token no longer valid" });
+		}
+
+		// Check hashed token in DB
+		const tokenHash = hashRefreshToken(rawToken);
+		const stored = user.refreshTokens.find((t) => t.tokenHash === tokenHash && t.expiresAt > new Date());
+
+		if (!stored) {
+			return res.status(401).json({ error: "Refresh token revoked or expired" });
+		}
+
+		// Rotate the refresh token
+		user.refreshTokens = user.refreshTokens.filter((t) => t.tokenHash !== tokenHash);
+		await user.save();
+
+		const newAccessToken = user.generateAccessToken();
+		const newRefreshToken = await user.generateRefreshToken();
+
+		res
+			.cookie("jid", newRefreshToken, {
+				httpOnly: true,
+				secure: process.env.NODE_ENV === "production",
+				sameSite: "strict",
+				path: "/api/users/refresh",
+			})
+			.json({ token: newAccessToken });
+	} catch (err) {
+		logger.error(`Refresh error: ${err.message}`);
+		return res.status(401).json({ error: "Invalid refresh token" });
 	}
 });
 
@@ -126,15 +180,31 @@ router.post("/users/login", authLimiter, (req, res, next) => {
 		return res.status(422).json({ errors: { password: "is required" } });
 	}
 
-	passport.authenticate("local", { session: false }, (err, user, info) => {
+	passport.authenticate("local", { session: false }, async (err, user, info) => {
 		if (err) {
 			logger.error(`Login error: ${err.message}`);
 			return next(err);
 		}
-		if (user) {
-			return res.json({ user: user.toAuthJSON() });
-		} else {
+		if (!user) {
 			return res.status(422).json(info);
+		}
+
+		try {
+			const accessToken = user.generateAccessToken();
+			const refreshToken = await user.generateRefreshToken();
+
+			// Send refresh token in httpOnly cookie
+			res
+				.cookie("jid", refreshToken, {
+					httpOnly: true,
+					secure: process.env.NODE_ENV === "production",
+					sameSite: "strict",
+					path: "/api/users/refresh",
+				})
+				.json({ user: user.toAuthJSON(accessToken) });
+		} catch (e) {
+			logger.error(`Token generation error: ${e.message}`);
+			return next(e);
 		}
 	})(req, res, next);
 });

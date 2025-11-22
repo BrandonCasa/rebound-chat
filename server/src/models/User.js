@@ -6,6 +6,8 @@ import mongooseUniqueValidator from "mongoose-unique-validator";
 
 import serverWatchers from "../socketio/watchers.js";
 
+const hashRefreshToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
+
 const UserSchema = new Schema(
 	{
 		username: {
@@ -41,6 +43,19 @@ const UserSchema = new Schema(
 		serverInvites: [{ type: Schema.Types.ObjectId, ref: "ServerInvite" }],
 		servers: [{ type: Schema.Types.ObjectId, ref: "Server" }],
 		active: { type: Boolean, default: true },
+		tokenVersion: {
+			type: Number,
+			default: 0,
+		},
+		passwordChangedAt: {
+			type: Date,
+		},
+		refreshTokens: [
+			{
+				tokenHash: { type: String, required: true },
+				expiresAt: { type: Date, required: true },
+			},
+		],
 	},
 	{ timestamps: true }
 );
@@ -74,43 +89,77 @@ UserSchema.methods.setPassword = function (password) {
 };
 
 /**
- * Generate a JSON Web Token for the user.
+ * Generate a volatile, short lived access token for the user with JWT, not stored in DB.
+ * @implements {tokenVersion: { type: Number}} Current token version
  * @returns {String} JWT
  */
-UserSchema.methods.generateJWT = function () {
-	const today = new Date();
-	const exp = new Date(today);
-	exp.setDate(today.getDate() + 60); // Expires in 60 days
+UserSchema.methods.generateAccessToken = function () {
+	const payload = {
+		id: this._id,
+		username: this.username,
+		tokenVersion: this.tokenVersion,
+	};
 
-	return jwt.sign(
-		{
-			id: this._id,
-			username: this.username,
-			exp: Math.floor(exp.getTime() / 1000),
-		},
-		process.env.SECRET
-	);
+	// Short-lived (e.g. 15 min)
+	return jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, {
+		expiresIn: "15m",
+	});
+};
+
+/**
+ * Generate a longer lived refresh token for the user with JWT, stored in DB and can be invalidated.
+ * @returns {String} JWT
+ */
+UserSchema.methods.generateRefreshToken = async function () {
+	const payload = {
+		id: this._id,
+		tokenVersion: this.tokenVersion,
+	};
+
+	const token = jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET, {
+		expiresIn: "60d",
+	});
+
+	const tokenHash = hashRefreshToken(token);
+	const expiresAt = new Date();
+	expiresAt.setDate(expiresAt.getDate() + 60);
+
+	this.refreshTokens.push({ tokenHash, expiresAt });
+	await this.save();
+
+	return token;
+};
+
+UserSchema.methods.revokeRefreshToken = async function (rawToken) {
+	const tokenHash = hashRefreshToken(rawToken);
+	this.refreshTokens = this.refreshTokens.filter((t) => t.tokenHash !== tokenHash);
+	await this.save();
+};
+
+UserSchema.methods.revokeAllRefreshTokens = async function () {
+	this.refreshTokens = [];
+	await this.save();
 };
 
 /**
  * Return authentication JSON.
  * @returns {Object}
  */
-UserSchema.methods.toAuthJSON = function () {
-        return {
-                id: this._id,
-                username: this.username,
-                email: this.email,
-                displayName: this.displayName,
-                bio: this.bio,
-                bannerUrl: this.bannerUrl,
-                avatarUrl: this.avatarUrl,
-                createdAt: this.createdAt,
-                token: this.generateJWT(),
-                friends: this.friends,
-                blocked: this.blocked,
-                serverInvites: this.serverInvites,
-        };
+UserSchema.methods.toAuthJSON = function (accessToken) {
+	return {
+		id: this._id,
+		username: this.username,
+		email: this.email,
+		displayName: this.displayName,
+		bio: this.bio,
+		bannerUrl: this.bannerUrl,
+		avatarUrl: this.avatarUrl,
+		createdAt: this.createdAt,
+		token: accessToken,
+		friends: this.friends,
+		blocked: this.blocked,
+		serverInvites: this.serverInvites,
+	};
 };
 
 /**
@@ -126,20 +175,20 @@ UserSchema.methods.toProfilePrivJSON = async function (requestingUser, session =
 	await this.populate({ path: "friends", options: { session } });
 	await this.populate({ path: "serverInvites", options: { session } });
 
-        return {
-                id: this._id,
-                username: this.username,
-                email: this.email,
-                displayName: this.displayName,
-                bio: this.bio,
-                bannerUrl: this.bannerUrl,
-                avatarUrl: this.avatarUrl,
-                createdAt: this.createdAt,
-                friends: this.friends,
-                blocked: this.blocked,
-                serverInvites: this.serverInvites,
-                servers: this.servers,
-        };
+	return {
+		id: this._id,
+		username: this.username,
+		email: this.email,
+		displayName: this.displayName,
+		bio: this.bio,
+		bannerUrl: this.bannerUrl,
+		avatarUrl: this.avatarUrl,
+		createdAt: this.createdAt,
+		friends: this.friends,
+		blocked: this.blocked,
+		serverInvites: this.serverInvites,
+		servers: this.servers,
+	};
 };
 
 /**
@@ -152,18 +201,18 @@ UserSchema.methods.toProfilePrivJSON = async function (requestingUser, session =
  */
 UserSchema.methods.toProfilePubJSON = async function (queryingUser, session = null) {
 	if (!queryingUser) {
-                return {
-                        id: this._id,
-                        username: this.username,
-                        displayName: this.displayName,
-                        bio: this.bio,
-                        bannerUrl: this.bannerUrl,
-                        avatarUrl: this.avatarUrl,
-                        createdAt: this.createdAt,
-                        friends: [],
-                        blocked: [],
-                        servers: [],
-                };
+		return {
+			id: this._id,
+			username: this.username,
+			displayName: this.displayName,
+			bio: this.bio,
+			bannerUrl: this.bannerUrl,
+			avatarUrl: this.avatarUrl,
+			createdAt: this.createdAt,
+			friends: [],
+			blocked: [],
+			servers: [],
+		};
 	}
 
 	await this.populate({ path: "friends", options: { session } });
@@ -191,18 +240,18 @@ UserSchema.methods.toProfilePubJSON = async function (queryingUser, session = nu
 	const theirServers = queryingUser.servers.map((s) => s.toString());
 	const mutualServers = this.servers.filter((s) => theirServers.includes(s.toString()));
 
-        return {
-                id: this._id,
-                username: this.username,
-                displayName: this.displayName,
-                bio: this.bio,
-                bannerUrl: this.bannerUrl,
-                avatarUrl: this.avatarUrl,
-                createdAt: this.createdAt,
-                friends: [friendInvite, ...mutualFriendIds].filter((x) => x != null),
-                blocked: blockedList,
-                servers: mutualServers,
-        };
+	return {
+		id: this._id,
+		username: this.username,
+		displayName: this.displayName,
+		bio: this.bio,
+		bannerUrl: this.bannerUrl,
+		avatarUrl: this.avatarUrl,
+		createdAt: this.createdAt,
+		friends: [friendInvite, ...mutualFriendIds].filter((x) => x != null),
+		blocked: blockedList,
+		servers: mutualServers,
+	};
 };
 
 /**
