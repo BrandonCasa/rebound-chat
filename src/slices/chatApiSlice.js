@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
-import { getApiBase } from "../helpers/api";
+import { buildApiConfig, getApiBase } from "../helpers/api";
 import { profileMediaUrl } from "../helpers/mediaUrl";
 
 const base = getApiBase();
@@ -16,9 +16,10 @@ export const mapMessages = (msgs) =>
 
 export const fetchRoomMessages = createAsyncThunk("chatApi/fetchRoomMessages", async ({ roomId, authToken }, { rejectWithValue }) => {
 	try {
-		const { data } = await axios.get(`${base}/rooms/${roomId}/messages`, {
-			headers: { Authorization: `Bearer ${authToken}` },
-		});
+                const { data } = await axios.get(
+                        `${base}/rooms/${roomId}/messages`,
+                        buildApiConfig(authToken)
+                );
 		return { roomId, messages: await mapMessages(data.messages) };
 	} catch (err) {
 		return rejectWithValue(err.response?.data || err.message);

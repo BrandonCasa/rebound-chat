@@ -13,8 +13,7 @@ import DraggableCallOverlay from "./components/CallOverlay/CallOverlay.comp";
 import SnackbarMapper from "./components/SnackbarMapper";
 import useDarkTheme from "./helpers/darkTheme";
 import socketIoHelper from "./helpers/socket";
-import { setLoggedIn, setLoggingIn, setSocketStatus, verifyUser, setAuthState } from "./slices/authSlice";
-import { addSnackbar } from "./slices/snackbarSlice";
+import { bootstrapAuth, setAuthState, setSocketStatus, verifyUser } from "./slices/authSlice";
 
 import useCustomAppBar from "./components/CustomAppBar/useCustomAppBar";
 import useWindowDimensions from "./helpers/useWindowDimensions";
@@ -45,77 +44,52 @@ const App = () => {
 	const dispatch = useDispatch();
 	const customAppBarProps = useCustomAppBar(useWindowDimensions().width);
 
-	useEffect(() => {
-		const params = new URLSearchParams(window.location.search);
-		const token = params.get("token");
-		if (token) {
-			window.localStorage.setItem("auth-token", token);
-			dispatch(setAuthState({ authToken: token }));
-			params.delete("token");
-			const newSearch = params.toString();
-			const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "");
-			window.history.replaceState({}, "", newUrl);
-		}
-	}, [dispatch]);
+        useEffect(() => {
+                const params = new URLSearchParams(window.location.search);
+                const token = params.get("token");
+                if (token) {
+                        dispatch(setAuthState({ authToken: token }));
+                        dispatch(verifyUser(token));
+                        params.delete("token");
+                        const newSearch = params.toString();
+                        const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "");
+                        window.history.replaceState({}, "", newUrl);
+                }
+        }, [dispatch]);
 
-	const useSocketConnection = (authToken, loggedIn) => {
-		useEffect(() => {
-			const connectSocket = async (token) => {
-				const socketClient = socketIoHelper.connectSocket(token);
+        useEffect(() => {
+                if (!authState.initialized && !authState.skipAutoLogin && !authState.authToken) {
+                        dispatch(bootstrapAuth());
+                }
+        }, [authState.initialized, authState.skipAutoLogin, authState.authToken, dispatch]);
 
-				socketClient.on("connected", () => {
-					dispatch(setSocketStatus({ connected: true }));
-				});
+        const useSocketConnection = (authToken, loggedIn) => {
+                useEffect(() => {
+                        const connectSocket = async (token) => {
+                                const socketClient = socketIoHelper.connectSocket(token);
 
-				socketClient.on("disconnect", () => {
-					dispatch(setSocketStatus({ connected: false }));
-				});
-			};
+                                socketClient.on("connected", () => {
+                                        dispatch(setSocketStatus({ connected: true }));
+                                });
 
-			if (!socketIoHelper.getSocket()?.connected && loggedIn) {
-				connectSocket(authToken);
-			}
+                                socketClient.on("disconnect", () => {
+                                        dispatch(setSocketStatus({ connected: false }));
+                                });
+                        };
 
-			return () => {
-				if (socketIoHelper.getSocket()?.connected) {
-					socketIoHelper.disconnectSocket();
-				}
-			};
-		}, [loggedIn, authToken]);
-	};
+                        if (!socketIoHelper.getSocket()?.connected && loggedIn) {
+                                connectSocket(authToken);
+                        }
 
-	const useVerifyUser = (authState) => {
-		useEffect(() => {
-			if (authState.authToken && !authState.loggedIn) {
-				dispatch(setLoggingIn({ loggingIn: true }));
-				dispatch(verifyUser(authState.authToken))
-					.unwrap()
-					.then((user) => {
-						dispatch(
-							addSnackbar({
-								snackbarMsg: `Hello ${user.displayName}!`,
-								snackbarSeverity: "success",
-								autoHideDuration: 1000,
-							})
-						);
-					})
-					.catch(() => {
-						dispatch(
-							addSnackbar({
-								snackbarMsg: "Failed to verify user. Please try logging in again.",
-								snackbarSeverity: "error",
-								autoHideDuration: 5000,
-							})
-						);
-						window.localStorage.removeItem("auth-token");
-						dispatch(setLoggedIn({ loggedIn: false, token: null }));
-					});
-			}
-		}, [authState.authToken, authState.loggedIn, dispatch]);
-	};
+                        return () => {
+                                if (socketIoHelper.getSocket()?.connected) {
+                                        socketIoHelper.disconnectSocket();
+                                }
+                        };
+                }, [loggedIn, authToken]);
+        };
 
-	useSocketConnection(authState.authToken, authState.loggedIn);
-	useVerifyUser(authState);
+        useSocketConnection(authState.authToken, authState.loggedIn);
 
 	return (
 		<ThemeProvider theme={darkTheme}>
