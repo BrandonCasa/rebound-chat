@@ -26,5 +26,9 @@ export const validationSchema = Joi.object({
     .truthy('1')
     .falsy('false')
     .falsy('0')
-    .default(true)
+    .default(true),
+  JWT_ACCESS_SECRET: Joi.string().min(24).default('dev-access-secret'),
+  JWT_ACCESS_TTL_SECONDS: Joi.number().integer().min(60).default(900),
+  JWT_REFRESH_SECRET: Joi.string().min(24).default('dev-refresh-secret'),
+  JWT_REFRESH_TTL_SECONDS: Joi.number().integer().min(300).default(60 * 60 * 24 * 7)
 });
