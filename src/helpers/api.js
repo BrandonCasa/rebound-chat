@@ -1,11 +1,9 @@
 export const getApiBase = () => {
-	const envBase = typeof import.meta !== "undefined" ? import.meta.env?.VITE_API_BASE_URL : undefined;
-
-	if (envBase) return envBase;
-
-	if (process.env.NODE_ENV === "development") return "/api";
-
-	return globalThis.IN_ELECTRON_ENV ? "https://rebound.nexus/api" : "/api";
+	//const envBase = typeof import.meta !== "undefined" ? import.meta.env?.VITE_API_BASE_URL : undefined;
+	//if (process.env.NODE_ENV === "development" & envBase) return envBase;
+	//if (process.env.NODE_ENV === "development") return "/api";
+	if (globalThis.IN_ELECTRON_ENV) return "https://rebound.nexus/api";
+	return "/api";
 };
 
 const CSRF_COOKIE_NAME = "csrfToken";

@@ -10,20 +10,22 @@ export default defineConfig(({ mode }) => ({
 		},
 	},
 	plugins: [react()],
-        define: {
-                "process.env.NODE_ENV": JSON.stringify(mode),
-        },
-        publicDir: "public",
-        build: {
-                outDir: "build",
-        },
-        server: {
-                port: 3000,
-                proxy: {
-                        "/api": {
-                                target: "http://localhost:6001",
-                                changeOrigin: true,
-                        },
-                },
-        },
+	define: {
+		"process.env.NODE_ENV": JSON.stringify(mode),
+	},
+	publicDir: "public",
+	build: {
+		outDir: "build",
+	},
+	server: {
+		port: 3000,
+		...(mode === "development" && {
+			proxy: {
+				"/api": {
+					target: "http://localhost:6001",
+					changeOrigin: true,
+				},
+			},
+		}),
+	},
 }));
