@@ -13,24 +13,23 @@ const LoginDialog = () => {
 	const loginDialogState = useSelector((state) => state.dialogs.loginDialogOpen);
 	const dispatch = useDispatch();
 
-	const [email, setEmail] = useState("");
-	const [password, setPassword] = useState("");
+        const [email, setEmail] = useState("");
+        const [password, setPassword] = useState("");
 
-	const handleUserLogin = () => {
-		dispatch(loginUser({ email, password }))
-			.unwrap()
-			.then((user) => {
-				window.localStorage.setItem("auth-token", user.authToken);
-				dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
-				dispatch(
-					addSnackbar({
-						snackbarMsg: `Login Successful. Hello ${user.displayName}`,
-						snackbarSeverity: "success",
-						autoHideDuration: 2000,
-					})
-				);
-			})
-			.catch((error) => {
+        const handleUserLogin = () => {
+                dispatch(loginUser({ email, password }))
+                        .unwrap()
+                        .then((user) => {
+                                dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
+                                dispatch(
+                                        addSnackbar({
+                                                snackbarMsg: `Login Successful. Hello ${user.displayName}`,
+                                                snackbarSeverity: "success",
+                                                autoHideDuration: 2000,
+                                        })
+                                );
+                        })
+                        .catch((error) => {
 				console.log(error);
 				const loginErrors = error?.errors;
 				if (!loginErrors) {
