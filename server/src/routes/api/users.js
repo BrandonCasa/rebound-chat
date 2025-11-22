@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { Router } from "express";
 
 import UserModel, { hashRefreshToken } from "../../models/User.js";
-import { auth, getAccessToken } from "../auth.js";
+import { auth } from "../auth.js";
 
 import jwt from "jsonwebtoken";
 import passport from "passport";
@@ -18,6 +18,8 @@ import serverWatchers from "../../socketio/watchers.js";
 import mongoose from "mongoose";
 import rateLimit from "express-rate-limit";
 
+import { createAuthContextMiddleware } from "../../utils/auth.js";
+
 import "dotenv/config";
 
 const router = Router();
@@ -32,6 +34,8 @@ const authLimiter = rateLimit({
         legacyHeaders: false,
         message: { error: "Too many auth attempts, please try again later." },
 });
+
+const requireAuthContext = (context) => createAuthContextMiddleware(context, logger);
 const modifyLimiter = rateLimit({
         windowMs: 30 * 60 * 1000,
         max: 8,
@@ -47,12 +51,6 @@ const generalLimiter = rateLimit({
         legacyHeaders: false,
         message: { error: "Too many requests, please try again later." },
 });
-
-const buildAuthError = (message, status = 401) => {
-        const err = new Error(message);
-        err.status = status;
-        return err;
-};
 
 const BASE_COOKIE_OPTIONS = {
         httpOnly: true,
@@ -91,50 +89,56 @@ const setAuthCookies = (res, accessToken, refreshToken) => {
         return setCsrfCookie(res);
 };
 
-const validateAccessToken = async (token) => {
-        if (!token) throw buildAuthError("Missing access token.");
-
-        let decoded;
-        try {
-                decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-        } catch (err) {
-                throw buildAuthError("Invalid access token.");
-        }
-
-        const user = await UserModel.findById(decoded.id);
-        if (!user || !user.active) {
-                throw buildAuthError("Invalid or deactivated account.");
-        }
-
-        if (decoded.tokenVersion !== user.tokenVersion) {
-                throw buildAuthError("Token no longer valid.");
-        }
-
-        if (user.passwordChangedAt && decoded.iat * 1000 < user.passwordChangedAt.getTime()) {
-                throw buildAuthError("Token issued before password change.");
-        }
-
-        return { user, decoded };
+const generateStoredFilename = (fieldName, userId, originalName) => {
+        const ext = originalName.split(".").pop();
+        return `${fieldName}-${userId}-${Math.floor(Math.random() * 1000)}-${Date.now()}.${ext}`;
 };
 
-const authenticateFromRequest = (req) => validateAccessToken(getAccessToken(req));
+const deleteExistingGridFile = async (bucket, currentUrl) => {
+        if (!currentUrl || !currentUrl.startsWith("/content/")) return;
 
-const handleAuthFailure = (err, res, context) => {
-        logger.error(`${context}: ${err.message}`);
-        return res.status(err.status || 401).json({ error: err.message });
+        const existingName = currentUrl.replace("/content/", "");
+        const [fileDoc] = await bucket.find({ filename: existingName }).toArray();
+        if (fileDoc) {
+                await bucket.delete(fileDoc._id);
+        }
 };
 
-router.post("/users/verify", authLimiter, async (req, res, next) => {
-        const token = getAccessToken(req);
+const uploadFileToGrid = async (bucket, file, filename) => {
+        const uploadStream = bucket.openUploadStream(filename, { contentType: file.mimetype });
+        uploadStream.end(file.buffer);
+        await once(uploadStream, "finish");
+};
 
-        try {
-                const { user } = await validateAccessToken(token);
+const processFileUpload = async (bucket, file, fieldName, userId, currentUrl) => {
+        if (!file) return currentUrl;
+
+        await deleteExistingGridFile(bucket, currentUrl);
+        const filename = generateStoredFilename(fieldName, userId, file.originalname);
+        await uploadFileToGrid(bucket, file, filename);
+        return `/content/${filename}`;
+};
+
+const friendAction = (label, action) => {
+        return async (req, res, next) => {
+                try {
+                        await action(req, res);
+                } catch (err) {
+                        logger.error(`${label} error: ${err.message}`);
+                        return next(err);
+                }
+        };
+};
+
+router.post(
+        "/users/verify",
+        authLimiter,
+        requireAuthContext("Verification error"),
+        (req, res) => {
+                const { user, token } = req.authContext;
                 return res.json({ user: user.toAuthJSON(token) });
-        } catch (err) {
-                logger.error(`Verification error: ${err.message}`);
-                return res.status(err.status || 401).json({ error: err.message });
         }
-});
+);
 
 router.post("/users/refresh", async (req, res, next) => {
 	const rawToken = req.cookies?.jid;
@@ -176,28 +180,33 @@ router.post("/users/refresh", async (req, res, next) => {
         }
 });
 
-router.get("/users/profile", generalLimiter, auth.required, async (req, res, next) => {
-        const token = getAccessToken(req);
-        try {
-                const { user: requestingUser, decoded } = await validateAccessToken(token);
-                const targetUserId = req.query.id || decoded.id;
-                const user = await UserModel.findById(targetUserId);
+router.get(
+        "/users/profile",
+        generalLimiter,
+        auth.required,
+        requireAuthContext("Profile retrieval auth error"),
+        async (req, res, next) => {
+                try {
+                        const { user: requestingUser, decoded } = req.authContext;
+                        const targetUserId = req.query.id || decoded.id;
+                        const user = await UserModel.findById(targetUserId);
 
-                if (!user) {
-                        return res.sendStatus(404);
+                        if (!user) {
+                                return res.sendStatus(404);
+                        }
+
+                        const profile =
+                                decoded.id === user._id.toString()
+                                        ? await user.toProfilePrivJSON(requestingUser)
+                                        : await user.toProfilePubJSON(requestingUser);
+
+                        return res.json({ user: profile });
+                } catch (err) {
+                        logger.error(`Profile retrieval error: ${err.message}`);
+                        return next(err);
                 }
-
-                const profile =
-                        decoded.id === user._id.toString()
-                                ? await user.toProfilePrivJSON(requestingUser)
-                                : await user.toProfilePubJSON(requestingUser);
-
-                return res.json({ user: profile });
-        } catch (err) {
-                logger.error(`Profile retrieval error: ${err.message}`);
-                return res.status(err.status || 401).json({ error: err.message });
         }
-});
+);
 
 router.get("/users/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 router.get("/users/google/callback", passport.authenticate("google", { session: false, failureRedirect: "/" }), async (req, res, next) => {
@@ -272,18 +281,13 @@ router.put(
         "/users/modify",
         modifyLimiter,
         auth.required,
-	upload.fields([
-		{ name: "banner", maxCount: 1 },
-		{ name: "avatar", maxCount: 1 },
-	]),
+        requireAuthContext("Token verification error in modify"),
+        upload.fields([
+                { name: "banner", maxCount: 1 },
+                { name: "avatar", maxCount: 1 },
+        ]),
         async (req, res, next) => {
-                let authContext;
-                try {
-                        authContext = await authenticateFromRequest(req);
-                } catch (err) {
-                        return handleAuthFailure(err, res, "Token verification error in modify");
-                }
-                const { decoded } = authContext;
+                const { decoded } = req.authContext;
 
                 const session = await mongoose.startSession();
                 try {
@@ -299,39 +303,24 @@ router.put(
                                 if (displayName != null) user.displayName = displayName;
                                 if (bio != null) user.bio = bio;
 
-                                const uploadToGrid = async (file, fieldName) => {
-                                        const ext = file.originalname.split(".").pop();
-                                        const filename = `${fieldName}-${decoded.id}-${Math.floor(Math.random() * 1000)}-${Date.now()}.${ext}`;
-                                        const uploadStream = databaseServer.gridfsBucket.openUploadStream(filename, { contentType: file.mimetype });
-                                        uploadStream.end(file.buffer);
-                                        await once(uploadStream, "finish");
-                                        return filename;
-                                };
+                                const bannerFile = req.files?.banner?.[0];
+                                const avatarFile = req.files?.avatar?.[0];
 
-                                if (req.files?.banner?.[0]) {
-                                        if (user.bannerUrl && user.bannerUrl.startsWith("/content/")) {
-                                                const oldBanner = user.bannerUrl.replace("/content/", "");
-						const [fileDoc] = await databaseServer.gridfsBucket.find({ filename: oldBanner }).toArray();
-						if (fileDoc) {
-							await databaseServer.gridfsBucket.delete(fileDoc._id);
-						}
-					}
+                                user.bannerUrl = await processFileUpload(
+                                        databaseServer.gridfsBucket,
+                                        bannerFile,
+                                        "banner",
+                                        decoded.id,
+                                        user.bannerUrl
+                                );
 
-					const storedName = await uploadToGrid(req.files.banner[0], "banner");
-					user.bannerUrl = `/content/${storedName}`;
-				}
-				if (req.files?.avatar?.[0]) {
-					if (user.avatarUrl && user.avatarUrl.startsWith("/content/")) {
-						const oldAvatar = user.avatarUrl.replace("/content/", "");
-						const [fileDoc] = await databaseServer.gridfsBucket.find({ filename: oldAvatar }).toArray();
-						if (fileDoc) {
-							await databaseServer.gridfsBucket.delete(fileDoc._id);
-						}
-					}
-
-                                        const storedName = await uploadToGrid(req.files.avatar[0], "avatar");
-                                        user.avatarUrl = `/content/${storedName}`;
-                                }
+                                user.avatarUrl = await processFileUpload(
+                                        databaseServer.gridfsBucket,
+                                        avatarFile,
+                                        "avatar",
+                                        decoded.id,
+                                        user.avatarUrl
+                                );
 
                                 await user.save({ session });
                         });
@@ -339,7 +328,7 @@ router.put(
                         serverWatchers.onUserSaved(decoded.id.toString());
                         const updated = await UserModel.findById(decoded.id).exec();
                         const profile = await updated.toProfilePrivJSON(updated);
-			return res.json({ user: profile });
+                        return res.json({ user: profile });
                 } catch (err) {
                         if (err.status === 404) return res.sendStatus(404);
                         logger.error(`User modification error: ${err.message}`);
@@ -350,104 +339,74 @@ router.put(
         }
 );
 
-router.put("/users/addfriend", generalLimiter, auth.required, async (req, res, next) => {
-        let authContext;
-        try {
-        authContext = await authenticateFromRequest(req);
-        } catch (err) {
-                return handleAuthFailure(err, res, "Token verification error in addfriend");
-        }
+router.put(
+        "/users/addfriend",
+        generalLimiter,
+        auth.required,
+        requireAuthContext("Token verification error in addfriend"),
+        friendAction("Add friend", async (req, res) => {
+                const { decoded, user: sender } = req.authContext;
 
-        const { decoded, user: sender } = authContext;
+                if (decoded.id === req.body.recipientId) {
+                        return res.sendStatus(403);
+                }
 
-        if (decoded.id === req.body.recipientId) {
-                return res.sendStatus(403);
-        }
-
-        try {
                 const recipient = await validateUserById(req.body.recipientId);
                 const result = await sendFriendRequest(sender, recipient);
                 return res.json(result);
-        } catch (err) {
-		logger.error(`Add friend error: ${err.message}`);
-		return next(err);
-	}
-});
+        })
+);
 
-router.put("/users/acceptfriend", generalLimiter, auth.required, async (req, res, next) => {
-        let authContext;
-        try {
-        authContext = await authenticateFromRequest(req);
-        } catch (err) {
-                return handleAuthFailure(err, res, "Token verification error in acceptfriend");
-        }
-
-        try {
+router.put(
+        "/users/acceptfriend",
+        generalLimiter,
+        auth.required,
+        requireAuthContext("Token verification error in acceptfriend"),
+        friendAction("Accept friend", async (req, res) => {
                 const friend = await validateFriendById(req.body.friendId);
                 if (friend.confirmed) {
                         return res.sendStatus(403);
                 }
-                if (friend.recipient.toString() !== authContext.decoded.id) {
+                if (friend.recipient.toString() !== req.authContext.decoded.id) {
                         return res.sendStatus(401);
                 }
                 friend.confirmed = true;
                 await friend.save();
                 return res.sendStatus(200);
-        } catch (err) {
-                logger.error(`Accept friend error: ${err.message}`);
-                return next(err);
-        }
-});
+        })
+);
 
-router.put("/users/declinefriend", generalLimiter, auth.required, async (req, res, next) => {
-        let authContext;
-        try {
-        authContext = await authenticateFromRequest(req);
-        } catch (err) {
-                return handleAuthFailure(err, res, "Token verification error in declinefriend");
-        }
-
-        try {
-                await declineFriend(req.body.friendId, authContext.decoded.id);
+router.put(
+        "/users/declinefriend",
+        generalLimiter,
+        auth.required,
+        requireAuthContext("Token verification error in declinefriend"),
+        friendAction("Decline friend", async (req, res) => {
+                await declineFriend(req.body.friendId, req.authContext.decoded.id);
                 return res.sendStatus(200);
-        } catch (err) {
-                logger.error(`Decline friend error: ${err.message}`);
-                return next(err);
-        }
-});
+        })
+);
 
-router.put("/users/cancelfriend", generalLimiter, auth.required, async (req, res, next) => {
-        let authContext;
-        try {
-        authContext = await authenticateFromRequest(req);
-        } catch (err) {
-                return handleAuthFailure(err, res, "Token verification error in cancelfriend");
-        }
-
-        try {
-                await cancelFriend(req.body.friendId, authContext.decoded.id);
+router.put(
+        "/users/cancelfriend",
+        generalLimiter,
+        auth.required,
+        requireAuthContext("Token verification error in cancelfriend"),
+        friendAction("Cancel friend", async (req, res) => {
+                await cancelFriend(req.body.friendId, req.authContext.decoded.id);
                 return res.sendStatus(200);
-        } catch (err) {
-                logger.error(`Cancel friend error: ${err.message}`);
-                return next(err);
-        }
-});
+        })
+);
 
-router.put("/users/removefriend", generalLimiter, auth.required, async (req, res, next) => {
-        let authContext;
-        try {
-        authContext = await authenticateFromRequest(req);
-        } catch (err) {
-                return handleAuthFailure(err, res, "Token verification error in removefriend");
-        }
-
-        try {
-                await removeFriend(req.body.friendId, authContext.decoded.id);
+router.put(
+        "/users/removefriend",
+        generalLimiter,
+        auth.required,
+        requireAuthContext("Token verification error in removefriend"),
+        friendAction("Remove friend", async (req, res) => {
+                await removeFriend(req.body.friendId, req.authContext.decoded.id);
                 return res.sendStatus(200);
-        } catch (err) {
-                logger.error(`Remove friend error: ${err.message}`);
-                return next(err);
-        }
-});
+        })
+);
 
 export default router;
