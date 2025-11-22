@@ -44,52 +44,52 @@ const App = () => {
 	const dispatch = useDispatch();
 	const customAppBarProps = useCustomAppBar(useWindowDimensions().width);
 
-        useEffect(() => {
-                const params = new URLSearchParams(window.location.search);
-                const token = params.get("token");
-                if (token) {
-                        dispatch(setAuthState({ authToken: token }));
-                        dispatch(verifyUser(token));
-                        params.delete("token");
-                        const newSearch = params.toString();
-                        const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "");
-                        window.history.replaceState({}, "", newUrl);
-                }
-        }, [dispatch]);
+	useEffect(() => {
+		const params = new URLSearchParams(window.location.search);
+		const token = params.get("token");
+		if (token) {
+			dispatch(setAuthState({ authToken: token }));
+			dispatch(verifyUser(token));
+			params.delete("token");
+			const newSearch = params.toString();
+			const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "");
+			window.history.replaceState({}, "", newUrl);
+		}
+	}, [dispatch]);
 
-        useEffect(() => {
-                if (!authState.initialized && !authState.skipAutoLogin && !authState.authToken) {
-                        dispatch(bootstrapAuth());
-                }
-        }, [authState.initialized, authState.skipAutoLogin, authState.authToken, dispatch]);
+	useEffect(() => {
+		if (!authState.initialized && !authState.skipAutoLogin && !authState.authToken) {
+			dispatch(bootstrapAuth());
+		}
+	}, [authState.initialized, authState.skipAutoLogin, authState.authToken, dispatch]);
 
-        const useSocketConnection = (authToken, loggedIn) => {
-                useEffect(() => {
-                        const connectSocket = async (token) => {
-                                const socketClient = socketIoHelper.connectSocket(token);
+	const useSocketConnection = (authToken, loggedIn) => {
+		useEffect(() => {
+			const connectSocket = async (token) => {
+				const socketClient = socketIoHelper.connectSocket(token);
 
-                                socketClient.on("connected", () => {
-                                        dispatch(setSocketStatus({ connected: true }));
-                                });
+				socketClient.on("connected", () => {
+					dispatch(setSocketStatus({ connected: true }));
+				});
 
-                                socketClient.on("disconnect", () => {
-                                        dispatch(setSocketStatus({ connected: false }));
-                                });
-                        };
+				socketClient.on("disconnect", () => {
+					dispatch(setSocketStatus({ connected: false }));
+				});
+			};
 
-                        if (!socketIoHelper.getSocket()?.connected && loggedIn) {
-                                connectSocket(authToken);
-                        }
+			if (!socketIoHelper.getSocket()?.connected && loggedIn) {
+				connectSocket(authToken);
+			}
 
-                        return () => {
-                                if (socketIoHelper.getSocket()?.connected) {
-                                        socketIoHelper.disconnectSocket();
-                                }
-                        };
-                }, [loggedIn, authToken]);
-        };
+			return () => {
+				if (socketIoHelper.getSocket()?.connected) {
+					socketIoHelper.disconnectSocket();
+				}
+			};
+		}, [loggedIn, authToken]);
+	};
 
-        useSocketConnection(authState.authToken, authState.loggedIn);
+	useSocketConnection(authState.authToken, authState.loggedIn);
 
 	return (
 		<ThemeProvider theme={darkTheme}>
@@ -116,7 +116,7 @@ const App = () => {
 				</CustomAppBar>
 				<RegisterDialog />
 				<LoginDialog />
-				<DraggableCallOverlay />
+				{/** <DraggableCallOverlay /> **/ <></>}
 			</AppRouter>
 		</ThemeProvider>
 	);
