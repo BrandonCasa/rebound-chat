@@ -1,7 +1,7 @@
 import { Router } from "express";
 
-import UserModel from "../../models/User.js";
-import { auth, getTokenFromHeader } from "../auth.js";
+import UserModel, { hashRefreshToken } from "../../models/User.js";
+import { auth, getAccessToken } from "../auth.js";
 
 import jwt from "jsonwebtoken";
 import passport from "passport";
@@ -46,36 +46,85 @@ const modifyLimiter = rateLimit({
 // ─── GENERAL RATE LIMITER ─────────────────────────────────────────────────────
 // fallback limiter for other user endpoints
 const generalLimiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 minutes
-	max: 100,
-	standardHeaders: true,
-	legacyHeaders: false,
-	message: { error: "Too many requests, please try again later." },
+        windowMs: 15 * 60 * 1000, // 15 minutes
+        max: 100,
+        standardHeaders: true,
+        legacyHeaders: false,
+        message: { error: "Too many requests, please try again later." },
 });
 
+const buildAuthError = (message, status = 401) => {
+        const err = new Error(message);
+        err.status = status;
+        return err;
+};
+
+const BASE_COOKIE_OPTIONS = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+};
+
+const ACCESS_COOKIE_OPTIONS = {
+        ...BASE_COOKIE_OPTIONS,
+        path: "/",
+};
+
+const REFRESH_COOKIE_OPTIONS = {
+        ...BASE_COOKIE_OPTIONS,
+        path: "/api/users/refresh",
+};
+
+const setAuthCookies = (res, accessToken, refreshToken) => {
+        res.cookie("token", accessToken, ACCESS_COOKIE_OPTIONS);
+        if (refreshToken) {
+                res.cookie("jid", refreshToken, REFRESH_COOKIE_OPTIONS);
+        }
+};
+
+const validateAccessToken = async (token) => {
+        if (!token) throw buildAuthError("Missing access token.");
+
+        let decoded;
+        try {
+                decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+        } catch (err) {
+                throw buildAuthError("Invalid access token.");
+        }
+
+        const user = await UserModel.findById(decoded.id);
+        if (!user || !user.active) {
+                throw buildAuthError("Invalid or deactivated account.");
+        }
+
+        if (decoded.tokenVersion !== user.tokenVersion) {
+                throw buildAuthError("Token no longer valid.");
+        }
+
+        if (user.passwordChangedAt && decoded.iat * 1000 < user.passwordChangedAt.getTime()) {
+                throw buildAuthError("Token issued before password change.");
+        }
+
+        return { user, decoded };
+};
+
+const authenticateFromRequest = (req) => validateAccessToken(getAccessToken(req));
+
+const handleAuthFailure = (err, res, context) => {
+        logger.error(`${context}: ${err.message}`);
+        return res.status(err.status || 401).json({ error: err.message });
+};
+
 router.post("/users/verify", authLimiter, async (req, res, next) => {
-	const token = getTokenFromHeader(req);
+        const token = getAccessToken(req);
 
-	try {
-		const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-		const user = await UserModel.findById(decoded.id);
-		if (!user || user.active === false) {
-			return res.status(401).json({ error: "Invalid or deactivated account." });
-		}
-
-		if (decoded.tokenVersion !== user.tokenVersion) {
-			return res.status(401).json({ error: "Token no longer valid." });
-		}
-
-		if (user.passwordChangedAt && decoded.iat * 1000 < user.passwordChangedAt.getTime()) {
-			return res.status(401).json({ error: "Token issued before password change." });
-		}
-
-		return res.json({ user: user.toAuthJSON(token) });
-	} catch (err) {
-		logger.error(`Verification error: ${err.message}`);
-		return next(err);
-	}
+        try {
+                const { user } = await validateAccessToken(token);
+                return res.json({ user: user.toAuthJSON(token) });
+        } catch (err) {
+                logger.error(`Verification error: ${err.message}`);
+                return res.status(err.status || 401).json({ error: err.message });
+        }
 });
 
 router.post("/users/refresh", async (req, res, next) => {
@@ -112,18 +161,13 @@ router.post("/users/refresh", async (req, res, next) => {
 		const newAccessToken = user.generateAccessToken();
 		const newRefreshToken = await user.generateRefreshToken();
 
-		res
-			.cookie("jid", newRefreshToken, {
-				httpOnly: true,
-				secure: process.env.NODE_ENV === "production",
-				sameSite: "strict",
-				path: "/api/users/refresh",
-			})
-			.json({ token: newAccessToken });
-	} catch (err) {
-		logger.error(`Refresh error: ${err.message}`);
-		return res.status(401).json({ error: "Invalid refresh token" });
-	}
+                setAuthCookies(res, newAccessToken, newRefreshToken);
+
+                res.json({ token: newAccessToken });
+        } catch (err) {
+                logger.error(`Refresh error: ${err.message}`);
+                return res.status(401).json({ error: "Invalid refresh token" });
+        }
 });
 
 /**
@@ -134,32 +178,31 @@ router.post("/users/refresh", async (req, res, next) => {
  * Otherwise, returns the private profile.
  */
 router.get("/users/profile", generalLimiter, auth.required, async (req, res, next) => {
-	const token = getTokenFromHeader(req);
-	try {
-		const decoded = jwt.verify(token, process.env.SECRET);
-		// Use provided id if any, otherwise default to the logged-in user's id.
-		const targetUserId = req.query.id || decoded.id;
-		const user = await UserModel.findById(targetUserId);
+        const token = getAccessToken(req);
+        try {
+                const { user: requestingUser, decoded } = await validateAccessToken(token);
+                // Use provided id if any, otherwise default to the logged-in user's id.
+                const targetUserId = req.query.id || decoded.id;
+                const user = await UserModel.findById(targetUserId);
 
-		if (!user) {
-			return res.sendStatus(404);
-		}
+                if (!user) {
+                        return res.sendStatus(404);
+                }
 
-		let profile;
-		// If the request is for the owner's profile, return the private version.
-		if (decoded.id === user._id.toString()) {
-			profile = await user.toProfilePrivJSON(user);
-		} else {
-			// For public profile, fetch the querying user's document to calculate mutual fields.
-			const queryingUser = await UserModel.findById(decoded.id);
-			profile = await user.toProfilePubJSON(queryingUser);
-		}
+                let profile;
+                // If the request is for the owner's profile, return the private version.
+                if (decoded.id === user._id.toString()) {
+                        profile = await user.toProfilePrivJSON(requestingUser);
+                } else {
+                        // For public profile, fetch the querying user's document to calculate mutual fields.
+                        profile = await user.toProfilePubJSON(requestingUser);
+                }
 
-		return res.json({ user: profile });
-	} catch (err) {
-		logger.error(`Profile retrieval error: ${err.message}`);
-		return next(err);
-	}
+                return res.json({ user: profile });
+        } catch (err) {
+                logger.error(`Profile retrieval error: ${err.message}`);
+                return res.status(err.status || 401).json({ error: err.message });
+        }
 });
 
 /**
@@ -168,24 +211,18 @@ router.get("/users/profile", generalLimiter, auth.required, async (req, res, nex
  */
 router.get("/users/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 router.get("/users/google/callback", passport.authenticate("google", { session: false, failureRedirect: "/" }), async (req, res, next) => {
-	try {
-		const accessToken = req.user.generateAccessToken();
-		const refreshToken = await req.user.generateRefreshToken();
+                try {
+                        const accessToken = req.user.generateAccessToken();
+                        const refreshToken = await req.user.generateRefreshToken();
 
-		res.cookie("jid", refreshToken, {
-			httpOnly: true,
-			secure: process.env.NODE_ENV === "production",
-			sameSite: "strict",
-			path: "/api/users/refresh",
-		});
+                        setAuthCookies(res, accessToken, refreshToken);
 
-		res.redirect(`${process.env.NODE_ENV === "development" ? "http://localhost:3000" : ""}/?token=${accessToken}`);
-	} catch (e) {
-		logger.error(`Google callback token error: ${e.message}`);
-		next(e);
-	}
-	const token = req.user.generateAccessToken();
-	res.redirect(`${process.env.NODE_ENV === "development" ? "http://localhost:3000" : ""}/?token=${token}`);
+                        const redirectBase = process.env.NODE_ENV === "development" ? "http://localhost:3000" : "";
+                        return res.redirect(redirectBase || "/");
+                } catch (e) {
+                        logger.error(`Google callback token error: ${e.message}`);
+                        next(e);
+                }
 });
 router.post("/users/login", authLimiter, (req, res, next) => {
 	if (!req.body?.user?.email) {
@@ -204,23 +241,17 @@ router.post("/users/login", authLimiter, (req, res, next) => {
 			return res.status(422).json(info);
 		}
 
-		try {
-			const accessToken = user.generateAccessToken();
-			const refreshToken = await user.generateRefreshToken();
+                try {
+                        const accessToken = user.generateAccessToken();
+                        const refreshToken = await user.generateRefreshToken();
 
-			// Send refresh token in httpOnly cookie
-			res
-				.cookie("jid", refreshToken, {
-					httpOnly: true,
-					secure: process.env.NODE_ENV === "production",
-					sameSite: "strict",
-					path: "/api/users/refresh",
-				})
-				.json({ user: user.toAuthJSON(accessToken) });
-		} catch (e) {
-			logger.error(`Token generation error: ${e.message}`);
-			return next(e);
-		}
+                        setAuthCookies(res, accessToken, refreshToken);
+
+                        res.json({ user: user.toAuthJSON(accessToken) });
+                } catch (e) {
+                        logger.error(`Token generation error: ${e.message}`);
+                        return next(e);
+                }
 	})(req, res, next);
 });
 
@@ -230,19 +261,25 @@ router.post("/users/login", authLimiter, (req, res, next) => {
  */
 router.post("/users/register", authLimiter, async (req, res, next) => {
 	try {
-		const { username, email, displayName, bio, password } = req.body.user;
-		if (!password || password.trim().length < 8) {
-			return res.status(422).json({ errors: { password: "is invalid" } });
-		}
-		const user = new UserModel({ username, email, displayName, bio });
-		user.setPassword(password);
+                const { username, email, displayName, bio, password } = req.body.user;
+                if (!password || password.trim().length < 8) {
+                        return res.status(422).json({ errors: { password: "is invalid" } });
+                }
+                const user = new UserModel({ username, email, displayName, bio });
+                user.setPassword(password);
 
-		await user.save();
-		return res.json({ user: user.toAuthJSON() });
-	} catch (err) {
-		logger.error(`Registration error: ${err.message}`);
-		return next(err);
-	}
+                await user.save();
+
+                const accessToken = user.generateAccessToken();
+                const refreshToken = await user.generateRefreshToken();
+
+                setAuthCookies(res, accessToken, refreshToken);
+
+                return res.json({ user: user.toAuthJSON(accessToken) });
+        } catch (err) {
+                logger.error(`Registration error: ${err.message}`);
+                return next(err);
+        }
 });
 
 /**
@@ -258,16 +295,15 @@ router.put(
 		{ name: "banner", maxCount: 1 },
 		{ name: "avatar", maxCount: 1 },
 	]),
-	async (req, res, next) => {
-		// 1) Verify token
-		const token = getTokenFromHeader(req);
-		let decoded;
-		try {
-			decoded = jwt.verify(token, process.env.SECRET);
-		} catch (err) {
-			logger.error(`Token verification error in modify: ${err.message}`);
-			return res.sendStatus(401);
-		}
+        async (req, res, next) => {
+                // 1) Verify token
+                let authContext;
+                try {
+                        authContext = await authenticateFromRequest(req);
+                } catch (err) {
+                        return handleAuthFailure(err, res, "Token verification error in modify");
+                }
+                const { decoded } = authContext;
 
 		// 2) Start a session & transaction
 		const session = await mongoose.startSession();
@@ -353,26 +389,25 @@ router.put(
  * The sender is the authenticated user and the recipient is provided in the request body.
  */
 router.put("/users/addfriend", generalLimiter, auth.required, async (req, res, next) => {
-	const token = getTokenFromHeader(req);
-	let decoded;
-	try {
-		decoded = jwt.verify(token, process.env.SECRET);
-	} catch (err) {
-		logger.error(`Token verification error in addfriend: ${err.message}`);
-		return res.sendStatus(401);
-	}
+        let authContext;
+        try {
+        authContext = await authenticateFromRequest(req);
+        } catch (err) {
+                return handleAuthFailure(err, res, "Token verification error in addfriend");
+        }
 
-	// Prevent a user from sending a friend request to themselves.
-	if (decoded.id === req.body.recipientId) {
-		return res.sendStatus(403);
-	}
+        const { decoded, user: sender } = authContext;
 
-	try {
-		const sender = await validateUserById(decoded.id);
-		const recipient = await validateUserById(req.body.recipientId);
-		const result = await sendFriendRequest(sender, recipient);
-		return res.json(result);
-	} catch (err) {
+        // Prevent a user from sending a friend request to themselves.
+        if (decoded.id === req.body.recipientId) {
+                return res.sendStatus(403);
+        }
+
+        try {
+                const recipient = await validateUserById(req.body.recipientId);
+                const result = await sendFriendRequest(sender, recipient);
+                return res.json(result);
+        } catch (err) {
 		logger.error(`Add friend error: ${err.message}`);
 		return next(err);
 	}
@@ -384,30 +419,28 @@ router.put("/users/addfriend", generalLimiter, auth.required, async (req, res, n
  * Only the intended recipient may confirm the request.
  */
 router.put("/users/acceptfriend", generalLimiter, auth.required, async (req, res, next) => {
-	const token = getTokenFromHeader(req);
-	let decoded;
-	try {
-		decoded = jwt.verify(token, process.env.SECRET);
-	} catch (err) {
-		logger.error(`Token verification error in acceptfriend: ${err.message}`);
-		return res.sendStatus(401);
-	}
+        let authContext;
+        try {
+        authContext = await authenticateFromRequest(req);
+        } catch (err) {
+                return handleAuthFailure(err, res, "Token verification error in acceptfriend");
+        }
 
-	try {
-		const friend = await validateFriendById(req.body.friendId);
-		if (friend.confirmed) {
-			return res.sendStatus(403);
-		}
-		if (friend.recipient.toString() !== decoded.id) {
-			return res.sendStatus(401);
-		}
-		friend.confirmed = true;
-		await friend.save();
-		return res.sendStatus(200);
-	} catch (err) {
-		logger.error(`Accept friend error: ${err.message}`);
-		return next(err);
-	}
+        try {
+                const friend = await validateFriendById(req.body.friendId);
+                if (friend.confirmed) {
+                        return res.sendStatus(403);
+                }
+                if (friend.recipient.toString() !== authContext.decoded.id) {
+                        return res.sendStatus(401);
+                }
+                friend.confirmed = true;
+                await friend.save();
+                return res.sendStatus(200);
+        } catch (err) {
+                logger.error(`Accept friend error: ${err.message}`);
+                return next(err);
+        }
 });
 
 /**
@@ -415,23 +448,21 @@ router.put("/users/acceptfriend", generalLimiter, auth.required, async (req, res
  * Decline a pending friend request.
  */
 router.put("/users/declinefriend", generalLimiter, auth.required, async (req, res, next) => {
-	const token = getTokenFromHeader(req);
-	let decoded;
-	try {
-		decoded = jwt.verify(token, process.env.SECRET);
-	} catch (err) {
-		logger.error(`Token verification error in declinefriend: ${err.message}`);
-		return res.sendStatus(401);
-	}
+        let authContext;
+        try {
+        authContext = await authenticateFromRequest(req);
+        } catch (err) {
+                return handleAuthFailure(err, res, "Token verification error in declinefriend");
+        }
 
-	try {
-		// Call declineFriend with the friend request ID and current user ID.
-		await declineFriend(req.body.friendId, decoded.id);
-		return res.sendStatus(200);
-	} catch (err) {
-		logger.error(`Decline friend error: ${err.message}`);
-		return next(err);
-	}
+        try {
+                // Call declineFriend with the friend request ID and current user ID.
+                await declineFriend(req.body.friendId, authContext.decoded.id);
+                return res.sendStatus(200);
+        } catch (err) {
+                logger.error(`Decline friend error: ${err.message}`);
+                return next(err);
+        }
 });
 
 /**
@@ -439,22 +470,20 @@ router.put("/users/declinefriend", generalLimiter, auth.required, async (req, re
  * Cancel a sent friend request.
  */
 router.put("/users/cancelfriend", generalLimiter, auth.required, async (req, res, next) => {
-	const token = getTokenFromHeader(req);
-	let decoded;
-	try {
-		decoded = jwt.verify(token, process.env.SECRET);
-	} catch (err) {
-		logger.error(`Token verification error in cancelfriend: ${err.message}`);
-		return res.sendStatus(401);
-	}
+        let authContext;
+        try {
+        authContext = await authenticateFromRequest(req);
+        } catch (err) {
+                return handleAuthFailure(err, res, "Token verification error in cancelfriend");
+        }
 
-	try {
-		await cancelFriend(req.body.friendId, decoded.id);
-		return res.sendStatus(200);
-	} catch (err) {
-		logger.error(`Cancel friend error: ${err.message}`);
-		return next(err);
-	}
+        try {
+                await cancelFriend(req.body.friendId, authContext.decoded.id);
+                return res.sendStatus(200);
+        } catch (err) {
+                logger.error(`Cancel friend error: ${err.message}`);
+                return next(err);
+        }
 });
 
 /**
@@ -462,22 +491,20 @@ router.put("/users/cancelfriend", generalLimiter, auth.required, async (req, res
  * Remove an existing friend.
  */
 router.put("/users/removefriend", generalLimiter, auth.required, async (req, res, next) => {
-	const token = getTokenFromHeader(req);
-	let decoded;
-	try {
-		decoded = jwt.verify(token, process.env.SECRET);
-	} catch (err) {
-		logger.error(`Token verification error in removefriend: ${err.message}`);
-		return res.sendStatus(401);
-	}
+        let authContext;
+        try {
+        authContext = await authenticateFromRequest(req);
+        } catch (err) {
+                return handleAuthFailure(err, res, "Token verification error in removefriend");
+        }
 
-	try {
-		await removeFriend(req.body.friendId, decoded.id);
-		return res.sendStatus(200);
-	} catch (err) {
-		logger.error(`Remove friend error: ${err.message}`);
-		return next(err);
-	}
+        try {
+                await removeFriend(req.body.friendId, authContext.decoded.id);
+                return res.sendStatus(200);
+        } catch (err) {
+                logger.error(`Remove friend error: ${err.message}`);
+                return next(err);
+        }
 });
 
 export default router;

@@ -8,6 +8,7 @@ import serverRooms from "./rooms.js";
 import serverDMs from "./dms.js";
 import serverWatchers from "./watchers.js";
 import UserModel from "../models/User.js";
+import { getAccessToken } from "../routes/auth.js";
 
 class SocketBackend {
 	constructor() {
@@ -33,19 +34,36 @@ class SocketBackend {
 		logger.info(`Socket.IO listening on port ${port}`);
 	}
 
-	/**
-	 * Middleware: verify JWT and attach decoded user to socket.user
-	 */
-	_authenticate(socket, next) {
-		const auth = socket.handshake.headers.authorization;
-		if (!auth) return next(new Error("Authentication error"));
-		const token = auth.split(" ")[1];
-		jwt.verify(token, process.env.SECRET, (err, decoded) => {
-			if (err) return next(new Error("Authentication error"));
-			socket.user = decoded;
-			next();
-		});
-	}
+        /**
+         * Middleware: verify JWT and attach decoded user to socket.user
+         */
+        async _authenticate(socket, next) {
+                const token = getAccessToken({ headers: socket.handshake.headers });
+                if (!token) return next(new Error("Authentication error"));
+
+                try {
+                        const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+                        const user = await UserModel.findById(decoded.id);
+
+                        if (!user || !user.active) {
+                                throw new Error("Invalid or inactive user");
+                        }
+
+                        if (decoded.tokenVersion !== user.tokenVersion) {
+                                throw new Error("Token version mismatch");
+                        }
+
+                        if (user.passwordChangedAt && decoded.iat * 1000 < user.passwordChangedAt.getTime()) {
+                                throw new Error("Stale access token");
+                        }
+
+                        socket.user = { id: user._id.toString(), username: user.username, tokenVersion: user.tokenVersion };
+                        next();
+                } catch (err) {
+                        logger.error("Socket authentication error:", err);
+                        next(new Error("Authentication error"));
+                }
+        }
 
 	/**
 	 * On new client connection: wire up rooms & watchers, send handshake.

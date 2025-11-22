@@ -3,6 +3,7 @@ import http from "http";
 import cors from "cors";
 import { configDotenv } from "dotenv";
 import express from "express";
+import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import methodOverride from "method-override";
 import morgan from "morgan";
@@ -47,9 +48,10 @@ class ServerBackend {
 			this.app.use(morgan("combined", { stream: logger.stream }));
 		}
 
-		// Body parsing
-		this.app.use(express.urlencoded({ extended: false }));
-		this.app.use(express.json());
+                // Body parsing
+                this.app.use(cookieParser());
+                this.app.use(express.urlencoded({ extended: false }));
+                this.app.use(express.json());
 
 		// Method-override for PUT/DELETE in forms
 		this.app.use(methodOverride());
