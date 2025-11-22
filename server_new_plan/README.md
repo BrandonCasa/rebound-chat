@@ -45,12 +45,14 @@ This folder captures the high-level migration strategy for moving the Rebound ba
 
 - Bootstrapped `server_new_impl` Nest app with GraphQL, validated configuration, and security middleware (helmet/CORS/validation pipe).
 - Added `Health` GraphQL resolver for liveness checks and initial `Users` module with a schema-level lookup stub to unblock frontend contracts.
+- Introduced an Auth module scaffold with JWT login + `viewer` query backed by an in-memory credential check to exercise guards/context wiring before PostgreSQL + Prisma arrive.
 
 ## Next considerations
 
 - Replace the in-memory `UsersService` placeholder with Prisma-backed PostgreSQL access and add dataloaders for relation-heavy queries.
-- Introduce authentication/authorization guards around user lookups before exposing broader profile fields.
+- Extend the new Auth module with refresh tokens, CSRF-aligned cookie handling, and OAuth provider hooks; front the `viewer` query with the finalized guard and context shape.
 - Stand up the shared `@rebound/types` package so the frontend can adopt generated types without coupling to Nest internals.
+- Capture voice/video call requirements (Discord-style multi-party rooms with media streams) in the RTC/Gateway plan so the WebSocket layer and permissions model can evolve without rework.
 
 ## Notes & Considerations
 - **API surface:** Go fully GraphQL-first (plus WebSockets for realtime) and deprecate the legacy REST surface as the frontend is modernized.

@@ -59,8 +59,10 @@
 - Nest GraphQL bootstrap is live with code-first schema generation and schema sorting.
 - Health resolver returns liveness metadata for quick smoke tests.
 - Users module scaffolded with a validated `user` query backed by an in-memory store until Prisma + PostgreSQL land.
+- Auth module added with JWT login and `viewer` query guarded by a WebSocket-friendly GraphQL auth guard to prove out context wiring before real persistence.
 
 ## Near-term adjustments
 - Add `@ResolveField` patterns and dataloaders around `User` relations (friends, presence) as soon as persistence is in place.
-- Wire Nest Guards/interceptors to enforce auth/context on user lookups once JWT/CSRF flows are implemented.
+- Wire Nest Guards/interceptors to enforce auth/context on user lookups once JWT/CSRF flows are implemented (refresh tokens + CSRF cookies next).
 - Capture schema artifacts in CI for diffing against future iterations and to feed frontend codegen.
+- Model RTC voice/video flows (Discord-style group calls) alongside the Rooms/Gateway design so media permissions, SFU/relay choices, and presence events align with future requirements.

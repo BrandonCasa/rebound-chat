@@ -24,6 +24,11 @@
 - **Blue/Green or Canary** for breaking changes (e.g., GraphQL schema evolutions, DB migrations) using traffic shifting.
 - **Zero-downtime migrations**: additive DB changes first, backfill jobs, then cleanup; maintain compatibility with running app versions.
 
+## RTC/Voice & Video (forward-looking)
+- Plan for TURN (coturn) + optional SFU (Janus/mediasoup) to support Discord-style multi-party voice/video; colocate near users and expose metrics.
+- Harden WebSocket ingress for elevated bitrate/connection counts; align auth/permissions with Nest Gateway guards and JWT context.
+- Budget for media storage (recordings/clips) in S3 with CDN caching rules and signed URLs similar to uploads pipeline.
+
 ## Security & Compliance Checklist
 - [ ] Secrets via env vault; rotate JWT/refresh secrets; enforce strong cipher suites.
 - [ ] Content Security Policy and strict CORS configuration aligned with frontend domains.
