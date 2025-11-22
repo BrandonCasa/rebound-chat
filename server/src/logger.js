@@ -22,18 +22,17 @@ let alignColorsAndTime = winston.format.combine(
 );
 
 if (process.env.NODE_ENV !== "production") {
-	logger.add(
-		new winston.transports.Console({
-			format: winston.format.combine(winston.format.colorize(), alignColorsAndTime),
-		})
-	);
+        logger.add(
+                new winston.transports.Console({
+                        format: winston.format.combine(winston.format.colorize(), alignColorsAndTime),
+                })
+        );
 }
 
-// Add stream property for Morgan
 logger.stream = {
-	write: function (message) {
-		logger.info(message.trim());
-	},
+        write: function (message) {
+                logger.info(message.trim());
+        },
 };
 
 export default logger;

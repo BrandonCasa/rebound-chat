@@ -11,7 +11,7 @@ import logger from "../../logger.js";
 import { sendFriendRequest, validateFriendById, validateUserById, removeFriend, declineFriend, cancelFriend } from "../../models/helpers/UserHelper.js";
 
 import multer from "multer";
-import databaseServer from "../../database/index.js"; // <— your DatabaseServer instance
+import databaseServer from "../../database/index.js";
 import { once } from "events";
 
 import serverWatchers from "../../socketio/watchers.js";
@@ -22,32 +22,26 @@ import "dotenv/config";
 
 const router = Router();
 
-const MAX_FILE_SIZE = 8 * 1024 * 1024; // 2 MB
+const MAX_FILE_SIZE = 8 * 1024 * 1024;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FILE_SIZE } });
 
-// ─── AUTH RATE LIMITER ────────────────────────────────────────────────────────
-// max 10 login/register attempts per hour per IP
 const authLimiter = rateLimit({
-	windowMs: 60 * 60 * 1000, // 1 hour
-	max: 20,
-	standardHeaders: true,
-	legacyHeaders: false,
-	message: { error: "Too many auth attempts, please try again later." },
+        windowMs: 60 * 60 * 1000,
+        max: 20,
+        standardHeaders: true,
+        legacyHeaders: false,
+        message: { error: "Too many auth attempts, please try again later." },
 });
-// ─── MODIFY RATE LIMITER ────────────────────────────────────────────────────────
-// max 8 modify profile attempts per 30 minutes per IP
 const modifyLimiter = rateLimit({
-	windowMs: 30 * 60 * 1000, // 1 hour
-	max: 8,
-	standardHeaders: true,
-	legacyHeaders: false,
-	message: { error: "Too many modification attempts, please try again later." },
+        windowMs: 30 * 60 * 1000,
+        max: 8,
+        standardHeaders: true,
+        legacyHeaders: false,
+        message: { error: "Too many modification attempts, please try again later." },
 });
 
-// ─── GENERAL RATE LIMITER ─────────────────────────────────────────────────────
-// fallback limiter for other user endpoints
 const generalLimiter = rateLimit({
-        windowMs: 15 * 60 * 1000, // 15 minutes
+        windowMs: 15 * 60 * 1000,
         max: 100,
         standardHeaders: true,
         legacyHeaders: false,
@@ -156,22 +150,19 @@ router.post("/users/refresh", async (req, res, next) => {
 			return res.status(401).json({ error: "Invalid user" });
 		}
 
-		// Check tokenVersion
-		if (user.tokenVersion !== payload.tokenVersion) {
-			return res.status(401).json({ error: "Token no longer valid" });
-		}
+                if (user.tokenVersion !== payload.tokenVersion) {
+                        return res.status(401).json({ error: "Token no longer valid" });
+                }
 
-		// Check hashed token in DB
-		const tokenHash = hashRefreshToken(rawToken);
-		const stored = user.refreshTokens.find((t) => t.tokenHash === tokenHash && t.expiresAt > new Date());
+                const tokenHash = hashRefreshToken(rawToken);
+                const stored = user.refreshTokens.find((t) => t.tokenHash === tokenHash && t.expiresAt > new Date());
 
-		if (!stored) {
-			return res.status(401).json({ error: "Refresh token revoked or expired" });
-		}
+                if (!stored) {
+                        return res.status(401).json({ error: "Refresh token revoked or expired" });
+                }
 
-		// Rotate the refresh token
-		user.refreshTokens = user.refreshTokens.filter((t) => t.tokenHash !== tokenHash);
-		await user.save();
+                user.refreshTokens = user.refreshTokens.filter((t) => t.tokenHash !== tokenHash);
+                await user.save();
 
                 const newAccessToken = user.generateAccessToken();
                 const newRefreshToken = await user.generateRefreshToken();
@@ -185,18 +176,10 @@ router.post("/users/refresh", async (req, res, next) => {
         }
 });
 
-/**
- * /users/profile
- * Retrieve a user's profile.
- * If a query parameter id is provided and does not match the requesting user,
- * returns the public profile (with mutual friend and server info).
- * Otherwise, returns the private profile.
- */
 router.get("/users/profile", generalLimiter, auth.required, async (req, res, next) => {
         const token = getAccessToken(req);
         try {
                 const { user: requestingUser, decoded } = await validateAccessToken(token);
-                // Use provided id if any, otherwise default to the logged-in user's id.
                 const targetUserId = req.query.id || decoded.id;
                 const user = await UserModel.findById(targetUserId);
 
@@ -204,14 +187,10 @@ router.get("/users/profile", generalLimiter, auth.required, async (req, res, nex
                         return res.sendStatus(404);
                 }
 
-                let profile;
-                // If the request is for the owner's profile, return the private version.
-                if (decoded.id === user._id.toString()) {
-                        profile = await user.toProfilePrivJSON(requestingUser);
-                } else {
-                        // For public profile, fetch the querying user's document to calculate mutual fields.
-                        profile = await user.toProfilePubJSON(requestingUser);
-                }
+                const profile =
+                        decoded.id === user._id.toString()
+                                ? await user.toProfilePrivJSON(requestingUser)
+                                : await user.toProfilePubJSON(requestingUser);
 
                 return res.json({ user: profile });
         } catch (err) {
@@ -220,10 +199,6 @@ router.get("/users/profile", generalLimiter, auth.required, async (req, res, nex
         }
 });
 
-/**
- * /users/login
- * Log in a user using passport local strategy.
- */
 router.get("/users/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 router.get("/users/google/callback", passport.authenticate("google", { session: false, failureRedirect: "/" }), async (req, res, next) => {
                 try {
@@ -270,12 +245,8 @@ router.post("/users/login", authLimiter, (req, res, next) => {
         })(req, res, next);
 });
 
-/**
- * /users/register
- * Register a new user. Checks for a password with a minimum length.
- */
 router.post("/users/register", authLimiter, async (req, res, next) => {
-	try {
+        try {
                 const { username, email, displayName, bio, password } = req.body.user;
                 if (!password || password.trim().length < 8) {
                         return res.status(422).json({ errors: { password: "is invalid" } });
@@ -297,21 +268,15 @@ router.post("/users/register", authLimiter, async (req, res, next) => {
         }
 });
 
-/**
- * /users/modify
- * Update fields of the user's profile.
- * This endpoint uses a transaction, which is important for replica sets.
- */
 router.put(
-	"/users/modify",
-	modifyLimiter,
-	auth.required,
+        "/users/modify",
+        modifyLimiter,
+        auth.required,
 	upload.fields([
 		{ name: "banner", maxCount: 1 },
 		{ name: "avatar", maxCount: 1 },
 	]),
         async (req, res, next) => {
-                // 1) Verify token
                 let authContext;
                 try {
                         authContext = await authenticateFromRequest(req);
@@ -320,38 +285,32 @@ router.put(
                 }
                 const { decoded } = authContext;
 
-		// 2) Start a session & transaction
-		const session = await mongoose.startSession();
-		try {
-			await session.withTransaction(async () => {
-				// 3) Load user under the session
-				const user = await UserModel.findById(decoded.id).session(session).exec();
-				if (!user) {
-					// throwing will abort the transaction
-					const err = new Error("User not found");
-					err.status = 404;
-					throw err;
-				}
+                const session = await mongoose.startSession();
+                try {
+                        await session.withTransaction(async () => {
+                                const user = await UserModel.findById(decoded.id).session(session).exec();
+                                if (!user) {
+                                        const err = new Error("User not found");
+                                        err.status = 404;
+                                        throw err;
+                                }
 
-				// 4) Update text fields
-				const { displayName, bio } = req.body;
-				if (displayName != null) user.displayName = displayName;
-				if (bio != null) user.bio = bio;
+                                const { displayName, bio } = req.body;
+                                if (displayName != null) user.displayName = displayName;
+                                if (bio != null) user.bio = bio;
 
-				// 5) File‐upload helper
-				const uploadToGrid = async (file, fieldName) => {
-					const ext = file.originalname.split(".").pop();
-					const filename = `${fieldName}-${decoded.id}-${Math.floor(Math.random() * 1000)}-${Date.now()}.${ext}`;
-					const uploadStream = databaseServer.gridfsBucket.openUploadStream(filename, { contentType: file.mimetype });
-					uploadStream.end(file.buffer);
-					await once(uploadStream, "finish");
-					return filename;
-				};
+                                const uploadToGrid = async (file, fieldName) => {
+                                        const ext = file.originalname.split(".").pop();
+                                        const filename = `${fieldName}-${decoded.id}-${Math.floor(Math.random() * 1000)}-${Date.now()}.${ext}`;
+                                        const uploadStream = databaseServer.gridfsBucket.openUploadStream(filename, { contentType: file.mimetype });
+                                        uploadStream.end(file.buffer);
+                                        await once(uploadStream, "finish");
+                                        return filename;
+                                };
 
-				// 6) Banner & avatar
-				if (req.files?.banner?.[0]) {
-					if (user.bannerUrl && user.bannerUrl.startsWith("/content/")) {
-						const oldBanner = user.bannerUrl.replace("/content/", "");
+                                if (req.files?.banner?.[0]) {
+                                        if (user.bannerUrl && user.bannerUrl.startsWith("/content/")) {
+                                                const oldBanner = user.bannerUrl.replace("/content/", "");
 						const [fileDoc] = await databaseServer.gridfsBucket.find({ filename: oldBanner }).toArray();
 						if (fileDoc) {
 							await databaseServer.gridfsBucket.delete(fileDoc._id);
@@ -370,39 +329,27 @@ router.put(
 						}
 					}
 
-					const storedName = await uploadToGrid(req.files.avatar[0], "avatar");
-					user.avatarUrl = `/content/${storedName}`;
-				}
+                                        const storedName = await uploadToGrid(req.files.avatar[0], "avatar");
+                                        user.avatarUrl = `/content/${storedName}`;
+                                }
 
-				// 7) Persist under the session
-				await user.save({ session });
-			});
+                                await user.save({ session });
+                        });
 
-			// 8) After commit succeed: notify watchers & respond
-			serverWatchers.onUserSaved(decoded.id.toString());
-			const updated = await UserModel.findById(decoded.id).exec();
-			const profile = await updated.toProfilePrivJSON(updated);
+                        serverWatchers.onUserSaved(decoded.id.toString());
+                        const updated = await UserModel.findById(decoded.id).exec();
+                        const profile = await updated.toProfilePrivJSON(updated);
 			return res.json({ user: profile });
-		} catch (err) {
-			// If you threw an Error with a .status, honor it:
-			if (err.status === 404) return res.sendStatus(404);
-			logger.error(`User modification error: ${err.message}`);
-			return next(err);
-		} finally {
-			session.endSession();
-		}
-	}
+                } catch (err) {
+                        if (err.status === 404) return res.sendStatus(404);
+                        logger.error(`User modification error: ${err.message}`);
+                        return next(err);
+                } finally {
+                        session.endSession();
+                }
+        }
 );
 
-/**
- * Friend-related endpoints
- */
-
-/**
- * /users/addfriend
- * Send a friend request.
- * The sender is the authenticated user and the recipient is provided in the request body.
- */
 router.put("/users/addfriend", generalLimiter, auth.required, async (req, res, next) => {
         let authContext;
         try {
@@ -413,7 +360,6 @@ router.put("/users/addfriend", generalLimiter, auth.required, async (req, res, n
 
         const { decoded, user: sender } = authContext;
 
-        // Prevent a user from sending a friend request to themselves.
         if (decoded.id === req.body.recipientId) {
                 return res.sendStatus(403);
         }
@@ -428,11 +374,6 @@ router.put("/users/addfriend", generalLimiter, auth.required, async (req, res, n
 	}
 });
 
-/**
- * /users/acceptfriend
- * Accept a pending friend request.
- * Only the intended recipient may confirm the request.
- */
 router.put("/users/acceptfriend", generalLimiter, auth.required, async (req, res, next) => {
         let authContext;
         try {
@@ -458,10 +399,6 @@ router.put("/users/acceptfriend", generalLimiter, auth.required, async (req, res
         }
 });
 
-/**
- * /users/declinefriend
- * Decline a pending friend request.
- */
 router.put("/users/declinefriend", generalLimiter, auth.required, async (req, res, next) => {
         let authContext;
         try {
@@ -471,7 +408,6 @@ router.put("/users/declinefriend", generalLimiter, auth.required, async (req, re
         }
 
         try {
-                // Call declineFriend with the friend request ID and current user ID.
                 await declineFriend(req.body.friendId, authContext.decoded.id);
                 return res.sendStatus(200);
         } catch (err) {
@@ -480,10 +416,6 @@ router.put("/users/declinefriend", generalLimiter, auth.required, async (req, re
         }
 });
 
-/**
- * /users/cancelfriend
- * Cancel a sent friend request.
- */
 router.put("/users/cancelfriend", generalLimiter, auth.required, async (req, res, next) => {
         let authContext;
         try {
@@ -501,10 +433,6 @@ router.put("/users/cancelfriend", generalLimiter, auth.required, async (req, res
         }
 });
 
-/**
- * /users/removefriend
- * Remove an existing friend.
- */
 router.put("/users/removefriend", generalLimiter, auth.required, async (req, res, next) => {
         let authContext;
         try {

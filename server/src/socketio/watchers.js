@@ -1,10 +1,8 @@
-// socketio/watchers.js
 import logger from "../logger.js";
 import UserModel from "../models/User.js";
-import socketBackend from "./index.js"; // must expose emitToSocketById(id,event,payload)
+import socketBackend from "./index.js";
 
 class ServerWatchers {
-	/** Map<watchedUserId, Map<socketId, watcherUserId>> */
 	#watched = new Map();
 
 	init(socket) {
@@ -19,7 +17,6 @@ class ServerWatchers {
 			if (!this.#watched.has(watchedId)) {
 				this.#watched.set(watchedId, new Map());
 			}
-			// remember who (socket.user.id) is watching whom
 			this.#watched.get(watchedId).set(socket.id, socket.user.id);
 		} catch (err) {
 			logger.error(err);
@@ -40,14 +37,6 @@ class ServerWatchers {
 		}
 	}
 
-	/**
-	 * Called from post-save hook when user `userId` changed.
-	 * Now for each watcher we:
-	 *   1. load the changed user
-	 *   2. load the watcher user
-	 *   3. compute public & private views
-	 *   4. emit to that socket
-	 */
 	async onUserSaved(userId) {
 		const watchers = this.#watched.get(userId);
 		if (!watchers) return;
@@ -64,7 +53,6 @@ class ServerWatchers {
 		for (const [socketId, watcherUserId] of watchers) {
 			try {
 				const watcherUser = await UserModel.findById(watcherUserId);
-				// pass the watcherUser as the "queryingUser"
 				const publicInfo = await changedUser.toProfilePubJSON(watcherUser);
 				const privateInfo = await changedUser.toProfilePrivJSON(watcherUser);
 				socketBackend.emitToSocketById(socketId, "watched_user_saved", [userId, publicInfo, privateInfo]);
