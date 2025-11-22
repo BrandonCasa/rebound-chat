@@ -39,10 +39,6 @@ export const getCsrfToken = () => getCookie(CSRF_COOKIE_NAME);
 
 export const setCsrfTokenCookie = (csrfToken) => setCookie(CSRF_COOKIE_NAME, csrfToken);
 
-export const getAuthToken = () => getCookie(AUTH_COOKIE_NAME);
-
-export const setAuthTokenCookie = (authToken) => setCookie(AUTH_COOKIE_NAME, authToken);
-
 export const clearAuthCookies = () => {
         clearCookie(AUTH_COOKIE_NAME);
         clearCookie(CSRF_COOKIE_NAME);
@@ -50,7 +46,7 @@ export const clearAuthCookies = () => {
 
 export const buildApiConfig = (authToken, config = {}) => {
         const csrfToken = getCsrfToken();
-        const token = authToken || getAuthToken();
+        const token = authToken;
         const headers = {
                 ...(csrfToken ? { [CSRF_HEADER_NAME]: csrfToken } : {}),
                 ...(token ? { Authorization: `Bearer ${token}` } : {}),
