@@ -1,0 +1,10 @@
+node_modules
+/dist
+/.env
+/.env.*
+.tsbuildinfo
+/tsconfig.build.tsbuildinfo
+.idea
+.DS_Store
+npm-debug.log*
+pnpm-debug.log*
