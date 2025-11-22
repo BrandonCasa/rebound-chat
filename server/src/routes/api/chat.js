@@ -6,13 +6,11 @@ import rateLimit from "express-rate-limit";
 
 const router = Router();
 
-// ─── MESSAGES RATE LIMITER ─────────────────────────────────────────────────---
-// limit paged message requests to 60 per minute per IP
 const messagesLimiter = rateLimit({
-	windowMs: 60 * 1000,
-	max: 3000,
-	standardHeaders: true,
-	legacyHeaders: false,
+        windowMs: 60 * 1000,
+        max: 3000,
+        standardHeaders: true,
+        legacyHeaders: false,
 	message: { error: "Too many requests, please try again later." },
 });
 

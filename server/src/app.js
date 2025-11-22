@@ -1,4 +1,3 @@
-// src/server.js
 import http from "http";
 import cors from "cors";
 import { configDotenv } from "dotenv";
@@ -28,43 +27,35 @@ const CSRF_COOKIE_OPTIONS = {
 configDotenv();
 
 class ServerBackend {
-	constructor() {
-		this.app = express();
-		customPassport.setupPassport();
-		this._initMiddleware();
-		this._initRoutes();
-		this.server = http.createServer(this.app);
-	}
+        constructor() {
+                this.app = express();
+                customPassport.setupPassport();
+                this._initMiddleware();
+                this._initRoutes();
+                this.server = http.createServer(this.app);
+        }
 
-	_initMiddleware() {
-		// Trust the reverse proxy (e.g. Nginx) when determining
-		// protocol and other forwarding headers
-		this.app.set("trust proxy", 1);
+        _initMiddleware() {
+                this.app.set("trust proxy", 1);
 
-		// CORS
-		this.app.use(cors({ optionsSuccessStatus: 200 }));
-		// ─── GLOBAL RATE LIMITER ───────────────────────────────────────────────────
-		// limit each IP to 150 requests per 5 minutes
-		const globalLimiter = rateLimit({
-			windowMs: 5 * 60 * 1000, // 5 minutes
-			max: 150,
-			standardHeaders: true,
-			legacyHeaders: false,
-			message: { error: "Too many requests, please try again later." },
-		});
-		this.app.use(globalLimiter);
+                this.app.use(cors({ optionsSuccessStatus: 200 }));
+                const globalLimiter = rateLimit({
+                        windowMs: 5 * 60 * 1000,
+                        max: 150,
+                        standardHeaders: true,
+                        legacyHeaders: false,
+                        message: { error: "Too many requests, please try again later." },
+                });
+                this.app.use(globalLimiter);
 
-                // HTTP request logging
                 if (logger.stream) {
                         this.app.use(morgan("combined", { stream: logger.stream }));
                 }
 
-                // Body parsing
                 this.app.use(cookieParser());
                 this.app.use(express.urlencoded({ extended: false }));
                 this.app.use(express.json());
 
-                // CSRF protection (double-submit cookie)
                 this.app.use((req, res, next) => {
                         let csrfToken = req.cookies?.[CSRF_COOKIE_NAME];
                         if (!csrfToken) {
@@ -88,52 +79,45 @@ class ServerBackend {
                         return next();
                 });
 
-                // Method-override for PUT/DELETE in forms
                 this.app.use(methodOverride());
         }
 
-	_initRoutes() {
-		this.app.use(routes);
-	}
+        _initRoutes() {
+                this.app.use(routes);
+        }
 
-	async startBackend() {
-		try {
-			// 1) connect to database
-			await databaseServer.startServer();
+        async startBackend() {
+                try {
+                        await databaseServer.startServer();
 
-			// 2) start Socket.IO on its own port (default 6002)
-			socketBackend.start();
+                        socketBackend.start();
 
-			// 3) start HTTP server
-			const httpPort = process.env.PORT || 6001;
-			this.server
-				.listen(httpPort, () => logger.info(`HTTP server listening on port ${httpPort}`))
-				.on("error", (err) => {
-					logger.error("HTTP server error:", err);
+                        const httpPort = process.env.PORT || 6001;
+                        this.server
+                                .listen(httpPort, () => logger.info(`HTTP server listening on port ${httpPort}`))
+                                .on("error", (err) => {
+                                        logger.error("HTTP server error:", err);
 					process.exit(1);
 				});
 		} catch (err) {
 			logger.error("Failed to start backend:", err);
 			process.exit(1);
 		}
-	}
+        }
 
-	async stopBackend() {
-		try {
-			// shut down Socket.IO
-			if (socketBackend.io) {
-				socketBackend.io.close(() => logger.info("Socket.IO server stopped"));
-			}
+        async stopBackend() {
+                try {
+                        if (socketBackend.io) {
+                                socketBackend.io.close(() => logger.info("Socket.IO server stopped"));
+                        }
 
-			// shut down database
-			await databaseServer.stopServer();
+                        await databaseServer.stopServer();
 
-			// shut down HTTP
-			this.server.close(() => logger.info("HTTP server stopped"));
-		} catch (err) {
-			logger.error("Error during shutdown:", err);
-			throw err;
-		}
+                        this.server.close(() => logger.info("HTTP server stopped"));
+                } catch (err) {
+                        logger.error("Error during shutdown:", err);
+                        throw err;
+                }
 	}
 
 	async handleShutdown(signal) {
