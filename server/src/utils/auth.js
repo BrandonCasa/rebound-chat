@@ -76,6 +76,18 @@ const handleAuthFailure = (err, res, context, logger) => {
         return res.status(err.status || 401).json({ error: err.message });
 };
 
+const buildRequestTokenDescriptor = (req) => {
+        const connectionAddress = req?.socket?.remoteAddress || req?.connection?.remoteAddress;
+        const forwardedIps = Array.isArray(req?.ips) && req.ips.length ? req.ips : [];
+        const ipAddress = forwardedIps[0] || connectionAddress || req?.ip || "unknown";
+
+        return {
+                userAgent: req?.get?.("user-agent") || "unknown",
+                ipAddress,
+                location: forwardedIps[0] || connectionAddress || "unknown",
+        };
+};
+
 const createAuthContextMiddleware = (context, logger) => {
         return async (req, res, next) => {
                 try {
@@ -96,4 +108,5 @@ export {
         parseCookieHeader,
         validateAccessToken,
         validateAccessTokenFromRequest,
+        buildRequestTokenDescriptor,
 };

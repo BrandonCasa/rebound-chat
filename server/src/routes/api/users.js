@@ -18,7 +18,7 @@ import serverWatchers from "../../socketio/watchers.js";
 import mongoose from "mongoose";
 import rateLimit from "express-rate-limit";
 
-import { createAuthContextMiddleware } from "../../utils/auth.js";
+import { buildRequestTokenDescriptor, createAuthContextMiddleware } from "../../utils/auth.js";
 
 import "dotenv/config";
 
@@ -164,7 +164,7 @@ router.post("/users/refresh", async (req, res, next) => {
 		await user.save();
 
 		const newAccessToken = user.generateAccessToken();
-		const newRefreshToken = await user.generateRefreshToken();
+                const newRefreshToken = await user.generateRefreshToken(buildRequestTokenDescriptor(req));
 
 		const csrfToken = setAuthCookies(res, newAccessToken, newRefreshToken);
 
@@ -199,7 +199,7 @@ router.get("/users/google/callback", passport.authenticate("google", { session: 
 	try {
 		console.log(req.user);
 		const accessToken = req.user.generateAccessToken();
-		const refreshToken = await req.user.generateRefreshToken();
+                const refreshToken = await req.user.generateRefreshToken(buildRequestTokenDescriptor(req));
 
 		setAuthCookies(res, accessToken, refreshToken);
 
@@ -227,11 +227,11 @@ router.post("/users/login", authLimiter, (req, res, next) => {
 			return res.status(422).json(info);
 		}
 
-		try {
-			const accessToken = user.generateAccessToken();
-			const refreshToken = await user.generateRefreshToken();
+                try {
+                        const accessToken = user.generateAccessToken();
+                        const refreshToken = await user.generateRefreshToken(buildRequestTokenDescriptor(req));
 
-			const csrfToken = setAuthCookies(res, accessToken, refreshToken);
+                        const csrfToken = setAuthCookies(res, accessToken, refreshToken);
 
 			res.json({ user: user.toAuthJSON(accessToken), csrfToken });
 		} catch (e) {
@@ -253,7 +253,7 @@ router.post("/users/register", authLimiter, async (req, res, next) => {
 		await user.save();
 
 		const accessToken = user.generateAccessToken();
-		const refreshToken = await user.generateRefreshToken();
+                const refreshToken = await user.generateRefreshToken(buildRequestTokenDescriptor(req));
 
 		const csrfToken = setAuthCookies(res, accessToken, refreshToken);
 

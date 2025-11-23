@@ -52,14 +52,17 @@ const UserSchema = new Schema(
 		passwordChangedAt: {
 			type: Date,
 		},
-		refreshTokens: [
-			{
-				tokenHash: { type: String, required: true },
-				expiresAt: { type: Date, required: true },
-			},
-		],
-	},
-	{ timestamps: true }
+                refreshTokens: [
+                        {
+                                tokenHash: { type: String, required: true },
+                                expiresAt: { type: Date, required: true },
+                                userAgent: { type: String },
+                                ipAddress: { type: String },
+                                location: { type: String },
+                        },
+                ],
+        },
+        { timestamps: true }
 );
 
 UserSchema.plugin(mongooseUniqueValidator, { message: "is already taken" });
@@ -98,23 +101,30 @@ UserSchema.methods.generateAccessToken = function () {
 	});
 };
 
-UserSchema.methods.generateRefreshToken = async function () {
-	const payload = {
-		id: this._id,
-		tokenVersion: this.tokenVersion,
-	};
+UserSchema.methods.generateRefreshToken = async function (descriptor = {}) {
+        const payload = {
+                id: this._id,
+                tokenVersion: this.tokenVersion,
+        };
 
 	const token = jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET, {
 		expiresIn: `${REFRESH_TOKEN_LIFETIME_DAYS}d`,
 	});
 
-	this.pruneExpiredRefreshTokens();
+        this.pruneExpiredRefreshTokens();
 
-	const expiresAt = new Date(Date.now() + REFRESH_TOKEN_LIFETIME_DAYS * 24 * 60 * 60 * 1000);
+        const expiresAt = new Date(Date.now() + REFRESH_TOKEN_LIFETIME_DAYS * 24 * 60 * 60 * 1000);
 
-	const tokenHash = hashRefreshToken(token);
-	this.refreshTokens.push({ tokenHash, expiresAt });
-	await this.save();
+        const tokenHash = hashRefreshToken(token);
+        const { userAgent, ipAddress, location } = descriptor;
+        this.refreshTokens.push({
+                tokenHash,
+                expiresAt,
+                userAgent: userAgent || "unknown",
+                ipAddress: ipAddress || "unknown",
+                location: location || ipAddress || "unknown",
+        });
+        await this.save();
 
 	return token;
 };
