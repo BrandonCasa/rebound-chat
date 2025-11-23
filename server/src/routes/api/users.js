@@ -320,21 +320,27 @@ router.get(
 );
 
 router.get("/users/google", passport.authenticate("google", { scope: ["profile", "email"] }));
-router.get("/users/google/callback", passport.authenticate("google", { session: false, failureRedirect: "/" }), async (req, res, next) => {
-	try {
-		console.log(req.user);
-		const accessToken = req.user.generateAccessToken();
-                const refreshToken = await req.user.generateRefreshToken(buildRequestTokenDescriptor(req));
+router.get(
+        "/users/google/callback",
+        passport.authenticate("google", { session: false, failureRedirect: "/" }),
+        async (req, res) => {
+                const redirectBase =
+                        process.env.CLIENT_REDIRECT_BASE || (process.env.NODE_ENV === "development" ? "http://localhost:3000" : "");
+                const redirectTarget = redirectBase || "/";
 
-		setAuthCookies(res, accessToken, refreshToken);
+                try {
+                        const accessToken = req.user.generateAccessToken();
+                        const refreshToken = await req.user.generateRefreshToken(buildRequestTokenDescriptor(req));
 
-		const redirectBase = process.env.NODE_ENV === "development" ? "http://localhost:3000" : "";
-		return res.redirect(redirectBase || "/");
-	} catch (e) {
-		logger.error(`Google callback token error: ${e.message}`);
-		next(e);
-	}
-});
+                        setAuthCookies(res, accessToken, refreshToken);
+
+                        return res.redirect(redirectTarget);
+                } catch (e) {
+                        logger.error(`Google callback token error: ${e.message}`);
+                        return res.redirect(`${redirectTarget}?authError=google`);
+                }
+        }
+);
 router.post("/users/login", authLimiter, (req, res, next) => {
 	if (!req.body?.user?.email) {
 		return res.status(422).json({ errors: { email: "is required" } });
