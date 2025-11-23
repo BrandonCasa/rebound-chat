@@ -1,19 +1,5 @@
 import React from "react";
-import {
-        Box,
-        Card,
-        CardHeader,
-        Divider,
-        Stack,
-        Tooltip,
-        Typography,
-        Button,
-        Chip,
-        useTheme,
-        useMediaQuery,
-        Skeleton,
-        Alert,
-} from "@mui/material";
+import { Box, Card, CardHeader, Divider, Stack, Tooltip, Typography, Button, Chip, useTheme, useMediaQuery, Skeleton, Alert } from "@mui/material";
 
 import DevicesOtherRoundedIcon from "@mui/icons-material/DevicesOtherRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
@@ -38,24 +24,16 @@ function formatLastActive(dateString) {
 }
 
 export default function DeviceSessionsPanel(props) {
-        const { sx, ...rest } = props;
-        const theme = useTheme();
-        const isSmUp = useMediaQuery(theme.breakpoints.up("sm"));
+	const { sx, ...rest } = props;
+	const theme = useTheme();
+	const isSmUp = useMediaQuery(theme.breakpoints.up("sm"));
 
-        const {
-                currentSession,
-                otherSessions,
-                hasOtherSessions,
-                loading,
-                error,
-                handleRevokeSession,
-                handleRevokeAllExceptCurrent,
-        } = useDeviceSessions();
+	const { currentSession, otherSessions, hasOtherSessions, loading, error, handleRevokeSession, handleRevokeAllExceptCurrent } = useDeviceSessions();
 
-        return (
-                <Card
-                        elevation={0}
-                        sx={{
+	return (
+		<Card
+			elevation={0}
+			sx={{
 				width: "100%",
 				borderRadius: 2,
 				border: `1px solid ${theme.palette.divider}`,
@@ -84,105 +62,102 @@ export default function DeviceSessionsPanel(props) {
 						Logged-in devices
 					</Typography>
 				}
-                                subheader={
-                                        <Typography variant="body2" color="text.secondary">
-                                                Manage where your account is signed in and revoke their login.
-                                        </Typography>
-                                }
-                                sx={{ pb: 0 }}
-                        />
+				subheader={
+					<Typography variant="body2" color="text.secondary">
+						Manage where your account is signed in and revoke their login.
+					</Typography>
+				}
+				sx={{ pb: 0 }}
+			/>
 
-                        <Divider flexItem />
+			<Divider flexItem />
 
-                        <Stack spacing={2} sx={{ py: 1 }}>
-                                {error && (
-                                        <Alert severity="error" sx={{ mx: 2 }}>
-                                                {typeof error === "string" ? error : "Unable to load device sessions"}
-                                        </Alert>
-                                )}
+			<Stack spacing={2} sx={{ py: 1 }}>
+				{error && (
+					<Alert severity="error" sx={{ mx: 2 }}>
+						{typeof error === "string" ? error : "Unable to load device sessions"}
+					</Alert>
+				)}
 
-                                <SectionContainer>
-                                        <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-                                                <Typography variant="subtitle2" sx={{ textTransform: "uppercase", letterSpacing: 0.6 }} color="text.secondary">
-                                                        Current device
-                                                </Typography>
-                                                <Chip
-                                                        size="small"
-                                                        icon={<SecurityRoundedIcon color="#12a4ff" sx={{ fontSize: 16, color: "#12a4ff" }} />}
-                                                        label="Protected"
-                                                        sx={{
-                                                                fontSize: 11,
-                                                                borderRadius: 999,
-                                                        }}
-                                                />
-                                        </Stack>
+				<SectionContainer>
+					<Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+						<Typography variant="subtitle2" sx={{ textTransform: "uppercase", letterSpacing: 0.6 }} color="text.secondary">
+							Current device
+						</Typography>
+						<Chip
+							size="small"
+							icon={<SecurityRoundedIcon color="#12a4ff" sx={{ fontSize: 16, color: "#12a4ff" }} />}
+							label="Protected"
+							sx={{
+								fontSize: 11,
+								borderRadius: 999,
+							}}
+						/>
+					</Stack>
 
-                                        {loading && !currentSession ? (
-                                                <DeviceRowSkeleton />
-                                        ) : currentSession ? (
-                                                <DeviceRow
-                                                        session={currentSession}
-                                                        isCurrent
-                                                        compact={!isSmUp}
-                                                        // no revoke for current device
-                                                />
-                                        ) : (
-                                                <Typography variant="body2" color="text.secondary">
-                                                        No active current device detected.
-                                                </Typography>
-                                        )}
-                                </SectionContainer>
+					{loading && !currentSession ? (
+						<DeviceRowSkeleton />
+					) : currentSession ? (
+						<DeviceRow
+							session={currentSession}
+							isCurrent
+							compact={!isSmUp}
+							// no revoke for current device
+						/>
+					) : (
+						<Typography variant="body2" color="text.secondary">
+							No active current device detected.
+						</Typography>
+					)}
+				</SectionContainer>
 
-                                <Divider flexItem />
+				<Divider flexItem />
 
-                                <SectionContainer>
-                                        <Stack
-                                                direction={isSmUp ? "row" : "column"}
-                                                alignItems={isSmUp ? "center" : "flex-start"}
-                                                justifyContent="space-between"
-                                                spacing={1.5}>
-                                                <Typography variant="subtitle2" sx={{ textTransform: "uppercase", letterSpacing: 0.6 }} color="text.secondary">
-                                                        Other devices
-                                                </Typography>
+				<SectionContainer>
+					<Stack direction={isSmUp ? "row" : "column"} alignItems={isSmUp ? "center" : "flex-start"} justifyContent="space-between" spacing={1.5}>
+						<Typography variant="subtitle2" sx={{ textTransform: "uppercase", letterSpacing: 0.6 }} color="text.secondary">
+							Other devices
+						</Typography>
 
-                                                <Button
-                                                        variant="contained"
-                                                        sx={{ background: "#c94b4b" }}
-                                                        size="small"
-                                                        startIcon={<LogoutRoundedIcon />}
-                                                        onClick={handleRevokeAllExceptCurrent}
-                                                        disabled={!hasOtherSessions || loading}>
-                                                        Logout All
-                                                </Button>
-                                        </Stack>
+						<Button
+							variant="contained"
+							sx={{ background: "#c94b4b" }}
+							style={{ display: !hasOtherSessions ? "none" : "inherit" }}
+							size="small"
+							startIcon={<LogoutRoundedIcon />}
+							onClick={handleRevokeAllExceptCurrent}
+							disabled={!hasOtherSessions || loading}>
+							Logout All
+						</Button>
+					</Stack>
 
-                                        {loading && otherSessions.length === 0 ? (
-                                                <Stack spacing={1.5}>
-                                                        <DeviceRowSkeleton />
-                                                        <DeviceRowSkeleton />
-                                                </Stack>
-                                        ) : otherSessions.length === 0 ? (
-                                                <Typography variant="body2" color="text.secondary">
-                                                        You’re only signed in on this device.
-                                                </Typography>
-                                        ) : (
-                                                <Stack spacing={1.5}>
-                                                        {otherSessions.map((session) => (
-                                                                <DeviceRow
-                                                                        key={session.id}
-                                                                        session={session}
-                                                                        isCurrent={false}
-                                                                        compact={!isSmUp}
-                                                                        disabled={loading}
-                                                                        onRevoke={() => handleRevokeSession(session.id)}
-                                                                />
-                                                        ))}
-                                                </Stack>
-                                        )}
-                                </SectionContainer>
-                        </Stack>
-                </Card>
-        );
+					{loading && otherSessions.length === 0 ? (
+						<Stack spacing={1.5}>
+							<DeviceRowSkeleton />
+							<DeviceRowSkeleton />
+						</Stack>
+					) : otherSessions.length === 0 ? (
+						<Typography variant="body2" color="text.secondary">
+							You’re only signed in on this device.
+						</Typography>
+					) : (
+						<Stack spacing={1.5}>
+							{otherSessions.map((session) => (
+								<DeviceRow
+									key={session.id}
+									session={session}
+									isCurrent={false}
+									compact={!isSmUp}
+									disabled={loading}
+									onRevoke={() => handleRevokeSession(session.id)}
+								/>
+							))}
+						</Stack>
+					)}
+				</SectionContainer>
+			</Stack>
+		</Card>
+	);
 }
 
 /**
@@ -275,11 +250,11 @@ function DeviceRow({ session, isCurrent, onRevoke, compact = false, disabled = f
 }
 
 function SectionContainer({ children }) {
-        return (
-                <Stack spacing={1.25} sx={{ px: 2, py: 1 }}>
-                        {children}
-                </Stack>
-        );
+	return (
+		<Stack spacing={1.25} sx={{ px: 2, py: 1 }}>
+			{children}
+		</Stack>
+	);
 }
 
 function DeviceRowSkeleton() {
