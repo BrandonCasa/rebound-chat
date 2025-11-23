@@ -9,12 +9,13 @@ export const getApiBase = () => {
 const CSRF_COOKIE_NAME = "csrfToken";
 const CSRF_HEADER_NAME = "x-csrf-token";
 const AUTH_COOKIE_NAME = "authToken";
+const AUTH_SESSION_COOKIE_NAME = "auth-session-present";
 
 const getCookie = (name) => {
-	if (typeof document === "undefined" || !document.cookie) return null;
-	const match = document.cookie
-		.split(";")
-		.map((entry) => entry.trim())
+        if (typeof document === "undefined" || !document.cookie) return null;
+        const match = document.cookie
+                .split(";")
+                .map((entry) => entry.trim())
 		.find((entry) => entry.startsWith(`${name}=`));
 	if (!match) return null;
 	const [, value] = match.split("=");
@@ -22,8 +23,8 @@ const getCookie = (name) => {
 };
 
 const setCookie = (name, value) => {
-	if (!value || typeof document === "undefined") return;
-	const secureFlag = window.location.protocol === "https:" ? "; Secure" : "";
+        if (!value || typeof document === "undefined") return;
+        const secureFlag = window.location.protocol === "https:" ? "; Secure" : "";
 	document.cookie = `${name}=${value}; Path=/; SameSite=Strict${secureFlag}`;
 };
 
@@ -36,9 +37,16 @@ export const getCsrfToken = () => getCookie(CSRF_COOKIE_NAME);
 
 export const setCsrfTokenCookie = (csrfToken) => setCookie(CSRF_COOKIE_NAME, csrfToken);
 
+export const setAuthSessionCookie = () => setCookie(AUTH_SESSION_COOKIE_NAME, "true");
+
+export const clearAuthSessionCookie = () => clearCookie(AUTH_SESSION_COOKIE_NAME);
+
+export const hasAuthSessionCookie = () => Boolean(getCookie(AUTH_SESSION_COOKIE_NAME));
+
 export const clearAuthCookies = () => {
-	clearCookie(AUTH_COOKIE_NAME);
-	clearCookie(CSRF_COOKIE_NAME);
+        clearCookie(AUTH_COOKIE_NAME);
+        clearCookie(CSRF_COOKIE_NAME);
+        clearAuthSessionCookie();
 };
 
 export const buildApiConfig = (authToken, config = {}) => {

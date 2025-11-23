@@ -2,7 +2,15 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
 import socketIoHelper from "../helpers/socket";
-import { buildApiConfig, clearAuthCookies, getApiBase, setCsrfTokenCookie } from "../helpers/api";
+import {
+        buildApiConfig,
+        clearAuthCookies,
+        clearAuthSessionCookie,
+        getApiBase,
+        hasAuthSessionCookie,
+        setAuthSessionCookie,
+        setCsrfTokenCookie,
+} from "../helpers/api";
 import { profileMediaUrl } from "../helpers/mediaUrl";
 
 const AUTO_LOGIN_BLOCK_KEY = "disable-auto-login";
@@ -18,12 +26,14 @@ const setAutoLoginBlocked = (blocked) => {
 };
 
 const setAuthSessionPresent = (present) => {
-	if (typeof window === "undefined") return;
-	if (present) {
-		window.localStorage.setItem(AUTH_SESSION_MARKER, "true");
-		return;
-	}
-	window.localStorage.removeItem(AUTH_SESSION_MARKER);
+        if (typeof window === "undefined") return;
+        if (present) {
+                window.localStorage.setItem(AUTH_SESSION_MARKER, "true");
+                setAuthSessionCookie();
+                return;
+        }
+        window.localStorage.removeItem(AUTH_SESSION_MARKER);
+        clearAuthSessionCookie();
 };
 
 const resetAuthFields = (state) => {
@@ -115,8 +125,10 @@ export const refreshAuthToken = createAsyncThunk("auth/refreshAuthToken", async 
 });
 
 export const bootstrapAuth = createAsyncThunk("auth/bootstrapAuth", async (_, { dispatch, rejectWithValue }) => {
-	try {
-		const hasSessionMarker = typeof window !== "undefined" && window.localStorage.getItem(AUTH_SESSION_MARKER) === "true";
+        try {
+                const hasSessionMarker =
+                        typeof window !== "undefined" &&
+                        (window.localStorage.getItem(AUTH_SESSION_MARKER) === "true" || hasAuthSessionCookie());
 
 		if (!hasSessionMarker) {
 			return rejectWithValue("No prior auth session");
