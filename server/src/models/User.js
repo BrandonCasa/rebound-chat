@@ -57,6 +57,9 @@ const UserSchema = new Schema(
                                 tokenHash: { type: String, required: true },
                                 expiresAt: { type: Date, required: true },
                                 userAgent: { type: String },
+                                userAgentParsed: { type: String },
+                                userAgentDeviceType: { type: String },
+                                deviceName: { type: String },
                                 ipAddress: { type: String },
                                 location: { type: String },
                                 lastUsed: { type: Date },
@@ -122,7 +125,7 @@ UserSchema.methods.generateRefreshToken = async function (descriptor = {}, exist
         const lastUsed = new Date();
 
         const tokenHash = hashRefreshToken(token);
-        const { userAgent, ipAddress, location } = descriptor;
+        const { userAgent, userAgentParsed, userAgentDeviceType, deviceName, ipAddress, location } = descriptor;
         const existingId =
                 targetIndex != null && targetIndex >= 0 && targetIndex < this.refreshTokens.length
                         ? this.refreshTokens[targetIndex]._id
@@ -132,9 +135,12 @@ UserSchema.methods.generateRefreshToken = async function (descriptor = {}, exist
                 ...(existingId ? { _id: existingId } : {}),
                 tokenHash,
                 expiresAt,
-                userAgent: userAgent || "unknown",
-                ipAddress: ipAddress || "unknown",
-                location: location || ipAddress || "unknown",
+                userAgent: userAgent || "Unknown",
+                userAgentParsed: userAgentParsed || userAgent || "Unknown",
+                userAgentDeviceType: userAgentDeviceType || "desktop",
+                deviceName: deviceName || userAgentParsed || userAgent || "Unknown device",
+                ipAddress: ipAddress || "Unknown",
+                location: location || ipAddress || "Unknown",
                 lastUsed,
         };
 

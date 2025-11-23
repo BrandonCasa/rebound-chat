@@ -8,11 +8,22 @@ const base = getApiBase();
 
 const normalizeSession = (session) => {
         const locationParts = [session?.city, session?.region, session?.country].filter(Boolean).join(", ");
+        const deviceType = session?.userAgentDeviceType ?? session?.deviceType ?? session?.clientType;
+        const userAgentDisplay =
+                session?.userAgentParsed ?? session?.user_agent_parsed ?? session?.userAgent ?? session?.user_agent ?? session?.client;
 
         return {
                 id: session?.id ?? session?._id ?? session?.sessionId ?? session?.sid ?? session?.token,
-                userAgent: session?.userAgent ?? session?.user_agent ?? session?.client ?? "Unknown client",
-                deviceName: session?.deviceName ?? session?.device_name ?? session?.device ?? session?.platform ?? "Unknown device",
+                userAgent: userAgentDisplay ?? "Unknown client",
+                userAgentParsed: userAgentDisplay ?? "Unknown client",
+                userAgentDeviceType: deviceType ?? "desktop",
+                deviceName:
+                        session?.deviceName ??
+                        session?.device_name ??
+                        session?.device ??
+                        session?.platform ??
+                        userAgentDisplay ??
+                        "Unknown device",
                 location: session?.location ?? locationParts || "Unknown location",
                 ipAddress: session?.ipAddress ?? session?.ip ?? session?.ip_address ?? "Unknown",
                 lastActive: session?.lastActive ?? session?.lastActiveAt ?? session?.updatedAt ?? session?.createdAt,

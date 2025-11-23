@@ -18,7 +18,12 @@ import serverWatchers from "../../socketio/watchers.js";
 import mongoose from "mongoose";
 import rateLimit from "express-rate-limit";
 
-import { buildRequestTokenDescriptor, createAuthContextMiddleware, parseCookieHeader } from "../../utils/auth.js";
+import {
+        buildRequestTokenDescriptor,
+        createAuthContextMiddleware,
+        parseCookieHeader,
+        sanitizeIpAddress,
+} from "../../utils/auth.js";
 
 import "dotenv/config";
 
@@ -120,19 +125,45 @@ const resolveCurrentRefreshTokenHash = (req, user) => {
         return nearest?.tokenHash || null;
 };
 
+const normalizeUnknownString = (value) => {
+        if (!value) return null;
+        const trimmed = String(value).trim();
+        return trimmed && trimmed.toLowerCase() !== "unknown" ? trimmed : null;
+};
+
 const normalizeRefreshSession = (tokenRecord, currentTokenHash = null) => {
         if (!tokenRecord) return null;
 
-        const { _id, tokenHash, userAgent, ipAddress, location, lastUsed, expiresAt } = tokenRecord;
+        const {
+                _id,
+                tokenHash,
+                userAgent,
+                userAgentParsed,
+                userAgentDeviceType,
+                deviceName,
+                ipAddress,
+                location,
+                lastUsed,
+                expiresAt,
+        } = tokenRecord;
 
         if (!_id) return null;
 
+        const normalizedIpAddress = sanitizeIpAddress(ipAddress);
+        const normalizedIp = normalizedIpAddress || normalizeUnknownString(ipAddress) || "Unknown";
+        const normalizedLocation = normalizeUnknownString(location) || normalizedIpAddress || normalizeUnknownString(ipAddress) || "Unknown";
+        const userAgentDisplay = normalizeUnknownString(userAgentParsed) || normalizeUnknownString(userAgent) || "Unknown";
+        const deviceLabel = normalizeUnknownString(deviceName) || userAgentDisplay || "Unknown device";
+        const deviceType = normalizeUnknownString(userAgentDeviceType) || "desktop";
+
         return {
                 id: _id.toString(),
-                userAgent: userAgent || "unknown",
-                deviceName: userAgent || "Unknown device",
-                ipAddress: ipAddress || "unknown",
-                location: location || ipAddress || "unknown",
+                userAgent: userAgentDisplay,
+                userAgentParsed: userAgentDisplay,
+                userAgentDeviceType: deviceType,
+                deviceName: deviceLabel,
+                ipAddress: normalizedIp,
+                location: normalizedLocation,
                 lastActive: lastUsed || expiresAt,
                 isCurrent: Boolean(currentTokenHash && tokenHash === currentTokenHash),
         };
