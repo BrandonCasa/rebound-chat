@@ -472,12 +472,12 @@ router.put(
         modifyLimiter,
         auth.required,
         requireAuthContext("Token verification error in modify"),
-	upload.fields([
-		{ name: "banner", maxCount: 1 },
-		{ name: "avatar", maxCount: 1 },
-	]),
-	async (req, res, next) => {
-		const { decoded } = req.authContext;
+        upload.fields([
+                { name: "banner", maxCount: 1 },
+                { name: "avatar", maxCount: 1 },
+        ]),
+        async (req, res, next) => {
+                const { decoded } = req.authContext;
 
 		const session = await mongoose.startSession();
 		try {
@@ -513,7 +513,46 @@ router.put(
 			return next(err);
 		} finally {
 			session.endSession();
-		}
+                }
+        }
+);
+
+router.put(
+        "/users/password",
+        modifyLimiter,
+        auth.required,
+        requireAuthContext("Password change auth error"),
+        async (req, res, next) => {
+                try {
+                        const { user } = req.authContext;
+                        const currentPassword = req.body?.currentPassword;
+                        const newPassword = req.body?.newPassword;
+
+                        if (!currentPassword) {
+                                return res.status(422).json({ errors: { currentPassword: "is required" } });
+                        }
+
+                        if (!newPassword) {
+                                return res.status(422).json({ errors: { newPassword: "is required" } });
+                        }
+
+                        if (String(newPassword).trim().length < 8) {
+                                return res.status(422).json({ errors: { newPassword: "is invalid" } });
+                        }
+
+                        if (!user.validPassword(currentPassword)) {
+                                return res.status(403).json({ errors: { currentPassword: "is incorrect" } });
+                        }
+
+                        user.setPassword(newPassword);
+                        await user.save();
+
+                        clearAuthCookies(res);
+                        return res.json({ success: true });
+                } catch (err) {
+                        logger.error(`Password change error: ${err.message}`);
+                        return next(err);
+                }
         }
 );
 

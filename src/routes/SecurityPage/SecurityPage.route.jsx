@@ -4,6 +4,9 @@ import React from "react";
 import { useSelector } from "react-redux";
 
 import DeviceSessionsPanel from "../../components/DeviceSessionManager/DeviceSessionManager.jsx";
+import PasswordResetCard from "../../components/Security/PasswordResetCard.jsx";
+
+import { scrollbarStyles } from "../scrollbarStyles.js";
 
 const ItemPaper = styled(Box)(({ theme }) => ({
 	...theme.typography.body2,
@@ -22,19 +25,17 @@ export default function SecurityPage() {
 				display: "flex",
 				justifyContent: "center",
 				flexGrow: 1,
-				overflow: "hidden",
+				flexDirection: "column",
 			}}>
-			<Stack spacing={2} sx={{ height: "100%", width: "100%" }}>
-				<ItemPaper>
-					<Typography variant="h4" color="text.primary">
-						Security Dashboard
-					</Typography>
-				</ItemPaper>
-
-				<Box sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
-					<DeviceSessionsPanel />
-				</Box>
-			</Stack>
+			<ItemPaper>
+				<Typography variant="h4" color="text.primary">
+					Security Dashboard
+				</Typography>
+			</ItemPaper>
+			<Box sx={{ overflowY: "scroll", flexGrow: 1, ...scrollbarStyles }}>
+				<DeviceSessionsPanel sx={{ mb: 2 }} />
+				<PasswordResetCard />
+			</Box>
 		</Box>
 	);
 }

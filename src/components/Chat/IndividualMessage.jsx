@@ -1,5 +1,5 @@
 import { Box, ListItem, Avatar, Typography, useTheme, Link, TextField, Button } from "@mui/material";
-import { scrollbarStyles } from "../../routes/LandingPage/utils/scrollbarStyles";
+import { scrollbarStyles } from "../../routes/scrollbarStyles";
 import React from "react";
 import useLongPress from "../../helpers/useLongPress";
 import { highlightMentions } from "../../helpers/mentions";

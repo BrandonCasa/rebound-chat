@@ -1,7 +1,7 @@
 import { Box, List } from "@mui/material";
 import React, { useMemo } from "react";
 
-import { scrollbarStyles } from "../../routes/LandingPage/utils/scrollbarStyles";
+import { scrollbarStyles } from "../../routes/scrollbarStyles";
 import ConstructedMessages from "./ConstructedMessages";
 
 function ChatArea({ messages, previewUser, onContextMenu, editingMessageId, editingText, setEditingText, commitEdit, cancelEdit, onScroll, listRef }) {

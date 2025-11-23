@@ -79,12 +79,14 @@ const initialState = {
 	loggingIn: false,
 	refreshing: false,
 	skipAutoLogin: typeof window !== "undefined" && window.localStorage.getItem(AUTO_LOGIN_BLOCK_KEY) === "true",
-	socketInfo: {
-		connected: false,
-		currentRoom: null,
-	},
-	bannerUrl: null,
-	avatarUrl: null,
+        socketInfo: {
+                connected: false,
+                currentRoom: null,
+        },
+        bannerUrl: null,
+        avatarUrl: null,
+        passwordChanging: false,
+        passwordChangeError: null,
 };
 
 export const verifyUser = createAsyncThunk("auth/verifyUser", async (token, { getState, rejectWithValue }) => {
@@ -112,9 +114,9 @@ export const verifyUser = createAsyncThunk("auth/verifyUser", async (token, { ge
 });
 
 export const refreshAuthToken = createAsyncThunk("auth/refreshAuthToken", async (_, { rejectWithValue }) => {
-	const base = getApiBase();
-	try {
-		const { data } = await axios.post(`${base}/users/refresh`, {}, buildApiConfig(null, { headers: { "Content-Type": "application/json" } }));
+        const base = getApiBase();
+        try {
+                const { data } = await axios.post(`${base}/users/refresh`, {}, buildApiConfig(null, { headers: { "Content-Type": "application/json" } }));
 
 		setCsrfTokenCookie(data.csrfToken);
 		setAuthSessionPresent(true);
@@ -171,6 +173,29 @@ export const loginUser = createAsyncThunk("auth/loginUser", async ({ email, pass
                 return rejectWithValue(err.response?.data || err.message);
         }
 });
+
+export const changePassword = createAsyncThunk(
+        "auth/changePassword",
+        async ({ currentPassword, newPassword }, { getState, rejectWithValue }) => {
+                const base = getApiBase();
+                const authToken = getState().auth.authToken;
+
+                if (!authToken) {
+                        return rejectWithValue("Not authenticated");
+                }
+
+                try {
+                        const { data } = await axios.put(
+                                `${base}/users/password`,
+                                { currentPassword, newPassword },
+                                buildApiConfig(authToken, { headers: { "Content-Type": "application/json" } })
+                        );
+                        return data;
+                } catch (err) {
+                        return rejectWithValue(err.response?.data || err.message);
+                }
+        }
+);
 
 export const logoutUser = createAsyncThunk(
         "auth/logoutUser",
@@ -402,6 +427,19 @@ const authSlice = createSlice({
                                 state.loggingIn = false;
                                 state.loggedIn = false;
                                 state.initialized = true;
+                        })
+                        .addCase(changePassword.pending, (state) => {
+                                state.passwordChanging = true;
+                                state.passwordChangeError = null;
+                        })
+                        .addCase(changePassword.fulfilled, (state) => {
+                                state.passwordChanging = false;
+                                state.passwordChangeError = null;
+                                applyLoggedOutState(state, true);
+                        })
+                        .addCase(changePassword.rejected, (state, action) => {
+                                state.passwordChanging = false;
+                                state.passwordChangeError = action.payload || "Failed to update password";
                         })
                         .addCase(logoutUser.fulfilled, (state, action) => {
                                 applyLoggedOutState(state, action.payload?.disableAutoLogin);
