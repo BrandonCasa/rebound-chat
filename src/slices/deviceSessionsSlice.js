@@ -28,7 +28,11 @@ const normalizeSession = (session) => {
 const normalizeSessions = (sessions) => (Array.isArray(sessions) ? sessions : []).map(normalizeSession).filter((session) => session.id);
 
 export const fetchDeviceSessions = createAsyncThunk("deviceSessions/fetchDeviceSessions", async (_, { getState, rejectWithValue }) => {
-	const authToken = getState().auth.authToken;
+        const { authToken, loggedIn } = getState().auth;
+
+        if (!loggedIn || !authToken) {
+                return rejectWithValue("Not authenticated");
+        }
 
 	try {
 		const { data } = await axios.get(`${base}/users/sessions`, buildApiConfig(authToken));
@@ -104,9 +108,14 @@ const deviceSessionsSlice = createSlice({
 				state.loading = false;
 				state.sessions = action.payload;
 			})
-			.addCase(fetchDeviceSessions.rejected, (state, action) => {
-				state.loading = false;
-				state.error = action.payload || "Failed to load devices";
+                        .addCase(fetchDeviceSessions.rejected, (state, action) => {
+                                state.loading = false;
+                                if (action.payload === "Not authenticated") {
+                                        state.sessions = [];
+                                        state.error = null;
+                                        return;
+                                }
+                                state.error = action.payload || "Failed to load devices";
 			})
 			.addCase(revokeDeviceSession.pending, (state) => {
 				state.loading = true;

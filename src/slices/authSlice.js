@@ -300,11 +300,11 @@ const authSlice = createSlice({
 			.addCase(verifyUser.pending, (state) => {
 				state.loggingIn = true;
 			})
-			.addCase(verifyUser.fulfilled, (state, action) => {
-				state.loggingIn = false;
-				state.loggedIn = true;
-				state.skipAutoLogin = false;
-				setAutoLoginBlocked(false);
+                        .addCase(verifyUser.fulfilled, (state, action) => {
+                                state.loggingIn = false;
+                                state.loggedIn = true;
+                                state.skipAutoLogin = false;
+                                setAutoLoginBlocked(false);
 				state.initialized = true;
 				state.authToken = action.payload.authToken;
 				state.userId = action.payload.userId;
@@ -315,28 +315,21 @@ const authSlice = createSlice({
 				state.bannerUrl = action.payload.bannerUrl;
 				state.avatarUrl = action.payload.avatarUrl;
 				state.createdAt = action.payload.createdAt;
-			})
-			.addCase(verifyUser.rejected, (state) => {
-				state.loggingIn = false;
-				state.loggedIn = false;
-				state.initialized = true;
-				clearAuthCookies();
-			})
-			.addCase(refreshAuthToken.pending, (state) => {
-				state.refreshing = true;
-				state.loggingIn = true;
-			})
-			.addCase(refreshAuthToken.fulfilled, (state, action) => {
-				state.refreshing = false;
-				state.authToken = action.payload.authToken;
-			})
-			.addCase(refreshAuthToken.rejected, (state) => {
-				state.refreshing = false;
-				state.loggingIn = false;
-				clearAuthCookies();
-				setAuthSessionPresent(false);
-				resetAuthFields(state);
-			})
+                        })
+                        .addCase(verifyUser.rejected, (state) => {
+                                applyLoggedOutState(state);
+                        })
+                        .addCase(refreshAuthToken.pending, (state) => {
+                                state.refreshing = true;
+                                state.loggingIn = true;
+                        })
+                        .addCase(refreshAuthToken.fulfilled, (state, action) => {
+                                state.refreshing = false;
+                                state.authToken = action.payload.authToken;
+                        })
+                        .addCase(refreshAuthToken.rejected, (state) => {
+                                applyLoggedOutState(state);
+                        })
 			.addCase(bootstrapAuth.pending, (state) => {
 				state.loggingIn = true;
 			})
