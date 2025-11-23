@@ -328,18 +328,22 @@ router.post("/users/login", authLimiter, (req, res, next) => {
 		return res.status(422).json({ errors: { password: "is required" } });
 	}
 
-	passport.authenticate("local", { session: false }, async (err, user, info) => {
+        passport.authenticate("local", { session: false }, async (err, user, info) => {
 		if (err) {
 			logger.error(`Login error: ${err.message}`);
 			return next(err);
 		}
 		if (!user) {
 			return res.status(422).json(info);
-		}
+                }
 
                 try {
                         const accessToken = user.generateAccessToken();
-                        const refreshToken = await user.generateRefreshToken(buildRequestTokenDescriptor(req));
+                        const existingTokenHash = resolveCurrentRefreshTokenHash(req, user);
+                        const refreshToken = await user.generateRefreshToken(
+                                buildRequestTokenDescriptor(req),
+                                existingTokenHash
+                        );
 
                         const csrfToken = setAuthCookies(res, accessToken, refreshToken);
 
@@ -439,6 +443,11 @@ router.delete(
 
                         if (scope === "others" && currentTokenHash) {
                                 user.refreshTokens = user.refreshTokens.filter((token) => token.tokenHash === currentTokenHash);
+                        } else if (scope === "current" && currentTokenHash) {
+                                user.refreshTokens = user.refreshTokens.filter((token) => token.tokenHash !== currentTokenHash);
+                                clearAuthCookies(res);
+                        } else if (scope === "current") {
+                                clearAuthCookies(res);
                         } else {
                                 user.refreshTokens = [];
                                 clearAuthCookies(res);
