@@ -59,6 +59,7 @@ const UserSchema = new Schema(
                                 userAgent: { type: String },
                                 ipAddress: { type: String },
                                 location: { type: String },
+                                lastUsed: { type: Date },
                         },
                 ],
         },
@@ -101,7 +102,7 @@ UserSchema.methods.generateAccessToken = function () {
 	});
 };
 
-UserSchema.methods.generateRefreshToken = async function (descriptor = {}) {
+UserSchema.methods.generateRefreshToken = async function (descriptor = {}, existingTokenHash = null) {
         const payload = {
                 id: this._id,
                 tokenVersion: this.tokenVersion,
@@ -113,20 +114,32 @@ UserSchema.methods.generateRefreshToken = async function (descriptor = {}) {
 
         this.pruneExpiredRefreshTokens();
 
+        const targetIndex = existingTokenHash
+                ? this.refreshTokens.findIndex((t) => t.tokenHash === existingTokenHash)
+                : null;
+
         const expiresAt = new Date(Date.now() + REFRESH_TOKEN_LIFETIME_DAYS * 24 * 60 * 60 * 1000);
+        const lastUsed = new Date();
 
         const tokenHash = hashRefreshToken(token);
         const { userAgent, ipAddress, location } = descriptor;
-        this.refreshTokens.push({
+        const tokenRecord = {
                 tokenHash,
                 expiresAt,
                 userAgent: userAgent || "unknown",
                 ipAddress: ipAddress || "unknown",
                 location: location || ipAddress || "unknown",
-        });
+                lastUsed,
+        };
+
+        if (targetIndex === null || targetIndex < 0 || targetIndex >= this.refreshTokens.length) {
+                this.refreshTokens.push(tokenRecord);
+        } else {
+                this.refreshTokens[targetIndex] = tokenRecord;
+        }
         await this.save();
 
-	return token;
+        return token;
 };
 
 UserSchema.methods.revokeRefreshToken = async function (rawToken) {

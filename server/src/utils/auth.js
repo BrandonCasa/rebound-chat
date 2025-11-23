@@ -37,6 +37,17 @@ const buildAuthError = (message, status = 401) => {
         return err;
 };
 
+const hasPasswordChangedAfterTokenIssue = (user, decoded) => {
+        const passwordChangedAt =
+                user?.passwordChangedAt instanceof Date ? user.passwordChangedAt.getTime() : null;
+        const issuedAtMs = decoded?.iat ? decoded.iat * 1000 : null;
+
+        if (!passwordChangedAt || !issuedAtMs) return false;
+
+        // Allow a small grace window to avoid race conditions during initial account creation/login
+        return issuedAtMs + 1000 < passwordChangedAt;
+};
+
 const validateAccessToken = async (token) => {
         if (!token) throw buildAuthError("Missing access token.");
 
@@ -56,7 +67,7 @@ const validateAccessToken = async (token) => {
                 throw buildAuthError("Token no longer valid.");
         }
 
-        if (user.passwordChangedAt && decoded.iat * 1000 < user.passwordChangedAt.getTime()) {
+        if (hasPasswordChangedAfterTokenIssue(user, decoded)) {
                 throw buildAuthError("Token issued before password change.");
         }
 
@@ -109,4 +120,5 @@ export {
         validateAccessToken,
         validateAccessTokenFromRequest,
         buildRequestTokenDescriptor,
+        hasPasswordChangedAfterTokenIssue,
 };

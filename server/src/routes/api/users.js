@@ -153,18 +153,21 @@ router.post("/users/refresh", async (req, res, next) => {
 			return res.status(401).json({ error: "Token no longer valid" });
 		}
 
-		const tokenHash = hashRefreshToken(rawToken);
-		const stored = user.refreshTokens.find((t) => t.tokenHash === tokenHash && t.expiresAt > new Date());
+                const tokenHash = hashRefreshToken(rawToken);
+                const now = new Date();
+                const storedIndex = user.refreshTokens.findIndex(
+                        (t) => t.tokenHash === tokenHash && t.expiresAt > now
+                );
 
-		if (!stored) {
-			return res.status(401).json({ error: "Refresh token revoked or expired" });
-		}
+                if (storedIndex === -1) {
+                        return res.status(401).json({ error: "Refresh token revoked or expired" });
+                }
 
-		user.refreshTokens = user.refreshTokens.filter((t) => t.tokenHash !== tokenHash);
-		await user.save();
-
-		const newAccessToken = user.generateAccessToken();
-                const newRefreshToken = await user.generateRefreshToken(buildRequestTokenDescriptor(req));
+                const newAccessToken = user.generateAccessToken();
+                const newRefreshToken = await user.generateRefreshToken(
+                        buildRequestTokenDescriptor(req),
+                        tokenHash
+                );
 
 		const csrfToken = setAuthCookies(res, newAccessToken, newRefreshToken);
 
