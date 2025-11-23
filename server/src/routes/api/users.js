@@ -18,7 +18,12 @@ import serverWatchers from "../../socketio/watchers.js";
 import mongoose from "mongoose";
 import rateLimit from "express-rate-limit";
 
-import { buildRequestTokenDescriptor, createAuthContextMiddleware } from "../../utils/auth.js";
+import {
+        buildRequestTokenDescriptor,
+        createAuthContextMiddleware,
+        parseCookieHeader,
+        sanitizeIpAddress,
+} from "../../utils/auth.js";
 
 import "dotenv/config";
 
@@ -82,11 +87,86 @@ const setCsrfCookie = (res) => {
 };
 
 const setAuthCookies = (res, accessToken, refreshToken) => {
-	res.cookie("token", accessToken, ACCESS_COOKIE_OPTIONS);
-	if (refreshToken) {
-		res.cookie("jid", refreshToken, REFRESH_COOKIE_OPTIONS);
-	}
-	return setCsrfCookie(res);
+        res.cookie("token", accessToken, ACCESS_COOKIE_OPTIONS);
+        if (refreshToken) {
+                res.cookie("jid", refreshToken, REFRESH_COOKIE_OPTIONS);
+        }
+        return setCsrfCookie(res);
+};
+
+const clearAuthCookies = (res) => {
+        res.clearCookie("token", ACCESS_COOKIE_OPTIONS);
+        res.clearCookie("jid", REFRESH_COOKIE_OPTIONS);
+        res.clearCookie("csrfToken", CSRF_COOKIE_OPTIONS);
+};
+
+const resolveCurrentRefreshTokenHash = (req, user) => {
+        const rawToken = req.cookies?.jid || parseCookieHeader(req.headers?.cookie || "")?.jid;
+        if (rawToken) return hashRefreshToken(rawToken);
+
+        const accessIssuedAtMs = req.authContext?.decoded?.iat ? req.authContext.decoded.iat * 1000 : null;
+        if (!accessIssuedAtMs || !Array.isArray(user?.refreshTokens)) return null;
+
+        const WINDOW_MS = 5 * 60 * 1000; // 5 minutes grace between issued access token and stored refresh record
+
+        let nearest = null;
+        for (const token of user.refreshTokens) {
+                if (!token?.lastUsed) continue;
+
+                const lastUsedMs = token.lastUsed instanceof Date ? token.lastUsed.getTime() : new Date(token.lastUsed).getTime();
+                if (Number.isNaN(lastUsedMs)) continue;
+
+                const delta = Math.abs(lastUsedMs - accessIssuedAtMs);
+                if (delta <= WINDOW_MS && (!nearest || delta < nearest.delta)) {
+                        nearest = { delta, tokenHash: token.tokenHash };
+                }
+        }
+
+        return nearest?.tokenHash || null;
+};
+
+const normalizeUnknownString = (value) => {
+        if (!value) return null;
+        const trimmed = String(value).trim();
+        return trimmed && trimmed.toLowerCase() !== "unknown" ? trimmed : null;
+};
+
+const normalizeRefreshSession = (tokenRecord, currentTokenHash = null) => {
+        if (!tokenRecord) return null;
+
+        const {
+                _id,
+                tokenHash,
+                userAgent,
+                userAgentParsed,
+                userAgentDeviceType,
+                deviceName,
+                ipAddress,
+                location,
+                lastUsed,
+                expiresAt,
+        } = tokenRecord;
+
+        if (!_id) return null;
+
+        const normalizedIpAddress = sanitizeIpAddress(ipAddress);
+        const normalizedIp = normalizedIpAddress || normalizeUnknownString(ipAddress) || "Unknown";
+        const normalizedLocation = normalizeUnknownString(location) || normalizedIpAddress || normalizeUnknownString(ipAddress) || "Unknown";
+        const userAgentDisplay = normalizeUnknownString(userAgentParsed) || normalizeUnknownString(userAgent) || "Unknown";
+        const deviceLabel = normalizeUnknownString(deviceName) || userAgentDisplay || "Unknown device";
+        const deviceType = normalizeUnknownString(userAgentDeviceType) || "desktop";
+
+        return {
+                id: _id.toString(),
+                userAgent: userAgentDisplay,
+                userAgentParsed: userAgentDisplay,
+                userAgentDeviceType: deviceType,
+                deviceName: deviceLabel,
+                ipAddress: normalizedIp,
+                location: normalizedLocation,
+                lastActive: lastUsed || expiresAt,
+                isCurrent: Boolean(currentTokenHash && tokenHash === currentTokenHash),
+        };
 };
 
 const generateStoredFilename = (fieldName, userId, originalName) => {
@@ -179,23 +259,50 @@ router.post("/users/refresh", async (req, res, next) => {
 });
 
 router.get("/users/profile", generalLimiter, auth.required, requireAuthContext("Profile retrieval auth error"), async (req, res, next) => {
-	try {
-		const { user: requestingUser, decoded } = req.authContext;
-		const targetUserId = req.query.id || decoded.id;
-		const user = await UserModel.findById(targetUserId);
+        try {
+                const { user: requestingUser, decoded } = req.authContext;
+                const targetUserId = req.query.id || decoded.id;
+                const user = await UserModel.findById(targetUserId);
 
 		if (!user) {
 			return res.sendStatus(404);
 		}
 
-		const profile = decoded.id === user._id.toString() ? await user.toProfilePrivJSON(requestingUser) : await user.toProfilePubJSON(requestingUser);
+                const profile = decoded.id === user._id.toString()
+                        ? await user.toProfilePrivJSON(requestingUser)
+                        : await user.toProfilePubJSON(requestingUser);
 
-		return res.json({ user: profile });
-	} catch (err) {
-		logger.error(`Profile retrieval error: ${err.message}`);
-		return next(err);
-	}
+                return res.json({ user: profile });
+        } catch (err) {
+                logger.error(`Profile retrieval error: ${err.message}`);
+                return next(err);
+        }
 });
+
+router.get(
+        "/users/sessions",
+        generalLimiter,
+        auth.required,
+        requireAuthContext("Session retrieval auth error"),
+        async (req, res, next) => {
+                try {
+                        const { user } = req.authContext;
+                        const currentTokenHash = resolveCurrentRefreshTokenHash(req, user);
+
+                        user.pruneExpiredRefreshTokens();
+                        await user.save();
+
+                        const sessions = user.refreshTokens
+                                .map((token) => normalizeRefreshSession(token, currentTokenHash))
+                                .filter(Boolean);
+
+                        return res.json({ sessions });
+                } catch (err) {
+                        logger.error(`Session retrieval error: ${err.message}`);
+                        return next(err);
+                }
+        }
+);
 
 router.get("/users/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 router.get("/users/google/callback", passport.authenticate("google", { session: false, failureRedirect: "/" }), async (req, res, next) => {
@@ -268,10 +375,10 @@ router.post("/users/register", authLimiter, async (req, res, next) => {
 });
 
 router.put(
-	"/users/modify",
-	modifyLimiter,
-	auth.required,
-	requireAuthContext("Token verification error in modify"),
+        "/users/modify",
+        modifyLimiter,
+        auth.required,
+        requireAuthContext("Token verification error in modify"),
 	upload.fields([
 		{ name: "banner", maxCount: 1 },
 		{ name: "avatar", maxCount: 1 },
@@ -314,14 +421,79 @@ router.put(
 		} finally {
 			session.endSession();
 		}
-	}
+        }
+);
+
+router.delete(
+        "/users/sessions",
+        modifyLimiter,
+        auth.required,
+        requireAuthContext("Session bulk revoke auth error"),
+        async (req, res, next) => {
+                try {
+                        const { user } = req.authContext;
+                        const scope = req.query.scope;
+                        const currentTokenHash = resolveCurrentRefreshTokenHash(req, user);
+
+                        user.pruneExpiredRefreshTokens();
+
+                        if (scope === "others" && currentTokenHash) {
+                                user.refreshTokens = user.refreshTokens.filter((token) => token.tokenHash === currentTokenHash);
+                        } else {
+                                user.refreshTokens = [];
+                                clearAuthCookies(res);
+                        }
+
+                        await user.save();
+                        return res.sendStatus(204);
+                } catch (err) {
+                        logger.error(`Session bulk revoke error: ${err.message}`);
+                        return next(err);
+                }
+        }
+);
+
+router.delete(
+        "/users/sessions/:sessionId",
+        modifyLimiter,
+        auth.required,
+        requireAuthContext("Session revoke auth error"),
+        async (req, res, next) => {
+                try {
+                        const { user } = req.authContext;
+                        const { sessionId } = req.params;
+                        const currentTokenHash = resolveCurrentRefreshTokenHash(req, user);
+
+                        user.pruneExpiredRefreshTokens();
+
+                        const targetIndex = user.refreshTokens.findIndex(
+                                (token) => token._id?.toString?.() === sessionId || token.tokenHash === sessionId
+                        );
+
+                        if (targetIndex === -1) {
+                                return res.status(404).json({ error: "Session not found" });
+                        }
+
+                        const [removed] = user.refreshTokens.splice(targetIndex, 1);
+
+                        if (currentTokenHash && removed?.tokenHash === currentTokenHash) {
+                                clearAuthCookies(res);
+                        }
+
+                        await user.save();
+                        return res.sendStatus(204);
+                } catch (err) {
+                        logger.error(`Session revoke error: ${err.message}`);
+                        return next(err);
+                }
+        }
 );
 
 router.put(
-	"/users/addfriend",
-	generalLimiter,
-	auth.required,
-	requireAuthContext("Token verification error in addfriend"),
+        "/users/addfriend",
+        generalLimiter,
+        auth.required,
+        requireAuthContext("Token verification error in addfriend"),
 	friendAction("Add friend", async (req, res) => {
 		const { decoded, user: sender } = req.authContext;
 

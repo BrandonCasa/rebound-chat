@@ -1,26 +1,13 @@
 import React from "react";
-import {
-	Box,
-	Card,
-	CardContent,
-	CardHeader,
-	Divider,
-	IconButton,
-	Stack,
-	Tooltip,
-	Typography,
-	Button,
-	Chip,
-	useTheme,
-	useMediaQuery,
-	Skeleton,
-} from "@mui/material";
+import { Box, Card, CardHeader, Divider, Stack, Tooltip, Typography, Button, Chip, useTheme, useMediaQuery, Skeleton, Alert } from "@mui/material";
 
 import DevicesOtherRoundedIcon from "@mui/icons-material/DevicesOtherRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import SecurityRoundedIcon from "@mui/icons-material/SecurityRounded";
 import LocationOnOutlinedIcon from "@mui/icons-material/LocationOnOutlined";
 import AccessTimeRoundedIcon from "@mui/icons-material/AccessTimeRounded";
+import LaptopMacRoundedIcon from "@mui/icons-material/LaptopMacRounded";
+import PhoneIphoneRoundedIcon from "@mui/icons-material/PhoneIphoneRounded";
 
 import useDeviceSessions from "./useDeviceSessions";
 
@@ -87,10 +74,15 @@ export default function DeviceSessionsPanel(props) {
 
 			<Divider flexItem />
 
-			{/* Current device */}
-			<Box sx={{ mt: 1 }}>
-				<Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2} sx={{ mx: 1 }}>
-					<Stack direction="row" spacing={3} alignItems="center">
+			<Stack spacing={2} sx={{ py: 1 }}>
+				{error && (
+					<Alert severity="error" sx={{ mx: 2 }}>
+						{typeof error === "string" ? error : "Unable to load device sessions"}
+					</Alert>
+				)}
+
+				<SectionContainer>
+					<Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
 						<Typography variant="subtitle2" sx={{ textTransform: "uppercase", letterSpacing: 0.6 }} color="text.secondary">
 							Current device
 						</Typography>
@@ -104,9 +96,7 @@ export default function DeviceSessionsPanel(props) {
 							}}
 						/>
 					</Stack>
-				</Stack>
 
-				<Box sx={{ padding: 1 }}>
 					{loading && !currentSession ? (
 						<DeviceRowSkeleton />
 					) : currentSession ? (
@@ -121,30 +111,28 @@ export default function DeviceSessionsPanel(props) {
 							No active current device detected.
 						</Typography>
 					)}
-				</Box>
-			</Box>
+				</SectionContainer>
 
-			<Divider flexItem />
+				<Divider flexItem />
 
-			{/* Other devices */}
-			<Box sx={{ mt: 1 }}>
-				<Stack direction={isSmUp ? "row" : "column"} alignItems={isSmUp ? "center" : "flex-start"} justifyContent="space-between" spacing={2} sx={{ mx: 1 }}>
-					<Typography variant="subtitle2" sx={{ textTransform: "uppercase", letterSpacing: 0.6 }} color="text.secondary">
-						Other devices
-					</Typography>
+				<SectionContainer>
+					<Stack direction={isSmUp ? "row" : "column"} alignItems={isSmUp ? "center" : "flex-start"} justifyContent="space-between" spacing={1.5}>
+						<Typography variant="subtitle2" sx={{ textTransform: "uppercase", letterSpacing: 0.6 }} color="text.secondary">
+							Other devices
+						</Typography>
 
-					<Button
-						variant="contained"
-						sx={{ background: "#c94b4b" }}
-						size="small"
-						startIcon={<LogoutRoundedIcon />}
-						onClick={handleRevokeAllExceptCurrent}
-						disabled={!hasOtherSessions || loading}>
-						Logout All
-					</Button>
-				</Stack>
+						<Button
+							variant="contained"
+							sx={{ background: "#c94b4b" }}
+							style={{ display: !hasOtherSessions ? "none" : "inherit" }}
+							size="small"
+							startIcon={<LogoutRoundedIcon />}
+							onClick={handleRevokeAllExceptCurrent}
+							disabled={!hasOtherSessions || loading}>
+							Logout All
+						</Button>
+					</Stack>
 
-				<Box sx={{ padding: 1 }}>
 					{loading && otherSessions.length === 0 ? (
 						<Stack spacing={1.5}>
 							<DeviceRowSkeleton />
@@ -168,8 +156,8 @@ export default function DeviceSessionsPanel(props) {
 							))}
 						</Stack>
 					)}
-				</Box>
-			</Box>
+				</SectionContainer>
+			</Stack>
 		</Card>
 	);
 }
@@ -179,10 +167,13 @@ export default function DeviceSessionsPanel(props) {
  */
 
 function DeviceRow({ session, isCurrent, onRevoke, compact = false, disabled = false }) {
-	const theme = useTheme();
+        const theme = useTheme();
+        const DeviceIcon = session.userAgentDeviceType === "mobile" ? PhoneIphoneRoundedIcon : LaptopMacRoundedIcon;
+        const hasIp = session.ipAddress && session.ipAddress !== "Unknown";
+        const userAgentDisplay = session.userAgentParsed || session.userAgent;
 
-	return (
-		<Box
+        return (
+                <Box
 			sx={{
 				px: 2,
 				py: 1.25,
@@ -195,14 +186,17 @@ function DeviceRow({ session, isCurrent, onRevoke, compact = false, disabled = f
 				gap: 1.5,
 				bgcolor: (t) => (isCurrent ? t.palette.action.disabledBackground : t.palette.action.hover),
 			}}>
-			<Stack spacing={0.75}>
-				<Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-					{session.deviceName}
-				</Typography>
+                        <Stack spacing={0.75}>
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                        <DeviceIcon sx={{ fontSize: 20, color: "text.secondary" }} />
+                                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                                {session.deviceName}
+                                        </Typography>
+                                </Stack>
 
-				<Typography variant="caption" color="text.secondary">
-					{session.userAgent}
-				</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                        {userAgentDisplay}
+                                </Typography>
 
 				<Stack direction="row" flexWrap="wrap" spacing={1.5} rowGap={0.5} sx={{ mt: 0.5 }}>
 					<Stack direction="row" spacing={0.5} alignItems="center">
@@ -219,22 +213,27 @@ function DeviceRow({ session, isCurrent, onRevoke, compact = false, disabled = f
 						</Typography>
 					</Stack>
 
-					<Tooltip title={session.ipAddress} arrow placement="top" describeChild>
-						<Typography
-							variant="body2"
-							color="text.secondary"
+                                        <Tooltip
+                                                title={hasIp ? session.ipAddress : undefined}
+                                                arrow
+                                                placement="top"
+                                                describeChild
+                                                disableHoverListener={!hasIp}>
+                                                <Typography
+                                                        variant="body2"
+                                                        color="text.secondary"
 							sx={{
 								fontFamily: "monospace",
 								cursor: "help",
 								borderRadius: 1,
-								px: 0.75,
-								py: 0.25,
-								border: `1px dashed ${theme.palette.divider}`,
-							}}>
-							IP: {MASK}
-						</Typography>
-					</Tooltip>
-				</Stack>
+                                                                px: 0.75,
+                                                                py: 0.25,
+                                                                border: `1px dashed ${theme.palette.divider}`,
+                                                        }}>
+                                                        IP: {hasIp ? MASK : "Unknown"}
+                                                </Typography>
+                                        </Tooltip>
+                                </Stack>
 			</Stack>
 
 			<Stack direction="row" alignItems="center" justifyContent={compact ? "flex-start" : "flex-end"} spacing={1}>
@@ -260,6 +259,14 @@ function DeviceRow({ session, isCurrent, onRevoke, compact = false, disabled = f
 				)}
 			</Stack>
 		</Box>
+	);
+}
+
+function SectionContainer({ children }) {
+	return (
+		<Stack spacing={1.25} sx={{ px: 2, py: 1 }}>
+			{children}
+		</Stack>
 	);
 }
 
