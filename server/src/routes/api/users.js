@@ -82,11 +82,33 @@ const setCsrfCookie = (res) => {
 };
 
 const setAuthCookies = (res, accessToken, refreshToken) => {
-	res.cookie("token", accessToken, ACCESS_COOKIE_OPTIONS);
-	if (refreshToken) {
-		res.cookie("jid", refreshToken, REFRESH_COOKIE_OPTIONS);
-	}
-	return setCsrfCookie(res);
+        res.cookie("token", accessToken, ACCESS_COOKIE_OPTIONS);
+        if (refreshToken) {
+                res.cookie("jid", refreshToken, REFRESH_COOKIE_OPTIONS);
+        }
+        return setCsrfCookie(res);
+};
+
+const clearAuthCookies = (res) => {
+        res.clearCookie("token", ACCESS_COOKIE_OPTIONS);
+        res.clearCookie("jid", REFRESH_COOKIE_OPTIONS);
+        res.clearCookie("csrfToken", CSRF_COOKIE_OPTIONS);
+};
+
+const normalizeRefreshSession = (tokenRecord, currentTokenHash = null) => {
+        if (!tokenRecord) return null;
+
+        const { _id, tokenHash, userAgent, ipAddress, location, lastUsed, expiresAt } = tokenRecord;
+
+        return {
+                id: _id?.toString?.() || tokenHash,
+                userAgent: userAgent || "unknown",
+                deviceName: userAgent || "Unknown device",
+                ipAddress: ipAddress || "unknown",
+                location: location || ipAddress || "unknown",
+                lastActive: lastUsed || expiresAt,
+                isCurrent: Boolean(currentTokenHash && tokenHash === currentTokenHash),
+        };
 };
 
 const generateStoredFilename = (fieldName, userId, originalName) => {
@@ -179,23 +201,50 @@ router.post("/users/refresh", async (req, res, next) => {
 });
 
 router.get("/users/profile", generalLimiter, auth.required, requireAuthContext("Profile retrieval auth error"), async (req, res, next) => {
-	try {
-		const { user: requestingUser, decoded } = req.authContext;
-		const targetUserId = req.query.id || decoded.id;
-		const user = await UserModel.findById(targetUserId);
+        try {
+                const { user: requestingUser, decoded } = req.authContext;
+                const targetUserId = req.query.id || decoded.id;
+                const user = await UserModel.findById(targetUserId);
 
 		if (!user) {
 			return res.sendStatus(404);
 		}
 
-		const profile = decoded.id === user._id.toString() ? await user.toProfilePrivJSON(requestingUser) : await user.toProfilePubJSON(requestingUser);
+                const profile = decoded.id === user._id.toString()
+                        ? await user.toProfilePrivJSON(requestingUser)
+                        : await user.toProfilePubJSON(requestingUser);
 
-		return res.json({ user: profile });
-	} catch (err) {
-		logger.error(`Profile retrieval error: ${err.message}`);
-		return next(err);
-	}
+                return res.json({ user: profile });
+        } catch (err) {
+                logger.error(`Profile retrieval error: ${err.message}`);
+                return next(err);
+        }
 });
+
+router.get(
+        "/users/sessions",
+        generalLimiter,
+        auth.required,
+        requireAuthContext("Session retrieval auth error"),
+        async (req, res, next) => {
+                try {
+                        const { user } = req.authContext;
+                        const currentTokenHash = req.cookies?.jid ? hashRefreshToken(req.cookies.jid) : null;
+
+                        user.pruneExpiredRefreshTokens();
+                        await user.save();
+
+                        const sessions = user.refreshTokens
+                                .map((token) => normalizeRefreshSession(token, currentTokenHash))
+                                .filter(Boolean);
+
+                        return res.json({ sessions });
+                } catch (err) {
+                        logger.error(`Session retrieval error: ${err.message}`);
+                        return next(err);
+                }
+        }
+);
 
 router.get("/users/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 router.get("/users/google/callback", passport.authenticate("google", { session: false, failureRedirect: "/" }), async (req, res, next) => {
@@ -268,10 +317,10 @@ router.post("/users/register", authLimiter, async (req, res, next) => {
 });
 
 router.put(
-	"/users/modify",
-	modifyLimiter,
-	auth.required,
-	requireAuthContext("Token verification error in modify"),
+        "/users/modify",
+        modifyLimiter,
+        auth.required,
+        requireAuthContext("Token verification error in modify"),
 	upload.fields([
 		{ name: "banner", maxCount: 1 },
 		{ name: "avatar", maxCount: 1 },
@@ -314,14 +363,79 @@ router.put(
 		} finally {
 			session.endSession();
 		}
-	}
+        }
+);
+
+router.delete(
+        "/users/sessions",
+        modifyLimiter,
+        auth.required,
+        requireAuthContext("Session bulk revoke auth error"),
+        async (req, res, next) => {
+                try {
+                        const { user } = req.authContext;
+                        const scope = req.query.scope;
+                        const currentTokenHash = req.cookies?.jid ? hashRefreshToken(req.cookies.jid) : null;
+
+                        user.pruneExpiredRefreshTokens();
+
+                        if (scope === "others" && currentTokenHash) {
+                                user.refreshTokens = user.refreshTokens.filter((token) => token.tokenHash === currentTokenHash);
+                        } else {
+                                user.refreshTokens = [];
+                                clearAuthCookies(res);
+                        }
+
+                        await user.save();
+                        return res.sendStatus(204);
+                } catch (err) {
+                        logger.error(`Session bulk revoke error: ${err.message}`);
+                        return next(err);
+                }
+        }
+);
+
+router.delete(
+        "/users/sessions/:sessionId",
+        modifyLimiter,
+        auth.required,
+        requireAuthContext("Session revoke auth error"),
+        async (req, res, next) => {
+                try {
+                        const { user } = req.authContext;
+                        const { sessionId } = req.params;
+                        const currentTokenHash = req.cookies?.jid ? hashRefreshToken(req.cookies.jid) : null;
+
+                        user.pruneExpiredRefreshTokens();
+
+                        const targetIndex = user.refreshTokens.findIndex(
+                                (token) => token._id?.toString?.() === sessionId || token.tokenHash === sessionId
+                        );
+
+                        if (targetIndex === -1) {
+                                return res.status(404).json({ error: "Session not found" });
+                        }
+
+                        const [removed] = user.refreshTokens.splice(targetIndex, 1);
+
+                        if (currentTokenHash && removed?.tokenHash === currentTokenHash) {
+                                clearAuthCookies(res);
+                        }
+
+                        await user.save();
+                        return res.sendStatus(204);
+                } catch (err) {
+                        logger.error(`Session revoke error: ${err.message}`);
+                        return next(err);
+                }
+        }
 );
 
 router.put(
-	"/users/addfriend",
-	generalLimiter,
-	auth.required,
-	requireAuthContext("Token verification error in addfriend"),
+        "/users/addfriend",
+        generalLimiter,
+        auth.required,
+        requireAuthContext("Token verification error in addfriend"),
 	friendAction("Add friend", async (req, res) => {
 		const { decoded, user: sender } = req.authContext;
 
