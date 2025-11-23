@@ -36,6 +36,7 @@ export default function DeviceSessionsPanel(props) {
 		<Card
 			elevation={0}
 			sx={{
+				minHeight: "300px",
 				width: "100%",
 				borderRadius: "16px",
 				border: `1px solid ${theme.palette.divider}`,

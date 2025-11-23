@@ -5,7 +5,7 @@ import React from "react";
 import FeatureCard from "../../components/FeatureCard";
 import LandingHeader from "../../components/LandingHeader";
 import { ItemBox } from "./utils/ItemBox";
-import { scrollbarStyles } from "./utils/scrollbarStyles";
+import { scrollbarStyles } from "../scrollbarStyles";
 import { TransitionGrid } from "./utils/TransitionGrid";
 
 function LandingPage(_props) {
