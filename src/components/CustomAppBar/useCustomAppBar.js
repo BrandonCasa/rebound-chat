@@ -2,7 +2,7 @@ import socketIoHelper from "../../helpers/socket";
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
-import { setLoggedIn } from "../../slices/authSlice";
+import { logoutUser } from "../../slices/authSlice";
 import { setDialogOpened } from "../../slices/dialogSlice";
 import { addSnackbar } from "../../slices/snackbarSlice";
 
@@ -38,9 +38,9 @@ export default function useCustomAppBar(width) {
 		);
 	};
 
-        const handleLogout = () => {
+        const handleLogout = async () => {
                 const oldDisplayName = displayName;
-                dispatch(setLoggedIn({ loggedIn: false, disableAutoLogin: true }));
+                await dispatch(logoutUser({ disableAutoLogin: true }));
                 const socketClient = socketIoHelper.getSocket();
                 if (socketClient && socketClient.connected) {
                         socketIoHelper.disconnectSocket();

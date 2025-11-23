@@ -7,6 +7,11 @@ import mongooseUniqueValidator from "mongoose-unique-validator";
 import serverWatchers from "../socketio/watchers.js";
 
 const hashRefreshToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
+const normalizeFingerprintValue = (value) => {
+        if (!value) return null;
+        const trimmed = String(value).trim().toLowerCase();
+        return trimmed || null;
+};
 
 const REFRESH_TOKEN_LIFETIME_DAYS = 60;
 
@@ -117,9 +122,33 @@ UserSchema.methods.generateRefreshToken = async function (descriptor = {}, exist
 
         this.pruneExpiredRefreshTokens();
 
-        const targetIndex = existingTokenHash
+        const descriptorFingerprint = {
+                userAgent: normalizeFingerprintValue(descriptor.userAgentParsed || descriptor.userAgent),
+                device: normalizeFingerprintValue(descriptor.deviceName),
+                ip: normalizeFingerprintValue(descriptor.ipAddress),
+        };
+
+        let targetIndex = existingTokenHash
                 ? this.refreshTokens.findIndex((t) => t.tokenHash === existingTokenHash)
                 : null;
+
+        if (targetIndex === null || targetIndex < 0 || targetIndex >= this.refreshTokens.length) {
+                targetIndex = this.refreshTokens.findIndex((t) => {
+                        const tokenFingerprint = {
+                                userAgent: normalizeFingerprintValue(t.userAgentParsed || t.userAgent),
+                                device: normalizeFingerprintValue(t.deviceName),
+                                ip: normalizeFingerprintValue(t.ipAddress),
+                        };
+
+                        return (
+                                descriptorFingerprint.userAgent &&
+                                descriptorFingerprint.device &&
+                                tokenFingerprint.userAgent === descriptorFingerprint.userAgent &&
+                                tokenFingerprint.device === descriptorFingerprint.device &&
+                                (!descriptorFingerprint.ip || tokenFingerprint.ip === descriptorFingerprint.ip)
+                        );
+                });
+        }
 
         const expiresAt = new Date(Date.now() + REFRESH_TOKEN_LIFETIME_DAYS * 24 * 60 * 60 * 1000);
         const lastUsed = new Date();

@@ -10,10 +10,13 @@ import {
 export default function useDeviceSessions() {
         const dispatch = useDispatch();
         const { sessions, loading, error } = useSelector((state) => state.deviceSessions);
+        const loggedIn = useSelector((state) => state.auth.loggedIn);
 
         useEffect(() => {
-                dispatch(fetchDeviceSessions());
-        }, [dispatch]);
+                if (loggedIn) {
+                        dispatch(fetchDeviceSessions());
+                }
+        }, [dispatch, loggedIn]);
 
         const handleRevokeSession = useCallback(
                 (deviceId) => dispatch(revokeDeviceSession(deviceId)),

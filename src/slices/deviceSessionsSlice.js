@@ -3,6 +3,7 @@ import axios from "axios";
 
 import { buildApiConfig, getApiBase } from "../helpers/api";
 import { addSnackbar } from "./snackbarSlice";
+import { logoutUser, setLoggedIn } from "./authSlice";
 
 const base = getApiBase();
 
@@ -27,7 +28,11 @@ const normalizeSession = (session) => {
 const normalizeSessions = (sessions) => (Array.isArray(sessions) ? sessions : []).map(normalizeSession).filter((session) => session.id);
 
 export const fetchDeviceSessions = createAsyncThunk("deviceSessions/fetchDeviceSessions", async (_, { getState, rejectWithValue }) => {
-	const authToken = getState().auth.authToken;
+        const { authToken, loggedIn } = getState().auth;
+
+        if (!loggedIn || !authToken) {
+                return rejectWithValue("Not authenticated");
+        }
 
 	try {
 		const { data } = await axios.get(`${base}/users/sessions`, buildApiConfig(authToken));
@@ -92,20 +97,25 @@ export const revokeOtherDeviceSessions = createAsyncThunk("deviceSessions/revoke
 const deviceSessionsSlice = createSlice({
 	name: "deviceSessions",
 	initialState: { sessions: [], loading: false, error: null },
-	reducers: {},
-	extraReducers: (builder) => {
-		builder
-			.addCase(fetchDeviceSessions.pending, (state) => {
-				state.loading = true;
+        reducers: {},
+        extraReducers: (builder) => {
+                builder
+                        .addCase(fetchDeviceSessions.pending, (state) => {
+                                state.loading = true;
 				state.error = null;
 			})
 			.addCase(fetchDeviceSessions.fulfilled, (state, action) => {
 				state.loading = false;
 				state.sessions = action.payload;
 			})
-			.addCase(fetchDeviceSessions.rejected, (state, action) => {
-				state.loading = false;
-				state.error = action.payload || "Failed to load devices";
+                        .addCase(fetchDeviceSessions.rejected, (state, action) => {
+                                state.loading = false;
+                                if (action.payload === "Not authenticated") {
+                                        state.sessions = [];
+                                        state.error = null;
+                                        return;
+                                }
+                                state.error = action.payload || "Failed to load devices";
 			})
 			.addCase(revokeDeviceSession.pending, (state) => {
 				state.loading = true;
@@ -126,12 +136,28 @@ const deviceSessionsSlice = createSlice({
 			.addCase(revokeOtherDeviceSessions.fulfilled, (state) => {
 				state.loading = false;
 				state.sessions = state.sessions.filter((session) => session.isCurrent);
-			})
-			.addCase(revokeOtherDeviceSessions.rejected, (state, action) => {
-				state.loading = false;
-				state.error = action.payload || "Failed to revoke devices";
-			});
-	},
+                        })
+                        .addCase(revokeOtherDeviceSessions.rejected, (state, action) => {
+                                state.loading = false;
+                                state.error = action.payload || "Failed to revoke devices";
+                        })
+                        .addCase(logoutUser.fulfilled, (state) => {
+                                state.sessions = [];
+                                state.loading = false;
+                                state.error = null;
+                        })
+                        .addCase(logoutUser.rejected, (state) => {
+                                state.sessions = [];
+                                state.loading = false;
+                        })
+                        .addCase(setLoggedIn, (state, action) => {
+                                if (action.payload?.loggedIn === false) {
+                                        state.sessions = [];
+                                        state.loading = false;
+                                        state.error = null;
+                                }
+                        });
+        },
 });
 
 export default deviceSessionsSlice.reducer;

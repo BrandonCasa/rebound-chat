@@ -27,16 +27,33 @@ const setAuthSessionPresent = (present) => {
 };
 
 const resetAuthFields = (state) => {
-	state.authToken = null;
-	state.userId = null;
+        state.authToken = null;
+        state.userId = null;
 	state.username = "";
 	state.displayName = "";
 	state.bio = "";
 	state.friends = [];
 	state.createdAt = null;
-	state.bannerUrl = null;
-	state.avatarUrl = null;
-	state.socketInfo.currentRoom = null;
+        state.bannerUrl = null;
+        state.avatarUrl = null;
+        state.socketInfo.currentRoom = null;
+};
+
+const applyLoggedOutState = (state, disableAutoLogin = false) => {
+        clearAuthCookies();
+        setAuthSessionPresent(false);
+        resetAuthFields(state);
+        state.loggingIn = false;
+        state.loggedIn = false;
+        state.initialized = true;
+        state.refreshing = false;
+        state.skipAutoLogin = Boolean(disableAutoLogin);
+        if (disableAutoLogin) {
+                state.skipAutoLogin = true;
+                setAutoLoginBlocked(true);
+        } else {
+                setAutoLoginBlocked(false);
+        }
 };
 
 const initialState = {
@@ -113,10 +130,10 @@ export const bootstrapAuth = createAsyncThunk("auth/bootstrapAuth", async (_, { 
 });
 
 export const loginUser = createAsyncThunk("auth/loginUser", async ({ email, password }, { rejectWithValue }) => {
-	const base = getApiBase();
-	try {
-		const { data } = await axios.post(
-			`${base}/users/login`,
+        const base = getApiBase();
+        try {
+                const { data } = await axios.post(
+                        `${base}/users/login`,
 			{
 				user: { email, password },
 			},
@@ -139,9 +156,31 @@ export const loginUser = createAsyncThunk("auth/loginUser", async ({ email, pass
 			createdAt: u.createdAt,
 		};
 	} catch (err) {
-		return rejectWithValue(err.response?.data || err.message);
-	}
+                return rejectWithValue(err.response?.data || err.message);
+        }
 });
+
+export const logoutUser = createAsyncThunk(
+        "auth/logoutUser",
+        async ({ disableAutoLogin = false } = {}, { getState, rejectWithValue }) => {
+                const base = getApiBase();
+                const authToken = getState().auth.authToken;
+
+                try {
+                        await axios.delete(
+                                `${base}/users/sessions`,
+                                buildApiConfig(authToken, { params: { scope: "current" } })
+                        );
+                        clearAuthCookies();
+                        setAuthSessionPresent(false);
+                        return { disableAutoLogin };
+                } catch (err) {
+                        clearAuthCookies();
+                        setAuthSessionPresent(false);
+                        return rejectWithValue({ error: err.response?.data || err.message, disableAutoLogin });
+                }
+        }
+);
 
 export const registerUser = createAsyncThunk("auth/registerUser", async ({ username, email, displayName, bio, password }, { rejectWithValue }) => {
 	const base = getApiBase();
@@ -186,25 +225,19 @@ const authSlice = createSlice({
 				}
 			}
 		},
-		setLoggedIn: (state, action) => {
-			if ("loggedIn" in action.payload) {
-				state.loggingIn = false;
-				state.loggedIn = action.payload.loggedIn;
+                setLoggedIn: (state, action) => {
+                        if ("loggedIn" in action.payload) {
+                                state.loggingIn = false;
+                                state.loggedIn = action.payload.loggedIn;
 
-				if (action.payload.loggedIn === false) {
-					clearAuthCookies();
-					resetAuthFields(state);
-					setAuthSessionPresent(false);
-					if (action.payload.disableAutoLogin) {
-						state.skipAutoLogin = true;
-						setAutoLoginBlocked(true);
-					}
-				}
-			}
-			if (action.payload.loggedIn) {
-				state.skipAutoLogin = false;
-				setAutoLoginBlocked(false);
-				setAuthSessionPresent(true);
+                                if (action.payload.loggedIn === false) {
+                                        applyLoggedOutState(state, action.payload.disableAutoLogin);
+                                }
+                        }
+                        if (action.payload.loggedIn) {
+                                state.skipAutoLogin = false;
+                                setAutoLoginBlocked(false);
+                                setAuthSessionPresent(true);
 			}
 			if ("authToken" in action.payload) {
 				state.authToken = action.payload.authToken;
@@ -267,11 +300,11 @@ const authSlice = createSlice({
 			.addCase(verifyUser.pending, (state) => {
 				state.loggingIn = true;
 			})
-			.addCase(verifyUser.fulfilled, (state, action) => {
-				state.loggingIn = false;
-				state.loggedIn = true;
-				state.skipAutoLogin = false;
-				setAutoLoginBlocked(false);
+                        .addCase(verifyUser.fulfilled, (state, action) => {
+                                state.loggingIn = false;
+                                state.loggedIn = true;
+                                state.skipAutoLogin = false;
+                                setAutoLoginBlocked(false);
 				state.initialized = true;
 				state.authToken = action.payload.authToken;
 				state.userId = action.payload.userId;
@@ -282,28 +315,21 @@ const authSlice = createSlice({
 				state.bannerUrl = action.payload.bannerUrl;
 				state.avatarUrl = action.payload.avatarUrl;
 				state.createdAt = action.payload.createdAt;
-			})
-			.addCase(verifyUser.rejected, (state) => {
-				state.loggingIn = false;
-				state.loggedIn = false;
-				state.initialized = true;
-				clearAuthCookies();
-			})
-			.addCase(refreshAuthToken.pending, (state) => {
-				state.refreshing = true;
-				state.loggingIn = true;
-			})
-			.addCase(refreshAuthToken.fulfilled, (state, action) => {
-				state.refreshing = false;
-				state.authToken = action.payload.authToken;
-			})
-			.addCase(refreshAuthToken.rejected, (state) => {
-				state.refreshing = false;
-				state.loggingIn = false;
-				clearAuthCookies();
-				setAuthSessionPresent(false);
-				resetAuthFields(state);
-			})
+                        })
+                        .addCase(verifyUser.rejected, (state) => {
+                                applyLoggedOutState(state);
+                        })
+                        .addCase(refreshAuthToken.pending, (state) => {
+                                state.refreshing = true;
+                                state.loggingIn = true;
+                        })
+                        .addCase(refreshAuthToken.fulfilled, (state, action) => {
+                                state.refreshing = false;
+                                state.authToken = action.payload.authToken;
+                        })
+                        .addCase(refreshAuthToken.rejected, (state) => {
+                                applyLoggedOutState(state);
+                        })
 			.addCase(bootstrapAuth.pending, (state) => {
 				state.loggingIn = true;
 			})
@@ -344,9 +370,9 @@ const authSlice = createSlice({
 			.addCase(loginUser.pending, (state) => {
 				state.loggingIn = true;
 			})
-			.addCase(loginUser.fulfilled, (state, action) => {
-				state.loggingIn = false;
-				state.loggedIn = true;
+                        .addCase(loginUser.fulfilled, (state, action) => {
+                                state.loggingIn = false;
+                                state.loggedIn = true;
 				state.skipAutoLogin = false;
 				setAutoLoginBlocked(false);
 				state.initialized = true;
@@ -357,15 +383,21 @@ const authSlice = createSlice({
 				state.bio = action.payload.bio;
 				state.friends = action.payload.friends;
 				state.bannerUrl = action.payload.bannerUrl;
-				state.avatarUrl = action.payload.avatarUrl;
-				state.createdAt = action.payload.createdAt;
-			})
-			.addCase(loginUser.rejected, (state) => {
-				state.loggingIn = false;
-				state.loggedIn = false;
-				state.initialized = true;
-			});
-	},
+                                state.avatarUrl = action.payload.avatarUrl;
+                                state.createdAt = action.payload.createdAt;
+                        })
+                        .addCase(loginUser.rejected, (state) => {
+                                state.loggingIn = false;
+                                state.loggedIn = false;
+                                state.initialized = true;
+                        })
+                        .addCase(logoutUser.fulfilled, (state, action) => {
+                                applyLoggedOutState(state, action.payload?.disableAutoLogin);
+                        })
+                        .addCase(logoutUser.rejected, (state, action) => {
+                                applyLoggedOutState(state, action.payload?.disableAutoLogin || action.meta?.arg?.disableAutoLogin);
+                        });
+        },
 });
 
 export const { setAuthState, setLoggedIn, setLoggingIn, setSocketStatus, setSocketRoom } = authSlice.actions;
