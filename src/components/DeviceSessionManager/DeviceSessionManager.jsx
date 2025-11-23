@@ -37,7 +37,7 @@ export default function DeviceSessionsPanel(props) {
 			elevation={0}
 			sx={{
 				width: "100%",
-				borderRadius: 2,
+				borderRadius: "16px",
 				border: `1px solid ${theme.palette.divider}`,
 				backgroundColor: theme.palette.background.paper,
 				...sx,
@@ -167,17 +167,17 @@ export default function DeviceSessionsPanel(props) {
  */
 
 function DeviceRow({ session, isCurrent, onRevoke, compact = false, disabled = false }) {
-        const theme = useTheme();
-        const DeviceIcon = session.userAgentDeviceType === "mobile" ? PhoneIphoneRoundedIcon : LaptopMacRoundedIcon;
-        const hasIp = session.ipAddress && session.ipAddress !== "Unknown";
-        const userAgentDisplay = session.userAgentParsed || session.userAgent;
-
-        return (
-                <Box
+	const theme = useTheme();
+	const DeviceIcon = session.userAgentDeviceType === "mobile" ? PhoneIphoneRoundedIcon : LaptopMacRoundedIcon;
+	const hasIp = session.ipAddress && session.ipAddress !== "Unknown";
+	const userAgentDisplay = session.userAgentParsed || session.userAgent;
+	console.log(theme);
+	return (
+		<Box
 			sx={{
 				px: 2,
 				py: 1.25,
-				borderRadius: 2,
+				borderRadius: "16px",
 				border: `1px solid ${theme.palette.divider}`,
 				display: "flex",
 				flexDirection: compact ? "column" : "row",
@@ -186,17 +186,17 @@ function DeviceRow({ session, isCurrent, onRevoke, compact = false, disabled = f
 				gap: 1.5,
 				bgcolor: (t) => (isCurrent ? t.palette.action.disabledBackground : t.palette.action.hover),
 			}}>
-                        <Stack spacing={0.75}>
-                                <Stack direction="row" spacing={1} alignItems="center">
-                                        <DeviceIcon sx={{ fontSize: 20, color: "text.secondary" }} />
-                                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                                                {session.deviceName}
-                                        </Typography>
-                                </Stack>
+			<Stack spacing={0.75}>
+				<Stack direction="row" spacing={1} alignItems="center">
+					<DeviceIcon sx={{ fontSize: 20, color: "text.secondary" }} />
+					<Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+						{session.deviceName}
+					</Typography>
+				</Stack>
 
-                                <Typography variant="caption" color="text.secondary">
-                                        {userAgentDisplay}
-                                </Typography>
+				<Typography variant="caption" color="text.secondary">
+					{userAgentDisplay}
+				</Typography>
 
 				<Stack direction="row" flexWrap="wrap" spacing={1.5} rowGap={0.5} sx={{ mt: 0.5 }}>
 					<Stack direction="row" spacing={0.5} alignItems="center">
@@ -213,27 +213,22 @@ function DeviceRow({ session, isCurrent, onRevoke, compact = false, disabled = f
 						</Typography>
 					</Stack>
 
-                                        <Tooltip
-                                                title={hasIp ? session.ipAddress : undefined}
-                                                arrow
-                                                placement="top"
-                                                describeChild
-                                                disableHoverListener={!hasIp}>
-                                                <Typography
-                                                        variant="body2"
-                                                        color="text.secondary"
+					<Tooltip title={hasIp ? session.ipAddress : undefined} arrow placement="top" describeChild disableHoverListener={!hasIp}>
+						<Typography
+							variant="body2"
+							color="text.secondary"
 							sx={{
 								fontFamily: "monospace",
 								cursor: "help",
 								borderRadius: 1,
-                                                                px: 0.75,
-                                                                py: 0.25,
-                                                                border: `1px dashed ${theme.palette.divider}`,
-                                                        }}>
-                                                        IP: {hasIp ? MASK : "Unknown"}
-                                                </Typography>
-                                        </Tooltip>
-                                </Stack>
+								px: 0.75,
+								py: 0.25,
+								border: `1px dashed ${theme.palette.divider}`,
+							}}>
+							IP: {hasIp ? MASK : "Unknown"}
+						</Typography>
+					</Tooltip>
+				</Stack>
 			</Stack>
 
 			<Stack direction="row" alignItems="center" justifyContent={compact ? "flex-start" : "flex-end"} spacing={1}>
