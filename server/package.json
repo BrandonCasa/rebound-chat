@@ -47,6 +47,7 @@
 		"prettier": "^3.5.3",
 		"rebound-server": "file:",
 		"socket.io": "^4.8.1",
+		"ua-parser-js": "^2.0.6",
 		"winston": "^3.17.0"
 	},
 	"devDependencies": {
