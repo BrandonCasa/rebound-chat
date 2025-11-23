@@ -125,8 +125,10 @@ const normalizeRefreshSession = (tokenRecord, currentTokenHash = null) => {
 
         const { _id, tokenHash, userAgent, ipAddress, location, lastUsed, expiresAt } = tokenRecord;
 
+        if (!_id) return null;
+
         return {
-                id: _id?.toString?.() || tokenHash,
+                id: _id.toString(),
                 userAgent: userAgent || "unknown",
                 deviceName: userAgent || "Unknown device",
                 ipAddress: ipAddress || "unknown",

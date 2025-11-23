@@ -123,7 +123,13 @@ UserSchema.methods.generateRefreshToken = async function (descriptor = {}, exist
 
         const tokenHash = hashRefreshToken(token);
         const { userAgent, ipAddress, location } = descriptor;
+        const existingId =
+                targetIndex != null && targetIndex >= 0 && targetIndex < this.refreshTokens.length
+                        ? this.refreshTokens[targetIndex]._id
+                        : null;
+
         const tokenRecord = {
+                ...(existingId ? { _id: existingId } : {}),
                 tokenHash,
                 expiresAt,
                 userAgent: userAgent || "unknown",
