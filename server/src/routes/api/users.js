@@ -18,7 +18,7 @@ import serverWatchers from "../../socketio/watchers.js";
 import mongoose from "mongoose";
 import rateLimit from "express-rate-limit";
 
-import { buildRequestTokenDescriptor, createAuthContextMiddleware } from "../../utils/auth.js";
+import { buildRequestTokenDescriptor, createAuthContextMiddleware, parseCookieHeader } from "../../utils/auth.js";
 
 import "dotenv/config";
 
@@ -93,6 +93,31 @@ const clearAuthCookies = (res) => {
         res.clearCookie("token", ACCESS_COOKIE_OPTIONS);
         res.clearCookie("jid", REFRESH_COOKIE_OPTIONS);
         res.clearCookie("csrfToken", CSRF_COOKIE_OPTIONS);
+};
+
+const resolveCurrentRefreshTokenHash = (req, user) => {
+        const rawToken = req.cookies?.jid || parseCookieHeader(req.headers?.cookie || "")?.jid;
+        if (rawToken) return hashRefreshToken(rawToken);
+
+        const accessIssuedAtMs = req.authContext?.decoded?.iat ? req.authContext.decoded.iat * 1000 : null;
+        if (!accessIssuedAtMs || !Array.isArray(user?.refreshTokens)) return null;
+
+        const WINDOW_MS = 5 * 60 * 1000; // 5 minutes grace between issued access token and stored refresh record
+
+        let nearest = null;
+        for (const token of user.refreshTokens) {
+                if (!token?.lastUsed) continue;
+
+                const lastUsedMs = token.lastUsed instanceof Date ? token.lastUsed.getTime() : new Date(token.lastUsed).getTime();
+                if (Number.isNaN(lastUsedMs)) continue;
+
+                const delta = Math.abs(lastUsedMs - accessIssuedAtMs);
+                if (delta <= WINDOW_MS && (!nearest || delta < nearest.delta)) {
+                        nearest = { delta, tokenHash: token.tokenHash };
+                }
+        }
+
+        return nearest?.tokenHash || null;
 };
 
 const normalizeRefreshSession = (tokenRecord, currentTokenHash = null) => {
@@ -229,7 +254,7 @@ router.get(
         async (req, res, next) => {
                 try {
                         const { user } = req.authContext;
-                        const currentTokenHash = req.cookies?.jid ? hashRefreshToken(req.cookies.jid) : null;
+                        const currentTokenHash = resolveCurrentRefreshTokenHash(req, user);
 
                         user.pruneExpiredRefreshTokens();
                         await user.save();
@@ -375,7 +400,7 @@ router.delete(
                 try {
                         const { user } = req.authContext;
                         const scope = req.query.scope;
-                        const currentTokenHash = req.cookies?.jid ? hashRefreshToken(req.cookies.jid) : null;
+                        const currentTokenHash = resolveCurrentRefreshTokenHash(req, user);
 
                         user.pruneExpiredRefreshTokens();
 
@@ -404,7 +429,7 @@ router.delete(
                 try {
                         const { user } = req.authContext;
                         const { sessionId } = req.params;
-                        const currentTokenHash = req.cookies?.jid ? hashRefreshToken(req.cookies.jid) : null;
+                        const currentTokenHash = resolveCurrentRefreshTokenHash(req, user);
 
                         user.pruneExpiredRefreshTokens();
 
