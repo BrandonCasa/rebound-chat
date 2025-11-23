@@ -120,6 +120,17 @@ const resolveClientRedirectTarget = (req) => {
         return "/";
 };
 
+const resolveCallbackUrl = (req) => {
+        if (process.env.GOOGLE_CALLBACK_URL) return process.env.GOOGLE_CALLBACK_URL;
+
+        const proto = req.get("x-forwarded-proto") || req.protocol;
+        const host = req.get("x-forwarded-host") || req.get("host");
+
+        if (!proto || !host) return null;
+
+        return `${proto}://${host}/api/users/google/callback`;
+};
+
 const withAuthErrorParam = (target) => `${target}${target.includes("?") ? "&" : "?"}authError=google`;
 
 const setCsrfCookie = (res) => {
@@ -354,17 +365,30 @@ router.get(
 
 router.get("/users/google", (req, res, next) => {
         const redirectTarget = resolveClientRedirectTarget(req);
+        const callbackURL = resolveCallbackUrl(req);
+
+        if (!callbackURL) {
+                logger.error("Unable to resolve Google callback URL from request headers");
+                return res.redirect(withAuthErrorParam(redirectTarget));
+        }
 
         return passport.authenticate("google", {
                 scope: ["profile", "email"],
                 state: encodeURIComponent(redirectTarget),
+                callbackURL,
         })(req, res, next);
 });
 router.get("/users/google/callback", (req, res, next) => {
         const redirectTarget = normalizeRedirectTarget(req.query?.state) || resolveClientRedirectTarget(req);
+        const callbackURL = resolveCallbackUrl(req);
         const redirectWithError = () => res.redirect(withAuthErrorParam(redirectTarget));
 
-        return passport.authenticate("google", { session: false }, async (err, user) => {
+        if (!callbackURL) {
+                logger.error("Unable to resolve Google callback URL from request headers");
+                return redirectWithError();
+        }
+
+        return passport.authenticate("google", { session: false, callbackURL }, async (err, user) => {
                 if (err || !user) {
                         if (err) {
                                 logger.error(`Google callback auth error: ${err.message}`);
