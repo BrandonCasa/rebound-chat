@@ -36,7 +36,7 @@ class CustomPassport {
                                         callbackURL:
                                                 process.env.GOOGLE_CALLBACK_URL ||
                                                 (process.env.NODE_ENV === "development"
-                                                        ? "http://localhost:3000/api/users/google/callback"
+                                                        ? "http://localhost:6001/api/users/google/callback"
                                                         : "https://rebound.nexus/api/users/google/callback"),
                                 },
 				async function (accessToken, refreshToken, profile, cb) {
