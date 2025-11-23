@@ -28,14 +28,19 @@ class CustomPassport {
 				}
 			)
 		);
-		passport.use(
-			new GoogleStrategy(
-				{
-					clientID: process.env.GOOGLE_CLIENT_ID,
-					clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-					callbackURL:
-						process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/google/callback" : "https://rebound.nexus/api/users/google/callback",
-				},
+                const callbackURL =
+                        process.env.GOOGLE_CALLBACK_URL ||
+                        (process.env.NODE_ENV === "development"
+                                ? "http://localhost:6001/api/users/google/callback"
+                                : "https://www.rebound.nexus/api/users/google/callback");
+
+                passport.use(
+                        new GoogleStrategy(
+                                {
+                                        clientID: process.env.GOOGLE_CLIENT_ID,
+                                        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+                                        callbackURL,
+                                },
 				async function (accessToken, refreshToken, profile, cb) {
 					try {
 						let user = await UserModel.findOne({ googleId: profile.id });
