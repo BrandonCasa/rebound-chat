@@ -4,6 +4,7 @@ import React from "react";
 import { useSelector } from "react-redux";
 
 import DeviceSessionsPanel from "../../components/DeviceSessionManager/DeviceSessionManager.jsx";
+import PasswordResetCard from "../../components/Security/PasswordResetCard.jsx";
 
 const ItemPaper = styled(Box)(({ theme }) => ({
 	...theme.typography.body2,
@@ -31,10 +32,13 @@ export default function SecurityPage() {
 					</Typography>
 				</ItemPaper>
 
-				<Box sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
-					<DeviceSessionsPanel />
-				</Box>
-			</Stack>
-		</Box>
-	);
+                                <Box sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
+                                        <Stack spacing={2} sx={{ flexGrow: 1 }}>
+                                                <PasswordResetCard />
+                                                <DeviceSessionsPanel />
+                                        </Stack>
+                                </Box>
+                        </Stack>
+                </Box>
+        );
 }
