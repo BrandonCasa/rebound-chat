@@ -74,16 +74,29 @@ const REFRESH_COOKIE_OPTIONS = {
 };
 
 const CSRF_COOKIE_OPTIONS = {
-	httpOnly: false,
-	secure: process.env.NODE_ENV === "production",
-	sameSite: "strict",
-	path: "/",
+        httpOnly: false,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/",
+};
+
+const AUTH_SESSION_COOKIE_NAME = "auth-session-present";
+
+const AUTH_SESSION_COOKIE_OPTIONS = {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/",
 };
 
 const setCsrfCookie = (res) => {
-	const csrfToken = crypto.randomBytes(32).toString("hex");
-	res.cookie("csrfToken", csrfToken, CSRF_COOKIE_OPTIONS);
-	return csrfToken;
+        const csrfToken = crypto.randomBytes(32).toString("hex");
+        res.cookie("csrfToken", csrfToken, CSRF_COOKIE_OPTIONS);
+        return csrfToken;
+};
+
+const setAuthSessionCookie = (res) => {
+        res.cookie(AUTH_SESSION_COOKIE_NAME, "true", AUTH_SESSION_COOKIE_OPTIONS);
 };
 
 const setAuthCookies = (res, accessToken, refreshToken) => {
@@ -91,6 +104,7 @@ const setAuthCookies = (res, accessToken, refreshToken) => {
         if (refreshToken) {
                 res.cookie("jid", refreshToken, REFRESH_COOKIE_OPTIONS);
         }
+        setAuthSessionCookie(res);
         return setCsrfCookie(res);
 };
 
@@ -98,6 +112,7 @@ const clearAuthCookies = (res) => {
         res.clearCookie("token", ACCESS_COOKIE_OPTIONS);
         res.clearCookie("jid", REFRESH_COOKIE_OPTIONS);
         res.clearCookie("csrfToken", CSRF_COOKIE_OPTIONS);
+        res.clearCookie(AUTH_SESSION_COOKIE_NAME, AUTH_SESSION_COOKIE_OPTIONS);
 };
 
 const resolveCurrentRefreshTokenHash = (req, user) => {
