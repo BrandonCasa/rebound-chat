@@ -4,6 +4,7 @@ import MessageRounded from "@mui/icons-material/MessageRounded";
 import DnsRounded from "@mui/icons-material/DnsRounded";
 import PersonRounded from "@mui/icons-material/PersonRounded";
 import ScienceTwoTone from "@mui/icons-material/ScienceTwoTone";
+import ShieldOutlined from "@mui/icons-material/ShieldOutlined";
 import SettingsRounded from "@mui/icons-material/SettingsRounded";
 import ChevronLeftRounded from "@mui/icons-material/ChevronLeftRounded";
 import { Toolbar, List, Divider, Drawer, Tooltip, ListItem, ListItemButton, ListItemIcon } from "@mui/material";
@@ -89,6 +90,13 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
 						path: "/testing",
 						Icon: ScienceTwoTone,
 						devOnly: true,
+					},
+					{
+						key: "security",
+						title: "Security",
+						path: "/security",
+						Icon: ShieldOutlined,
+						devOnly: false,
 					},
 					{
 						key: "settings",

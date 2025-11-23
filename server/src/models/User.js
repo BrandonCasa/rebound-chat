@@ -52,14 +52,18 @@ const UserSchema = new Schema(
 		passwordChangedAt: {
 			type: Date,
 		},
-		refreshTokens: [
-			{
-				tokenHash: { type: String, required: true },
-				expiresAt: { type: Date, required: true },
-			},
-		],
-	},
-	{ timestamps: true }
+                refreshTokens: [
+                        {
+                                tokenHash: { type: String, required: true },
+                                expiresAt: { type: Date, required: true },
+                                userAgent: { type: String },
+                                ipAddress: { type: String },
+                                location: { type: String },
+                                lastUsed: { type: Date },
+                        },
+                ],
+        },
+        { timestamps: true }
 );
 
 UserSchema.plugin(mongooseUniqueValidator, { message: "is already taken" });
@@ -98,25 +102,44 @@ UserSchema.methods.generateAccessToken = function () {
 	});
 };
 
-UserSchema.methods.generateRefreshToken = async function () {
-	const payload = {
-		id: this._id,
-		tokenVersion: this.tokenVersion,
-	};
+UserSchema.methods.generateRefreshToken = async function (descriptor = {}, existingTokenHash = null) {
+        const payload = {
+                id: this._id,
+                tokenVersion: this.tokenVersion,
+        };
 
 	const token = jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET, {
 		expiresIn: `${REFRESH_TOKEN_LIFETIME_DAYS}d`,
 	});
 
-	this.pruneExpiredRefreshTokens();
+        this.pruneExpiredRefreshTokens();
 
-	const expiresAt = new Date(Date.now() + REFRESH_TOKEN_LIFETIME_DAYS * 24 * 60 * 60 * 1000);
+        const targetIndex = existingTokenHash
+                ? this.refreshTokens.findIndex((t) => t.tokenHash === existingTokenHash)
+                : null;
 
-	const tokenHash = hashRefreshToken(token);
-	this.refreshTokens.push({ tokenHash, expiresAt });
-	await this.save();
+        const expiresAt = new Date(Date.now() + REFRESH_TOKEN_LIFETIME_DAYS * 24 * 60 * 60 * 1000);
+        const lastUsed = new Date();
 
-	return token;
+        const tokenHash = hashRefreshToken(token);
+        const { userAgent, ipAddress, location } = descriptor;
+        const tokenRecord = {
+                tokenHash,
+                expiresAt,
+                userAgent: userAgent || "unknown",
+                ipAddress: ipAddress || "unknown",
+                location: location || ipAddress || "unknown",
+                lastUsed,
+        };
+
+        if (targetIndex === null || targetIndex < 0 || targetIndex >= this.refreshTokens.length) {
+                this.refreshTokens.push(tokenRecord);
+        } else {
+                this.refreshTokens[targetIndex] = tokenRecord;
+        }
+        await this.save();
+
+        return token;
 };
 
 UserSchema.methods.revokeRefreshToken = async function (rawToken) {

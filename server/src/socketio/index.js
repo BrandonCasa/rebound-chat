@@ -8,6 +8,7 @@ import serverDMs from "./dms.js";
 import serverWatchers from "./watchers.js";
 import UserModel from "../models/User.js";
 import { getAccessToken } from "../routes/auth.js";
+import { hasPasswordChangedAfterTokenIssue } from "../utils/auth.js";
 
 class SocketBackend {
 	constructor() {
@@ -44,7 +45,7 @@ class SocketBackend {
                                 throw new Error("Token version mismatch");
                         }
 
-                        if (user.passwordChangedAt && decoded.iat * 1000 < user.passwordChangedAt.getTime()) {
+                        if (hasPasswordChangedAfterTokenIssue(user, decoded)) {
                                 throw new Error("Stale access token");
                         }
 

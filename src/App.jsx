@@ -24,6 +24,7 @@ const ProfilePage = lazy(() => import("./routes/ProfilePage/ProfilePage.route"))
 const ChatPage = lazy(() => import("./routes/ChatPage/ChatPage"));
 const ServersPage = lazy(() => import("./routes/ServersPage/ServersPage.route"));
 const TestingPage = lazy(() => import("./routes/TestingPage/TestingPage.route"));
+const SecurityPage = lazy(() => import("./routes/SecurityPage/SecurityPage.route"));
 const SettingsPage = lazy(() => import("./routes/SettingsPage/SettingsPage.route"));
 const FriendPage = lazy(() => import("./routes/FriendPage/FriendPage.route"));
 const DirectMessagePage = lazy(() => import("./routes/DirectMessagePage/DirectMessagePage"));
@@ -34,7 +35,7 @@ const PageNotFoundContainer = styled("div")({
 });
 
 const AppRouter = ({ children }) => {
-	const Router = window.isElectron ? HashRouter : BrowserRouter;
+	const Router = window?.isElectron ? HashRouter : BrowserRouter;
 	return <Router>{children}</Router>;
 };
 
@@ -108,6 +109,7 @@ const App = () => {
 								<Route path="/dm/:userId" element={<DirectMessagePage />} />
 								<Route path="/servers" element={<ServersPage />} />
 								<Route path="/testing" element={<TestingPage />} />
+								<Route path="/security" element={<SecurityPage />} />
 								<Route path="/settings" element={<SettingsPage />} />
 								<Route path="*" element={<PageNotFoundContainer>PAGE NOT FOUND</PageNotFoundContainer>} />
 							</Routes>

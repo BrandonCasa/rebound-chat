@@ -37,6 +37,17 @@ const buildAuthError = (message, status = 401) => {
         return err;
 };
 
+const hasPasswordChangedAfterTokenIssue = (user, decoded) => {
+        const passwordChangedAt =
+                user?.passwordChangedAt instanceof Date ? user.passwordChangedAt.getTime() : null;
+        const issuedAtMs = decoded?.iat ? decoded.iat * 1000 : null;
+
+        if (!passwordChangedAt || !issuedAtMs) return false;
+
+        // Allow a small grace window to avoid race conditions during initial account creation/login
+        return issuedAtMs + 1000 < passwordChangedAt;
+};
+
 const validateAccessToken = async (token) => {
         if (!token) throw buildAuthError("Missing access token.");
 
@@ -56,7 +67,7 @@ const validateAccessToken = async (token) => {
                 throw buildAuthError("Token no longer valid.");
         }
 
-        if (user.passwordChangedAt && decoded.iat * 1000 < user.passwordChangedAt.getTime()) {
+        if (hasPasswordChangedAfterTokenIssue(user, decoded)) {
                 throw buildAuthError("Token issued before password change.");
         }
 
@@ -74,6 +85,18 @@ const handleAuthFailure = (err, res, context, logger) => {
                 logger.error(`${context}: ${err.message}`);
         }
         return res.status(err.status || 401).json({ error: err.message });
+};
+
+const buildRequestTokenDescriptor = (req) => {
+        const connectionAddress = req?.socket?.remoteAddress || req?.connection?.remoteAddress;
+        const forwardedIps = Array.isArray(req?.ips) && req.ips.length ? req.ips : [];
+        const ipAddress = forwardedIps[0] || connectionAddress || req?.ip || "unknown";
+
+        return {
+                userAgent: req?.get?.("user-agent") || "unknown",
+                ipAddress,
+                location: forwardedIps[0] || connectionAddress || "unknown",
+        };
 };
 
 const createAuthContextMiddleware = (context, logger) => {
@@ -96,4 +119,6 @@ export {
         parseCookieHeader,
         validateAccessToken,
         validateAccessTokenFromRequest,
+        buildRequestTokenDescriptor,
+        hasPasswordChangedAfterTokenIssue,
 };
