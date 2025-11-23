@@ -14,6 +14,7 @@ import SnackbarMapper from "./components/SnackbarMapper";
 import useDarkTheme from "./helpers/darkTheme";
 import socketIoHelper from "./helpers/socket";
 import { bootstrapAuth, setAuthState, setSocketStatus, verifyUser } from "./slices/authSlice";
+import { hasAuthSessionCookie } from "./helpers/api";
 
 import useCustomAppBar from "./components/CustomAppBar/useCustomAppBar";
 import useWindowDimensions from "./helpers/useWindowDimensions";
@@ -58,11 +59,14 @@ const App = () => {
 		}
 	}, [dispatch]);
 
-	useEffect(() => {
-		if (!authState.initialized && !authState.skipAutoLogin && !authState.authToken) {
-			dispatch(bootstrapAuth());
-		}
-	}, [authState.initialized, authState.skipAutoLogin, authState.authToken, dispatch]);
+        useEffect(() => {
+                if (authState.initialized || authState.authToken) return;
+
+                const hasSessionMarker = hasAuthSessionCookie();
+                if (!authState.skipAutoLogin || hasSessionMarker) {
+                        dispatch(bootstrapAuth());
+                }
+        }, [authState.initialized, authState.skipAutoLogin, authState.authToken, dispatch]);
 
 	const useSocketConnection = (authToken, loggedIn) => {
 		useEffect(() => {
