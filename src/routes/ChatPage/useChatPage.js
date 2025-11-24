@@ -33,6 +33,8 @@ export default function useChatPage() {
         const loadingOlderRef = useRef(false);
         const initialFetchRoomRef = useRef(null);
         const topFetchLockedRef = useRef(false);
+        const rearmScrollTopRef = useRef(SCROLL_TRIGGER_PX * 2);
+        const lastScrollTopRef = useRef(0);
 
         const mergeMessages = useCallback((existing, incoming) => {
                 const merged = new Map();
@@ -130,6 +132,12 @@ export default function useChatPage() {
                                 const newHeight = el.scrollHeight;
                                 const adjustedTop = newHeight - previousScrollHeight + previousScrollTop;
                                 el.scrollTop = adjustedTop;
+                                lastScrollTopRef.current = adjustedTop;
+
+                                // Require the user to scroll down past the post-prepend anchor before unlocking
+                                // another top fetch. This avoids cascading loads when the viewport remains near
+                                // the top after inserting older messages.
+                                rearmScrollTopRef.current = adjustedTop + SCROLL_TRIGGER_PX;
 
                                 if (adjustedTop > SCROLL_TRIGGER_PX * 2) {
                                         topFetchLockedRef.current = false;
@@ -146,16 +154,20 @@ export default function useChatPage() {
         const handleScroll = useCallback(
                 (e) => {
                         const { scrollTop } = e.target;
+                        const scrollingUp = scrollTop < lastScrollTopRef.current;
+                        lastScrollTopRef.current = scrollTop;
+
+                        if (loadingOlderRef.current || fetchingRef.current) return;
 
                         if (topFetchLockedRef.current) {
-                                if (scrollTop > SCROLL_TRIGGER_PX * 2) {
+                                if (scrollTop > rearmScrollTopRef.current) {
                                         topFetchLockedRef.current = false;
-                                } else {
-                                        return;
                                 }
+
+                                if (topFetchLockedRef.current) return;
                         }
 
-                        if (scrollTop < SCROLL_TRIGGER_PX) {
+                        if (scrollingUp && scrollTop < SCROLL_TRIGGER_PX) {
                                 topFetchLockedRef.current = true;
                                 fetchOlderMessages();
                         }
@@ -279,6 +291,9 @@ export default function useChatPage() {
                 const roomId = authState.socketInfo.currentRoom;
                 setUsers([]);
                 pageInfoRef.current = { hasMoreBefore: false, hasMoreAfter: false, nextBefore: null, nextAfter: null };
+                rearmScrollTopRef.current = SCROLL_TRIGGER_PX * 2;
+                lastScrollTopRef.current = 0;
+                topFetchLockedRef.current = false;
                 if (!roomId) {
                         initialFetchRoomRef.current = null;
                         setMessages([]);
