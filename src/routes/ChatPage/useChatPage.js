@@ -1,18 +1,22 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import useWindowDimensions from "../../helpers/useWindowDimensions";
 import { useDispatch, useSelector } from "react-redux";
+import { fetchRoomMessages, mapMessages } from "../../slices/chatApiSlice";
 import { parseMentions } from "../../helpers/mentions";
 import { fetchUserProfile } from "../../slices/userApiSlice";
 import socketIoHelper from "../../helpers/socket";
 import { setSocketRoom } from "../../slices/authSlice";
-import useChatMessages from "./hooks/useChatMessages";
-import useChatSockets from "./hooks/useChatSockets";
-import useRoomLifecycle from "./hooks/useRoomLifecycle";
+import { addSnackbar } from "../../slices/snackbarSlice";
+import { getApiBase } from "../../helpers/api";
+
+const REQUEST_BASE = getApiBase();
 
 export default function useChatPage() {
 	const authState = useSelector((state) => state.auth);
 	const dispatch = useDispatch();
 
 	const [message, setMessage] = useState("");
+	const [messages, setMessages] = useState([]);
 	const [channels, setChannels] = useState({});
 	const [users, setUsers] = useState([]);
 
@@ -24,47 +28,94 @@ export default function useChatPage() {
 	const [selectedMessage, setSelectedMessage] = useState(null);
 	const [editingMessageId, setEditingMessageId] = useState(null);
 	const [editingText, setEditingText] = useState("");
+	const listRef = useRef(null);
+	const fetchingRef = useRef(false);
 
-	const {
-		messages,
-		setMessages,
-		listRef,
-		handleScroll,
-		fetchMessages,
-		mergeMessages,
-		updatePageInfo,
-		scrollToBottom,
-		isNearBottom,
-		pageInfoRef,
-		loadingOlderRef,
-		resetRoomState,
-		initialFetchRoomRef,
-	} = useChatMessages(authState, dispatch);
+	const fetchMessages = useCallback(async () => {
+		if (!authState.socketInfo.currentRoom || fetchingRef.current) return;
+		fetchingRef.current = true;
+		try {
+			const { messages: msgs } = await dispatch(fetchRoomMessages({ roomId: authState.socketInfo.currentRoom, authToken: authState.authToken })).unwrap();
+			setMessages(msgs);
+		} catch (err) {
+			console.error("load messages error", err);
+		} finally {
+			fetchingRef.current = false;
+		}
+	}, [authState.socketInfo.currentRoom, authState.authToken, dispatch]);
 
-	useChatSockets({
-		authState,
-		dispatch,
-		setChannels,
-		setUsers,
-		setMessages,
-		mergeMessages,
-		updatePageInfo,
-		scrollToBottom,
-		isNearBottom,
-		pageInfoRef,
-	});
+	useEffect(() => {
+		const socket = socketIoHelper.getSocket();
+		if (authState.loggedIn && socket) {
+			socket.on("room_list", ([idMap, roomObjs]) => {
+				setChannels(roomObjs);
+				if (!authState.socketInfo.currentRoom) {
+					dispatch(
+						setSocketRoom({
+							lastRoom: null,
+							currentRoom: Object.keys(idMap)[0] || null,
+						})
+					);
+				}
+			});
+			socket.on("joined_room", async (_id, msgs) => {
+				setMessages(await mapMessages(msgs));
+			});
+			socket.on("message_sent", async (_id, msgs) => {
+				setMessages(await mapMessages(msgs));
+			});
+			socket.on("new_message", async (_id, msgs) => {
+				setMessages(await mapMessages(msgs));
+			});
+			socket.on("messages_updated", async (_id, msgs) => {
+				setMessages(await mapMessages(msgs));
+			});
+			socket.on("user_list", (_roomId, list, sender, evt) => {
+				if (sender.id !== authState.userId) {
+					dispatch(
+						addSnackbar({
+							snackbarMsg: `'${sender.displayName}' ${evt === "join" ? "joined!" : "left."}`,
+							snackbarSeverity: "info",
+							autoHideDuration: 1500,
+						})
+					);
+				}
+				setUsers(list);
+			});
+			socket.emit("list_rooms");
+		} else if (!authState.loggingIn && !authState.loggedIn) {
+			dispatch(
+				addSnackbar({
+					snackbarMsg: "Login or register to use this page.",
+					snackbarSeverity: "warning",
+					autoHideDuration: 1500,
+				})
+			);
+		}
 
-	useRoomLifecycle({
-		authState,
-		fetchMessages,
-		setMessages,
-		setUsers,
-		resetRoomState,
-		initialFetchRoomRef,
-		loadingOlderRef,
-		isNearBottom,
-		scrollToBottom,
-	});
+		return () => {
+			if (socket) {
+				socket.off("room_list");
+				socket.off("joined_room");
+				socket.off("message_sent");
+				socket.off("new_message");
+				socket.off("messages_updated");
+				socket.off("user_list");
+			}
+			setChannels({});
+			setMessages([]);
+			setUsers([]);
+		};
+	}, [authState.loggedIn, authState.loggingIn, authState.socketInfo.currentRoom, authState.userId, authState.socketInfo.connected, dispatch]);
+
+	useEffect(() => {
+		setUsers([]);
+	}, [authState.socketInfo.currentRoom]);
+
+	useEffect(() => {
+		setMessages([]);
+		fetchMessages();
+	}, [authState.socketInfo.currentRoom, fetchMessages]);
 
 	useEffect(
 		() => () => {
@@ -73,14 +124,14 @@ export default function useChatPage() {
 		[dispatch]
 	);
 
-	const sendMessage = (e) => {
-		e?.preventDefault();
-		if (!message || !authState.socketInfo.currentRoom) return;
-		const s = socketIoHelper.getSocket();
-		const mentions = parseMentions(message, users);
-		s.emit("message_room", [authState.socketInfo.currentRoom, message, mentions]);
-		setMessage("");
-	};
+        const sendMessage = (e) => {
+                e?.preventDefault();
+                if (!message || !authState.socketInfo.currentRoom) return;
+                const s = socketIoHelper.getSocket();
+                const mentions = parseMentions(message, users);
+                s.emit("message_room", [authState.socketInfo.currentRoom, message, mentions]);
+                setMessage("");
+        };
 
 	const clickRoomSelect = (e) => {
 		setRoomAnchorEl(e.currentTarget);
@@ -134,19 +185,29 @@ export default function useChatPage() {
 		closeMessageMenu();
 	};
 
-	const commitEditMessage = () => {
-		if (!editingMessageId) return;
-		const s = socketIoHelper.getSocket();
-		const mentions = parseMentions(editingText, users);
-		s.emit("edit_message", authState.socketInfo.currentRoom, editingMessageId, editingText, mentions);
-		setEditingMessageId(null);
-		setEditingText("");
-	};
+        const commitEditMessage = () => {
+                if (!editingMessageId) return;
+                const s = socketIoHelper.getSocket();
+                const mentions = parseMentions(editingText, users);
+                s.emit("edit_message", authState.socketInfo.currentRoom, editingMessageId, editingText, mentions);
+                setEditingMessageId(null);
+                setEditingText("");
+        };
 
 	const cancelEditMessage = () => {
 		setEditingMessageId(null);
 		setEditingText("");
 	};
+
+	const { width, height } = useWindowDimensions();
+
+	useEffect(() => {
+		const el = listRef.current;
+		if (!el) return;
+		requestAnimationFrame(() => {
+			el.scrollTop = 0;
+		});
+	}, [width, height, messages.length]);
 
 	return {
 		authState,
@@ -179,7 +240,6 @@ export default function useChatPage() {
 		confirmDeleteSelectedMessage,
 		commitEditMessage,
 		cancelEditMessage,
-		handleScroll,
 		listRef,
 	};
 }
