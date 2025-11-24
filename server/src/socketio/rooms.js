@@ -5,6 +5,21 @@ import UserModel from "../models/User.js";
 import socketio from "./index.js";
 import "dotenv/config";
 
+const MESSAGE_LIMIT = 50;
+
+async function fetchRecentMessages(roomDoc, limit = MESSAGE_LIMIT) {
+        const messageIds = roomDoc?.messages ?? [];
+        if (!messageIds.length) return [];
+
+        const messages = await MessageModel.find({ _id: { $in: messageIds } })
+                .sort({ _id: -1 })
+                .limit(limit)
+                .populate({ path: "sender", select: "displayName avatarUrl" })
+                .lean();
+
+        return messages.reverse();
+}
+
 class ServerRooms {
 	async getRoomList() {
 		const idToName = {};
@@ -21,23 +36,29 @@ class ServerRooms {
 		await this.leaveRooms(socket);
 	}
 
-	async joinRoom(socket, roomId, roomDoc) {
-		socket.join(roomId);
-		socket.emit("joined_room", roomId, roomDoc.messages);
+        async joinRoom(socket, roomId, roomDoc) {
+                socket.join(roomId);
 
-		try {
-			const user = await UserModel.findById(socket.user.id);
-			const userProfile = await user.toProfilePubJSON(null);
-			const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
+                try {
+                        const messages = await fetchRecentMessages(roomDoc);
+                        socket.emit("joined_room", roomId, messages);
+                } catch (err) {
+                        logger.error("Error loading initial room messages:", err);
+                }
 
-			socketsInRoom.forEach((s) => {
-				s.emit("user_list", roomId, usersInRoom, userProfile, "join");
-			});
-			logger.info(`User '${socket.user.username}' joined room '${roomId}'.`);
-		} catch (err) {
-			logger.error("Error notifying join:", err);
-		}
-	}
+                try {
+                        const user = await UserModel.findById(socket.user.id);
+                        const userProfile = await user.toProfilePubJSON(null);
+                        const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
+
+                        socketsInRoom.forEach((s) => {
+                                s.emit("user_list", roomId, usersInRoom, userProfile, "join");
+                        });
+                        logger.info(`User '${socket.user.username}' joined room '${roomId}'.`);
+                } catch (err) {
+                        logger.error("Error notifying join:", err);
+                }
+        }
 
 	async leaveRooms(socket) {
 		try {
@@ -107,16 +128,12 @@ class ServerRooms {
 					throw new Error("Room not found by ID.");
 				}
 
-				const roomDoc = await RoomModel.findById(roomId).populate({
-					path: "messages",
-					options: { sort: { createdAt: 1 } },
-					populate: { path: "sender", select: "displayName avatarUrl" },
-				});
+                                const roomDoc = await RoomModel.findById(roomId);
 
-				await this.leaveRooms(socket);
-				await this.joinRoom(socket, roomId, roomDoc);
-			} catch (err) {
-				logger.error("Error joining room:", err);
+                                await this.leaveRooms(socket);
+                                await this.joinRoom(socket, roomId, roomDoc);
+                        } catch (err) {
+                                logger.error("Error joining room:", err);
 			}
 		});
 
@@ -156,66 +173,58 @@ class ServerRooms {
 					throw new Error("Room not found by ID.");
 				}
 
-				const sender = await UserModel.findById(socket.user.id);
-				if (!sender) throw new Error("Sender not found.");
+                                const sender = await UserModel.findById(socket.user.id);
+                                if (!sender) throw new Error("Sender not found.");
 
                                 const msg = new MessageModel({ sender, content, mentions });
-				await msg.save();
+                                await msg.save();
 
-				const roomDoc = await RoomModel.findById(roomId);
-				roomDoc.messages.push(msg);
-				await roomDoc.save();
+                                const roomDoc = await RoomModel.findById(roomId);
+                                roomDoc.messages.push(msg);
+                                await roomDoc.save();
+                                await msg.populate({ path: "sender", select: "displayName avatarUrl" });
 
-				await roomDoc.populate({
-					path: "messages",
-					options: { sort: { createdAt: 1 } },
-					populate: { path: "sender", select: "displayName avatarUrl" },
-				});
+                                const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
+                                socketsInRoom.forEach((s) => {
+                                        if (s.user.id === socket.user.id) {
+                                                s.emit("message_sent", roomId, msg);
+                                        } else {
+                                                s.emit("new_message", roomId, msg);
+                                        }
+                                });
 
-				const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
-				socketsInRoom.forEach((s) => {
-					if (s.user.id === socket.user.id) {
-						s.emit("message_sent", roomId, roomDoc.messages);
-					} else {
-						s.emit("new_message", roomId, roomDoc.messages);
-					}
-				});
-
-				logger.info(`User '${socket.user.username}' sent message '${msg._id}' to room '${roomId}'.`);
-			} catch (err) {
-				logger.error("Error handling message_room:", err);
-			}
-		});
+                                logger.info(`User '${socket.user.username}' sent message '${msg._id}' to room '${roomId}'.`);
+                        } catch (err) {
+                                logger.error("Error handling message_room:", err);
+                        }
+                });
 
                 socket.on("edit_message", async (roomId, messageId, content, mentions) => {
-			try {
-				const [idToName] = await this.getRoomList();
-				if (!idToName[roomId]) {
-					throw new Error("Room not found by ID.");
-				}
+                        try {
+                                const [idToName] = await this.getRoomList();
+                                if (!idToName[roomId]) {
+                                        throw new Error("Room not found by ID.");
+                                }
 
-				const msg = await MessageModel.findById(messageId);
-				if (!msg) return;
-				if (msg.sender.toString() !== socket.user.id) return;
+                                const roomDoc = await RoomModel.findById(roomId).select("messages");
+                                const msg = await MessageModel.findById(messageId);
+                                if (!msg) return;
+                                if (msg.sender.toString() !== socket.user.id) return;
+                                if (!roomDoc?.messages?.some((m) => m.toString() === messageId)) return;
 
                                 msg.content = content;
                                 msg.mentions = mentions;
                                 await msg.save();
+                                await msg.populate({ path: "sender", select: "displayName avatarUrl" });
 
-				const roomDoc = await RoomModel.findById(roomId).populate({
-					path: "messages",
-					options: { sort: { createdAt: 1 } },
-					populate: { path: "sender", select: "displayName avatarUrl" },
-				});
-
-				const [, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
-				socketsInRoom.forEach((s) => {
-					s.emit("messages_updated", roomId, roomDoc.messages);
-				});
-			} catch (err) {
-				logger.error("Error handling edit_message:", err);
-			}
-		});
+                                const [, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
+                                socketsInRoom.forEach((s) => {
+                                        s.emit("messages_updated", roomId, { type: "edit", message: msg });
+                                });
+                        } catch (err) {
+                                logger.error("Error handling edit_message:", err);
+                        }
+                });
 
 		socket.on("delete_message", async (roomId, messageId) => {
 			try {
@@ -228,25 +237,22 @@ class ServerRooms {
 				if (!msg) return;
 				if (msg.sender.toString() !== socket.user.id) return;
 
-				await MessageModel.deleteOne({ _id: messageId });
-				await RoomModel.findByIdAndUpdate(roomId, {
-					$pull: { messages: messageId },
-				});
+                                const roomDoc = await RoomModel.findById(roomId).select("messages");
+                                if (!roomDoc?.messages?.some((m) => m.toString() === messageId)) return;
 
-				const roomDoc = await RoomModel.findById(roomId).populate({
-					path: "messages",
-					options: { sort: { createdAt: 1 } },
-					populate: { path: "sender", select: "displayName avatarUrl" },
-				});
+                                await MessageModel.deleteOne({ _id: messageId });
+                                await RoomModel.findByIdAndUpdate(roomId, {
+                                        $pull: { messages: messageId },
+                                });
 
-				const [, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
-				socketsInRoom.forEach((s) => {
-					s.emit("messages_updated", roomId, roomDoc.messages);
-				});
-			} catch (err) {
-				logger.error("Error handling delete_message:", err);
-			}
-		});
+                                const [, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
+                                socketsInRoom.forEach((s) => {
+                                        s.emit("messages_updated", roomId, { type: "delete", messageId });
+                                });
+                        } catch (err) {
+                                logger.error("Error handling delete_message:", err);
+                        }
+                });
 	}
 }
 

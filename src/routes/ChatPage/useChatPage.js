@@ -7,9 +7,8 @@ import { fetchUserProfile } from "../../slices/userApiSlice";
 import socketIoHelper from "../../helpers/socket";
 import { setSocketRoom } from "../../slices/authSlice";
 import { addSnackbar } from "../../slices/snackbarSlice";
-import { getApiBase } from "../../helpers/api";
-
-const REQUEST_BASE = getApiBase();
+const MESSAGE_PAGE_SIZE = 50;
+const SCROLL_TRIGGER_PX = 150;
 
 export default function useChatPage() {
 	const authState = useSelector((state) => state.auth);
@@ -24,25 +23,123 @@ export default function useChatPage() {
 	const [userListAnchorEl, setUserListAnchorEl] = useState(null);
 	const [userPreviewEl, setUserPreviewEl] = useState(null);
 	const [userPreviewUser, setUserPreviewUser] = useState(null);
-	const [msgMenuPos, setMsgMenuPos] = useState(null);
-	const [selectedMessage, setSelectedMessage] = useState(null);
-	const [editingMessageId, setEditingMessageId] = useState(null);
-	const [editingText, setEditingText] = useState("");
-	const listRef = useRef(null);
-	const fetchingRef = useRef(false);
+        const [msgMenuPos, setMsgMenuPos] = useState(null);
+        const [selectedMessage, setSelectedMessage] = useState(null);
+        const [editingMessageId, setEditingMessageId] = useState(null);
+        const [editingText, setEditingText] = useState("");
+        const listRef = useRef(null);
+        const fetchingRef = useRef(false);
+        const pageInfoRef = useRef({ hasMoreBefore: false, hasMoreAfter: false, nextBefore: null, nextAfter: null });
+        const loadingOlderRef = useRef(false);
 
-	const fetchMessages = useCallback(async () => {
-		if (!authState.socketInfo.currentRoom || fetchingRef.current) return;
-		fetchingRef.current = true;
-		try {
-			const { messages: msgs } = await dispatch(fetchRoomMessages({ roomId: authState.socketInfo.currentRoom, authToken: authState.authToken })).unwrap();
-			setMessages(msgs);
-		} catch (err) {
-			console.error("load messages error", err);
-		} finally {
-			fetchingRef.current = false;
-		}
-	}, [authState.socketInfo.currentRoom, authState.authToken, dispatch]);
+        const mergeMessages = useCallback((existing, incoming) => {
+                const merged = new Map();
+                existing.forEach((msg) => merged.set(msg._id, msg));
+                incoming.forEach((msg) => merged.set(msg._id, msg));
+
+                return Array.from(merged.values()).sort(
+                        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+                );
+        }, []);
+
+        const updatePageInfo = useCallback((pageInfo = {}, nextMessages = messages) => {
+                pageInfoRef.current = {
+                        hasMoreBefore: pageInfo.hasMoreBefore ?? pageInfoRef.current.hasMoreBefore,
+                        hasMoreAfter: pageInfo.hasMoreAfter ?? pageInfoRef.current.hasMoreAfter,
+                        nextBefore: pageInfo.nextBefore || nextMessages[0]?._id || pageInfoRef.current.nextBefore,
+                        nextAfter:
+                                pageInfo.nextAfter || nextMessages[nextMessages.length - 1]?._id || pageInfoRef.current.nextAfter,
+                };
+        }, [messages]);
+
+        const scrollToBottom = useCallback(() => {
+                const el = listRef.current;
+                if (!el) return;
+                el.scrollTop = el.scrollHeight;
+        }, []);
+
+        const isNearBottom = useCallback(() => {
+                const el = listRef.current;
+                if (!el) return false;
+                return el.scrollHeight - el.clientHeight - el.scrollTop < SCROLL_TRIGGER_PX;
+        }, []);
+
+        const fetchMessages = useCallback(async () => {
+                if (!authState.socketInfo.currentRoom || fetchingRef.current) return;
+                fetchingRef.current = true;
+                try {
+                        const { messages: msgs, pageInfo } = await dispatch(
+                                fetchRoomMessages({
+                                        roomId: authState.socketInfo.currentRoom,
+                                        authToken: authState.authToken,
+                                        limit: MESSAGE_PAGE_SIZE,
+                                })
+                        ).unwrap();
+                        const mapped = msgs || [];
+                        setMessages(mapped);
+                        updatePageInfo(pageInfo, mapped);
+                        requestAnimationFrame(scrollToBottom);
+                } catch (err) {
+                        console.error("load messages error", err);
+                } finally {
+                        fetchingRef.current = false;
+                }
+        }, [authState.socketInfo.currentRoom, authState.authToken, dispatch, scrollToBottom, updatePageInfo]);
+
+        const fetchOlderMessages = useCallback(async () => {
+                if (
+                        !authState.socketInfo.currentRoom ||
+                        fetchingRef.current ||
+                        !pageInfoRef.current.hasMoreBefore ||
+                        !pageInfoRef.current.nextBefore
+                ) {
+                        return;
+                }
+
+                fetchingRef.current = true;
+                loadingOlderRef.current = true;
+                const el = listRef.current;
+                const previousScrollHeight = el?.scrollHeight ?? 0;
+                const previousScrollTop = el?.scrollTop ?? 0;
+
+                try {
+                        const { messages: olderMessages, pageInfo } = await dispatch(
+                                fetchRoomMessages({
+                                        roomId: authState.socketInfo.currentRoom,
+                                        authToken: authState.authToken,
+                                        before: pageInfoRef.current.nextBefore,
+                                        limit: MESSAGE_PAGE_SIZE,
+                                })
+                        ).unwrap();
+
+                        const mapped = olderMessages || [];
+                        setMessages((prev) => {
+                                const merged = mergeMessages(mapped, prev);
+                                updatePageInfo(pageInfo, merged);
+                                return merged;
+                        });
+
+                        requestAnimationFrame(() => {
+                                if (!el) return;
+                                const newHeight = el.scrollHeight;
+                                el.scrollTop = newHeight - previousScrollHeight + previousScrollTop;
+                        });
+                } catch (err) {
+                        console.error("load older messages error", err);
+                } finally {
+                        fetchingRef.current = false;
+                        loadingOlderRef.current = false;
+                }
+        }, [authState.authToken, authState.socketInfo.currentRoom, dispatch, mergeMessages, updatePageInfo]);
+
+        const handleScroll = useCallback(
+                (e) => {
+                        if (e.target.scrollTop < SCROLL_TRIGGER_PX) {
+                                fetchOlderMessages();
+                        }
+                },
+                [fetchOlderMessages]
+        );
 
 	useEffect(() => {
 		const socket = socketIoHelper.getSocket();
@@ -58,18 +155,55 @@ export default function useChatPage() {
 					);
 				}
 			});
-			socket.on("joined_room", async (_id, msgs) => {
-				setMessages(await mapMessages(msgs));
-			});
-			socket.on("message_sent", async (_id, msgs) => {
-				setMessages(await mapMessages(msgs));
-			});
-			socket.on("new_message", async (_id, msgs) => {
-				setMessages(await mapMessages(msgs));
-			});
-			socket.on("messages_updated", async (_id, msgs) => {
-				setMessages(await mapMessages(msgs));
-			});
+                        socket.on("joined_room", async (_id, msgs) => {
+                                const mapped = await mapMessages(msgs || []);
+                                setMessages((prev) => {
+                                        const merged = mergeMessages(prev, mapped);
+                                        updatePageInfo(pageInfoRef.current, merged);
+                                        return merged;
+                                });
+                                if (mapped.length) {
+                                        requestAnimationFrame(scrollToBottom);
+                                }
+                        });
+
+                        const handleIncomingMessage = async (payload) => {
+                                if (!payload) return;
+                                const normalized = Array.isArray(payload) ? payload : [payload];
+                                const mapped = await mapMessages(normalized);
+                                setMessages((prev) => {
+                                        const merged = mergeMessages(prev, mapped);
+                                        updatePageInfo(pageInfoRef.current, merged);
+                                        return merged;
+                                });
+                                if (isNearBottom()) {
+                                        requestAnimationFrame(scrollToBottom);
+                                }
+                        };
+
+                        socket.on("message_sent", async (_id, msg) => {
+                                await handleIncomingMessage(msg);
+                        });
+                        socket.on("new_message", async (_id, msg) => {
+                                await handleIncomingMessage(msg);
+                        });
+                        socket.on("messages_updated", async (_id, payload) => {
+                                if (payload?.type === "delete" && payload.messageId) {
+                                        setMessages((prev) => {
+                                                const filtered = prev.filter((m) => m._id !== payload.messageId);
+                                                updatePageInfo(pageInfoRef.current, filtered);
+                                                return filtered;
+                                        });
+                                        return;
+                                }
+
+                                if (payload?.type === "edit" && payload.message) {
+                                        await handleIncomingMessage(payload.message);
+                                        return;
+                                }
+
+                                await handleIncomingMessage(payload);
+                        });
 			socket.on("user_list", (_roomId, list, sender, evt) => {
 				if (sender.id !== authState.userId) {
 					dispatch(
@@ -106,16 +240,35 @@ export default function useChatPage() {
 			setMessages([]);
 			setUsers([]);
 		};
-	}, [authState.loggedIn, authState.loggingIn, authState.socketInfo.currentRoom, authState.userId, authState.socketInfo.connected, dispatch]);
+        }, [
+                authState.loggedIn,
+                authState.loggingIn,
+                authState.socketInfo.currentRoom,
+                authState.userId,
+                authState.socketInfo.connected,
+                dispatch,
+                isNearBottom,
+                mergeMessages,
+                scrollToBottom,
+                updatePageInfo,
+        ]);
 
-	useEffect(() => {
-		setUsers([]);
-	}, [authState.socketInfo.currentRoom]);
+        useEffect(() => {
+                setUsers([]);
+                pageInfoRef.current = { hasMoreBefore: false, hasMoreAfter: false, nextBefore: null, nextAfter: null };
+        }, [authState.socketInfo.currentRoom]);
 
-	useEffect(() => {
-		setMessages([]);
-		fetchMessages();
-	}, [authState.socketInfo.currentRoom, fetchMessages]);
+        useEffect(() => {
+                setMessages([]);
+                fetchMessages();
+        }, [authState.socketInfo.currentRoom, fetchMessages]);
+
+        useEffect(() => {
+                if (loadingOlderRef.current) return;
+                if (isNearBottom()) {
+                        requestAnimationFrame(scrollToBottom);
+                }
+        }, [isNearBottom, messages.length, scrollToBottom]);
 
 	useEffect(
 		() => () => {
@@ -199,15 +352,14 @@ export default function useChatPage() {
 		setEditingText("");
 	};
 
-	const { width, height } = useWindowDimensions();
+        const { width, height } = useWindowDimensions();
 
-	useEffect(() => {
-		const el = listRef.current;
-		if (!el) return;
-		requestAnimationFrame(() => {
-			el.scrollTop = 0;
-		});
-	}, [width, height, messages.length]);
+        useEffect(() => {
+                if (loadingOlderRef.current) return;
+                if (isNearBottom()) {
+                        requestAnimationFrame(scrollToBottom);
+                }
+        }, [height, isNearBottom, scrollToBottom, width]);
 
 	return {
 		authState,
@@ -238,8 +390,9 @@ export default function useChatPage() {
 		closeMessageMenu,
 		startEditSelectedMessage,
 		confirmDeleteSelectedMessage,
-		commitEditMessage,
-		cancelEditMessage,
-		listRef,
-	};
+                  commitEditMessage,
+                  cancelEditMessage,
+                  handleScroll,
+                  listRef,
+         };
 }
