@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { parseMentions } from "../../helpers/mentions";
 import { fetchUserProfile } from "../../slices/userApiSlice";
@@ -31,15 +31,16 @@ export default function useChatPage() {
 		listRef,
 		handleScroll,
 		fetchMessages,
-		mergeMessages,
-		updatePageInfo,
-		scrollToBottom,
-		isNearBottom,
-		pageInfoRef,
-		loadingOlderRef,
-		resetRoomState,
-		initialFetchRoomRef,
-	} = useChatMessages(authState, dispatch);
+                mergeMessages,
+                updatePageInfo,
+                scrollToBottom,
+                isNearBottom,
+                pageInfoRef,
+                loadingOlderRef,
+                resetRoomState,
+                initialFetchRoomRef,
+                loadingSkeletonCount,
+        } = useChatMessages(authState, dispatch);
 
 	useChatSockets({
 		authState,
@@ -73,80 +74,88 @@ export default function useChatPage() {
 		[dispatch]
 	);
 
-	const sendMessage = (e) => {
-		e?.preventDefault();
-		if (!message || !authState.socketInfo.currentRoom) return;
-		const s = socketIoHelper.getSocket();
-		const mentions = parseMentions(message, users);
-		s.emit("message_room", [authState.socketInfo.currentRoom, message, mentions]);
-		setMessage("");
-	};
+        const sendMessage = useCallback(
+                (e) => {
+                        e?.preventDefault();
+                        if (!message || !authState.socketInfo.currentRoom) return;
+                        const s = socketIoHelper.getSocket();
+                        const mentions = parseMentions(message, users);
+                        s.emit("message_room", [authState.socketInfo.currentRoom, message, mentions]);
+                        setMessage("");
+                },
+                [authState.socketInfo.currentRoom, message, users]
+        );
 
-	const clickRoomSelect = (e) => {
-		setRoomAnchorEl(e.currentTarget);
-		setUserListAnchorEl(null);
-	};
+        const clickRoomSelect = useCallback((e) => {
+                setRoomAnchorEl(e.currentTarget);
+                setUserListAnchorEl(null);
+        }, []);
 
-	const clickUserList = (e) => {
-		setUserListAnchorEl(e.currentTarget);
-		setRoomAnchorEl(null);
-	};
+        const clickUserList = useCallback((e) => {
+                setUserListAnchorEl(e.currentTarget);
+                setRoomAnchorEl(null);
+        }, []);
 
-	const previewUser = async (elRef, u) => {
-		if (!elRef?.current) {
-			setUserPreviewEl(null);
-			setUserPreviewUser(null);
-			return;
-		}
-		if (!u?._id) return;
-		try {
-			const { profile: info } = await dispatch(fetchUserProfile({ userId: u._id, authToken: authState.authToken })).unwrap();
-			if (info) {
-				setUserPreviewEl(elRef.current);
-				setUserPreviewUser(info);
-			}
-		} catch (err) {
-			console.error(err);
-		}
-	};
+        const previewUser = useCallback(
+                async (elRef, u) => {
+                        if (!elRef?.current) {
+                                setUserPreviewEl(null);
+                                setUserPreviewUser(null);
+                                return;
+                        }
+                        if (!u?._id) return;
+                        try {
+                                const { profile: info } = await dispatch(
+                                        fetchUserProfile({ userId: u._id, authToken: authState.authToken })
+                                ).unwrap();
+                                if (info) {
+                                        setUserPreviewEl(elRef.current);
+                                        setUserPreviewUser(info);
+                                }
+                        } catch (err) {
+                                console.error(err);
+                        }
+                },
+                [authState.authToken, dispatch]
+        );
 
-	const openMessageMenu = (msg, pos) => {
-		setSelectedMessage(msg);
-		setMsgMenuPos(pos);
-	};
+        const openMessageMenu = useCallback((msg, pos) => {
+                setSelectedMessage(msg);
+                setMsgMenuPos(pos);
+        }, []);
 
-	const closeMessageMenu = () => {
-		setMsgMenuPos(null);
-		setSelectedMessage(null);
-	};
+        const closeMessageMenu = useCallback(() => {
+                setMsgMenuPos(null);
+                setSelectedMessage(null);
+        }, []);
 
-	const startEditSelectedMessage = () => {
-		if (!selectedMessage) return;
-		setEditingMessageId(selectedMessage._id);
-		setEditingText(selectedMessage.content);
-		closeMessageMenu();
-	};
+        const startEditSelectedMessage = useCallback(() => {
+                if (!selectedMessage) return;
+                setEditingMessageId(selectedMessage._id);
+                setEditingText(selectedMessage.content);
+                closeMessageMenu();
+        }, [closeMessageMenu, selectedMessage]);
 
-	const confirmDeleteSelectedMessage = () => {
-		if (!selectedMessage) return;
-		const s = socketIoHelper.getSocket();
-		s.emit("delete_message", authState.socketInfo.currentRoom, selectedMessage._id);
-		closeMessageMenu();
-	};
+        const confirmDeleteSelectedMessage = useCallback(() => {
+                if (!selectedMessage) return;
+                const s = socketIoHelper.getSocket();
+                s.emit("delete_message", authState.socketInfo.currentRoom, selectedMessage._id);
+                closeMessageMenu();
+        }, [authState.socketInfo.currentRoom, closeMessageMenu, selectedMessage]);
 
-	const commitEditMessage = () => {
-		if (!editingMessageId) return;
-		const s = socketIoHelper.getSocket();
-		const mentions = parseMentions(editingText, users);
-		s.emit("edit_message", authState.socketInfo.currentRoom, editingMessageId, editingText, mentions);
-		setEditingMessageId(null);
-		setEditingText("");
-	};
+        const commitEditMessage = useCallback(() => {
+                if (!editingMessageId) return;
+                const s = socketIoHelper.getSocket();
+                const mentions = parseMentions(editingText, users);
+                s.emit("edit_message", authState.socketInfo.currentRoom, editingMessageId, editingText, mentions);
+                setEditingMessageId(null);
+                setEditingText("");
+        }, [authState.socketInfo.currentRoom, editingMessageId, editingText, users]);
 
-	const cancelEditMessage = () => {
-		setEditingMessageId(null);
-		setEditingText("");
-	};
+        const cancelEditMessage = useCallback(() => {
+                setEditingMessageId(null);
+                setEditingText("");
+        }, []);
 
 	return {
 		authState,
@@ -178,8 +187,9 @@ export default function useChatPage() {
 		startEditSelectedMessage,
 		confirmDeleteSelectedMessage,
 		commitEditMessage,
-		cancelEditMessage,
-		handleScroll,
-		listRef,
-	};
+                cancelEditMessage,
+                handleScroll,
+                listRef,
+                loadingSkeletonCount,
+        };
 }

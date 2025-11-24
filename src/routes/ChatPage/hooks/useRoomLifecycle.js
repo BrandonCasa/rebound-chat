@@ -28,6 +28,7 @@ export default function useRoomLifecycle({
                 if (!roomId) {
                         initialFetchRoomRef.current = null;
                         setMessages([]);
+                        requestAnimationFrame(scrollToBottom);
                         return;
                 }
 
@@ -35,6 +36,16 @@ export default function useRoomLifecycle({
 
                 initialFetchRoomRef.current = roomId;
                 setMessages([]);
+                requestAnimationFrame(scrollToBottom);
                 fetchMessages(roomId);
-        }, [authState.authToken, authState.socketInfo.currentRoom, fetchMessages, initialFetchRoomRef, resetRoomState, setMessages, setUsers]);
+        }, [
+                authState.authToken,
+                authState.socketInfo.currentRoom,
+                fetchMessages,
+                initialFetchRoomRef,
+                resetRoomState,
+                scrollToBottom,
+                setMessages,
+                setUsers,
+        ]);
 }
