@@ -110,7 +110,7 @@ export default function useChatPage() {
 
 				const mapped = olderMessages || [];
 				setMessages((prev) => {
-					const merged = mergeMessages(mapped, prev);
+					const merged = mergeMessages(prev, mapped);
 					updatePageInfo(pageInfo, roomIdOut, merged);
 					return merged;
 				});
