@@ -1,12 +1,12 @@
 import { Box, List } from "@mui/material";
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 
 import { scrollbarStyles } from "../../routes/scrollbarStyles";
 import ConstructedMessages from "./ConstructedMessages";
 
 function ChatArea({ messages, previewUser, onContextMenu, editingMessageId, editingText, setEditingText, commitEdit, cancelEdit, onScroll, listRef }) {
-	const boxStyles = useMemo(
-		() => ({
+        const boxStyles = useMemo(
+                () => ({
 			position: "absolute",
 			left: "0px",
 			top: "0px",
@@ -18,30 +18,26 @@ function ChatArea({ messages, previewUser, onContextMenu, editingMessageId, edit
 			display: "flex",
 			flexDirection: "column",
 			...scrollbarStyles,
-		}),
-		[]
-	);
+                }),
+                []
+        );
 
-	React.useEffect(() => {
-		console.log(listRef);
-		if (listRef.current) {
-			// Attach the event listener
-			listRef.current.addEventListener("scrollend", onScroll);
-		}
+        useEffect(() => {
+                const listEl = listRef?.current;
+                if (!listEl || !onScroll) return undefined;
 
-		// Cleanup function: remove the event listener when the component unmounts
-		return () => {
-			if (listRef.current) {
-				listRef.current.removeEventListener("scrollend", onScroll);
-			}
-		};
-	}, []);
+                listEl.addEventListener("scrollend", onScroll);
 
-	return (
-		<Box sx={boxStyles} ref={listRef}>
-			<List disablePadding>
-				<ConstructedMessages
-					relevantMsgs={messages}
+                return () => {
+                        listEl.removeEventListener("scrollend", onScroll);
+                };
+        }, [listRef, onScroll]);
+
+        return (
+                <Box sx={boxStyles} ref={listRef}>
+                        <List disablePadding>
+                                <ConstructedMessages
+                                        relevantMsgs={messages}
 					previewUser={previewUser}
 					onContextMenu={onContextMenu}
 					editingMessageId={editingMessageId}

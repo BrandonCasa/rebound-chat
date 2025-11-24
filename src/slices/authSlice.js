@@ -307,31 +307,32 @@ const authSlice = createSlice({
 		setLoggingIn: (state, action) => {
 			state.loggingIn = action.payload.loggingIn;
 		},
-		setSocketStatus: (state, action) => {
-			state.socketInfo.connected = action.payload.connected;
-		},
-		setSocketRoom: (state, action) => {
-			const socketClient = socketIoHelper.getSocket();
+                setSocketStatus: (state, action) => {
+                        state.socketInfo.connected = action.payload.connected;
+                },
+                setSocketRoom: (state, action) => {
+                        const socketClient = socketIoHelper.getSocket();
 
-			const roomToLeave = action.payload.lastRoom || state.socketInfo.currentRoom;
-			const roomToJoin = action.payload.currentRoom;
+                        const roomToLeave = action.payload.lastRoom || state.socketInfo.currentRoom;
+                        const roomToJoin = action.payload.currentRoom;
 
-			if (!socketClient) {
-				state.socketInfo.currentRoom = roomToJoin || null;
-				return;
-			}
+                        if (!socketClient) {
+                                state.socketInfo.currentRoom = roomToJoin || state.socketInfo.currentRoom || null;
+                                return;
+                        }
 
-			if (roomToLeave) {
-				socketClient.emit("leave_room", roomToLeave);
-				state.socketInfo.currentRoom = null;
-			}
+                        if (roomToLeave && roomToLeave !== roomToJoin) {
+                                socketClient.emit("leave_room", roomToLeave);
+                        }
 
-			if (roomToJoin) {
-				socketClient.emit("join_room", roomToJoin);
-				state.socketInfo.currentRoom = roomToJoin;
-			}
-		},
-	},
+                        if (roomToJoin) {
+                                socketClient.emit("join_room", roomToJoin);
+                                state.socketInfo.currentRoom = roomToJoin;
+                        } else if (roomToLeave) {
+                                state.socketInfo.currentRoom = null;
+                        }
+                },
+        },
 	extraReducers: (builder) => {
 		builder
 			.addCase(verifyUser.pending, (state) => {
