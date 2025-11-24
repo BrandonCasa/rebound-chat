@@ -15,15 +15,30 @@ function ChatArea({ messages, previewUser, onContextMenu, editingMessageId, edit
 			overflowX: "hidden",
 			overflowY: "auto",
 			padding: 1,
-                        display: "flex",
-                        flexDirection: "column",
+			display: "flex",
+			flexDirection: "column",
 			...scrollbarStyles,
 		}),
 		[]
 	);
 
+	React.useEffect(() => {
+		console.log(listRef);
+		if (listRef.current) {
+			// Attach the event listener
+			listRef.current.addEventListener("scrollend", onScroll);
+		}
+
+		// Cleanup function: remove the event listener when the component unmounts
+		return () => {
+			if (listRef.current) {
+				listRef.current.removeEventListener("scrollend", onScroll);
+			}
+		};
+	}, []);
+
 	return (
-		<Box sx={boxStyles} onScroll={onScroll} ref={listRef}>
+		<Box sx={boxStyles} ref={listRef}>
 			<List disablePadding>
 				<ConstructedMessages
 					relevantMsgs={messages}
