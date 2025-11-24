@@ -14,13 +14,17 @@ export const mapMessages = (msgs) =>
 		},
 	}));
 
-export const fetchRoomMessages = createAsyncThunk("chatApi/fetchRoomMessages", async ({ roomId, authToken }, { rejectWithValue }) => {
+export const fetchRoomMessages = createAsyncThunk("chatApi/fetchRoomMessages", async ({ roomId, authToken, before, after, limit }, { rejectWithValue }) => {
 	try {
-                const { data } = await axios.get(
-                        `${base}/rooms/${roomId}/messages`,
-                        buildApiConfig(authToken)
-                );
-		return { roomId, messages: await mapMessages(data.messages) };
+		const params = new URLSearchParams();
+		if (before) params.append("before", before);
+		if (after) params.append("after", after);
+		if (limit) params.append("limit", limit);
+
+		const query = params.toString();
+		const url = `${base}/rooms/${roomId}/messages${query ? `?${query}` : ""}`;
+		const { data } = await axios.get(url, buildApiConfig(authToken));
+		return { roomId, messages: await mapMessages(data.messages), pageInfo: data.pageInfo };
 	} catch (err) {
 		return rejectWithValue(err.response?.data || err.message);
 	}

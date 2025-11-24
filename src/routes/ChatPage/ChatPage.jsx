@@ -4,6 +4,7 @@ import PeopleRounded from "@mui/icons-material/PeopleRounded";
 import { Box, Button, Divider, Paper, Popover, Typography, useTheme } from "@mui/material";
 
 import useChatPage from "./useChatPage";
+import useInfiniteScrollUpList from "./useInfiniteScroll";
 
 import ChatRoomMenu from "../../components/Chat/ChatRoomMenu";
 import UserListMenu from "../../components/Chat/UserListMenu";
@@ -45,8 +46,20 @@ function ChatPage() {
 		confirmDeleteSelectedMessage,
 		commitEditMessage,
 		cancelEditMessage,
-		listRef,
+		fetchOlderMessages,
+		pageInfoRef,
 	} = useChatPage();
+
+	const { listRef, topSentinelRef } = useInfiniteScrollUpList(
+		{
+			initialCount: 50,
+			chunkSize: 50,
+			debounceMs: 500,
+		},
+		fetchOlderMessages,
+		messages,
+		pageInfoRef
+	);
 
 	return (
 		<Box
@@ -127,11 +140,12 @@ function ChatPage() {
 						commitEdit={commitEditMessage}
 						cancelEdit={cancelEditMessage}
 						listRef={listRef}
+						topSentinelRef={topSentinelRef}
 					/>
 				</Box>
 
 				{/* input */}
-                                <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} users={users} />
+				<ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} users={users} />
 			</Paper>
 		</Box>
 	);

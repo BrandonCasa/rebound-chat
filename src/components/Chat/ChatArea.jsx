@@ -4,7 +4,7 @@ import React, { useMemo } from "react";
 import { scrollbarStyles } from "../../routes/scrollbarStyles";
 import ConstructedMessages from "./ConstructedMessages";
 
-function ChatArea({ messages, previewUser, onContextMenu, editingMessageId, editingText, setEditingText, commitEdit, cancelEdit, onScroll, listRef }) {
+function ChatArea({ messages, previewUser, onContextMenu, editingMessageId, editingText, setEditingText, commitEdit, cancelEdit, listRef, topSentinelRef }) {
 	const boxStyles = useMemo(
 		() => ({
 			position: "absolute",
@@ -23,19 +23,18 @@ function ChatArea({ messages, previewUser, onContextMenu, editingMessageId, edit
 	);
 
 	return (
-		<Box sx={boxStyles} onScroll={onScroll} ref={listRef}>
-			<List disablePadding>
-				<ConstructedMessages
-					relevantMsgs={messages}
-					previewUser={previewUser}
-					onContextMenu={onContextMenu}
-					editingMessageId={editingMessageId}
-					editingText={editingText}
-					setEditingText={setEditingText}
-					commitEdit={commitEdit}
-					cancelEdit={cancelEdit}
-				/>
-			</List>
+		<Box sx={boxStyles} ref={listRef}>
+			<ConstructedMessages
+				relevantMsgs={messages}
+				previewUser={previewUser}
+				onContextMenu={onContextMenu}
+				editingMessageId={editingMessageId}
+				editingText={editingText}
+				setEditingText={setEditingText}
+				commitEdit={commitEdit}
+				cancelEdit={cancelEdit}
+			/>
+			<div ref={topSentinelRef} />
 		</Box>
 	);
 }
