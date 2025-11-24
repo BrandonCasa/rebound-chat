@@ -42,15 +42,15 @@ export default function useChatPage() {
                 );
         }, []);
 
-        const updatePageInfo = useCallback((pageInfo = {}, nextMessages = messages) => {
+        const updatePageInfo = useCallback((pageInfo = {}, nextMessages = []) => {
                 pageInfoRef.current = {
                         hasMoreBefore: pageInfo.hasMoreBefore ?? pageInfoRef.current.hasMoreBefore,
                         hasMoreAfter: pageInfo.hasMoreAfter ?? pageInfoRef.current.hasMoreAfter,
-                        nextBefore: pageInfo.nextBefore || nextMessages[0]?._id || pageInfoRef.current.nextBefore,
+                        nextBefore: pageInfo.nextBefore ?? nextMessages[0]?._id ?? pageInfoRef.current.nextBefore,
                         nextAfter:
-                                pageInfo.nextAfter || nextMessages[nextMessages.length - 1]?._id || pageInfoRef.current.nextAfter,
+                                pageInfo.nextAfter ?? nextMessages[nextMessages.length - 1]?._id ?? pageInfoRef.current.nextAfter,
                 };
-        }, [messages]);
+        }, []);
 
         const scrollToBottom = useCallback(() => {
                 const el = listRef.current;
