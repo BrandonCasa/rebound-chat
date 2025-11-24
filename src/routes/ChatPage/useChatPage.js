@@ -8,7 +8,7 @@ import socketIoHelper from "../../helpers/socket";
 import { setSocketRoom } from "../../slices/authSlice";
 import { addSnackbar } from "../../slices/snackbarSlice";
 const MESSAGE_PAGE_SIZE = 50;
-const SCROLL_TRIGGER_PX = 150;
+const SCROLL_TRIGGER_PX = 50;
 
 export default function useChatPage() {
 	const authState = useSelector((state) => state.auth);
@@ -19,161 +19,158 @@ export default function useChatPage() {
 	const [channels, setChannels] = useState({});
 	const [users, setUsers] = useState([]);
 
-        const [roomAnchorEl, setRoomAnchorEl] = useState(null);
-        const [userListAnchorEl, setUserListAnchorEl] = useState(null);
-        const [userPreviewEl, setUserPreviewEl] = useState(null);
-        const [userPreviewUser, setUserPreviewUser] = useState(null);
-        const [msgMenuPos, setMsgMenuPos] = useState(null);
-        const [selectedMessage, setSelectedMessage] = useState(null);
-        const [editingMessageId, setEditingMessageId] = useState(null);
-        const [editingText, setEditingText] = useState("");
-        const listRef = useRef(null);
-        const fetchingRef = useRef(false);
-        const pageInfoRef = useRef({ hasMoreBefore: false, hasMoreAfter: false, nextBefore: null, nextAfter: null });
-        const loadingOlderRef = useRef(false);
-        const initialFetchRoomRef = useRef(null);
-        const topFetchLockedRef = useRef(false);
-        const rearmScrollTopRef = useRef(SCROLL_TRIGGER_PX * 2);
-        const lastScrollTopRef = useRef(0);
+	const [roomAnchorEl, setRoomAnchorEl] = useState(null);
+	const [userListAnchorEl, setUserListAnchorEl] = useState(null);
+	const [userPreviewEl, setUserPreviewEl] = useState(null);
+	const [userPreviewUser, setUserPreviewUser] = useState(null);
+	const [msgMenuPos, setMsgMenuPos] = useState(null);
+	const [selectedMessage, setSelectedMessage] = useState(null);
+	const [editingMessageId, setEditingMessageId] = useState(null);
+	const [editingText, setEditingText] = useState("");
+	const listRef = useRef(null);
+	const fetchingRef = useRef(false);
+	const pageInfoRef = useRef({ hasMoreBefore: false, hasMoreAfter: false, nextBefore: null, nextAfter: null });
+	const loadingOlderRef = useRef(false);
+	const initialFetchRoomRef = useRef(null);
+	const topFetchLockedRef = useRef(false);
+	const rearmScrollTopRef = useRef(SCROLL_TRIGGER_PX * 2);
+	const lastScrollTopRef = useRef(0);
 
-        const mergeMessages = useCallback((existing, incoming) => {
-                const merged = new Map();
-                existing.forEach((msg) => merged.set(msg._id, msg));
-                incoming.forEach((msg) => merged.set(msg._id, msg));
+	const mergeMessages = useCallback((existing, incoming) => {
+		const merged = new Map();
+		existing.forEach((msg) => merged.set(msg._id, msg));
+		incoming.forEach((msg) => merged.set(msg._id, msg));
 
-                return Array.from(merged.values()).sort(
-                        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-                );
-        }, []);
+		return Array.from(merged.values()).sort((a, b) => {
+			if (a.createdAt < b.createdAt) return -1;
+			if (a.createdAt > b.createdAt) return 1;
+			return 0;
+		});
+	}, []);
 
-        const updatePageInfo = useCallback((pageInfo = {}, nextMessages = []) => {
-                pageInfoRef.current = {
-                        hasMoreBefore: pageInfo.hasMoreBefore ?? pageInfoRef.current.hasMoreBefore,
-                        hasMoreAfter: pageInfo.hasMoreAfter ?? pageInfoRef.current.hasMoreAfter,
-                        nextBefore: pageInfo.nextBefore ?? nextMessages[0]?._id ?? pageInfoRef.current.nextBefore,
-                        nextAfter:
-                                pageInfo.nextAfter ?? nextMessages[nextMessages.length - 1]?._id ?? pageInfoRef.current.nextAfter,
-                };
-        }, []);
+	const updatePageInfo = useCallback((pageInfo = {}, nextMessages = []) => {
+		pageInfoRef.current = {
+			hasMoreBefore: pageInfo.hasMoreBefore ?? pageInfoRef.current.hasMoreBefore,
+			hasMoreAfter: pageInfo.hasMoreAfter ?? pageInfoRef.current.hasMoreAfter,
+			nextBefore: pageInfo.nextBefore ?? nextMessages[0]?._id ?? pageInfoRef.current.nextBefore,
+			nextAfter: pageInfo.nextAfter ?? nextMessages[nextMessages.length - 1]?._id ?? pageInfoRef.current.nextAfter,
+		};
+	}, []);
 
-        const scrollToBottom = useCallback(() => {
-                const el = listRef.current;
-                if (!el) return;
-                el.scrollTop = el.scrollHeight;
-        }, []);
+	const scrollToBottom = useCallback(() => {
+		const el = listRef.current;
+		if (!el) return;
+		el.scrollTop = el.scrollHeight;
+	}, []);
 
-        const isNearBottom = useCallback(() => {
-                const el = listRef.current;
-                if (!el) return false;
-                return el.scrollHeight - el.clientHeight - el.scrollTop < SCROLL_TRIGGER_PX;
-        }, []);
+	const isNearBottom = useCallback(() => {
+		const el = listRef.current;
+		if (!el) return false;
+		return el.scrollHeight - el.clientHeight - el.scrollTop < SCROLL_TRIGGER_PX;
+	}, []);
 
-        const fetchMessages = useCallback(
-                async (roomOverride) => {
-                        const roomId = roomOverride || authState.socketInfo.currentRoom;
-                        if (!roomId || fetchingRef.current || !authState.authToken) return;
-                        fetchingRef.current = true;
-                        try {
-                                const { messages: msgs, pageInfo } = await dispatch(
-                                        fetchRoomMessages({
-                                                roomId,
-                                                authToken: authState.authToken,
-                                                limit: MESSAGE_PAGE_SIZE,
-                                        })
-                                ).unwrap();
-                                const mapped = msgs || [];
-                                setMessages(mapped);
-                                updatePageInfo(pageInfo, mapped);
-                                requestAnimationFrame(scrollToBottom);
-                        } catch (err) {
-                                console.error("load messages error", err);
-                        } finally {
-                                fetchingRef.current = false;
-                        }
-                },
-                [authState.authToken, authState.socketInfo.currentRoom, dispatch, scrollToBottom, updatePageInfo]
-        );
+	const fetchMessages = useCallback(
+		async (roomOverride) => {
+			const roomId = roomOverride || authState.socketInfo.currentRoom;
+			if (!roomId || fetchingRef.current || !authState.authToken) return;
+			fetchingRef.current = true;
+			try {
+				const { messages: msgs, pageInfo } = await dispatch(
+					fetchRoomMessages({
+						roomId,
+						authToken: authState.authToken,
+						limit: MESSAGE_PAGE_SIZE,
+					})
+				).unwrap();
+				const mapped = msgs || [];
+				setMessages(mapped);
+				updatePageInfo(pageInfo, mapped);
+				requestAnimationFrame(scrollToBottom);
+			} catch (err) {
+				console.error("load messages error", err);
+			} finally {
+				fetchingRef.current = false;
+			}
+		},
+		[authState.authToken, authState.socketInfo.currentRoom, dispatch, scrollToBottom, updatePageInfo]
+	);
 
-        const fetchOlderMessages = useCallback(async () => {
-                if (
-                        !authState.socketInfo.currentRoom ||
-                        fetchingRef.current ||
-                        !pageInfoRef.current.hasMoreBefore ||
-                        !pageInfoRef.current.nextBefore
-                ) {
-                        return;
-                }
+	const fetchOlderMessages = useCallback(async () => {
+		if (!authState.socketInfo.currentRoom || fetchingRef.current || !pageInfoRef.current.hasMoreBefore || !pageInfoRef.current.nextBefore) {
+			return;
+		}
 
-                fetchingRef.current = true;
-                loadingOlderRef.current = true;
-                const el = listRef.current;
-                const previousScrollHeight = el?.scrollHeight ?? 0;
-                const previousScrollTop = el?.scrollTop ?? 0;
+		fetchingRef.current = true;
+		loadingOlderRef.current = true;
+		const el = listRef.current;
+		const previousScrollHeight = el?.scrollHeight ?? 0;
+		const previousScrollTop = el?.scrollTop ?? 0;
 
-                try {
-                        const { messages: olderMessages, pageInfo } = await dispatch(
-                                fetchRoomMessages({
-                                        roomId: authState.socketInfo.currentRoom,
-                                        authToken: authState.authToken,
-                                        before: pageInfoRef.current.nextBefore,
-                                        limit: MESSAGE_PAGE_SIZE,
-                                })
-                        ).unwrap();
+		try {
+			const { messages: olderMessages, pageInfo } = await dispatch(
+				fetchRoomMessages({
+					roomId: authState.socketInfo.currentRoom,
+					authToken: authState.authToken,
+					before: pageInfoRef.current.nextBefore,
+					limit: MESSAGE_PAGE_SIZE,
+				})
+			).unwrap();
 
-                        const mapped = olderMessages || [];
-                        setMessages((prev) => {
-                                const merged = mergeMessages(mapped, prev);
-                                updatePageInfo(pageInfo, merged);
-                                return merged;
-                        });
+			const mapped = olderMessages || [];
+			setMessages((prev) => {
+				const merged = mergeMessages(mapped, prev);
+				updatePageInfo(pageInfo, merged);
+				return merged;
+			});
 
-                        requestAnimationFrame(() => {
-                                if (!el) return;
-                                const newHeight = el.scrollHeight;
-                                const adjustedTop = newHeight - previousScrollHeight + previousScrollTop;
-                                el.scrollTop = adjustedTop;
-                                lastScrollTopRef.current = adjustedTop;
+			requestAnimationFrame(() => {
+				if (!el) return;
+				const newHeight = el.scrollHeight;
+				const adjustedTop = newHeight - previousScrollHeight + previousScrollTop;
+				el.scrollTop = adjustedTop;
+				lastScrollTopRef.current = adjustedTop;
 
-                                // Require the user to scroll down past the post-prepend anchor before unlocking
-                                // another top fetch. This avoids cascading loads when the viewport remains near
-                                // the top after inserting older messages.
-                                rearmScrollTopRef.current = adjustedTop + SCROLL_TRIGGER_PX;
+				// Require the user to scroll down past the post-prepend anchor before unlocking
+				// another top fetch. This avoids cascading loads when the viewport remains near
+				// the top after inserting older messages.
+				rearmScrollTopRef.current = adjustedTop + SCROLL_TRIGGER_PX;
 
-                                if (adjustedTop > SCROLL_TRIGGER_PX * 2) {
-                                        topFetchLockedRef.current = false;
-                                }
-                        });
-                } catch (err) {
-                        console.error("load older messages error", err);
-                } finally {
-                        fetchingRef.current = false;
-                        loadingOlderRef.current = false;
-                }
-        }, [authState.authToken, authState.socketInfo.currentRoom, dispatch, mergeMessages, updatePageInfo]);
+				if (adjustedTop > SCROLL_TRIGGER_PX * 2) {
+					topFetchLockedRef.current = false;
+				}
+			});
+		} catch (err) {
+			console.error("load older messages error", err);
+		} finally {
+			fetchingRef.current = false;
+			loadingOlderRef.current = false;
+		}
+	}, [authState.authToken, authState.socketInfo.currentRoom, dispatch, mergeMessages, updatePageInfo]);
 
-        const handleScroll = useCallback(
-                (e) => {
-                        const { scrollTop } = e.target;
-                        const scrollingUp = scrollTop < lastScrollTopRef.current;
-                        lastScrollTopRef.current = scrollTop;
+	const handleScroll = useCallback(
+		(e) => {
+			const { scrollTop } = e.target;
 
-                        if (loadingOlderRef.current || fetchingRef.current) return;
+			const scrollingUp = scrollTop < lastScrollTopRef.current;
+			lastScrollTopRef.current = scrollTop;
 
-                        if (topFetchLockedRef.current) {
-                                if (scrollTop > rearmScrollTopRef.current) {
-                                        topFetchLockedRef.current = false;
-                                }
+			if (loadingOlderRef.current || fetchingRef.current) return;
 
-                                if (topFetchLockedRef.current) return;
-                        }
+			if (topFetchLockedRef.current) {
+				if (scrollTop > rearmScrollTopRef.current) {
+					topFetchLockedRef.current = false;
+				}
 
-                        if (scrollingUp && scrollTop < SCROLL_TRIGGER_PX) {
-                                topFetchLockedRef.current = true;
-                                fetchOlderMessages();
-                        }
-                },
-                [fetchOlderMessages]
-        );
+				if (topFetchLockedRef.current) return;
+			}
+
+			if (scrollingUp && scrollTop < SCROLL_TRIGGER_PX) {
+				topFetchLockedRef.current = true;
+				fetchOlderMessages();
+			}
+		},
+		[fetchOlderMessages]
+	);
 
 	useEffect(() => {
 		const socket = socketIoHelper.getSocket();
@@ -189,55 +186,55 @@ export default function useChatPage() {
 					);
 				}
 			});
-                        socket.on("joined_room", async (_id, msgs) => {
-                                const mapped = await mapMessages(msgs || []);
-                                setMessages((prev) => {
-                                        const merged = mergeMessages(prev, mapped);
-                                        updatePageInfo(pageInfoRef.current, merged);
-                                        return merged;
-                                });
-                                if (mapped.length) {
-                                        requestAnimationFrame(scrollToBottom);
-                                }
-                        });
+			socket.on("joined_room", async (_id, msgs) => {
+				const mapped = await mapMessages(msgs || []);
+				setMessages((prev) => {
+					const merged = mergeMessages(prev, mapped);
+					updatePageInfo(pageInfoRef.current, merged);
+					return merged;
+				});
+				if (mapped.length) {
+					requestAnimationFrame(scrollToBottom);
+				}
+			});
 
-                        const handleIncomingMessage = async (payload) => {
-                                if (!payload) return;
-                                const normalized = Array.isArray(payload) ? payload : [payload];
-                                const mapped = await mapMessages(normalized);
-                                setMessages((prev) => {
-                                        const merged = mergeMessages(prev, mapped);
-                                        updatePageInfo(pageInfoRef.current, merged);
-                                        return merged;
-                                });
-                                if (isNearBottom()) {
-                                        requestAnimationFrame(scrollToBottom);
-                                }
-                        };
+			const handleIncomingMessage = async (payload) => {
+				if (!payload) return;
+				const normalized = Array.isArray(payload) ? payload : [payload];
+				const mapped = await mapMessages(normalized);
+				setMessages((prev) => {
+					const merged = mergeMessages(prev, mapped);
+					updatePageInfo(pageInfoRef.current, merged);
+					return merged;
+				});
+				if (isNearBottom()) {
+					requestAnimationFrame(scrollToBottom);
+				}
+			};
 
-                        socket.on("message_sent", async (_id, msg) => {
-                                await handleIncomingMessage(msg);
-                        });
-                        socket.on("new_message", async (_id, msg) => {
-                                await handleIncomingMessage(msg);
-                        });
-                        socket.on("messages_updated", async (_id, payload) => {
-                                if (payload?.type === "delete" && payload.messageId) {
-                                        setMessages((prev) => {
-                                                const filtered = prev.filter((m) => m._id !== payload.messageId);
-                                                updatePageInfo(pageInfoRef.current, filtered);
-                                                return filtered;
-                                        });
-                                        return;
-                                }
+			socket.on("message_sent", async (_id, msg) => {
+				await handleIncomingMessage(msg);
+			});
+			socket.on("new_message", async (_id, msg) => {
+				await handleIncomingMessage(msg);
+			});
+			socket.on("messages_updated", async (_id, payload) => {
+				if (payload?.type === "delete" && payload.messageId) {
+					setMessages((prev) => {
+						const filtered = prev.filter((m) => m._id !== payload.messageId);
+						updatePageInfo(pageInfoRef.current, filtered);
+						return filtered;
+					});
+					return;
+				}
 
-                                if (payload?.type === "edit" && payload.message) {
-                                        await handleIncomingMessage(payload.message);
-                                        return;
-                                }
+				if (payload?.type === "edit" && payload.message) {
+					await handleIncomingMessage(payload.message);
+					return;
+				}
 
-                                await handleIncomingMessage(payload);
-                        });
+				await handleIncomingMessage(payload);
+			});
 			socket.on("user_list", (_roomId, list, sender, evt) => {
 				if (sender.id !== authState.userId) {
 					dispatch(
@@ -274,45 +271,45 @@ export default function useChatPage() {
 			setMessages([]);
 			setUsers([]);
 		};
-        }, [
-                authState.loggedIn,
-                authState.loggingIn,
-                authState.socketInfo.currentRoom,
-                authState.userId,
-                authState.socketInfo.connected,
-                dispatch,
-                isNearBottom,
-                mergeMessages,
-                scrollToBottom,
-                updatePageInfo,
-        ]);
+	}, [
+		authState.loggedIn,
+		authState.loggingIn,
+		authState.socketInfo.currentRoom,
+		authState.userId,
+		authState.socketInfo.connected,
+		dispatch,
+		isNearBottom,
+		mergeMessages,
+		scrollToBottom,
+		updatePageInfo,
+	]);
 
-        useEffect(() => {
-                const roomId = authState.socketInfo.currentRoom;
-                setUsers([]);
-                pageInfoRef.current = { hasMoreBefore: false, hasMoreAfter: false, nextBefore: null, nextAfter: null };
-                rearmScrollTopRef.current = SCROLL_TRIGGER_PX * 2;
-                lastScrollTopRef.current = 0;
-                topFetchLockedRef.current = false;
-                if (!roomId) {
-                        initialFetchRoomRef.current = null;
-                        setMessages([]);
-                        return;
-                }
+	useEffect(() => {
+		const roomId = authState.socketInfo.currentRoom;
+		setUsers([]);
+		pageInfoRef.current = { hasMoreBefore: false, hasMoreAfter: false, nextBefore: null, nextAfter: null };
+		rearmScrollTopRef.current = SCROLL_TRIGGER_PX * 2;
+		lastScrollTopRef.current = 0;
+		topFetchLockedRef.current = false;
+		if (!roomId) {
+			initialFetchRoomRef.current = null;
+			setMessages([]);
+			return;
+		}
 
-                if (initialFetchRoomRef.current === roomId) return;
+		if (initialFetchRoomRef.current === roomId) return;
 
-                initialFetchRoomRef.current = roomId;
-                setMessages([]);
-                fetchMessages(roomId);
-        }, [authState.authToken, authState.socketInfo.currentRoom, fetchMessages]);
+		initialFetchRoomRef.current = roomId;
+		setMessages([]);
+		fetchMessages(roomId);
+	}, [authState.authToken, authState.socketInfo.currentRoom, fetchMessages]);
 
-        useEffect(() => {
-                if (loadingOlderRef.current) return;
-                if (isNearBottom()) {
-                        requestAnimationFrame(scrollToBottom);
-                }
-        }, [isNearBottom, messages.length, scrollToBottom]);
+	useEffect(() => {
+		if (loadingOlderRef.current) return;
+		if (isNearBottom()) {
+			requestAnimationFrame(scrollToBottom);
+		}
+	}, [isNearBottom, messages.length, scrollToBottom]);
 
 	useEffect(
 		() => () => {
@@ -321,14 +318,14 @@ export default function useChatPage() {
 		[dispatch]
 	);
 
-        const sendMessage = (e) => {
-                e?.preventDefault();
-                if (!message || !authState.socketInfo.currentRoom) return;
-                const s = socketIoHelper.getSocket();
-                const mentions = parseMentions(message, users);
-                s.emit("message_room", [authState.socketInfo.currentRoom, message, mentions]);
-                setMessage("");
-        };
+	const sendMessage = (e) => {
+		e?.preventDefault();
+		if (!message || !authState.socketInfo.currentRoom) return;
+		const s = socketIoHelper.getSocket();
+		const mentions = parseMentions(message, users);
+		s.emit("message_room", [authState.socketInfo.currentRoom, message, mentions]);
+		setMessage("");
+	};
 
 	const clickRoomSelect = (e) => {
 		setRoomAnchorEl(e.currentTarget);
@@ -382,28 +379,28 @@ export default function useChatPage() {
 		closeMessageMenu();
 	};
 
-        const commitEditMessage = () => {
-                if (!editingMessageId) return;
-                const s = socketIoHelper.getSocket();
-                const mentions = parseMentions(editingText, users);
-                s.emit("edit_message", authState.socketInfo.currentRoom, editingMessageId, editingText, mentions);
-                setEditingMessageId(null);
-                setEditingText("");
-        };
+	const commitEditMessage = () => {
+		if (!editingMessageId) return;
+		const s = socketIoHelper.getSocket();
+		const mentions = parseMentions(editingText, users);
+		s.emit("edit_message", authState.socketInfo.currentRoom, editingMessageId, editingText, mentions);
+		setEditingMessageId(null);
+		setEditingText("");
+	};
 
 	const cancelEditMessage = () => {
 		setEditingMessageId(null);
 		setEditingText("");
 	};
 
-        const { width, height } = useWindowDimensions();
+	const { width, height } = useWindowDimensions();
 
-        useEffect(() => {
-                if (loadingOlderRef.current) return;
-                if (isNearBottom()) {
-                        requestAnimationFrame(scrollToBottom);
-                }
-        }, [height, isNearBottom, scrollToBottom, width]);
+	useEffect(() => {
+		if (loadingOlderRef.current) return;
+		if (isNearBottom()) {
+			requestAnimationFrame(scrollToBottom);
+		}
+	}, [height, isNearBottom, scrollToBottom, width]);
 
 	return {
 		authState,
@@ -434,9 +431,9 @@ export default function useChatPage() {
 		closeMessageMenu,
 		startEditSelectedMessage,
 		confirmDeleteSelectedMessage,
-                  commitEditMessage,
-                  cancelEditMessage,
-                  handleScroll,
-                  listRef,
-         };
+		commitEditMessage,
+		cancelEditMessage,
+		handleScroll,
+		listRef,
+	};
 }
