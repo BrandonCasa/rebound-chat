@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { addSnackbar } from "../../../slices/snackbarSlice";
 import { mapMessages } from "../../../slices/chatApiSlice";
 import socketIoHelper from "../../../helpers/socket";
@@ -16,35 +16,12 @@ export default function useChatSockets({
         isNearBottom,
         pageInfoRef,
 }) {
-        const currentRoomRef = useRef(authState.socketInfo.currentRoom);
-
-        useEffect(() => {
-                currentRoomRef.current = authState.socketInfo.currentRoom;
-        }, [authState.socketInfo.currentRoom]);
-
-        const handleIncomingMessage = useCallback(
-                async (payload) => {
-                        if (!payload) return;
-                        const normalized = Array.isArray(payload) ? payload : [payload];
-                        const mapped = await mapMessages(normalized);
-                        setMessages((prev) => {
-                                const merged = mergeMessages(prev, mapped);
-                                updatePageInfo(pageInfoRef.current, merged);
-                                return merged;
-                        });
-                        if (isNearBottom()) {
-                                requestAnimationFrame(scrollToBottom);
-                        }
-                },
-                [isNearBottom, mergeMessages, scrollToBottom, setMessages, updatePageInfo, pageInfoRef]
-        );
-
         useEffect(() => {
                 const socket = socketIoHelper.getSocket();
                 if (authState.loggedIn && socket) {
                         socket.on("room_list", ([idMap, roomObjs]) => {
                                 setChannels(roomObjs);
-                                if (!currentRoomRef.current) {
+                                if (!authState.socketInfo.currentRoom) {
                                         dispatch(
                                                 setSocketRoom({
                                                         lastRoom: null,
@@ -64,6 +41,20 @@ export default function useChatSockets({
                                         requestAnimationFrame(scrollToBottom);
                                 }
                         });
+
+                        const handleIncomingMessage = async (payload) => {
+                                if (!payload) return;
+                                const normalized = Array.isArray(payload) ? payload : [payload];
+                                const mapped = await mapMessages(normalized);
+                                setMessages((prev) => {
+                                        const merged = mergeMessages(prev, mapped);
+                                        updatePageInfo(pageInfoRef.current, merged);
+                                        return merged;
+                                });
+                                if (isNearBottom()) {
+                                        requestAnimationFrame(scrollToBottom);
+                                }
+                        };
 
                         socket.on("message_sent", async (_id, msg) => {
                                 await handleIncomingMessage(msg);
@@ -127,10 +118,12 @@ export default function useChatSockets({
         }, [
                 authState.loggedIn,
                 authState.loggingIn,
+                authState.socketInfo.currentRoom,
                 authState.userId,
                 authState.socketInfo.connected,
                 dispatch,
-                handleIncomingMessage,
+                isNearBottom,
+                mergeMessages,
                 scrollToBottom,
                 setChannels,
                 setMessages,

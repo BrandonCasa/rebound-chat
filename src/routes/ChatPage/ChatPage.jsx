@@ -41,14 +41,13 @@ function ChatPage() {
 		previewUser,
 		openMessageMenu,
 		closeMessageMenu,
-                startEditSelectedMessage,
-                confirmDeleteSelectedMessage,
-                commitEditMessage,
-                cancelEditMessage,
-                handleScroll,
-                listRef,
-                loadingSkeletonCount,
-        } = useChatPage();
+		startEditSelectedMessage,
+		confirmDeleteSelectedMessage,
+		commitEditMessage,
+		cancelEditMessage,
+		handleScroll,
+		listRef,
+	} = useChatPage();
 
 	return (
 		<Box
@@ -125,14 +124,13 @@ function ChatPage() {
 						onContextMenu={openMessageMenu}
 						editingMessageId={editingMessageId}
 						editingText={editingText}
-                                                setEditingText={setEditingText}
-                                                commitEdit={commitEditMessage}
-                                                cancelEdit={cancelEditMessage}
-                                                listRef={listRef}
-                                                onScroll={handleScroll}
-                                                loadingSkeletonCount={loadingSkeletonCount}
-                                        />
-                                </Box>
+						setEditingText={setEditingText}
+						commitEdit={commitEditMessage}
+						cancelEdit={cancelEditMessage}
+						listRef={listRef}
+						onScroll={handleScroll}
+					/>
+				</Box>
 
 				{/* input */}
 				<ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} users={users} />
