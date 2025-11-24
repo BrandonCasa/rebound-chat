@@ -26,10 +26,38 @@ function ChatArea({ messages, previewUser, onContextMenu, editingMessageId, edit
                 const listEl = listRef?.current;
                 if (!listEl || !onScroll) return undefined;
 
-                listEl.addEventListener("scrollend", onScroll);
+                let scrollEndTimeout = null;
+                const scrollEndDelay = 120;
+
+                const handleScrollEnd = (event) => {
+                        onScroll(event);
+                };
+
+                const dispatchSyntheticScrollEnd = () => {
+                        if (scrollEndTimeout) {
+                                clearTimeout(scrollEndTimeout);
+                        }
+                        scrollEndTimeout = setTimeout(() => {
+                                listEl.dispatchEvent(new Event("scrollend"));
+                        }, scrollEndDelay);
+                };
+
+                listEl.addEventListener("scrollend", handleScrollEnd);
+
+                // Polyfill scrollend when the browser does not emit it natively.
+                const shouldPolyfillScrollEnd = !("onscrollend" in document);
+                if (shouldPolyfillScrollEnd) {
+                        listEl.addEventListener("scroll", dispatchSyntheticScrollEnd, { passive: true });
+                }
 
                 return () => {
-                        listEl.removeEventListener("scrollend", onScroll);
+                        listEl.removeEventListener("scrollend", handleScrollEnd);
+                        if (shouldPolyfillScrollEnd) {
+                                listEl.removeEventListener("scroll", dispatchSyntheticScrollEnd);
+                        }
+                        if (scrollEndTimeout) {
+                                clearTimeout(scrollEndTimeout);
+                        }
                 };
         }, [listRef, onScroll]);
 
