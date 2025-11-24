@@ -32,6 +32,7 @@ export default function useChatPage() {
         const pageInfoRef = useRef({ hasMoreBefore: false, hasMoreAfter: false, nextBefore: null, nextAfter: null });
         const loadingOlderRef = useRef(false);
         const initialFetchRoomRef = useRef(null);
+        const topFetchLockedRef = useRef(false);
 
         const mergeMessages = useCallback((existing, incoming) => {
                 const merged = new Map();
@@ -127,7 +128,12 @@ export default function useChatPage() {
                         requestAnimationFrame(() => {
                                 if (!el) return;
                                 const newHeight = el.scrollHeight;
-                                el.scrollTop = newHeight - previousScrollHeight + previousScrollTop;
+                                const adjustedTop = newHeight - previousScrollHeight + previousScrollTop;
+                                el.scrollTop = adjustedTop;
+
+                                if (adjustedTop > SCROLL_TRIGGER_PX * 2) {
+                                        topFetchLockedRef.current = false;
+                                }
                         });
                 } catch (err) {
                         console.error("load older messages error", err);
@@ -139,7 +145,18 @@ export default function useChatPage() {
 
         const handleScroll = useCallback(
                 (e) => {
-                        if (e.target.scrollTop < SCROLL_TRIGGER_PX) {
+                        const { scrollTop } = e.target;
+
+                        if (topFetchLockedRef.current) {
+                                if (scrollTop > SCROLL_TRIGGER_PX * 2) {
+                                        topFetchLockedRef.current = false;
+                                } else {
+                                        return;
+                                }
+                        }
+
+                        if (scrollTop < SCROLL_TRIGGER_PX) {
+                                topFetchLockedRef.current = true;
                                 fetchOlderMessages();
                         }
                 },
