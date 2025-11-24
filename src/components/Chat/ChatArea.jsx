@@ -15,8 +15,8 @@ function ChatArea({ messages, previewUser, onContextMenu, editingMessageId, edit
 			overflowX: "hidden",
 			overflowY: "auto",
 			padding: 1,
-			display: "flex",
-			flexDirection: "column-reverse",
+                        display: "flex",
+                        flexDirection: "column",
 			...scrollbarStyles,
 		}),
 		[]
