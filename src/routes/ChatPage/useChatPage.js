@@ -19,10 +19,10 @@ export default function useChatPage() {
 	const [channels, setChannels] = useState({});
 	const [users, setUsers] = useState([]);
 
-	const [roomAnchorEl, setRoomAnchorEl] = useState(null);
-	const [userListAnchorEl, setUserListAnchorEl] = useState(null);
-	const [userPreviewEl, setUserPreviewEl] = useState(null);
-	const [userPreviewUser, setUserPreviewUser] = useState(null);
+        const [roomAnchorEl, setRoomAnchorEl] = useState(null);
+        const [userListAnchorEl, setUserListAnchorEl] = useState(null);
+        const [userPreviewEl, setUserPreviewEl] = useState(null);
+        const [userPreviewUser, setUserPreviewUser] = useState(null);
         const [msgMenuPos, setMsgMenuPos] = useState(null);
         const [selectedMessage, setSelectedMessage] = useState(null);
         const [editingMessageId, setEditingMessageId] = useState(null);
@@ -31,6 +31,7 @@ export default function useChatPage() {
         const fetchingRef = useRef(false);
         const pageInfoRef = useRef({ hasMoreBefore: false, hasMoreAfter: false, nextBefore: null, nextAfter: null });
         const loadingOlderRef = useRef(false);
+        const initialFetchRoomRef = useRef(null);
 
         const mergeMessages = useCallback((existing, incoming) => {
                 const merged = new Map();
@@ -64,27 +65,31 @@ export default function useChatPage() {
                 return el.scrollHeight - el.clientHeight - el.scrollTop < SCROLL_TRIGGER_PX;
         }, []);
 
-        const fetchMessages = useCallback(async () => {
-                if (!authState.socketInfo.currentRoom || fetchingRef.current) return;
-                fetchingRef.current = true;
-                try {
-                        const { messages: msgs, pageInfo } = await dispatch(
-                                fetchRoomMessages({
-                                        roomId: authState.socketInfo.currentRoom,
-                                        authToken: authState.authToken,
-                                        limit: MESSAGE_PAGE_SIZE,
-                                })
-                        ).unwrap();
-                        const mapped = msgs || [];
-                        setMessages(mapped);
-                        updatePageInfo(pageInfo, mapped);
-                        requestAnimationFrame(scrollToBottom);
-                } catch (err) {
-                        console.error("load messages error", err);
-                } finally {
-                        fetchingRef.current = false;
-                }
-        }, [authState.socketInfo.currentRoom, authState.authToken, dispatch, scrollToBottom, updatePageInfo]);
+        const fetchMessages = useCallback(
+                async (roomOverride) => {
+                        const roomId = roomOverride || authState.socketInfo.currentRoom;
+                        if (!roomId || fetchingRef.current || !authState.authToken) return;
+                        fetchingRef.current = true;
+                        try {
+                                const { messages: msgs, pageInfo } = await dispatch(
+                                        fetchRoomMessages({
+                                                roomId,
+                                                authToken: authState.authToken,
+                                                limit: MESSAGE_PAGE_SIZE,
+                                        })
+                                ).unwrap();
+                                const mapped = msgs || [];
+                                setMessages(mapped);
+                                updatePageInfo(pageInfo, mapped);
+                                requestAnimationFrame(scrollToBottom);
+                        } catch (err) {
+                                console.error("load messages error", err);
+                        } finally {
+                                fetchingRef.current = false;
+                        }
+                },
+                [authState.authToken, authState.socketInfo.currentRoom, dispatch, scrollToBottom, updatePageInfo]
+        );
 
         const fetchOlderMessages = useCallback(async () => {
                 if (
@@ -254,14 +259,21 @@ export default function useChatPage() {
         ]);
 
         useEffect(() => {
+                const roomId = authState.socketInfo.currentRoom;
                 setUsers([]);
                 pageInfoRef.current = { hasMoreBefore: false, hasMoreAfter: false, nextBefore: null, nextAfter: null };
-        }, [authState.socketInfo.currentRoom]);
+                if (!roomId) {
+                        initialFetchRoomRef.current = null;
+                        setMessages([]);
+                        return;
+                }
 
-        useEffect(() => {
+                if (initialFetchRoomRef.current === roomId) return;
+
+                initialFetchRoomRef.current = roomId;
                 setMessages([]);
-                fetchMessages();
-        }, [authState.socketInfo.currentRoom, fetchMessages]);
+                fetchMessages(roomId);
+        }, [authState.authToken, authState.socketInfo.currentRoom, fetchMessages]);
 
         useEffect(() => {
                 if (loadingOlderRef.current) return;
