@@ -45,6 +45,7 @@ function ChatPage() {
 		confirmDeleteSelectedMessage,
 		commitEditMessage,
 		cancelEditMessage,
+		handleScroll,
 		listRef,
 	} = useChatPage();
 
@@ -127,11 +128,12 @@ function ChatPage() {
 						commitEdit={commitEditMessage}
 						cancelEdit={cancelEditMessage}
 						listRef={listRef}
+						onScroll={handleScroll}
 					/>
 				</Box>
 
 				{/* input */}
-                                <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} users={users} />
+				<ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} users={users} />
 			</Paper>
 		</Box>
 	);
