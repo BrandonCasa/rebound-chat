@@ -29,15 +29,17 @@ function ChatPage() {
 		setUserPreviewEl,
 		userPreviewUser,
 		setUserPreviewUser,
-		selectedMessage,
-		msgMenuPos,
-		editingMessageId,
-		editingText,
-		setEditingText,
-		setMessages,
-		sendMessage,
-		clickRoomSelect,
-		clickUserList,
+                selectedMessage,
+                msgMenuPos,
+                editingMessageId,
+                editingText,
+                isLoadingOlder,
+                pageInfo,
+                setEditingText,
+                setMessages,
+                sendMessage,
+                clickRoomSelect,
+                clickUserList,
 		previewUser,
 		openMessageMenu,
 		closeMessageMenu,
@@ -122,15 +124,17 @@ function ChatPage() {
 						messages={messages}
 						previewUser={previewUser}
 						onContextMenu={openMessageMenu}
-						editingMessageId={editingMessageId}
-                                                editingText={editingText}
-                                                setEditingText={setEditingText}
-                                                commitEdit={commitEditMessage}
-                                                cancelEdit={cancelEditMessage}
-                                                listRef={listRef}
-                                                onScroll={handleScroll}
-                                        />
-                                </Box>
+                                        editingMessageId={editingMessageId}
+                                        editingText={editingText}
+                                        setEditingText={setEditingText}
+                                        commitEdit={commitEditMessage}
+                                        cancelEdit={cancelEditMessage}
+                                        listRef={listRef}
+                                        hasMoreBefore={pageInfo.hasMoreBefore}
+                                        isLoadingOlder={isLoadingOlder}
+                                        onScroll={handleScroll}
+                                />
+                        </Box>
 
 				{/* input */}
                                 <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} users={users} />

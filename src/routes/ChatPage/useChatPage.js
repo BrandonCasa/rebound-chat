@@ -141,11 +141,13 @@ function useMessageActions(authState, users) {
 }
 
 function useMessagePagination(authState, dispatch, listRef, scrollToBottom, isNearBottom) {
-	const [messages, setMessages] = useState([]);
-	const pageInfoRef = useRef(initialPageInfo);
-	const fetchingRef = useRef(false);
-	const loadingOlderRef = useRef(false);
-	const initialFetchRoomRef = useRef(null);
+        const [messages, setMessages] = useState([]);
+        const [pageInfo, setPageInfo] = useState(initialPageInfo);
+        const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+        const pageInfoRef = useRef(initialPageInfo);
+        const fetchingRef = useRef(false);
+        const loadingOlderRef = useRef(false);
+        const initialFetchRoomRef = useRef(null);
 
 	const mergeMessages = useCallback((existing, incoming) => {
 		const byId = new Map();
@@ -153,14 +155,23 @@ function useMessagePagination(authState, dispatch, listRef, scrollToBottom, isNe
 		return Array.from(byId.values()).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 	}, []);
 
-	const updatePageInfo = useCallback((pageInfo = {}, nextMessages = []) => {
-		pageInfoRef.current = {
-			...pageInfoRef.current,
-			...pageInfo,
-			hasMoreBefore: pageInfo.hasMoreBefore ?? pageInfoRef.current.hasMoreBefore,
-			nextBefore: pageInfo.nextBefore ?? nextMessages[0]?._id ?? pageInfoRef.current.nextBefore,
-		};
-	}, []);
+        const updatePageInfo = useCallback(
+                (nextPageInfo = {}, nextMessages = []) => {
+                        const mergedPageInfo = {
+                                ...pageInfoRef.current,
+                                ...nextPageInfo,
+                                hasMoreBefore: nextPageInfo.hasMoreBefore ?? pageInfoRef.current.hasMoreBefore,
+                                nextBefore:
+                                        nextPageInfo.nextBefore ??
+                                        nextMessages[0]?._id ??
+                                        pageInfoRef.current.nextBefore,
+                        };
+
+                        pageInfoRef.current = mergedPageInfo;
+                        setPageInfo(mergedPageInfo);
+                },
+                []
+        );
 
 	const fetchMessages = useCallback(
 		async (roomOverride) => {
@@ -196,10 +207,11 @@ function useMessagePagination(authState, dispatch, listRef, scrollToBottom, isNe
 		}
 
 		fetchingRef.current = true;
-		loadingOlderRef.current = true;
-		const el = listRef.current;
-		const prevHeight = el?.scrollHeight ?? 0;
-		const prevTop = el?.scrollTop ?? 0;
+                loadingOlderRef.current = true;
+                setIsLoadingOlder(true);
+                const el = listRef.current;
+                const prevHeight = el?.scrollHeight ?? 0;
+                const prevTop = el?.scrollTop ?? 0;
 
 		try {
 			const { messages: olderMessages, pageInfo } = await dispatch(
@@ -223,13 +235,14 @@ function useMessagePagination(authState, dispatch, listRef, scrollToBottom, isNe
 				const delta = el.scrollHeight - prevHeight;
 				el.scrollTop = prevTop + delta;
 			});
-		} catch (err) {
-			console.error("load older messages error", err);
-		} finally {
-			fetchingRef.current = false;
-			loadingOlderRef.current = false;
-		}
-	}, [authState.authToken, authState.socketInfo, dispatch, listRef, mergeMessages, updatePageInfo]);
+                } catch (err) {
+                        console.error("load older messages error", err);
+                } finally {
+                        fetchingRef.current = false;
+                        loadingOlderRef.current = false;
+                        setIsLoadingOlder(false);
+                }
+        }, [authState.authToken, authState.socketInfo, dispatch, listRef, mergeMessages, updatePageInfo]);
 
 	const handleScroll = useCallback(
 		(e) => {
@@ -267,14 +280,16 @@ function useMessagePagination(authState, dispatch, listRef, scrollToBottom, isNe
 		[updatePageInfo]
 	);
 
-	const resetAndFetchForRoom = useCallback(
-		(roomId) => {
-			pageInfoRef.current = initialPageInfo;
-			if (!roomId) {
-				initialFetchRoomRef.current = null;
-				setMessages([]);
-				return;
-			}
+        const resetAndFetchForRoom = useCallback(
+                (roomId) => {
+                        pageInfoRef.current = initialPageInfo;
+                        setPageInfo(initialPageInfo);
+                        setIsLoadingOlder(false);
+                        if (!roomId) {
+                                initialFetchRoomRef.current = null;
+                                setMessages([]);
+                                return;
+                        }
 			if (initialFetchRoomRef.current === roomId) return;
 			initialFetchRoomRef.current = roomId;
 			setMessages([]);
@@ -297,12 +312,15 @@ function useMessagePagination(authState, dispatch, listRef, scrollToBottom, isNe
 		fetchOlderMessages,
 		handleDeletedMessage,
 		handleIncomingMessages,
-		handleScroll,
-		loadingOlderRef,
-		messages,
-		resetAndFetchForRoom,
-		syncScrollIfNearBottom,
-	};
+                handleScroll,
+                isLoadingOlder,
+                loadingOlderRef,
+                messages,
+                pageInfo,
+                setMessages,
+                resetAndFetchForRoom,
+                syncScrollIfNearBottom,
+        };
 }
 
 export default function useChatPage() {
@@ -314,17 +332,20 @@ export default function useChatPage() {
 	const [users, setUsers] = useState([]);
 
 	const listRef = useRef(null);
-	const { isNearBottom, scrollToBottom } = useScrollHelpers(listRef);
-	const {
-		fetchOlderMessages,
-		handleDeletedMessage,
-		handleIncomingMessages,
-		handleScroll,
-		loadingOlderRef,
-		messages,
-		resetAndFetchForRoom,
-		syncScrollIfNearBottom,
-	} = useMessagePagination(authState, dispatch, listRef, scrollToBottom, isNearBottom);
+        const { isNearBottom, scrollToBottom } = useScrollHelpers(listRef);
+        const {
+                fetchOlderMessages,
+                handleDeletedMessage,
+                handleIncomingMessages,
+                handleScroll,
+                isLoadingOlder,
+                loadingOlderRef,
+                messages,
+                pageInfo,
+                setMessages,
+                resetAndFetchForRoom,
+                syncScrollIfNearBottom,
+        } = useMessagePagination(authState, dispatch, listRef, scrollToBottom, isNearBottom);
 
 	const { clickRoomSelect, clickUserList, roomAnchorEl, setRoomAnchorEl, setUserListAnchorEl, userListAnchorEl } = useAnchors();
 	const { previewUser, setUserPreviewEl, setUserPreviewUser, userPreviewEl, userPreviewUser } = useUserPreview(authState, dispatch);
@@ -459,28 +480,31 @@ export default function useChatPage() {
 		confirmDeleteSelectedMessage,
 		editingMessageId,
 		editingText,
-		handleScroll,
-		listRef,
-		message,
-		messages,
-		msgMenuPos,
-		openMessageMenu,
-		previewUser,
-		roomAnchorEl,
-		scrollToBottom,
-		selectedMessage,
-		sendMessage,
-		setEditingText,
-		setMessage,
-		setRoomAnchorEl,
-		setUserListAnchorEl,
-		setUserPreviewEl,
-		setUserPreviewUser,
+                handleScroll,
+                isLoadingOlder,
+                listRef,
+                message,
+                messages,
+                msgMenuPos,
+                openMessageMenu,
+                pageInfo,
+                previewUser,
+                roomAnchorEl,
+                scrollToBottom,
+                selectedMessage,
+                sendMessage,
+                setEditingText,
+                setMessage,
+                setMessages,
+                setRoomAnchorEl,
+                setUserListAnchorEl,
+                setUserPreviewEl,
+                setUserPreviewUser,
 		startEditSelectedMessage,
 		userListAnchorEl,
 		userPreviewEl,
-		userPreviewUser,
-		users,
-		fetchOlderMessages,
-	};
+                userPreviewUser,
+                users,
+                fetchOlderMessages,
+        };
 }
