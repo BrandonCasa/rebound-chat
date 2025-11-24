@@ -5,6 +5,21 @@ import UserModel from "../models/User.js";
 import socketio from "./index.js";
 import "dotenv/config";
 
+const MESSAGE_LIMIT = 50;
+
+async function fetchRecentMessages(roomDoc, limit = MESSAGE_LIMIT) {
+	const messageIds = roomDoc?.messages ?? [];
+	if (!messageIds.length) return [];
+
+	const messages = await MessageModel.find({ _id: { $in: messageIds } })
+		.sort({ _id: -1 })
+		.limit(limit)
+		.populate({ path: "sender", select: "displayName avatarUrl" })
+		.lean();
+
+	return messages.reverse();
+}
+
 class ServerRooms {
 	async getRoomList() {
 		const idToName = {};
@@ -23,7 +38,13 @@ class ServerRooms {
 
 	async joinRoom(socket, roomId, roomDoc) {
 		socket.join(roomId);
-		socket.emit("joined_room", roomId, roomDoc.messages);
+
+		try {
+			const messages = await fetchRecentMessages(roomDoc);
+			socket.emit("joined_room", roomId, messages);
+		} catch (err) {
+			logger.error("Error loading initial room messages:", err);
+		}
 
 		try {
 			const user = await UserModel.findById(socket.user.id);
@@ -139,18 +160,18 @@ class ServerRooms {
 			}
 		});
 
-                socket.on("message_room", async (arg1, arg2, arg3) => {
+		socket.on("message_room", async (arg1, arg2, arg3) => {
 			try {
 				const [idToName] = await this.getRoomList();
-                                let roomId, content, mentions;
+				let roomId, content, mentions;
 
-                                if (Array.isArray(arg1) && arg2 === undefined) {
-                                        [roomId, content, mentions] = arg1;
-                                } else {
-                                        roomId = arg1;
-                                        content = arg2;
-                                        mentions = arg3;
-                                }
+				if (Array.isArray(arg1) && arg2 === undefined) {
+					[roomId, content, mentions] = arg1;
+				} else {
+					roomId = arg1;
+					content = arg2;
+					mentions = arg3;
+				}
 
 				if (!idToName[roomId]) {
 					throw new Error("Room not found by ID.");
@@ -159,25 +180,20 @@ class ServerRooms {
 				const sender = await UserModel.findById(socket.user.id);
 				if (!sender) throw new Error("Sender not found.");
 
-                                const msg = new MessageModel({ sender, content, mentions });
+				const msg = new MessageModel({ sender, content, mentions });
 				await msg.save();
 
 				const roomDoc = await RoomModel.findById(roomId);
 				roomDoc.messages.push(msg);
 				await roomDoc.save();
-
-				await roomDoc.populate({
-					path: "messages",
-					options: { sort: { createdAt: 1 } },
-					populate: { path: "sender", select: "displayName avatarUrl" },
-				});
+				await msg.populate({ path: "sender", select: "displayName avatarUrl" });
 
 				const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
 				socketsInRoom.forEach((s) => {
 					if (s.user.id === socket.user.id) {
-						s.emit("message_sent", roomId, roomDoc.messages);
+						s.emit("message_sent", roomId, msg);
 					} else {
-						s.emit("new_message", roomId, roomDoc.messages);
+						s.emit("new_message", roomId, msg);
 					}
 				});
 
@@ -187,30 +203,27 @@ class ServerRooms {
 			}
 		});
 
-                socket.on("edit_message", async (roomId, messageId, content, mentions) => {
+		socket.on("edit_message", async (roomId, messageId, content, mentions) => {
 			try {
 				const [idToName] = await this.getRoomList();
 				if (!idToName[roomId]) {
 					throw new Error("Room not found by ID.");
 				}
 
+				const roomDoc = await RoomModel.findById(roomId).select("messages");
 				const msg = await MessageModel.findById(messageId);
 				if (!msg) return;
 				if (msg.sender.toString() !== socket.user.id) return;
+				if (!roomDoc?.messages?.some((m) => m.toString() === messageId)) return;
 
-                                msg.content = content;
-                                msg.mentions = mentions;
-                                await msg.save();
-
-				const roomDoc = await RoomModel.findById(roomId).populate({
-					path: "messages",
-					options: { sort: { createdAt: 1 } },
-					populate: { path: "sender", select: "displayName avatarUrl" },
-				});
+				msg.content = content;
+				msg.mentions = mentions;
+				await msg.save();
+				await msg.populate({ path: "sender", select: "displayName avatarUrl" });
 
 				const [, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
 				socketsInRoom.forEach((s) => {
-					s.emit("messages_updated", roomId, roomDoc.messages);
+					s.emit("messages_updated", roomId, { type: "edit", message: msg });
 				});
 			} catch (err) {
 				logger.error("Error handling edit_message:", err);
@@ -228,20 +241,17 @@ class ServerRooms {
 				if (!msg) return;
 				if (msg.sender.toString() !== socket.user.id) return;
 
+				const roomDoc = await RoomModel.findById(roomId).select("messages");
+				if (!roomDoc?.messages?.some((m) => m.toString() === messageId)) return;
+
 				await MessageModel.deleteOne({ _id: messageId });
 				await RoomModel.findByIdAndUpdate(roomId, {
 					$pull: { messages: messageId },
 				});
 
-				const roomDoc = await RoomModel.findById(roomId).populate({
-					path: "messages",
-					options: { sort: { createdAt: 1 } },
-					populate: { path: "sender", select: "displayName avatarUrl" },
-				});
-
 				const [, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
 				socketsInRoom.forEach((s) => {
-					s.emit("messages_updated", roomId, roomDoc.messages);
+					s.emit("messages_updated", roomId, { type: "delete", messageId });
 				});
 			} catch (err) {
 				logger.error("Error handling delete_message:", err);
