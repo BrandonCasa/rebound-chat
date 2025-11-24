@@ -3,21 +3,34 @@ import React, { useEffect, useMemo } from "react";
 
 import { scrollbarStyles } from "../../routes/scrollbarStyles";
 import ConstructedMessages from "./ConstructedMessages";
+import MessageSkeletons from "./MessageSkeletons";
 
-function ChatArea({ messages, previewUser, onContextMenu, editingMessageId, editingText, setEditingText, commitEdit, cancelEdit, onScroll, listRef }) {
+function ChatArea({
+        messages,
+        previewUser,
+        onContextMenu,
+        editingMessageId,
+        editingText,
+        setEditingText,
+        commitEdit,
+        cancelEdit,
+        onScroll,
+        listRef,
+        loadingSkeletonCount,
+}) {
         const boxStyles = useMemo(
                 () => ({
-			position: "absolute",
-			left: "0px",
-			top: "0px",
-			right: "0px",
-			bottom: "0px",
-			overflowX: "hidden",
-			overflowY: "auto",
-			padding: 1,
-			display: "flex",
-			flexDirection: "column",
-			...scrollbarStyles,
+                        position: "absolute",
+                        left: "0px",
+                        top: "0px",
+                        right: "0px",
+                        bottom: "0px",
+                        overflowX: "hidden",
+                        overflowY: "auto",
+                        padding: 1,
+                        display: "flex",
+                        flexDirection: "column",
+                        ...scrollbarStyles,
                 }),
                 []
         );
@@ -64,19 +77,20 @@ function ChatArea({ messages, previewUser, onContextMenu, editingMessageId, edit
         return (
                 <Box sx={boxStyles} ref={listRef}>
                         <List disablePadding>
+                                <MessageSkeletons count={loadingSkeletonCount} />
                                 <ConstructedMessages
                                         relevantMsgs={messages}
-					previewUser={previewUser}
-					onContextMenu={onContextMenu}
-					editingMessageId={editingMessageId}
-					editingText={editingText}
-					setEditingText={setEditingText}
-					commitEdit={commitEdit}
-					cancelEdit={cancelEdit}
-				/>
-			</List>
-		</Box>
-	);
+                                        previewUser={previewUser}
+                                        onContextMenu={onContextMenu}
+                                        editingMessageId={editingMessageId}
+                                        editingText={editingText}
+                                        setEditingText={setEditingText}
+                                        commitEdit={commitEdit}
+                                        cancelEdit={cancelEdit}
+                                />
+                        </List>
+                </Box>
+        );
 }
 
 export default ChatArea;

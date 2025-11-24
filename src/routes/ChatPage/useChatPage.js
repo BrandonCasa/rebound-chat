@@ -31,15 +31,16 @@ export default function useChatPage() {
 		listRef,
 		handleScroll,
 		fetchMessages,
-		mergeMessages,
-		updatePageInfo,
-		scrollToBottom,
-		isNearBottom,
-		pageInfoRef,
-		loadingOlderRef,
-		resetRoomState,
-		initialFetchRoomRef,
-	} = useChatMessages(authState, dispatch);
+                mergeMessages,
+                updatePageInfo,
+                scrollToBottom,
+                isNearBottom,
+                pageInfoRef,
+                loadingOlderRef,
+                resetRoomState,
+                initialFetchRoomRef,
+                loadingSkeletonCount,
+        } = useChatMessages(authState, dispatch);
 
 	useChatSockets({
 		authState,
@@ -186,8 +187,9 @@ export default function useChatPage() {
 		startEditSelectedMessage,
 		confirmDeleteSelectedMessage,
 		commitEditMessage,
-		cancelEditMessage,
-		handleScroll,
-		listRef,
-	};
+                cancelEditMessage,
+                handleScroll,
+                listRef,
+                loadingSkeletonCount,
+        };
 }
