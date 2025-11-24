@@ -172,7 +172,7 @@ function DeviceRow({ session, isCurrent, onRevoke, compact = false, disabled = f
 	const DeviceIcon = session.userAgentDeviceType === "mobile" ? PhoneIphoneRoundedIcon : LaptopMacRoundedIcon;
 	const hasIp = session.ipAddress && session.ipAddress !== "Unknown";
 	const userAgentDisplay = session.userAgentParsed || session.userAgent;
-	console.log(theme);
+
 	return (
 		<Box
 			sx={{
