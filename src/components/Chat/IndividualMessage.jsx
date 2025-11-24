@@ -149,7 +149,18 @@ function IndividualMessage({
 									key={p.key}
 									style={
 										p.mention
-											? { backgroundColor: `${theme.palette.warning.main}80`, color: theme.palette.common.white, borderRadius: 4, padding: "0 2px" }
+											? {
+													display: "inline-flex",
+													alignItems: "center",
+													padding: "0 4px",
+													borderRadius: 16,
+													backgroundColor: theme.palette.warning.main,
+													cursor: "pointer",
+													color: theme.palette.primary.contrastText,
+													fontSize: "0.75rem",
+													lineHeight: "22px",
+													margin: "0 2px",
+												}
 											: {}
 									}>
 									{p.text}
