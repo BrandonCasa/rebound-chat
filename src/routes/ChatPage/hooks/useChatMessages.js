@@ -10,10 +10,9 @@ const getMaxScrollTop = (el) => {
         return Math.max((el.scrollHeight ?? 0) - (el.clientHeight ?? 0), 0);
 };
 
-const normalizeScrollTop = (el, desiredTop) => {
+const clampScrollTop = (el, desiredTop) => {
         if (!el) return 0;
-        const clampedTop = Math.max(0, Math.min(desiredTop, getMaxScrollTop(el)));
-        return clampedTop;
+        return Math.max(0, Math.min(desiredTop, getMaxScrollTop(el)));
 };
 
 export default function useChatMessages(authState, dispatch) {
@@ -49,12 +48,12 @@ export default function useChatMessages(authState, dispatch) {
 		};
 	}, []);
 
-        const renderScrollTop = useCallback((desiredTop, { lock = false, frame = false } = {}) => {
+        const setScrollTop = useCallback((desiredTop, { lock = false, frame = false } = {}) => {
                 const el = listRef.current;
                 if (!el) return null;
 
                 const apply = () => {
-                        const clampedTop = normalizeScrollTop(el, desiredTop);
+                        const clampedTop = clampScrollTop(el, desiredTop);
                         el.scrollTop = clampedTop;
                         if (lock) {
                                 scrollLockRef.current = clampedTop;
@@ -73,21 +72,19 @@ export default function useChatMessages(authState, dispatch) {
         const scrollToBottom = useCallback(() => {
                 const el = listRef.current;
                 if (!el) return;
-                renderScrollTop(getMaxScrollTop(el));
-        }, [renderScrollTop]);
+                setScrollTop(getMaxScrollTop(el), { frame: true });
+        }, [setScrollTop]);
 
         useEffect(() => {
-                requestAnimationFrame(scrollToBottom);
+                scrollToBottom();
         }, [scrollToBottom]);
 
         const clampScrollIfLocked = useCallback(
                 (target) => {
                         if (!target || scrollLockRef.current == null) return;
-                        if (target.scrollTop < scrollLockRef.current) {
-                                renderScrollTop(scrollLockRef.current, { lock: true });
-                        }
+                        setScrollTop(scrollLockRef.current, { lock: true });
                 },
-                [renderScrollTop]
+                [setScrollTop]
         );
 
         const isNearBottom = useCallback(() => {
@@ -118,7 +115,7 @@ export default function useChatMessages(authState, dispatch) {
                                 requestAnimationFrame(() => {
                                         scrollToBottom();
                                         const el = listRef.current;
-                                        scrollLockRef.current = el ? normalizeScrollTop(el, el.scrollTop ?? 0) : null;
+                                        scrollLockRef.current = el ? clampScrollTop(el, el.scrollTop ?? 0) : null;
                                 });
                         } catch (err) {
                                 console.error("load messages error", err);
@@ -145,27 +142,20 @@ export default function useChatMessages(authState, dispatch) {
                 loadingOlderRef.current = true;
 
                 const el = listRef.current;
-                const previousMaxTop = getMaxScrollTop(el);
-                const previousScrollTop = el?.scrollTop ?? 0;
-                const previousBottomOffset = previousMaxTop - previousScrollTop;
+                const lockedTop = clampScrollTop(el, el?.scrollTop ?? 0);
+                const bottomGap = el ? getMaxScrollTop(el) - lockedTop : 0;
+                scrollLockRef.current = lockedTop;
+                setScrollTop(Math.max(lockedTop, SCROLL_TRIGGER_PX), { lock: true });
 
-                const applyScrollLock = () => {
-                        if (!el) return;
-                        const lockTarget = Math.max(el.scrollTop ?? 0, SCROLL_TRIGGER_PX);
-                        renderScrollTop(lockTarget, { lock: true });
+                const restorePosition = () => {
+                        const container = listRef.current;
+                        if (!container) return;
+                        const targetTop = clampScrollTop(container, getMaxScrollTop(container) - bottomGap);
+                        setScrollTop(targetTop, { lock: true });
                 };
 
-                applyScrollLock();
-
-                if (hasMoreBefore) {
-                        setLoadingSkeletonCount(SKELETON_BATCH_SIZE);
-                        requestAnimationFrame(() => {
-                                if (!listRef.current) return;
-                                const newMaxTop = getMaxScrollTop(listRef.current);
-                                const adjustedTop = Math.max(newMaxTop - previousBottomOffset, 0);
-                                renderScrollTop(adjustedTop, { lock: true });
-                        });
-                }
+                setLoadingSkeletonCount(SKELETON_BATCH_SIZE);
+                requestAnimationFrame(restorePosition);
 
                 try {
                         const { messages: olderMessages, pageInfo } = await dispatch(
@@ -185,10 +175,7 @@ export default function useChatMessages(authState, dispatch) {
                         });
 
                         requestAnimationFrame(() => {
-                                if (!listRef.current) return;
-                                const newMaxTop = getMaxScrollTop(listRef.current);
-                                const adjustedTop = Math.max(newMaxTop - previousBottomOffset, 0);
-                                renderScrollTop(adjustedTop, { lock: true });
+                                restorePosition();
                         });
                 } catch (err) {
                         console.error("load older messages error", err);
@@ -197,6 +184,7 @@ export default function useChatMessages(authState, dispatch) {
                         loadingOlderRef.current = false;
                         setLoadingSkeletonCount(0);
                         inFlightBeforeRef.current = null;
+                        scrollLockRef.current = null;
                 }
         }, [
                 authState.authToken,
@@ -204,6 +192,7 @@ export default function useChatMessages(authState, dispatch) {
                 dispatch,
                 mergeMessages,
                 updatePageInfo,
+                setScrollTop,
         ]);
 
 	// Now only called on scrollend, so we just check where the scroll finished.
@@ -218,15 +207,15 @@ export default function useChatMessages(authState, dispatch) {
                         }
 
                         const { hasMoreBefore } = pageInfoRef.current;
-                        const scrollTop = normalizeScrollTop(target, target.scrollTop ?? 0);
+                        const scrollTop = clampScrollTop(target, target.scrollTop ?? 0);
 
                         if (scrollTop < SCROLL_TRIGGER_PX && hasMoreBefore) {
                                 const lockTarget = Math.max(scrollTop, SCROLL_TRIGGER_PX);
-                                renderScrollTop(lockTarget, { lock: true });
+                                setScrollTop(lockTarget, { lock: true });
                                 fetchOlderMessages();
                         }
                 },
-                [clampScrollIfLocked, fetchOlderMessages, renderScrollTop]
+                [clampScrollIfLocked, fetchOlderMessages, setScrollTop]
         );
 
         const resetRoomState = useCallback(() => {
