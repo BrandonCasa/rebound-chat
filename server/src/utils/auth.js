@@ -139,6 +139,28 @@ const buildRequestTokenDescriptor = (req) => {
 	};
 };
 
+const resolveGoogleCallbackUrl = (req = null) => {
+	const buildCallback = (proto, host) => {
+		if (!proto || !host) return null;
+		return `${proto}://${host}/api/users/google/callback`;
+	};
+
+	if (process.env.GOOGLE_CALLBACK_URL) return process.env.GOOGLE_CALLBACK_URL;
+
+	if (req) {
+		const proto = req.get?.("x-forwarded-proto") || req.protocol;
+		const host = req.get?.("x-forwarded-host") || req.get?.("host");
+		const forwardedCallback = buildCallback(proto, host);
+		if (forwardedCallback) return forwardedCallback;
+	}
+
+	if (process.env.NODE_ENV === "development") {
+		return "http://localhost:6001/api/users/google/callback";
+	}
+
+	return "https://rebound.nexus/api/users/google/callback";
+};
+
 const createAuthContextMiddleware = (context, logger) => {
 	return async (req, res, next) => {
 		try {
@@ -163,4 +185,5 @@ export {
 	hasPasswordChangedAfterTokenIssue,
 	sanitizeIpAddress,
 	parseUserAgentDetails,
+	resolveGoogleCallbackUrl,
 };
