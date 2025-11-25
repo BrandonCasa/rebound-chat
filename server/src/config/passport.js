@@ -3,6 +3,7 @@ import { Strategy as LocalStrategy } from "passport-local";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import crypto from "crypto";
 import UserModel from "../models/User.js";
+import { resolveGoogleCallbackUrl } from "../utils/auth.js";
 
 class CustomPassport {
 	setupPassport() {
@@ -28,19 +29,15 @@ class CustomPassport {
 				}
 			)
 		);
-                const callbackURL =
-                        process.env.GOOGLE_CALLBACK_URL ||
-                        (process.env.NODE_ENV === "development"
-                                ? "http://localhost:6001/api/users/google/callback"
-                                : "https://www.rebound.nexus/api/users/google/callback");
+		const callbackURL = resolveGoogleCallbackUrl();
 
-                passport.use(
-                        new GoogleStrategy(
-                                {
-                                        clientID: process.env.GOOGLE_CLIENT_ID,
-                                        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-                                        callbackURL,
-                                },
+		passport.use(
+			new GoogleStrategy(
+				{
+					clientID: process.env.GOOGLE_CLIENT_ID,
+					clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+					callbackURL,
+				},
 				async function (accessToken, refreshToken, profile, cb) {
 					try {
 						let user = await UserModel.findOne({ googleId: profile.id });
