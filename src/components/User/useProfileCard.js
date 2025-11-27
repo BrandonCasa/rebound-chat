@@ -5,6 +5,8 @@ import { setLoggedIn } from "../../slices/authSlice";
 import { friendAction, modifyProfile } from "../../slices/userApiSlice";
 import { getApiBase } from "../../helpers/api";
 import { profileMediaUrl } from "../../helpers/mediaUrl";
+import { emitSocketEvent } from "../../slices/socketSlice";
+import { getSocketClient } from "../../helpers/socketClient";
 
 const REQUEST_BASE = getApiBase();
 
@@ -134,28 +136,30 @@ export default function useProfileCard(user, forceSelf) {
 
 	// watch/unwatch user via socket based on profile.id and editMode
 	useEffect(() => {
-		if (!sockets.socketClient || !sockets.conneted) return;
+		const socket = getSocketClient();
+		if (!socket || !sockets.connected) return;
 
 		if (watchRef.current && (watchRef.current !== watchId || editMode)) {
-			sockets.socketClient.emit("unwatch_user", watchRef.current);
+			dispatch(emitSocketEvent({ event: "unwatch_user", args: [watchRef.current] }));
 			watchRef.current = null;
 		}
 		if (!editMode && watchId && watchRef.current !== watchId) {
-			sockets.socketClient.emit("watch_user", watchId);
+			dispatch(emitSocketEvent({ event: "watch_user", args: [watchId] }));
 			watchRef.current = watchId;
 		}
 
 		return () => {
 			if (watchRef.current) {
-				sockets.socketClient.emit("unwatch_user", watchRef.current);
+				dispatch(emitSocketEvent({ event: "unwatch_user", args: [watchRef.current] }));
 				watchRef.current = null;
 			}
 		};
-	}, [sockets.connected, sockets.socketClient, watchId, editMode]);
+	}, [sockets.connected, watchId, editMode, dispatch]);
 
 	// Handle "watched_user_saved" updates
 	useEffect(() => {
-		if (!sockets.socketClient || !sockets.conneted) return;
+		const socket = getSocketClient();
+		if (!socket || !sockets.connected) return;
 
 		const onSaved = ([id, pubData, privData]) => {
 			if (id !== watchId) return;
@@ -177,11 +181,11 @@ export default function useProfileCard(user, forceSelf) {
 			setBio(data.bio || "");
 		};
 
-		sockets.socketClient.on("watched_user_saved", onSaved);
+		socket.on("watched_user_saved", onSaved);
 		return () => {
-			sockets.socketClient.off("watched_user_saved", onSaved);
+			socket.off("watched_user_saved", onSaved);
 		};
-	}, [sockets.connected, sockets.socketClient, auth.authToken, auth.userId, watchId, avatar, banner]);
+	}, [sockets.connected, auth.userId, watchId, avatar, banner]);
 
 	// Your improved friend-status logic, but on normalized data
 	const { status, friendId } = useMemo(() => {

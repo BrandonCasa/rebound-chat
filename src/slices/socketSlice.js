@@ -1,54 +1,99 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import { io } from "socket.io-client";
+import { getSocketClient, initSocketClient, tearDownSocketClient, updateSocketAuthToken } from "../helpers/socketClient";
+
+let lifecycleHandlers = null;
 
 const initialState = {
 	socketURL: process.env.NODE_ENV === "development" ? "http://localhost:6002" : globalThis.IN_ELECTRON_ENV ? "https://rebound.nexus" : "",
-	socketClient: null,
 	status: "idle", // "idle" | "connecting" | "connected" | "error"
 	error: null,
 	connected: false,
+	currentRoom: null,
 };
 
-export const connectSocket = createAsyncThunk("socketApi/connectSocket", async ({ socketURL, userToken } = {}, { getState, rejectWithValue }) => {
+const attachLifecycleHandlers = (dispatch) => {
+	const socket = getSocketClient();
+	if (!socket) return;
+
+	if (lifecycleHandlers) {
+		socket.off("connect", lifecycleHandlers.onConnected);
+		socket.off("disconnect", lifecycleHandlers.onDisconnected);
+		socket.off("connected", lifecycleHandlers.onConnected);
+	}
+
+	const onConnected = () => dispatch(setConnected(true));
+	const onDisconnected = () => dispatch(setConnected(false));
+
+	lifecycleHandlers = { onConnected, onDisconnected };
+	socket.on("connect", onConnected);
+	socket.on("disconnect", onDisconnected);
+	socket.on("connected", onConnected);
+
+	if (socket.connected) {
+		onConnected();
+	}
+};
+
+const detachLifecycleHandlers = () => {
+	const socket = getSocketClient();
+	if (!socket || !lifecycleHandlers) return;
+	socket.off("connect", lifecycleHandlers.onConnected);
+	socket.off("disconnect", lifecycleHandlers.onDisconnected);
+	socket.off("connected", lifecycleHandlers.onConnected);
+	lifecycleHandlers = null;
+};
+
+export const connectSocket = createAsyncThunk("socketApi/connectSocket", async ({ socketURL, userToken } = {}, { getState, dispatch, rejectWithValue }) => {
 	try {
 		const state = getState();
-		const current = state.sockets?.socketClient;
-
-		if (current?.connected) return { socketClient: current };
-
 		const url = socketURL ?? state.sockets?.socketURL;
-		if (!url) return rejectWithValue("Missing socketURL");
-
 		const token = userToken ?? state.auth?.authToken ?? state.auth?.token;
+
+		if (!url) return rejectWithValue("Missing socketURL");
 		if (!token) return rejectWithValue("Missing user token");
 
-		if (current) {
-			try {
-				current.disconnect();
-				current.close?.();
-			} catch {}
+		const existing = getSocketClient();
+		if (existing?.connected) {
+			updateSocketAuthToken(token);
+			attachLifecycleHandlers(dispatch);
+			return { reused: true };
 		}
 
-		const client = io(url, {
-			autoConnect: true,
-			transports: ["websocket"],
-			extraHeaders: { Authorization: `Bearer ${token}` },
-		});
+		initSocketClient(url, token);
+		attachLifecycleHandlers(dispatch);
 
-		return { socketClient: client };
+		return { reused: false };
 	} catch (err) {
 		return rejectWithValue(err?.response?.data || err?.message || String(err));
 	}
 });
 
-export const disconnectSocket = createAsyncThunk("socketApi/disconnectSocket", async (_, { getState }) => {
-	const client = getState().sockets?.socketClient;
-	if (client) {
-		try {
-			client.disconnect();
-			client.close?.();
-		} catch {}
+export const disconnectSocket = createAsyncThunk("socketApi/disconnectSocket", async (_, { dispatch }) => {
+	detachLifecycleHandlers();
+	tearDownSocketClient();
+	dispatch(setConnected(false));
+	return true;
+});
+
+export const setActiveSocketRoom = createAsyncThunk("socketApi/setActiveSocketRoom", async ({ currentRoom, lastRoom } = {}, { getState }) => {
+	const socket = getSocketClient();
+	const state = getState();
+	const prevRoom = lastRoom ?? state.sockets?.currentRoom ?? null;
+	const nextRoom = currentRoom ?? null;
+
+	if (socket) {
+		if (prevRoom && prevRoom !== nextRoom) socket.emit("leave_room", prevRoom);
+		if (nextRoom && prevRoom !== nextRoom) socket.emit("join_room", nextRoom);
 	}
+
+	return { currentRoom: nextRoom };
+});
+
+export const emitSocketEvent = createAsyncThunk("socketApi/emitSocketEvent", async ({ event, args = [] } = {}, { rejectWithValue }) => {
+	const socket = getSocketClient();
+	if (!socket) return rejectWithValue("Socket not connected");
+	if (!event) return rejectWithValue("Missing event name");
+	socket.emit(event, ...args);
 	return true;
 });
 
@@ -59,7 +104,6 @@ const socketSlice = createSlice({
 		setConnected(state, action) {
 			state.connected = !!action.payload;
 			state.status = state.connected ? "connected" : "idle";
-			if (!state.connected) state.socketClient = state.socketClient;
 		},
 		setSocketURL(state, action) {
 			state.socketURL = action.payload;
@@ -74,9 +118,7 @@ const socketSlice = createSlice({
 				state.status = "connecting";
 				state.error = null;
 			})
-			.addCase(connectSocket.fulfilled, (state, action) => {
-				state.socketClient = action.payload.socketClient;
-				state.connected = !!action.payload.socketClient?.connected;
+			.addCase(connectSocket.fulfilled, (state) => {
 				state.status = state.connected ? "connected" : "idle";
 			})
 			.addCase(connectSocket.rejected, (state, action) => {
@@ -85,10 +127,13 @@ const socketSlice = createSlice({
 				state.connected = false;
 			})
 			.addCase(disconnectSocket.fulfilled, (state) => {
-				state.socketClient = null;
 				state.connected = false;
 				state.status = "idle";
 				state.error = null;
+				state.currentRoom = null;
+			})
+			.addCase(setActiveSocketRoom.fulfilled, (state, action) => {
+				state.currentRoom = action.payload.currentRoom;
 			});
 	},
 });
