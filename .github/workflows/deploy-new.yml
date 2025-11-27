@@ -27,6 +27,10 @@ on:
         description: "The name of PM2 Process to be restarted"
         required: false
         default: "rebound-express"
+      deploymentBranch:
+        description: "The branch to deploy from the repository"
+        required: false
+        default: "dev"
       bumpVersion:
         description: "Whether to bump the version in package.json files"
         required: false
@@ -126,7 +130,13 @@ jobs:
                   git restore .
                   git clean -fd
                 fi
-                git pull origin dev
+                git fetch origin "${{ github.event.inputs.deploymentBranch }}"
+                if git rev-parse --verify "${{ github.event.inputs.deploymentBranch }}" >/dev/null 2>&1; then
+                  git checkout "${{ github.event.inputs.deploymentBranch }}"
+                else
+                  git checkout -b "${{ github.event.inputs.deploymentBranch }}" "origin/${{ github.event.inputs.deploymentBranch }}"
+                fi
+                git reset --hard "origin/${{ github.event.inputs.deploymentBranch }}"
               else
                 cd ..
                 rm -rf "${{ github.event.inputs.appDirectory }}"
@@ -140,6 +150,14 @@ jobs:
               NEW_CLONE=true
               cd "${{ github.event.inputs.appDirectory }}"
             fi
+
+            git fetch origin "${{ github.event.inputs.deploymentBranch }}"
+            if git rev-parse --verify "${{ github.event.inputs.deploymentBranch }}" >/dev/null 2>&1; then
+              git checkout "${{ github.event.inputs.deploymentBranch }}"
+            else
+              git checkout -b "${{ github.event.inputs.deploymentBranch }}" "origin/${{ github.event.inputs.deploymentBranch }}"
+            fi
+            git reset --hard "origin/${{ github.event.inputs.deploymentBranch }}"
 
             cd "${{ github.event.inputs.serverSubdirectory }}"
 
