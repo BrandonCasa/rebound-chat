@@ -5,16 +5,7 @@ import rootReducer from "./slices";
 
 const store = configureStore({
 	reducer: rootReducer,
-	middleware: (getDefaultMiddleware) =>
-		getDefaultMiddleware({
-			serializableCheck: {
-				// ignore the socket instance in state
-				ignoredPaths: ["sockets.socketClient"],
-
-				// OR (more robust) ignore that field anywhere in action payloads
-				ignoredActionPaths: ["payload.socketClient"],
-			},
-		}),
+	middleware: (getDefaultMiddleware) => getDefaultMiddleware(),
 });
 
 setupListeners(store.dispatch);

@@ -45,7 +45,6 @@ const resetAuthFields = (state) => {
 	state.createdAt = null;
 	state.bannerUrl = null;
 	state.avatarUrl = null;
-	state.socketInfo.currentRoom = null;
 };
 
 const applyLoggedOutState = (state, disableAutoLogin = false) => {
@@ -78,10 +77,6 @@ const initialState = {
 	loggingIn: false,
 	refreshing: false,
 	skipAutoLogin: typeof window !== "undefined" && window.localStorage.getItem(AUTO_LOGIN_BLOCK_KEY) === "true",
-	socketInfo: {
-		connected: false,
-		currentRoom: null,
-	},
 	bannerUrl: null,
 	avatarUrl: null,
 	passwordChanging: false,
@@ -238,22 +233,6 @@ export const registerUser = createAsyncThunk("auth/registerUser", async ({ usern
 	}
 });
 
-export const setSocketRoom = createAsyncThunk("auth/setSocketRoom", async ({ lastRoom, currentRoom }, { getState, dispatch }) => {
-	const state = getState();
-	const socketClient = state.sockets?.socketClient;
-
-	const roomToLeave = lastRoom || state.auth.socketInfo.currentRoom;
-	const roomToJoin = currentRoom;
-
-	// update redux state immediately
-	dispatch(setSocketRoomState({ currentRoom: roomToJoin || null }));
-
-	if (!socketClient) return;
-
-	if (roomToLeave) socketClient.emit("leave_room", roomToLeave);
-	if (roomToJoin) socketClient.emit("join_room", roomToJoin);
-});
-
 const authSlice = createSlice({
 	name: "auth",
 	initialState,
@@ -310,13 +289,6 @@ const authSlice = createSlice({
 		},
 		setLoggingIn: (state, action) => {
 			state.loggingIn = action.payload.loggingIn;
-		},
-		setSocketStatus: (state, action) => {
-			state.socketInfo.connected = action.payload.connected;
-		},
-		setSocketRoomState: (state, action) => {
-			const roomToJoin = action.payload.currentRoom ?? null;
-			state.socketInfo.currentRoom = roomToJoin;
 		},
 	},
 	extraReducers: (builder) => {
@@ -438,6 +410,6 @@ const authSlice = createSlice({
 	},
 });
 
-export const { setAuthState, setLoggedIn, setLoggingIn, setSocketStatus, setSocketRoomState } = authSlice.actions;
+export const { setAuthState, setLoggedIn, setLoggingIn } = authSlice.actions;
 
 export default authSlice.reducer;

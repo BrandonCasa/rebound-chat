@@ -12,8 +12,8 @@ import RegisterDialog from "./components/RegisterDialog";
 import DraggableCallOverlay from "./components/CallOverlay/CallOverlay.comp";
 import SnackbarMapper from "./components/SnackbarMapper";
 import useDarkTheme from "./helpers/darkTheme";
-import { bootstrapAuth, refreshAuthToken, setAuthState, setSocketStatus, verifyUser } from "./slices/authSlice";
-import { connectSocket, disconnectSocket, setConnected as setSocketConnected } from "./slices/socketSlice";
+import { bootstrapAuth, refreshAuthToken, setAuthState, verifyUser } from "./slices/authSlice";
+import { connectSocket, disconnectSocket } from "./slices/socketSlice";
 import { hasAuthSessionCookie } from "./helpers/api";
 import { getTokenExpiry } from "./helpers/authToken";
 
@@ -43,7 +43,6 @@ const AppRouter = ({ children }) => {
 
 const App = () => {
 	const authState = useSelector((state) => state.auth);
-	const socketState = useSelector((state) => state.sockets);
 	const darkTheme = useDarkTheme();
 	const dispatch = useDispatch();
 	const customAppBarProps = useCustomAppBar(useWindowDimensions().width);
@@ -120,35 +119,6 @@ const App = () => {
 			dispatch(disconnectSocket());
 		}
 	}, [authState.loggedIn, authState.authToken, dispatch]);
-
-	// Wire socket events -> redux
-	useEffect(() => {
-		if (!socketState.socketClient) return;
-
-		const onConnected = () => {
-			dispatch(setSocketConnected(true));
-			dispatch(setSocketStatus({ connected: true }));
-		};
-
-		const onDisconnect = () => {
-			dispatch(setSocketConnected(false));
-			dispatch(setSocketStatus({ connected: false }));
-		};
-
-		// socket.io standard events
-		socketState.socketClient.on("connect", onConnected);
-		socketState.socketClient.on("disconnect", onDisconnect);
-		socketState.socketClient.on("connected", onConnected);
-
-		// initialize state immediately
-		if (socketState.socketClient.connected) onConnected();
-
-		return () => {
-			socketClient.off("connect", onConnected);
-			socketClient.off("disconnect", onDisconnect);
-			socketClient.off("connected", onConnected);
-		};
-	}, [socketState.socketClient, dispatch]);
 
 	return (
 		<ThemeProvider theme={darkTheme}>
