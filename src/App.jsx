@@ -1,6 +1,6 @@
 import { CssBaseline, ThemeProvider } from "@mui/material";
 import { styled } from "@mui/material/styles";
-import React, { useEffect, Suspense, lazy } from "react";
+import React, { useEffect, useRef, Suspense, lazy } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { BrowserRouter, HashRouter, Route, Routes } from "react-router-dom";
 
@@ -13,8 +13,9 @@ import DraggableCallOverlay from "./components/CallOverlay/CallOverlay.comp";
 import SnackbarMapper from "./components/SnackbarMapper";
 import useDarkTheme from "./helpers/darkTheme";
 import socketIoHelper from "./helpers/socket";
-import { bootstrapAuth, setAuthState, setSocketStatus, verifyUser } from "./slices/authSlice";
+import { bootstrapAuth, refreshAuthToken, setAuthState, setSocketStatus, verifyUser } from "./slices/authSlice";
 import { hasAuthSessionCookie } from "./helpers/api";
+import { getTokenExpiry } from "./helpers/authToken";
 
 import useCustomAppBar from "./components/CustomAppBar/useCustomAppBar";
 import useWindowDimensions from "./helpers/useWindowDimensions";
@@ -45,6 +46,7 @@ const App = () => {
 	const darkTheme = useDarkTheme();
 	const dispatch = useDispatch();
 	const customAppBarProps = useCustomAppBar(useWindowDimensions().width);
+	const refreshTimeoutRef = useRef(null);
 
 	useEffect(() => {
 		const params = new URLSearchParams(window.location.search);
@@ -59,14 +61,55 @@ const App = () => {
 		}
 	}, [dispatch]);
 
-        useEffect(() => {
-                if (authState.initialized || authState.authToken) return;
+	useEffect(() => {
+		if (authState.initialized || authState.authToken) return;
 
-                const hasSessionMarker = hasAuthSessionCookie();
-                if (!authState.skipAutoLogin || hasSessionMarker) {
-                        dispatch(bootstrapAuth());
-                }
-        }, [authState.initialized, authState.skipAutoLogin, authState.authToken, dispatch]);
+		const hasSessionMarker = hasAuthSessionCookie();
+		if (!authState.skipAutoLogin || hasSessionMarker) {
+			dispatch(bootstrapAuth());
+		}
+	}, [authState.initialized, authState.skipAutoLogin, authState.authToken, dispatch]);
+
+	useEffect(() => {
+		if (refreshTimeoutRef.current) {
+			clearTimeout(refreshTimeoutRef.current);
+			refreshTimeoutRef.current = null;
+		}
+
+		if (!authState.authToken) return undefined;
+
+		const REFRESH_BUFFER_MS = 60_000;
+		const MIN_REFRESH_DELAY_MS = 5_000;
+
+		const scheduleRefresh = (delayMs) => {
+			refreshTimeoutRef.current = window.setTimeout(() => {
+				dispatch(refreshAuthToken());
+			}, delayMs);
+		};
+
+		const tokenExpiry = getTokenExpiry(authState.authToken);
+
+		if (!tokenExpiry) {
+			scheduleRefresh(MIN_REFRESH_DELAY_MS);
+			return undefined;
+		}
+
+		const refreshIn = tokenExpiry - Date.now() - REFRESH_BUFFER_MS;
+
+		if (refreshIn <= 0) {
+			dispatch(refreshAuthToken());
+			return undefined;
+		}
+
+		scheduleRefresh(Math.max(refreshIn, MIN_REFRESH_DELAY_MS));
+
+		return () => {
+			if (refreshTimeoutRef.current) {
+				clearTimeout(refreshTimeoutRef.current);
+				refreshTimeoutRef.current = null;
+			}
+		};
+	}, [authState.authToken, dispatch]);
 
 	const useSocketConnection = (authToken, loggedIn) => {
 		useEffect(() => {
