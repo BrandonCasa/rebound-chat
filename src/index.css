@@ -1,32 +1,42 @@
+:root {
+        --app-height: 100vh;
+}
+
 html {
-	margin: 0;
-	padding: 0;
-	width: 100vw;
-	height: 100vh;
-	overflow: hidden;
-	position: absolute;
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        min-height: var(--app-height);
+        height: var(--app-height);
+        overflow-x: hidden;
+        overflow-y: auto;
+        position: relative;
 }
 
 body {
-	margin: 0;
-	padding: 0;
-	width: 100vw;
-	height: 100vh;
-	overflow: hidden;
-	position: absolute;
-	font-family: "Roboto";
-	-webkit-font-smoothing: antialiased;
-	-moz-osx-font-smoothing: grayscale;
-	touch-action: manipulation;
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        min-height: var(--app-height);
+        height: var(--app-height);
+        overflow-x: hidden;
+        overflow-y: auto;
+        position: relative;
+        font-family: "Roboto";
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        touch-action: manipulation;
 }
 
 #root {
-	margin: 0;
-	padding: 0;
-	width: 100vw;
-	height: 100vh;
-	overflow: hidden;
-	position: absolute;
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        min-height: var(--app-height);
+        height: var(--app-height);
+        overflow-x: hidden;
+        overflow-y: auto;
+        position: relative;
 }
 
 code {

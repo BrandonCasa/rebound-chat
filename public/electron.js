@@ -15,6 +15,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let mainWindow;
 
+if (process.platform === "win32") {
+	app.setAppUserModelId("com.brandoncasa.rebound");
+}
+
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
 
@@ -22,6 +26,14 @@ function sendStatus(channel, payload = {}) {
 	if (mainWindow?.webContents) {
 		mainWindow.webContents.send(channel, payload);
 	}
+}
+
+function allowUpdateAction(actionName) {
+	if (isDev) {
+		log.warn(`Skipping ${actionName} while running in development.`);
+		return false;
+	}
+	return true;
 }
 
 async function createWindow() {
@@ -51,9 +63,18 @@ async function createWindow() {
 }
 
 // wire up IPC
-ipcMain.on("check-for-updates", () => autoUpdater.checkForUpdates());
-ipcMain.on("download-update", () => autoUpdater.downloadUpdate());
-ipcMain.on("install-update", () => autoUpdater.quitAndInstall(true, true));
+ipcMain.on("check-for-updates", () => {
+	if (!allowUpdateAction("check-for-updates")) return;
+	autoUpdater.checkForUpdates();
+});
+ipcMain.on("download-update", () => {
+	if (!allowUpdateAction("download-update")) return;
+	autoUpdater.downloadUpdate();
+});
+ipcMain.on("install-update", () => {
+	if (!allowUpdateAction("install-update")) return;
+	autoUpdater.quitAndInstall(true, true);
+});
 ipcMain.on("simulate-update", async () => {
 	log.info("Simulating an update…");
 	autoUpdater.emit("checking-for-update");
