@@ -57,6 +57,7 @@ export default function useChatPage() {
 
 	const fetchMessages = useCallback(
 		async (roomOverride) => {
+			const requestedRoom = roomOverride || sockets.currentRoom || pageInfoRef.current.channel;
 			let roomId = pageInfoRef.current.channel || roomOverride || sockets.currentRoom;
 			if (!roomId) {
 				console.error("Cannot fetch messages without an active channel");
@@ -84,9 +85,13 @@ export default function useChatPage() {
 						limit: MESSAGE_PAGE_SIZE,
 					})
 				).unwrap();
+				const resolvedRoom = roomIdOut || roomId;
+				if (resolvedRoom && resolvedRoom !== requestedRoom) {
+					return;
+				}
 				const mapped = msgs || [];
 				setMessages(mapped);
-				updatePageInfo(pageInfo, roomIdOut || roomId, mapped);
+				updatePageInfo(pageInfo, resolvedRoom || roomId, mapped);
 			} catch (err) {
 				console.error("load messages error", err);
 			} finally {
@@ -135,11 +140,15 @@ export default function useChatPage() {
 						limit: MESSAGE_PAGE_SIZE,
 					})
 				).unwrap();
+				const resolvedRoom = roomIdOut || roomId;
+				if (resolvedRoom && resolvedRoom !== pageInfoRef.current.channel) {
+					return;
+				}
 
 				const mapped = olderMessages || [];
 				setMessages((prev) => {
 					const merged = mergeMessages(prev, mapped);
-					updatePageInfo(pageInfo, roomIdOut || roomId, merged);
+					updatePageInfo(pageInfo, resolvedRoom || roomId, merged);
 					return merged;
 				});
 			} catch (err) {
@@ -281,9 +290,10 @@ export default function useChatPage() {
 	}, [sockets.currentRoom]);
 
 	useEffect(() => {
+		resetRoomState();
 		setMessages([]);
 		fetchMessages();
-	}, [sockets.currentRoom, fetchMessages]);
+	}, [sockets.currentRoom, fetchMessages, resetRoomState]);
 
 	useEffect(
 		() => () => {
