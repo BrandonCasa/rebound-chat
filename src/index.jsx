@@ -15,22 +15,6 @@ import "./index.css";
 
 import store from "./store";
 
-const setViewportHeightVar = () => {
-	const viewportHeight = window.visualViewport?.height ?? window.innerHeight ?? document.documentElement.clientHeight;
-	document.documentElement.style.setProperty("--app-height", `${viewportHeight}px`);
-};
-
-setViewportHeightVar();
-
-if (!window.__appHeightListenerAttached) {
-	const syncViewportHeight = () => setViewportHeightVar();
-	window.addEventListener("resize", syncViewportHeight);
-	window.addEventListener("orientationchange", syncViewportHeight);
-	window.visualViewport?.addEventListener("resize", syncViewportHeight);
-	window.visualViewport?.addEventListener("scroll", syncViewportHeight);
-	window.__appHeightListenerAttached = true;
-}
-
 window.isElectron = "electronAPI" in window;
 
 const root = ReactDOM.createRoot(document.getElementById("root"));

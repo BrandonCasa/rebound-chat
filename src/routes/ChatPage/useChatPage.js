@@ -292,6 +292,8 @@ export default function useChatPage() {
 	useEffect(() => {
 		resetRoomState();
 		setMessages([]);
+		if (!sockets.currentRoom) return;
+
 		fetchMessages();
 	}, [sockets.currentRoom, fetchMessages, resetRoomState]);
 
