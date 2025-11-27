@@ -42,20 +42,35 @@ export default function useChatPage() {
 		return outMsgs;
 	}, []);
 
-	const updatePageInfo = useCallback((pageInfo = {}, roomIdOut = null, nextMessages = []) => {
+	const updatePageInfo = useCallback((pageInfo = {}, roomIdOut = undefined, nextMessages = []) => {
+		const resolvedChannelCandidate = roomIdOut ?? pageInfo.channel ?? nextMessages[0]?.roomId;
+		const resolvedChannel = resolvedChannelCandidate ?? pageInfoRef.current.channel ?? null;
+
 		pageInfoRef.current = {
 			hasMoreBefore: pageInfo.hasMoreBefore ?? pageInfoRef.current.hasMoreBefore,
 			hasMoreAfter: pageInfo.hasMoreAfter ?? pageInfoRef.current.hasMoreAfter,
 			nextBefore: pageInfo.nextBefore ?? nextMessages[0]?._id ?? pageInfoRef.current.nextBefore,
 			nextAfter: pageInfo.nextAfter ?? nextMessages[nextMessages.length - 1]?._id ?? pageInfoRef.current.nextAfter,
-			channel: roomIdOut ?? pageInfoRef.current.roomIdOut,
+			channel: resolvedChannel,
 		};
 	}, []);
 
 	const fetchMessages = useCallback(
 		async (roomOverride) => {
-			const roomId = roomOverride || sockets.currentRoom;
-			if (!roomId || fetchingRef.current || !authState.authToken || !sockets.connected) return;
+			let roomId = pageInfoRef.current.channel || roomOverride || sockets.currentRoom;
+			if (!roomId) {
+				console.error("Cannot fetch messages without an active channel");
+				dispatch(
+					addSnackbar({
+						snackbarMsg: "Unable to load messages: no active channel.",
+						snackbarSeverity: "error",
+						autoHideDuration: 2500,
+					})
+				);
+				return;
+			}
+			updatePageInfo(pageInfoRef.current, roomId);
+			if (fetchingRef.current || !authState.authToken || !sockets.connected) return;
 			fetchingRef.current = true;
 			try {
 				const {
@@ -71,7 +86,7 @@ export default function useChatPage() {
 				).unwrap();
 				const mapped = msgs || [];
 				setMessages(mapped);
-				updatePageInfo(pageInfo, roomIdOut, mapped);
+				updatePageInfo(pageInfo, roomIdOut || roomId, mapped);
 			} catch (err) {
 				console.error("load messages error", err);
 			} finally {
@@ -83,9 +98,24 @@ export default function useChatPage() {
 
 	const fetchOlderMessages = useCallback(
 		async (roomOverride) => {
-			const roomId = roomOverride || sockets.currentRoom || pageInfoRef.current.channel;
-			if (!roomId || fetchingRef.current || !authState.authToken || !sockets.connected) return;
-			if (!roomId || fetchingRef.current || !pageInfoRef.current.hasMoreBefore) {
+			let roomId = pageInfoRef.current.channel;
+			if (!roomId && roomOverride) {
+				updatePageInfo(pageInfoRef.current, roomOverride);
+				roomId = roomOverride;
+			}
+			if (!roomId) {
+				console.error("Cannot fetch older messages without an active channel");
+				dispatch(
+					addSnackbar({
+						snackbarMsg: "Unable to load messages: no active channel.",
+						snackbarSeverity: "error",
+						autoHideDuration: 2500,
+					})
+				);
+				return;
+			}
+			if (fetchingRef.current || !authState.authToken || !sockets.connected) return;
+			if (!pageInfoRef.current.hasMoreBefore) {
 				return;
 			}
 
@@ -109,7 +139,7 @@ export default function useChatPage() {
 				const mapped = olderMessages || [];
 				setMessages((prev) => {
 					const merged = mergeMessages(prev, mapped);
-					updatePageInfo(pageInfo, roomIdOut, merged);
+					updatePageInfo(pageInfo, roomIdOut || roomId, merged);
 					return merged;
 				});
 			} catch (err) {
@@ -123,10 +153,16 @@ export default function useChatPage() {
 	);
 
 	const resetRoomState = useCallback(() => {
-		pageInfoRef.current = { hasMoreBefore: false, hasMoreAfter: false, nextBefore: null, nextAfter: null };
+		pageInfoRef.current = { hasMoreBefore: false, hasMoreAfter: false, nextBefore: null, nextAfter: null, channel: null };
 		loadingOlderRef.current = false;
 		fetchingRef.current = false;
 	}, []);
+
+	useEffect(() => {
+		if (sockets.currentRoom) {
+			updatePageInfo(pageInfoRef.current, sockets.currentRoom);
+		}
+	}, [sockets.currentRoom, updatePageInfo]);
 
 	useEffect(() => {
 		const socket = getSocketClient();
