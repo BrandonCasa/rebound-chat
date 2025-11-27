@@ -13,7 +13,7 @@ class DatabaseServer {
 	}
 
 	async startServer() {
-		const isDevelopment = process.env.NODE_ENV === "development";
+		const isDevelopment = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
 		const mongoUri = isDevelopment ? await this.startDevelopmentServer() : this.getProductionUri();
 
 		const mongooseOpts = {};
