@@ -5,7 +5,7 @@ import { styled, alpha } from "@mui/material/styles";
 import * as React from "react";
 import { useDispatch, useSelector } from "react-redux";
 
-import { setSocketRoom } from "../../slices/authSlice";
+import { setActiveSocketRoom } from "../../slices/socketSlice";
 
 const StyledMenu = styled((props) => (
 	<Menu
@@ -46,7 +46,7 @@ const StyledMenu = styled((props) => (
 
 export default function ChatRoomMenu({ anchorEl, setAnchorEl, channels, setMessages }) {
 	const open = Boolean(anchorEl);
-	const authState = useSelector((state) => state.auth);
+	const socketState = useSelector((state) => state.sockets);
 	const dispatch = useDispatch();
 
 	const handleClose = () => {
@@ -54,12 +54,12 @@ export default function ChatRoomMenu({ anchorEl, setAnchorEl, channels, setMessa
 	};
 
 	const handleChannelSelect = (channel) => {
-		if (authState.socketInfo.currentRoom !== channel) {
+		if (socketState.currentRoom !== channel) {
 			setMessages([]);
 		}
 		dispatch(
-			setSocketRoom({
-				lastRoom: authState.socketInfo.currentRoom,
+			setActiveSocketRoom({
+				lastRoom: socketState.currentRoom,
 				currentRoom: channel,
 			})
 		);
@@ -69,7 +69,7 @@ export default function ChatRoomMenu({ anchorEl, setAnchorEl, channels, setMessa
 	return (
 		<StyledMenu id="chat-room-menu" anchorEl={anchorEl} open={open} onClose={handleClose}>
 			{Object.keys(channels).map((channel, index) => (
-				<MenuItem key={index} onClick={() => handleChannelSelect(channel)} disableRipple selected={authState.socketInfo.currentRoom === channel}>
+				<MenuItem key={index} onClick={() => handleChannelSelect(channel)} disableRipple selected={socketState.currentRoom === channel}>
 					<DnsRounded />
 					{channels[channel].name}
 				</MenuItem>

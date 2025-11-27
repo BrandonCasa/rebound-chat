@@ -1,4 +1,3 @@
-import socketIoHelper from "../../helpers/socket";
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
@@ -38,13 +37,10 @@ export default function useCustomAppBar(width) {
 		);
 	};
 
-        const handleLogout = async () => {
-                const oldDisplayName = displayName;
-                await dispatch(logoutUser({ disableAutoLogin: true }));
-                const socketClient = socketIoHelper.getSocket();
-                if (socketClient && socketClient.connected) {
-                        socketIoHelper.disconnectSocket();
-                }
+	const handleLogout = async () => {
+		const oldDisplayName = displayName;
+		await dispatch(logoutUser({ disableAutoLogin: true }));
+		dispatch(disconnectSocket());
 		dispatch(
 			addSnackbar({
 				snackbarMsg: `Goodbye ${oldDisplayName}`,

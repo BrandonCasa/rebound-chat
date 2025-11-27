@@ -12,8 +12,8 @@ import RegisterDialog from "./components/RegisterDialog";
 import DraggableCallOverlay from "./components/CallOverlay/CallOverlay.comp";
 import SnackbarMapper from "./components/SnackbarMapper";
 import useDarkTheme from "./helpers/darkTheme";
-import socketIoHelper from "./helpers/socket";
-import { bootstrapAuth, refreshAuthToken, setAuthState, setSocketStatus, verifyUser } from "./slices/authSlice";
+import { bootstrapAuth, refreshAuthToken, setAuthState, verifyUser } from "./slices/authSlice";
+import { connectSocket, disconnectSocket } from "./slices/socketSlice";
 import { hasAuthSessionCookie } from "./helpers/api";
 import { getTokenExpiry } from "./helpers/authToken";
 
@@ -102,6 +102,7 @@ const App = () => {
 		}
 
 		scheduleRefresh(Math.max(refreshIn, MIN_REFRESH_DELAY_MS));
+		//scheduleRefresh(10_000);
 
 		return () => {
 			if (refreshTimeoutRef.current) {
@@ -111,37 +112,19 @@ const App = () => {
 		};
 	}, [authState.authToken, dispatch]);
 
-	const useSocketConnection = (authToken, loggedIn) => {
-		useEffect(() => {
-			const connectSocket = async (token) => {
-				const socketClient = socketIoHelper.connectSocket(token);
+	useEffect(() => {
+		if (authState.loggedIn && authState.authToken) {
+			dispatch(connectSocket());
+		} else {
+			dispatch(disconnectSocket());
+		}
+	}, [authState.loggedIn, authState.authToken, dispatch]);
 
-				socketClient.on("connected", () => {
-					dispatch(setSocketStatus({ connected: true }));
-				});
-
-				socketClient.on("disconnect", () => {
-					dispatch(setSocketStatus({ connected: false }));
-				});
-			};
-
-			if (!socketIoHelper.getSocket()?.connected && loggedIn) {
-				connectSocket(authToken);
-			}
-
-			return () => {
-				if (socketIoHelper.getSocket()?.connected) {
-					socketIoHelper.disconnectSocket();
-				}
-			};
-		}, [loggedIn, authToken]);
-	};
-
-	useSocketConnection(authState.authToken, authState.loggedIn);
+	const showAutoUpdate = window.isElectron && import.meta.env.PROD;
 
 	return (
 		<ThemeProvider theme={darkTheme}>
-			{window.isElectron && <AutoUpdate />}
+			{showAutoUpdate && <AutoUpdate />}
 			<CssBaseline />
 			<SnackbarMapper drawerWidth={customAppBarProps.drawerWidth} drawerOpen={customAppBarProps.drawerOpen} />
 			<AppRouter>

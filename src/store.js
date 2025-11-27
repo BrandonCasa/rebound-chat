@@ -5,6 +5,7 @@ import rootReducer from "./slices";
 
 const store = configureStore({
 	reducer: rootReducer,
+	middleware: (getDefaultMiddleware) => getDefaultMiddleware(),
 });
 
 setupListeners(store.dispatch);

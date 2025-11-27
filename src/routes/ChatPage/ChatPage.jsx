@@ -21,6 +21,7 @@ function ChatPage() {
 		setMessage,
 		messages,
 		channels,
+		currentRoom,
 		users,
 		roomAnchorEl,
 		setRoomAnchorEl,
@@ -115,7 +116,7 @@ function ChatPage() {
 					}}>
 					<Button variant="outlined" color="secondary" startIcon={<MenuRounded />} onClick={clickRoomSelect} sx={{ textTransform: "initial" }}>
 						<Typography variant="h6" align="center">
-							{channels[authState.socketInfo.currentRoom]?.name || "No Room"}
+							{channels[currentRoom]?.name || "No Room"}
 						</Typography>
 					</Button>
 					<Box flexGrow={1} />

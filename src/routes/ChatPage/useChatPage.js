@@ -1,20 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import useWindowDimensions from "../../helpers/useWindowDimensions";
 import { useDispatch, useSelector } from "react-redux";
+
 import { fetchRoomMessages, mapMessages } from "../../slices/chatApiSlice";
 import { parseMentions } from "../../helpers/mentions";
 import { fetchUserProfile } from "../../slices/userApiSlice";
-import socketIoHelper from "../../helpers/socket";
-import { setSocketRoom } from "../../slices/authSlice";
 import { addSnackbar } from "../../slices/snackbarSlice";
-import { getApiBase } from "../../helpers/api";
-import { useInView } from "react-intersection-observer";
+import { setActiveSocketRoom, emitSocketEvent } from "../../slices/socketSlice";
+import { getSocketClient } from "../../helpers/socketClient";
 
-const REQUEST_BASE = getApiBase();
 const MESSAGE_PAGE_SIZE = 50;
 
 export default function useChatPage() {
 	const authState = useSelector((state) => state.auth);
+	const sockets = useSelector((s) => s.sockets);
 	const dispatch = useDispatch();
 
 	const [message, setMessage] = useState("");
@@ -44,20 +42,36 @@ export default function useChatPage() {
 		return outMsgs;
 	}, []);
 
-	const updatePageInfo = useCallback((pageInfo = {}, roomIdOut = null, nextMessages = []) => {
+	const updatePageInfo = useCallback((pageInfo = {}, roomIdOut = undefined, nextMessages = []) => {
+		const resolvedChannelCandidate = roomIdOut ?? pageInfo.channel ?? nextMessages[0]?.roomId;
+		const resolvedChannel = resolvedChannelCandidate ?? pageInfoRef.current.channel ?? null;
+
 		pageInfoRef.current = {
 			hasMoreBefore: pageInfo.hasMoreBefore ?? pageInfoRef.current.hasMoreBefore,
 			hasMoreAfter: pageInfo.hasMoreAfter ?? pageInfoRef.current.hasMoreAfter,
 			nextBefore: pageInfo.nextBefore ?? nextMessages[0]?._id ?? pageInfoRef.current.nextBefore,
 			nextAfter: pageInfo.nextAfter ?? nextMessages[nextMessages.length - 1]?._id ?? pageInfoRef.current.nextAfter,
-			channel: roomIdOut ?? pageInfoRef.current.roomIdOut,
+			channel: resolvedChannel,
 		};
 	}, []);
 
 	const fetchMessages = useCallback(
 		async (roomOverride) => {
-			const roomId = roomOverride || authState.socketInfo.currentRoom;
-			if (!roomId || fetchingRef.current || !authState.authToken || !authState.socketInfo.connected) return;
+			const requestedRoom = roomOverride || sockets.currentRoom || pageInfoRef.current.channel;
+			let roomId = pageInfoRef.current.channel || roomOverride || sockets.currentRoom;
+			if (!roomId) {
+				console.error("Cannot fetch messages without an active channel");
+				dispatch(
+					addSnackbar({
+						snackbarMsg: "Unable to load messages: no active channel.",
+						snackbarSeverity: "error",
+						autoHideDuration: 2500,
+					})
+				);
+				return;
+			}
+			updatePageInfo(pageInfoRef.current, roomId);
+			if (fetchingRef.current || !authState.authToken || !sockets.connected) return;
 			fetchingRef.current = true;
 			try {
 				const {
@@ -71,23 +85,42 @@ export default function useChatPage() {
 						limit: MESSAGE_PAGE_SIZE,
 					})
 				).unwrap();
+				const resolvedRoom = roomIdOut || roomId;
+				if (resolvedRoom && resolvedRoom !== requestedRoom) {
+					return;
+				}
 				const mapped = msgs || [];
 				setMessages(mapped);
-				updatePageInfo(pageInfo, roomIdOut, mapped);
+				updatePageInfo(pageInfo, resolvedRoom || roomId, mapped);
 			} catch (err) {
 				console.error("load messages error", err);
 			} finally {
 				fetchingRef.current = false;
 			}
 		},
-		[authState.socketInfo.currentRoom, authState.socketInfo.connected, authState.authToken, dispatch, updatePageInfo]
+		[sockets.currentRoom, sockets.connected, dispatch, updatePageInfo, authState.authToken]
 	);
 
 	const fetchOlderMessages = useCallback(
 		async (roomOverride) => {
-			const roomId = roomOverride || authState.socketInfo.currentRoom || pageInfoRef.current.channel;
-			if (!roomId || fetchingRef.current || !authState.authToken || !authState.socketInfo.connected) return;
-			if (!roomId || fetchingRef.current || !pageInfoRef.current.hasMoreBefore) {
+			let roomId = pageInfoRef.current.channel;
+			if (!roomId && roomOverride) {
+				updatePageInfo(pageInfoRef.current, roomOverride);
+				roomId = roomOverride;
+			}
+			if (!roomId) {
+				console.error("Cannot fetch older messages without an active channel");
+				dispatch(
+					addSnackbar({
+						snackbarMsg: "Unable to load messages: no active channel.",
+						snackbarSeverity: "error",
+						autoHideDuration: 2500,
+					})
+				);
+				return;
+			}
+			if (fetchingRef.current || !authState.authToken || !sockets.connected) return;
+			if (!pageInfoRef.current.hasMoreBefore) {
 				return;
 			}
 
@@ -107,11 +140,15 @@ export default function useChatPage() {
 						limit: MESSAGE_PAGE_SIZE,
 					})
 				).unwrap();
+				const resolvedRoom = roomIdOut || roomId;
+				if (resolvedRoom && resolvedRoom !== pageInfoRef.current.channel) {
+					return;
+				}
 
 				const mapped = olderMessages || [];
 				setMessages((prev) => {
 					const merged = mergeMessages(prev, mapped);
-					updatePageInfo(pageInfo, roomIdOut, merged);
+					updatePageInfo(pageInfo, resolvedRoom || roomId, merged);
 					return merged;
 				});
 			} catch (err) {
@@ -121,23 +158,29 @@ export default function useChatPage() {
 				loadingOlderRef.current = false;
 			}
 		},
-		[authState.authToken, authState.socketInfo.currentRoom, authState.socketInfo.connected, dispatch, mergeMessages, pageInfoRef, updatePageInfo]
+		[sockets.currentRoom, sockets.connected, dispatch, mergeMessages, updatePageInfo, authState.authToken]
 	);
 
 	const resetRoomState = useCallback(() => {
-		pageInfoRef.current = { hasMoreBefore: false, hasMoreAfter: false, nextBefore: null, nextAfter: null };
+		pageInfoRef.current = { hasMoreBefore: false, hasMoreAfter: false, nextBefore: null, nextAfter: null, channel: null };
 		loadingOlderRef.current = false;
 		fetchingRef.current = false;
 	}, []);
 
 	useEffect(() => {
-		const socket = socketIoHelper.getSocket();
-		if (authState.loggedIn && socket) {
+		if (sockets.currentRoom) {
+			updatePageInfo(pageInfoRef.current, sockets.currentRoom);
+		}
+	}, [sockets.currentRoom, updatePageInfo]);
+
+	useEffect(() => {
+		const socket = getSocketClient();
+		if (authState.loggedIn && socket && sockets.connected) {
 			socket.on("room_list", ([idMap, roomObjs]) => {
 				setChannels(roomObjs);
-				if (!authState.socketInfo.currentRoom) {
+				if (!sockets.currentRoom) {
 					dispatch(
-						setSocketRoom({
+						setActiveSocketRoom({
 							lastRoom: null,
 							currentRoom: Object.keys(idMap)[0] || null,
 						})
@@ -145,10 +188,10 @@ export default function useChatPage() {
 				}
 			});
 			socket.on("joined_room", async (_id, msgs) => {
-				if (!authState.socketInfo.currentRoom) {
+				if (!sockets.currentRoom) {
 					dispatch(
-						setSocketRoom({
-							lastRoom: authState?.socketInfo?.currentRoom || null,
+						setActiveSocketRoom({
+							lastRoom: sockets?.currentRoom || null,
 							currentRoom: _id || null,
 						})
 					);
@@ -159,9 +202,6 @@ export default function useChatPage() {
 					updatePageInfo(pageInfoRef.current, _id, merged);
 					return merged;
 				});
-				//if (mapped.length) {
-				//	requestAnimationFrame(scrollToBottom);
-				//}
 			});
 			const handleIncomingMessage = async (payload) => {
 				if (!payload) return;
@@ -231,32 +271,42 @@ export default function useChatPage() {
 			setChannels({});
 			setMessages([]);
 			setUsers([]);
-			resetRoomState("");
+			resetRoomState();
 		};
-	}, [authState.loggedIn, authState.loggingIn, authState.socketInfo.currentRoom, authState.userId, authState.socketInfo.connected, dispatch]);
+	}, [
+		authState.loggedIn,
+		authState.loggingIn,
+		authState.userId,
+		sockets.connected,
+		sockets.currentRoom,
+		dispatch,
+		mergeMessages,
+		updatePageInfo,
+		resetRoomState,
+	]);
 
 	useEffect(() => {
 		setUsers([]);
-	}, [authState.socketInfo.currentRoom]);
+	}, [sockets.currentRoom]);
 
 	useEffect(() => {
+		resetRoomState();
 		setMessages([]);
 		fetchMessages();
-	}, [authState.socketInfo.currentRoom, fetchMessages]);
+	}, [sockets.currentRoom, fetchMessages, resetRoomState]);
 
 	useEffect(
 		() => () => {
-			dispatch(setSocketRoom({ currentRoom: null }));
+			dispatch(setActiveSocketRoom({ currentRoom: null }));
 		},
 		[dispatch]
 	);
 
 	const sendMessage = (e) => {
 		e?.preventDefault();
-		if (!message || !authState.socketInfo.currentRoom) return;
-		const s = socketIoHelper.getSocket();
+		if (!message || !sockets.currentRoom) return;
 		const mentions = parseMentions(message, users);
-		s.emit("message_room", [authState.socketInfo.currentRoom, message, mentions]);
+		dispatch(emitSocketEvent({ event: "message_room", args: [sockets.currentRoom, message, mentions] }));
 		setMessage("");
 	};
 
@@ -306,17 +356,15 @@ export default function useChatPage() {
 	};
 
 	const confirmDeleteSelectedMessage = () => {
-		if (!selectedMessage) return;
-		const s = socketIoHelper.getSocket();
-		s.emit("delete_message", authState.socketInfo.currentRoom, selectedMessage._id);
+		if (!selectedMessage || !sockets.currentRoom) return;
+		dispatch(emitSocketEvent({ event: "delete_message", args: [sockets.currentRoom, selectedMessage._id] }));
 		closeMessageMenu();
 	};
 
 	const commitEditMessage = () => {
-		if (!editingMessageId) return;
-		const s = socketIoHelper.getSocket();
+		if (!editingMessageId || !sockets.currentRoom) return;
 		const mentions = parseMentions(editingText, users);
-		s.emit("edit_message", authState.socketInfo.currentRoom, editingMessageId, editingText, mentions);
+		dispatch(emitSocketEvent({ event: "edit_message", args: [sockets.currentRoom, editingMessageId, editingText, mentions] }));
 		setEditingMessageId(null);
 		setEditingText("");
 	};
@@ -326,16 +374,6 @@ export default function useChatPage() {
 		setEditingText("");
 	};
 
-	const { width, height } = useWindowDimensions();
-
-	//useEffect(() => {
-	//	const el = listRef.current;
-	//	if (!el) return;
-	//	requestAnimationFrame(() => {
-	//		el.scrollTop = 0;
-	//	});
-	//}, [width, height, messages.length]);
-
 	return {
 		authState,
 		message,
@@ -343,6 +381,7 @@ export default function useChatPage() {
 		messages,
 		setMessages,
 		channels,
+		currentRoom: sockets.currentRoom,
 		users,
 		roomAnchorEl,
 		setRoomAnchorEl,

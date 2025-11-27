@@ -1,15 +1,16 @@
 {
 	"name": "rebound-server",
-	"version": "1.0.34",
+	"version": "1.0.35",
 	"description": "Rebound Server",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/BrandonCasa/rebound-electron.git"
 	},
 	"main": "./src/app.js",
-	"scripts": {
-		"dev": "npx kill-port 6001 && npx kill-port 27017 && cross-env NODE_ENV=development nodemon ./src/app.js"
-	},
+        "scripts": {
+                "dev": "npx kill-port 6001 && npx kill-port 27017 && cross-env NODE_ENV=development nodemon ./src/app.js",
+                "test": "cross-env NODE_ENV=test mocha \"test/**/*.test.js\" --timeout 20000"
+        },
 	"author": {
 		"name": "Brandon Casamichana",
 		"email": "brandoncasawork8@gmail.com",

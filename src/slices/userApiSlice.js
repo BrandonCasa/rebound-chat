@@ -11,20 +11,17 @@ const initialState = {
 export const fetchUserProfile = createAsyncThunk("userApi/fetchUserProfile", async ({ userId, authToken } = {}, { rejectWithValue }) => {
 	const base = getApiBase();
 	try {
-                const { data } = await axios.get(
-                        `${base}/users/profile`,
-                        buildApiConfig(authToken, { params: userId ? { id: userId } : undefined })
-                );
+		const { data } = await axios.get(`${base}/users/profile`, buildApiConfig(authToken, { params: userId ? { id: userId } : undefined }));
 		const u = data.user;
 
-                return {
-                        id: u.id,
-                        profile: {
-                                ...u,
-                                bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
-                                avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
-                        },
-                };
+		return {
+			id: u.id,
+			profile: {
+				...u,
+				bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
+				avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
+			},
+		};
 	} catch (err) {
 		return rejectWithValue(err.response?.data || err.message);
 	}
@@ -33,7 +30,7 @@ export const fetchUserProfile = createAsyncThunk("userApi/fetchUserProfile", asy
 export const modifyProfile = createAsyncThunk("userApi/modifyProfile", async ({ formData, authToken }, { rejectWithValue }) => {
 	const base = getApiBase();
 	try {
-                const { data } = await axios.put(`${base}/users/modify`, formData, buildApiConfig(authToken));
+		const { data } = await axios.put(`${base}/users/modify`, formData, buildApiConfig(authToken));
 		const u = data.user;
 		return {
 			id: u.id,
@@ -53,7 +50,7 @@ export const friendAction = createAsyncThunk(
 	async ({ ep, data, authToken, message, severity = "success" }, { dispatch, rejectWithValue }) => {
 		const base = getApiBase();
 		try {
-                        await axios.put(`${base}/users/${ep}`, data, buildApiConfig(authToken));
+			await axios.put(`${base}/users/${ep}`, data, buildApiConfig(authToken));
 			if (message) {
 				dispatch(addSnackbar({ snackbarMsg: message, snackbarSeverity: severity, autoHideDuration: 1500 }));
 			}

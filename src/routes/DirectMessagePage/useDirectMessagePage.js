@@ -2,12 +2,14 @@ import { useState, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchDmMessages } from "../../slices/dmApiSlice";
 import { fetchUserProfile } from "../../slices/userApiSlice";
-import socketIoHelper from "../../helpers/socket";
 import { mapMessages } from "../../slices/chatApiSlice";
 import { parseMentions } from "../../helpers/mentions";
+import { emitSocketEvent } from "../../slices/socketSlice";
+import { getSocketClient } from "../../helpers/socketClient";
 
 export default function useDirectMessagePage(otherId) {
 	const auth = useSelector((state) => state.auth);
+	const socketState = useSelector((state) => state.sockets);
 	const dispatch = useDispatch();
 
 	const [threadId, setThreadId] = useState(null);
@@ -32,9 +34,9 @@ export default function useDirectMessagePage(otherId) {
 
 	useEffect(() => {
 		if (!auth.loggedIn || !otherId) return;
-		const socket = socketIoHelper.getSocket();
-		if (socket) {
-			socket.emit("join_dm", otherId);
+		const socket = getSocketClient();
+		if (socket && socketState.connected) {
+			dispatch(emitSocketEvent({ event: "join_dm", args: [otherId] }));
 			socket.on("dm_joined", (tId, msgs) => {
 				setThreadId(tId);
 				setMessages(mapMessages(msgs));
@@ -65,7 +67,7 @@ export default function useDirectMessagePage(otherId) {
 				socket.off("dm_delete_message");
 			}
 		};
-	}, [otherId, auth.loggedIn, threadId]);
+	}, [otherId, auth.loggedIn, threadId, socketState.connected, dispatch]);
 
 	useEffect(() => {
 		if (!auth.loggedIn || !otherId) return;
@@ -78,14 +80,13 @@ export default function useDirectMessagePage(otherId) {
 			.catch(() => {});
 	}, [otherId, auth.loggedIn, auth.authToken, dispatch]);
 
-        const sendMessage = (e) => {
-                e?.preventDefault();
-                if (!message || !threadId) return;
-                const s = socketIoHelper.getSocket();
-                const mentions = parseMentions(message, [otherUser].filter(Boolean));
-                s.emit("message_dm", threadId, message, mentions);
-                setMessage("");
-        };
+	const sendMessage = (e) => {
+		e?.preventDefault();
+		if (!message || !threadId) return;
+		const mentions = parseMentions(message, [otherUser].filter(Boolean));
+		dispatch(emitSocketEvent({ event: "message_dm", args: [threadId, message, mentions] }));
+		setMessage("");
+	};
 
 	const openMessageMenu = (msg, pos) => {
 		setSelectedMessage(msg);
@@ -104,14 +105,13 @@ export default function useDirectMessagePage(otherId) {
 		closeMessageMenu();
 	};
 
-        const commitEditMessage = () => {
-                if (!editingMessageId) return;
-                const s = socketIoHelper.getSocket();
-                const mentions = parseMentions(editingText, [otherUser].filter(Boolean));
-                s.emit("dm_edit_message", threadId, editingMessageId, editingText, mentions);
-                setEditingMessageId(null);
-                setEditingText("");
-        };
+	const commitEditMessage = () => {
+		if (!editingMessageId) return;
+		const mentions = parseMentions(editingText, [otherUser].filter(Boolean));
+		dispatch(emitSocketEvent({ event: "dm_edit_message", args: [threadId, editingMessageId, editingText, mentions] }));
+		setEditingMessageId(null);
+		setEditingText("");
+	};
 
 	const cancelEditMessage = () => {
 		setEditingMessageId(null);
@@ -120,8 +120,7 @@ export default function useDirectMessagePage(otherId) {
 
 	const confirmDeleteSelectedMessage = () => {
 		if (!selectedMessage) return;
-		const s = socketIoHelper.getSocket();
-		s.emit("dm_delete_message", threadId, selectedMessage._id);
+		dispatch(emitSocketEvent({ event: "dm_delete_message", args: [threadId, selectedMessage._id] }));
 		closeMessageMenu();
 	};
 
