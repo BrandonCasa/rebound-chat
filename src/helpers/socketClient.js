@@ -1,25 +1,15 @@
 import { io } from "socket.io-client";
 
 let socketInstance = null;
-let socketMeta = { url: null, token: null };
+let socketMeta = { url: null };
 
 export const getSocketClient = () => socketInstance;
 export const getSocketMeta = () => socketMeta;
 
-export const updateSocketAuthToken = (token) => {
-	if (!socketInstance || !token) return;
-	socketMeta = { ...socketMeta, token };
-	socketInstance.io.opts.extraHeaders = { Authorization: `Bearer ${token}` };
-	socketInstance.auth = { ...(socketInstance.auth || {}), token };
-};
-
-export const initSocketClient = (url, token) => {
-	if (!url || !token) return null;
+export const initSocketClient = (url) => {
+	if (!url) return null;
 
 	if (socketInstance && socketMeta.url === url) {
-		if (socketMeta.token !== token) {
-			updateSocketAuthToken(token);
-		}
 		if (!socketInstance.connected && !socketInstance.connecting) {
 			socketInstance.connect();
 		}
@@ -38,9 +28,9 @@ export const initSocketClient = (url, token) => {
 	socketInstance = io(url, {
 		autoConnect: true,
 		transports: ["websocket"],
-		extraHeaders: { Authorization: `Bearer ${token}` },
+		withCredentials: true,
 	});
-	socketMeta = { url, token };
+	socketMeta = { url };
 	return socketInstance;
 };
 
@@ -54,5 +44,5 @@ export const tearDownSocketClient = () => {
 		console.error("Error tearing down socket", err);
 	}
 	socketInstance = null;
-	socketMeta = { url: null, token: null };
+	socketMeta = { url: null };
 };
