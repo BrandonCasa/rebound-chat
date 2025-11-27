@@ -3,8 +3,15 @@ import { getSocketClient, initSocketClient, tearDownSocketClient } from "../help
 
 let lifecycleHandlers = null;
 
+const resolveDefaultSocketURL = () => {
+	if (process.env.NODE_ENV === "development") return "http://localhost:6002";
+	if (globalThis.IN_ELECTRON_ENV) return "https://rebound.nexus";
+	if (typeof window !== "undefined" && window.location?.origin) return window.location.origin;
+	return "";
+};
+
 const initialState = {
-	socketURL: process.env.NODE_ENV === "development" ? "http://localhost:6002" : globalThis.IN_ELECTRON_ENV ? "https://rebound.nexus" : "",
+	socketURL: resolveDefaultSocketURL(),
 	status: "idle", // "idle" | "connecting" | "connected" | "error"
 	error: null,
 	connected: false,
@@ -46,7 +53,8 @@ const detachLifecycleHandlers = () => {
 export const connectSocket = createAsyncThunk("socketApi/connectSocket", async ({ socketURL } = {}, { getState, dispatch, rejectWithValue }) => {
 	try {
 		const state = getState();
-		const url = socketURL ?? state.sockets?.socketURL;
+		const resolvedDefault = resolveDefaultSocketURL();
+		const url = socketURL || state.sockets?.socketURL || resolvedDefault;
 
 		if (!url) return rejectWithValue("Missing socketURL");
 
