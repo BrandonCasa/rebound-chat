@@ -1,14 +1,15 @@
-import socketIoHelper from "../../helpers/socket";
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 import { logoutUser } from "../../slices/authSlice";
+import { disconnectSocket } from "../../slices/socketSlice";
 import { setDialogOpened } from "../../slices/dialogSlice";
 import { addSnackbar } from "../../slices/snackbarSlice";
 
 export default function useCustomAppBar(width) {
 	const loggedInState = useSelector((state) => state.auth.loggedIn);
 	const displayName = useSelector((state) => state.auth.displayName);
+	const sockets = useSelector((s) => s.sockets);
 	const dispatch = useDispatch();
 
 	const [drawerOpen, setDrawerOpen] = useState(true);
@@ -38,13 +39,12 @@ export default function useCustomAppBar(width) {
 		);
 	};
 
-        const handleLogout = async () => {
-                const oldDisplayName = displayName;
-                await dispatch(logoutUser({ disableAutoLogin: true }));
-                const socketClient = socketIoHelper.getSocket();
-                if (socketClient && socketClient.connected) {
-                        socketIoHelper.disconnectSocket();
-                }
+	const handleLogout = async () => {
+		const oldDisplayName = displayName;
+		await dispatch(logoutUser({ disableAutoLogin: true }));
+		if (sockets.socketClient && sockets.connected) {
+			dispatch(disconnectSocket);
+		}
 		dispatch(
 			addSnackbar({
 				snackbarMsg: `Goodbye ${oldDisplayName}`,

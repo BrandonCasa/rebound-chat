@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { fetchUserProfile, friendAction } from "../../slices/userApiSlice";
-import socketIoHelper from "../../helpers/socket";
 async function getUserInfo(userId, authToken, dispatch) {
 	try {
 		const { profile } = await dispatch(fetchUserProfile({ userId, authToken })).unwrap();
@@ -14,6 +13,7 @@ async function getUserInfo(userId, authToken, dispatch) {
 
 export default function useFriendPage() {
 	const auth = useSelector((state) => state.auth);
+	const sockets = useSelector((s) => s.sockets);
 	const dispatch = useDispatch();
 
 	const [friendItems, setFriendItems] = useState([]);
@@ -45,7 +45,6 @@ export default function useFriendPage() {
 			return;
 		}
 		let isMounted = true;
-		const socket = socketIoHelper.getSocket();
 
 		async function loadRelations() {
 			setLoading(true);
@@ -83,20 +82,20 @@ export default function useFriendPage() {
 		}
 
 		loadRelations();
-		if (socket) {
-			socket.emit("watch_user", auth.userId);
-			socket.on("watched_user_saved", ([watchedId]) => {
+		if (sockets.socketClient && sockets.connected) {
+			sockets.socketClient.emit("watch_user", auth.userId);
+			sockets.socketClient.on("watched_user_saved", ([watchedId]) => {
 				if (watchedId === auth.userId) loadRelations();
 			});
 		}
 		return () => {
 			isMounted = false;
-			if (socket) {
-				socket.emit("unwatch_user", auth.userId);
-				socket.off("watched_user_saved");
+			if (sockets.socketClient) {
+				sockets.socketClient.emit("unwatch_user", auth.userId);
+				sockets.socketClient.off("watched_user_saved");
 			}
 		};
-	}, [auth.authToken, auth.userId, auth.loggedIn, auth.socketInfo.connected]);
+	}, [auth.userId, auth.loggedIn, sockets.connected, sockets]);
 
 	const callApi = async (ep, data, onSuccessId) => {
 		try {

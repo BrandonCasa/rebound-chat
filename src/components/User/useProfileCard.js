@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import socketIoHelper from "../../helpers/socket";
 import { addSnackbar } from "../../slices/snackbarSlice";
 import { setLoggedIn } from "../../slices/authSlice";
 import { friendAction, modifyProfile } from "../../slices/userApiSlice";
@@ -71,6 +70,7 @@ export function useFilePreview(initialUrl) {
 export default function useProfileCard(user, forceSelf) {
 	const dispatch = useDispatch();
 	const auth = useSelector((s) => s.auth);
+	const sockets = useSelector((s) => s.sockets);
 
 	const isSelf = forceSelf || user?.id === auth.userId;
 
@@ -134,30 +134,28 @@ export default function useProfileCard(user, forceSelf) {
 
 	// watch/unwatch user via socket based on profile.id and editMode
 	useEffect(() => {
-		const socket = socketIoHelper.getSocket();
-		if (!socket?.connected) return;
+		if (!sockets.socketClient || !sockets.conneted) return;
 
 		if (watchRef.current && (watchRef.current !== watchId || editMode)) {
-			socket.emit("unwatch_user", watchRef.current);
+			sockets.socketClient.emit("unwatch_user", watchRef.current);
 			watchRef.current = null;
 		}
 		if (!editMode && watchId && watchRef.current !== watchId) {
-			socket.emit("watch_user", watchId);
+			sockets.socketClient.emit("watch_user", watchId);
 			watchRef.current = watchId;
 		}
 
 		return () => {
 			if (watchRef.current) {
-				socket.emit("unwatch_user", watchRef.current);
+				sockets.socketClient.emit("unwatch_user", watchRef.current);
 				watchRef.current = null;
 			}
 		};
-	}, [auth.socketInfo.connected, watchId, editMode]);
+	}, [sockets.connected, sockets.socketClient, watchId, editMode]);
 
 	// Handle "watched_user_saved" updates
 	useEffect(() => {
-		const socket = socketIoHelper.getSocket();
-		if (!socket) return;
+		if (!sockets.socketClient || !sockets.conneted) return;
 
 		const onSaved = ([id, pubData, privData]) => {
 			if (id !== watchId) return;
@@ -179,11 +177,11 @@ export default function useProfileCard(user, forceSelf) {
 			setBio(data.bio || "");
 		};
 
-		socket.on("watched_user_saved", onSaved);
+		sockets.socketClient.on("watched_user_saved", onSaved);
 		return () => {
-			socket.off("watched_user_saved", onSaved);
+			sockets.socketClient.off("watched_user_saved", onSaved);
 		};
-	}, [auth.authToken, auth.userId, auth.socketInfo.connected, watchId, avatar, banner]);
+	}, [sockets.connected, sockets.socketClient, auth.authToken, auth.userId, watchId, avatar, banner]);
 
 	// Your improved friend-status logic, but on normalized data
 	const { status, friendId } = useMemo(() => {

@@ -4,7 +4,6 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchRoomMessages, mapMessages } from "../../slices/chatApiSlice";
 import { parseMentions } from "../../helpers/mentions";
 import { fetchUserProfile } from "../../slices/userApiSlice";
-import socketIoHelper from "../../helpers/socket";
 import { setSocketRoom } from "../../slices/authSlice";
 import { addSnackbar } from "../../slices/snackbarSlice";
 import { getApiBase } from "../../helpers/api";
@@ -15,6 +14,7 @@ const MESSAGE_PAGE_SIZE = 50;
 
 export default function useChatPage() {
 	const authState = useSelector((state) => state.auth);
+	const sockets = useSelector((s) => s.sockets);
 	const dispatch = useDispatch();
 
 	const [message, setMessage] = useState("");
@@ -57,7 +57,7 @@ export default function useChatPage() {
 	const fetchMessages = useCallback(
 		async (roomOverride) => {
 			const roomId = roomOverride || authState.socketInfo.currentRoom;
-			if (!roomId || fetchingRef.current || !authState.authToken || !authState.socketInfo.connected) return;
+			if (!roomId || fetchingRef.current || !authState.authToken || !sockets.connected) return;
 			fetchingRef.current = true;
 			try {
 				const {
@@ -80,13 +80,13 @@ export default function useChatPage() {
 				fetchingRef.current = false;
 			}
 		},
-		[authState.socketInfo.currentRoom, authState.socketInfo.connected, authState.authToken, dispatch, updatePageInfo]
+		[authState.socketInfo.currentRoom, sockets.connected, dispatch, updatePageInfo]
 	);
 
 	const fetchOlderMessages = useCallback(
 		async (roomOverride) => {
 			const roomId = roomOverride || authState.socketInfo.currentRoom || pageInfoRef.current.channel;
-			if (!roomId || fetchingRef.current || !authState.authToken || !authState.socketInfo.connected) return;
+			if (!roomId || fetchingRef.current || !authState.authToken || !sockets.connected) return;
 			if (!roomId || fetchingRef.current || !pageInfoRef.current.hasMoreBefore) {
 				return;
 			}
@@ -121,7 +121,7 @@ export default function useChatPage() {
 				loadingOlderRef.current = false;
 			}
 		},
-		[authState.authToken, authState.socketInfo.currentRoom, authState.socketInfo.connected, dispatch, mergeMessages, pageInfoRef, updatePageInfo]
+		[authState.socketInfo.currentRoom, sockets.connected, dispatch, mergeMessages, pageInfoRef, updatePageInfo]
 	);
 
 	const resetRoomState = useCallback(() => {
@@ -131,9 +131,8 @@ export default function useChatPage() {
 	}, []);
 
 	useEffect(() => {
-		const socket = socketIoHelper.getSocket();
-		if (authState.loggedIn && socket) {
-			socket.on("room_list", ([idMap, roomObjs]) => {
+		if (authState.loggedIn && sockets.socketClient && sockets.connected) {
+			sockets.socketClient.on("room_list", ([idMap, roomObjs]) => {
 				setChannels(roomObjs);
 				if (!authState.socketInfo.currentRoom) {
 					dispatch(
@@ -144,7 +143,7 @@ export default function useChatPage() {
 					);
 				}
 			});
-			socket.on("joined_room", async (_id, msgs) => {
+			sockets.socketClient.on("joined_room", async (_id, msgs) => {
 				if (!authState.socketInfo.currentRoom) {
 					dispatch(
 						setSocketRoom({
@@ -173,13 +172,13 @@ export default function useChatPage() {
 					return merged;
 				});
 			};
-			socket.on("message_sent", async (_id, msg) => {
+			sockets.socketClient.on("message_sent", async (_id, msg) => {
 				await handleIncomingMessage(msg);
 			});
-			socket.on("new_message", async (_id, msg) => {
+			sockets.socketClient.on("new_message", async (_id, msg) => {
 				await handleIncomingMessage(msg);
 			});
-			socket.on("messages_updated", async (_id, payload) => {
+			sockets.socketClient.on("messages_updated", async (_id, payload) => {
 				if (payload?.type === "delete" && payload.messageId) {
 					setMessages((prev) => {
 						const filtered = prev.filter((m) => m._id !== payload.messageId);
@@ -196,7 +195,7 @@ export default function useChatPage() {
 
 				await handleIncomingMessage(payload);
 			});
-			socket.on("user_list", (_roomId, list, sender, evt) => {
+			sockets.socketClient.on("user_list", (_roomId, list, sender, evt) => {
 				if (sender.id !== authState.userId) {
 					dispatch(
 						addSnackbar({
@@ -208,7 +207,7 @@ export default function useChatPage() {
 				}
 				setUsers(list);
 			});
-			socket.emit("list_rooms");
+			sockets.socketClient.emit("list_rooms");
 		} else if (!authState.loggingIn && !authState.loggedIn) {
 			dispatch(
 				addSnackbar({
@@ -220,20 +219,20 @@ export default function useChatPage() {
 		}
 
 		return () => {
-			if (socket) {
-				socket.off("room_list");
-				socket.off("joined_room");
-				socket.off("message_sent");
-				socket.off("new_message");
-				socket.off("messages_updated");
-				socket.off("user_list");
+			if (sockets.socketClient) {
+				sockets.socketClient.off("room_list");
+				sockets.socketClient.off("joined_room");
+				sockets.socketClient.off("message_sent");
+				sockets.socketClient.off("new_message");
+				sockets.socketClient.off("messages_updated");
+				sockets.socketClient.off("user_list");
 			}
 			setChannels({});
 			setMessages([]);
 			setUsers([]);
 			resetRoomState("");
 		};
-	}, [authState.loggedIn, authState.loggingIn, authState.socketInfo.currentRoom, authState.userId, authState.socketInfo.connected, dispatch]);
+	}, [sockets.socketClient, authState.loggedIn, authState.loggingIn, authState.socketInfo.currentRoom, authState.userId, sockets.connected, dispatch]);
 
 	useEffect(() => {
 		setUsers([]);
@@ -254,9 +253,8 @@ export default function useChatPage() {
 	const sendMessage = (e) => {
 		e?.preventDefault();
 		if (!message || !authState.socketInfo.currentRoom) return;
-		const s = socketIoHelper.getSocket();
 		const mentions = parseMentions(message, users);
-		s.emit("message_room", [authState.socketInfo.currentRoom, message, mentions]);
+		sockets.socketClient.emit("message_room", [authState.socketInfo.currentRoom, message, mentions]);
 		setMessage("");
 	};
 
@@ -307,16 +305,14 @@ export default function useChatPage() {
 
 	const confirmDeleteSelectedMessage = () => {
 		if (!selectedMessage) return;
-		const s = socketIoHelper.getSocket();
-		s.emit("delete_message", authState.socketInfo.currentRoom, selectedMessage._id);
+		sockets.socketClient.emit("delete_message", authState.socketInfo.currentRoom, selectedMessage._id);
 		closeMessageMenu();
 	};
 
 	const commitEditMessage = () => {
 		if (!editingMessageId) return;
-		const s = socketIoHelper.getSocket();
 		const mentions = parseMentions(editingText, users);
-		s.emit("edit_message", authState.socketInfo.currentRoom, editingMessageId, editingText, mentions);
+		sockets.socketClient.emit("edit_message", authState.socketInfo.currentRoom, editingMessageId, editingText, mentions);
 		setEditingMessageId(null);
 		setEditingText("");
 	};
