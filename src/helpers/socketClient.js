@@ -7,14 +7,12 @@ export const getSocketClient = () => socketInstance;
 export const getSocketMeta = () => socketMeta;
 
 export const updateSocketAuthToken = (token) => {
-	if (!socketInstance || !token) return;
-	socketMeta = { ...socketMeta, token };
-	socketInstance.io.opts.extraHeaders = { Authorization: `Bearer ${token}` };
-	socketInstance.auth = { ...(socketInstance.auth || {}), token };
+	if (!socketInstance) return;
+	socketMeta = { ...socketMeta, token: token ?? null };
 };
 
 export const initSocketClient = (url, token) => {
-	if (!url || !token) return null;
+	if (!url) return null;
 
 	if (socketInstance && socketMeta.url === url) {
 		if (socketMeta.token !== token) {
@@ -38,7 +36,7 @@ export const initSocketClient = (url, token) => {
 	socketInstance = io(url, {
 		autoConnect: true,
 		transports: ["websocket"],
-		extraHeaders: { Authorization: `Bearer ${token}` },
+		withCredentials: true,
 	});
 	socketMeta = { url, token };
 	return socketInstance;

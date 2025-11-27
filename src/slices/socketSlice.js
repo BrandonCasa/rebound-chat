@@ -47,10 +47,9 @@ export const connectSocket = createAsyncThunk("socketApi/connectSocket", async (
 	try {
 		const state = getState();
 		const url = socketURL ?? state.sockets?.socketURL;
-		const token = userToken ?? state.auth?.authToken ?? state.auth?.token;
+		const token = userToken ?? state.auth?.authToken ?? state.auth?.token ?? null;
 
 		if (!url) return rejectWithValue("Missing socketURL");
-		if (!token) return rejectWithValue("Missing user token");
 
 		const existing = getSocketClient();
 		if (existing?.connected) {
