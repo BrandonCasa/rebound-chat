@@ -101,8 +101,8 @@ const App = () => {
 			return undefined;
 		}
 
-		//scheduleRefresh(Math.max(refreshIn, MIN_REFRESH_DELAY_MS));
-		scheduleRefresh(10_000);
+		scheduleRefresh(Math.max(refreshIn, MIN_REFRESH_DELAY_MS));
+		//scheduleRefresh(10_000);
 
 		return () => {
 			if (refreshTimeoutRef.current) {
