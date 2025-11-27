@@ -8,8 +8,7 @@ html {
         width: 100%;
         min-height: var(--app-height);
         height: var(--app-height);
-        overflow-x: hidden;
-        overflow-y: auto;
+        overflow: hidden;
         position: relative;
 }
 
@@ -19,8 +18,7 @@ body {
         width: 100%;
         min-height: var(--app-height);
         height: var(--app-height);
-        overflow-x: hidden;
-        overflow-y: auto;
+        overflow: hidden;
         position: relative;
         font-family: "Roboto";
         -webkit-font-smoothing: antialiased;
@@ -34,8 +32,7 @@ body {
         width: 100%;
         min-height: var(--app-height);
         height: var(--app-height);
-        overflow-x: hidden;
-        overflow-y: auto;
+        overflow: hidden;
         position: relative;
 }
 
