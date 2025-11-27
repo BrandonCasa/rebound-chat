@@ -4,6 +4,7 @@ import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import crypto from "crypto";
 import UserModel from "../models/User.js";
 import { resolveGoogleCallbackUrl } from "../utils/auth.js";
+import logger from "../logger.js";
 
 class CustomPassport {
 	setupPassport() {
@@ -30,6 +31,12 @@ class CustomPassport {
 			)
 		);
 		const callbackURL = resolveGoogleCallbackUrl();
+
+		const hasGoogleConfig = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.NODE_ENV !== "test";
+		if (!hasGoogleConfig) {
+			logger.info("Google OAuth strategy disabled: missing credentials or running in test mode.");
+			return;
+		}
 
 		passport.use(
 			new GoogleStrategy(

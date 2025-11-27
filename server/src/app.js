@@ -18,110 +18,129 @@ const CSRF_COOKIE_NAME = "csrfToken";
 const CSRF_HEADER_NAME = "x-csrf-token";
 const CSRF_PROTECTED_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const CSRF_COOKIE_OPTIONS = {
-        httpOnly: false,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        path: "/",
+	httpOnly: false,
+	secure: process.env.NODE_ENV === "production",
+	sameSite: "strict",
+	path: "/",
 };
 
 configDotenv();
 
 class ServerBackend {
-        constructor() {
-                this.app = express();
-                customPassport.setupPassport();
-                this._initMiddleware();
-                this._initRoutes();
-                this.server = http.createServer(this.app);
-        }
+	constructor() {
+		this.app = express();
+		customPassport.setupPassport();
+		this._initMiddleware();
+		this._initRoutes();
+		this.server = http.createServer(this.app);
+		this.socketStarted = false;
+	}
 
-        _initMiddleware() {
-                this.app.set("trust proxy", 1);
+	_initMiddleware() {
+		this.app.set("trust proxy", 1);
 
-                this.app.use(cors({ optionsSuccessStatus: 200 }));
-                const globalLimiter = rateLimit({
-                        windowMs: 5 * 60 * 1000,
-                        max: 150,
-                        standardHeaders: true,
-                        legacyHeaders: false,
-                        message: { error: "Too many requests, please try again later." },
-                });
-                this.app.use(globalLimiter);
+		this.app.use(cors({ optionsSuccessStatus: 200 }));
+		const globalLimiter = rateLimit({
+			windowMs: 5 * 60 * 1000,
+			max: 150,
+			standardHeaders: true,
+			legacyHeaders: false,
+			message: { error: "Too many requests, please try again later." },
+		});
+		this.app.use(globalLimiter);
 
-                if (logger.stream) {
-                        this.app.use(morgan("combined", { stream: logger.stream }));
-                }
+		if (logger.stream) {
+			this.app.use(morgan("combined", { stream: logger.stream }));
+		}
 
-                this.app.use(cookieParser());
-                this.app.use(express.urlencoded({ extended: false }));
-                this.app.use(express.json());
+		this.app.use(cookieParser());
+		this.app.use(express.urlencoded({ extended: false }));
+		this.app.use(express.json());
 
-                this.app.use((req, res, next) => {
-                        let csrfToken = req.cookies?.[CSRF_COOKIE_NAME];
-                        if (!csrfToken) {
-                                csrfToken = crypto.randomBytes(32).toString("hex");
-                                res.cookie(CSRF_COOKIE_NAME, csrfToken, CSRF_COOKIE_OPTIONS);
-                        }
-                        req.csrfToken = csrfToken;
-                        next();
-                });
+		this.app.use((req, res, next) => {
+			let csrfToken = req.cookies?.[CSRF_COOKIE_NAME];
+			if (!csrfToken) {
+				csrfToken = crypto.randomBytes(32).toString("hex");
+				res.cookie(CSRF_COOKIE_NAME, csrfToken, CSRF_COOKIE_OPTIONS);
+			}
+			req.csrfToken = csrfToken;
+			next();
+		});
 
-                this.app.use((req, res, next) => {
-                        if (!CSRF_PROTECTED_METHODS.has(req.method)) return next();
+		this.app.use((req, res, next) => {
+			if (!CSRF_PROTECTED_METHODS.has(req.method)) return next();
 
-                        const cookieToken = req.cookies?.[CSRF_COOKIE_NAME];
-                        const headerToken = req.get(CSRF_HEADER_NAME);
+			const cookieToken = req.cookies?.[CSRF_COOKIE_NAME];
+			const headerToken = req.get(CSRF_HEADER_NAME);
 
-                        if (!cookieToken && !headerToken) {
-                                return next();
-                        }
+			if (!cookieToken && !headerToken) {
+				return next();
+			}
 
-                        if (!cookieToken || !headerToken || cookieToken !== headerToken) {
-                                return res.status(403).json({ error: "Invalid CSRF token" });
-                        }
+			if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+				return res.status(403).json({ error: "Invalid CSRF token" });
+			}
 
-                        return next();
-                });
+			return next();
+		});
 
-                this.app.use(methodOverride());
-        }
+		this.app.use(methodOverride());
+	}
 
-        _initRoutes() {
-                this.app.use(routes);
-        }
+	_initRoutes() {
+		this.app.use(routes);
+	}
 
-        async startBackend() {
-                try {
-                        await databaseServer.startServer();
+	async startBackend({ httpPort, startSockets = true } = {}) {
+		try {
+			await databaseServer.startServer();
 
-                        socketBackend.start();
+			if (startSockets) {
+				socketBackend.start();
+				this.socketStarted = true;
+			}
 
-                        const httpPort = process.env.PORT || 6001;
-                        this.server
-                                .listen(httpPort, () => logger.info(`HTTP server listening on port ${httpPort}`))
-                                .on("error", (err) => {
-                                        logger.error("HTTP server error:", err);
-					process.exit(1);
-				});
+			const resolvedPort = httpPort ?? process.env.PORT ?? 6001;
+
+			await new Promise((resolve, reject) => {
+				this.server
+					.listen(resolvedPort, () => {
+						logger.info(`HTTP server listening on port ${resolvedPort}`);
+						resolve();
+					})
+					.on("error", (err) => {
+						logger.error("HTTP server error:", err);
+						reject(err);
+					});
+			});
 		} catch (err) {
 			logger.error("Failed to start backend:", err);
-			process.exit(1);
+			throw err;
 		}
-        }
+	}
 
-        async stopBackend() {
-                try {
-                        if (socketBackend.io) {
-                                socketBackend.io.close(() => logger.info("Socket.IO server stopped"));
-                        }
+	async stopBackend() {
+		try {
+			if (this.socketStarted && socketBackend.io) {
+				socketBackend.io.close(() => logger.info("Socket.IO server stopped"));
+				this.socketStarted = false;
+			}
 
-                        await databaseServer.stopServer();
+			await databaseServer.stopServer();
 
-                        this.server.close(() => logger.info("HTTP server stopped"));
-                } catch (err) {
-                        logger.error("Error during shutdown:", err);
-                        throw err;
-                }
+			if (this.server.listening) {
+				await new Promise((resolve, reject) => {
+					this.server.close((err) => {
+						if (err) return reject(err);
+						logger.info("HTTP server stopped");
+						resolve();
+					});
+				});
+			}
+		} catch (err) {
+			logger.error("Error during shutdown:", err);
+			throw err;
+		}
 	}
 
 	async handleShutdown(signal) {
@@ -135,21 +154,26 @@ class ServerBackend {
 	}
 }
 
-(async () => {
-	const serverBackend = new ServerBackend();
+const serverBackend = new ServerBackend();
 
-	process.on("SIGINT", async () => {
-		await serverBackend.handleShutdown("SIGINT");
-	});
+if (process.env.NODE_ENV !== "test") {
+	(async () => {
+		process.on("SIGINT", async () => {
+			await serverBackend.handleShutdown("SIGINT");
+		});
 
-	process.on("SIGTERM", async () => {
-		await serverBackend.handleShutdown("SIGTERM");
-	});
+		process.on("SIGTERM", async () => {
+			await serverBackend.handleShutdown("SIGTERM");
+		});
 
-	try {
-		await serverBackend.startBackend();
-	} catch (e) {
-		logger.error("Startup error:", e);
-		process.exit(1);
-	}
-})();
+		try {
+			await serverBackend.startBackend();
+		} catch (e) {
+			logger.error("Startup error:", e);
+			process.exit(1);
+		}
+	})();
+}
+
+export { ServerBackend, serverBackend };
+export default serverBackend;
