@@ -120,9 +120,11 @@ const App = () => {
 		}
 	}, [authState.loggedIn, authState.authToken, dispatch]);
 
+	const showAutoUpdate = window.isElectron && import.meta.env.PROD;
+
 	return (
 		<ThemeProvider theme={darkTheme}>
-			{window.isElectron && <AutoUpdate />}
+			{showAutoUpdate && <AutoUpdate />}
 			<CssBaseline />
 			<SnackbarMapper drawerWidth={customAppBarProps.drawerWidth} drawerOpen={customAppBarProps.drawerOpen} />
 			<AppRouter>
