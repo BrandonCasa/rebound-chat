@@ -1,23 +1,15 @@
 import { io } from "socket.io-client";
 
 let socketInstance = null;
-let socketMeta = { url: null, token: null };
+let socketMeta = { url: null };
 
 export const getSocketClient = () => socketInstance;
 export const getSocketMeta = () => socketMeta;
 
-export const updateSocketAuthToken = (token) => {
-	if (!socketInstance) return;
-	socketMeta = { ...socketMeta, token: token ?? null };
-};
-
-export const initSocketClient = (url, token) => {
+export const initSocketClient = (url) => {
 	if (!url) return null;
 
 	if (socketInstance && socketMeta.url === url) {
-		if (socketMeta.token !== token) {
-			updateSocketAuthToken(token);
-		}
 		if (!socketInstance.connected && !socketInstance.connecting) {
 			socketInstance.connect();
 		}
@@ -38,7 +30,7 @@ export const initSocketClient = (url, token) => {
 		transports: ["websocket"],
 		withCredentials: true,
 	});
-	socketMeta = { url, token };
+	socketMeta = { url };
 	return socketInstance;
 };
 
@@ -52,5 +44,5 @@ export const tearDownSocketClient = () => {
 		console.error("Error tearing down socket", err);
 	}
 	socketInstance = null;
-	socketMeta = { url: null, token: null };
+	socketMeta = { url: null };
 };

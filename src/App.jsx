@@ -114,7 +114,7 @@ const App = () => {
 
 	useEffect(() => {
 		if (authState.loggedIn && authState.authToken) {
-			dispatch(connectSocket({ userToken: authState.authToken }));
+			dispatch(connectSocket());
 		} else {
 			dispatch(disconnectSocket());
 		}

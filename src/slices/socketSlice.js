@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import { getSocketClient, initSocketClient, tearDownSocketClient, updateSocketAuthToken } from "../helpers/socketClient";
+import { getSocketClient, initSocketClient, tearDownSocketClient } from "../helpers/socketClient";
 
 let lifecycleHandlers = null;
 
@@ -43,22 +43,20 @@ const detachLifecycleHandlers = () => {
 	lifecycleHandlers = null;
 };
 
-export const connectSocket = createAsyncThunk("socketApi/connectSocket", async ({ socketURL, userToken } = {}, { getState, dispatch, rejectWithValue }) => {
+export const connectSocket = createAsyncThunk("socketApi/connectSocket", async ({ socketURL } = {}, { getState, dispatch, rejectWithValue }) => {
 	try {
 		const state = getState();
 		const url = socketURL ?? state.sockets?.socketURL;
-		const token = userToken ?? state.auth?.authToken ?? state.auth?.token ?? null;
 
 		if (!url) return rejectWithValue("Missing socketURL");
 
 		const existing = getSocketClient();
 		if (existing?.connected) {
-			updateSocketAuthToken(token);
 			attachLifecycleHandlers(dispatch);
 			return { reused: true };
 		}
 
-		initSocketClient(url, token);
+		initSocketClient(url);
 		attachLifecycleHandlers(dispatch);
 
 		return { reused: false };

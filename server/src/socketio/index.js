@@ -1,5 +1,4 @@
 import { Server } from "socket.io";
-import jwt from "jsonwebtoken";
 import "dotenv/config";
 
 import logger from "../logger.js";
@@ -7,8 +6,7 @@ import serverRooms from "./rooms.js";
 import serverDMs from "./dms.js";
 import serverWatchers from "./watchers.js";
 import UserModel from "../models/User.js";
-import { getAccessToken, parseCookieHeader } from "../routes/auth.js";
-import { hasPasswordChangedAfterTokenIssue } from "../utils/auth.js";
+import { parseCookieHeader, validateAccessToken } from "../utils/auth.js";
 
 class SocketBackend {
 	constructor() {
@@ -31,25 +29,11 @@ class SocketBackend {
 
 	async _authenticate(socket, next) {
 		const cookies = parseCookieHeader(socket.handshake.headers?.cookie);
-		const token = getAccessToken({ headers: socket.handshake.headers, cookies });
+		const token = cookies?.token;
 		if (!token) return next(new Error("Authentication error"));
 
 		try {
-			const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-			const user = await UserModel.findById(decoded.id);
-
-			if (!user || !user.active) {
-				throw new Error("Invalid or inactive user");
-			}
-
-			if (decoded.tokenVersion !== user.tokenVersion) {
-				throw new Error("Token version mismatch");
-			}
-
-			if (hasPasswordChangedAfterTokenIssue(user, decoded)) {
-				throw new Error("Stale access token");
-			}
-
+			const { user } = await validateAccessToken(token);
 			socket.user = { id: user._id.toString(), username: user.username, tokenVersion: user.tokenVersion };
 			next();
 		} catch (err) {
