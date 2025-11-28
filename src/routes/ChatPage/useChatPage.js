@@ -181,7 +181,7 @@ export default function useChatPage() {
 				if (!sockets.currentRoom) {
 					dispatch(
 						setActiveSocketRoom({
-							lastRoom: sockets?.currentRoom || null,
+							lastRoom: null,
 							currentRoom: Object.keys(idMap)[0] || null,
 						})
 					);
@@ -191,7 +191,7 @@ export default function useChatPage() {
 				if (!sockets.currentRoom) {
 					dispatch(
 						setActiveSocketRoom({
-							lastRoom: sockets?.currentRoom || null,
+							lastRoom: null,
 							currentRoom: _id || null,
 						})
 					);
@@ -268,10 +268,8 @@ export default function useChatPage() {
 				socket.off("messages_updated");
 				socket.off("user_list");
 			}
-			if (!sockets?.connected || !sockets?.currentRoom) {
-				setChannels({});
-				setUsers([]);
-			}
+			setChannels({});
+			setUsers([]);
 			setMessages([]);
 			resetRoomState();
 		};
