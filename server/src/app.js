@@ -9,6 +9,7 @@ import methodOverride from "method-override";
 import morgan from "morgan";
 
 import customPassport from "./config/passport.js";
+import { corsOptions } from "./config/cors.js";
 import databaseServer from "./database/index.js";
 import logger from "./logger.js";
 import routes from "./routes/index.js";
@@ -39,7 +40,8 @@ class ServerBackend {
 	_initMiddleware() {
 		this.app.set("trust proxy", 1);
 
-		this.app.use(cors({ optionsSuccessStatus: 200 }));
+		this.app.use(cors(corsOptions));
+		this.app.options("*", cors(corsOptions));
 		const globalLimiter = rateLimit({
 			windowMs: 5 * 60 * 1000,
 			max: 150,
