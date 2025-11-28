@@ -7,7 +7,7 @@ const resolveDefaultSocketURL = () => {
 	if (process.env.NODE_ENV === "development") return "http://localhost:6002";
 	if (globalThis.IN_ELECTRON_ENV) return "https://rebound.nexus";
 	//if (typeof window !== "undefined" && window.location?.origin) return window.location.origin;
-	return "";
+	return "/";
 };
 
 const initialState = {
