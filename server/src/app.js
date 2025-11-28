@@ -14,6 +14,8 @@ import logger from "./logger.js";
 import routes from "./routes/index.js";
 import socketBackend from "./socketio/index.js";
 
+import { corsOptions } from "./config/cors.js";
+
 const CSRF_COOKIE_NAME = "csrfToken";
 const CSRF_HEADER_NAME = "x-csrf-token";
 const CSRF_PROTECTED_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -39,7 +41,9 @@ class ServerBackend {
 	_initMiddleware() {
 		this.app.set("trust proxy", 1);
 
-		this.app.use(cors({ optionsSuccessStatus: 200 }));
+		this.app.use(cors(corsOptions)); // main CORS
+		this.app.options("*", cors(corsOptions));
+
 		const globalLimiter = rateLimit({
 			windowMs: 5 * 60 * 1000,
 			max: 150,
@@ -73,10 +77,7 @@ class ServerBackend {
 			const cookieToken = req.cookies?.[CSRF_COOKIE_NAME];
 			const headerToken = req.get(CSRF_HEADER_NAME);
 
-			if (!cookieToken && !headerToken) {
-				return next();
-			}
-
+			// Require both tokens and equality
 			if (!cookieToken || !headerToken || cookieToken !== headerToken) {
 				return res.status(403).json({ error: "Invalid CSRF token" });
 			}
