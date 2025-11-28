@@ -2,7 +2,7 @@
 
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, protocol } from "electron";
 import log from "electron-log";
 import updater from "electron-updater";
 const { autoUpdater } = updater;
@@ -14,6 +14,19 @@ const __dirname = dirname(__filename);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let mainWindow;
+
+protocol.registerSchemesAsPrivileged([
+	{
+		scheme: "app",
+		privileges: {
+			standard: true,
+			secure: true,
+			supportFetchAPI: true,
+			allowServiceWorkers: true,
+			corsEnabled: true,
+		},
+	},
+]);
 
 if (process.platform === "win32") {
 	app.setAppUserModelId("com.brandoncasa.rebound");
@@ -52,7 +65,7 @@ async function createWindow() {
 	if (isDev) {
 		mainWindow.loadURL("http://localhost:3000");
 	} else {
-		mainWindow.loadFile(join(__dirname, "index.html"));
+		mainWindow.loadURL("app://-/index.html");
 		// mainWindow.webContents.openDevTools();
 		// autoUpdater.checkForUpdates();
 	}
@@ -131,7 +144,19 @@ autoUpdater.on("update-downloaded", (info) => {
 });
 
 // boot
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+	protocol.registerFileProtocol("app", (request, callback) => {
+		const url = new URL(request.url);
+		const pathname = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
+		const filePath = join(__dirname, decodeURIComponent(pathname));
+
+		callback({
+			path: filePath,
+		});
+	});
+
+	await createWindow();
+});
 
 app.on("window-all-closed", () => {
 	if (process.platform !== "darwin") app.quit();
