@@ -120,7 +120,7 @@ const App = () => {
 		}
 	}, [authState.loggedIn, authState.authToken, dispatch]);
 
-	const showAutoUpdate = window.isElectron && import.meta.env.PROD;
+	const showAutoUpdate = window.isElectron;
 
 	return (
 		<ThemeProvider theme={darkTheme}>
