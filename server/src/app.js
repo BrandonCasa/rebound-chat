@@ -42,7 +42,7 @@ class ServerBackend {
 		this.app.set("trust proxy", 1);
 
 		this.app.use(cors(corsOptions)); // main CORS
-		this.app.options("*", cors(corsOptions));
+		this.app.options(/.*/, cors(corsOptions));
 
 		const globalLimiter = rateLimit({
 			windowMs: 5 * 60 * 1000,
