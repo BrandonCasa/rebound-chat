@@ -16,7 +16,7 @@ class SocketBackend {
 	start(port = 6002) {
 		this.io = new Server({
 			path: "/socket.io",
-			cors: { origin: true, credentials: true },
+			cors: { origin: "*", credentials: true },
 		});
 
 		this.io.use(this._authenticate.bind(this));
