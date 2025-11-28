@@ -284,6 +284,10 @@ export default function useChatPage() {
 		updatePageInfo,
 		resetRoomState,
 	]);
+	
+	useEffect (() => {
+		setUsers ([]);
+	}, [sockets.currentRoom]);
 
 	useEffect(() => {
 		resetRoomState();
