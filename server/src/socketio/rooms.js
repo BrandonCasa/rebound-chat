@@ -6,6 +6,8 @@ import socketio from "./index.js";
 import "dotenv/config";
 
 const MESSAGE_LIMIT = 50;
+const MAX_ATTACHMENTS = 4;
+const MAX_ATTACHMENT_BYTES = 1 * 1024 * 1024;
 
 async function fetchRecentMessages(roomDoc, limit = MESSAGE_LIMIT) {
 	const messageIds = roomDoc?.messages ?? [];
@@ -19,6 +21,29 @@ async function fetchRecentMessages(roomDoc, limit = MESSAGE_LIMIT) {
 
 	return messages.reverse();
 }
+
+const normalizeAttachments = (rawAttachments) => {
+	if (!Array.isArray(rawAttachments)) return [];
+
+	return rawAttachments
+		.map((attachment) => ({
+			url: typeof attachment?.url === "string" ? attachment.url : null,
+			contentType: typeof attachment?.contentType === "string" ? attachment.contentType : null,
+			size: Number.isFinite(attachment?.size) ? attachment.size : null,
+			originalName: typeof attachment?.originalName === "string" && attachment.originalName.trim() ? attachment.originalName : null,
+		}))
+		.filter(
+			(attachment) =>
+				Boolean(attachment.url) &&
+				Boolean(attachment.originalName) &&
+				typeof attachment.contentType === "string" &&
+				attachment.contentType.startsWith("image/") &&
+				Number.isFinite(attachment.size) &&
+				attachment.size >= 0 &&
+				attachment.size <= MAX_ATTACHMENT_BYTES
+		)
+		.slice(0, MAX_ATTACHMENTS);
+};
 
 class ServerRooms {
 	async getRoomList() {
@@ -161,17 +186,18 @@ class ServerRooms {
 			}
 		});
 
-		socket.on("message_room", async (arg1, arg2, arg3) => {
+		socket.on("message_room", async (arg1, arg2, arg3, arg4) => {
 			try {
 				const [idToName] = await this.getRoomList();
-				let roomId, content, mentions;
+				let roomId, content, mentions, attachmentsRaw;
 
 				if (Array.isArray(arg1) && arg2 === undefined) {
-					[roomId, content, mentions] = arg1;
+					[roomId, content, mentions, attachmentsRaw] = arg1;
 				} else {
 					roomId = arg1;
 					content = arg2;
 					mentions = arg3;
+					attachmentsRaw = arg4;
 				}
 
 				if (!idToName[roomId]) {
@@ -181,7 +207,8 @@ class ServerRooms {
 				const sender = await UserModel.findById(socket.user.id);
 				if (!sender) throw new Error("Sender not found.");
 
-				const msg = new MessageModel({ sender, content, mentions });
+				const attachments = normalizeAttachments(attachmentsRaw);
+				const msg = new MessageModel({ sender, content: content || "", mentions, attachments });
 				await msg.save();
 
 				const roomDoc = await RoomModel.findById(roomId);

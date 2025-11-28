@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { styled, useTheme, darken } from "@mui/material/styles";
-import { Box, Chip, Typography, Paper } from "@mui/material";
+import { Box, Chip, Typography, Paper, IconButton, CircularProgress } from "@mui/material";
 import Button from "@mui/material/Button";
 import SendIcon from "@mui/icons-material/Send";
+import ImageIcon from "@mui/icons-material/Image";
 import DOMPurify from "dompurify";
 import { parseMentions, highlightMentions } from "../../helpers/mentions";
 
@@ -111,11 +112,12 @@ const buildHighlightedHtml = (text, mentions) => {
 	return DOMPurify.sanitize(raw);
 };
 
-export default function ChatInput({ message, setMessage, sendMessage, users = [] }) {
+export default function ChatInput({ message, setMessage, sendMessage, users = [], attachments = [], uploadAttachment, removeAttachment, uploadingAttachment }) {
 	const theme = useTheme();
 	const divRef = useRef(null);
 	const [mentionQuery, setMentionQuery] = useState(null);
 	const [activeMentionIdx, setActiveMentionIdx] = useState(0);
+	const fileInputRef = useRef(null);
 
 	// Pre‑compute mentions + highlighted markup -----------------------------
 	const mentions = useMemo(() => parseMentions(message, users), [message, users]);
@@ -216,7 +218,10 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 
 	const handleSend = useCallback(() => {
 		const trimmed = divRef.current?.textContent.trim();
-		if (trimmed) {
+		const hasContent = Boolean(trimmed);
+		const hasAttachments = attachments.length > 0;
+
+		if (hasContent || hasAttachments) {
 			sendMessage();
 			setMessage("");
 			setMentionQuery(null);
@@ -225,7 +230,7 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 				if (divRef.current) divRef.current.innerHTML = "";
 			});
 		}
-	}, [sendMessage, setMessage]);
+	}, [attachments.length, sendMessage, setMessage]);
 
 	const handleKeyDown = (e) => {
 		if (mentionOptions.length) {
@@ -255,6 +260,19 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 	const handleSelectionChange = useCallback(() => {
 		syncFromDom(false);
 	}, [syncFromDom]);
+
+	const handleFileButtonClick = () => {
+		fileInputRef.current?.click();
+	};
+
+	const handleFileChange = async (event) => {
+		const file = event.target?.files?.[0];
+		if (!file || !uploadAttachment) return;
+		await uploadAttachment(file);
+		event.target.value = "";
+	};
+
+	const canSend = Boolean(message?.trim()) || attachments.length > 0;
 
 	return (
 		<Box sx={{ width: "100%", display: "flex", flexDirection: "column", gap: 0.5 }}>
@@ -305,6 +323,34 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 					))}
 				</Box>
 			)}
+			{attachments.length > 0 && (
+				<Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, px: 2 }}>
+					{attachments.map((att) => (
+						<Paper key={att.url} variant="outlined" sx={{ display: "flex", alignItems: "center", gap: 1, p: 1 }}>
+							<Box
+								component="img"
+								src={att.url}
+								alt={att.originalName || "attachment"}
+								sx={{
+									width: 72,
+									height: 72,
+									borderRadius: 1,
+									objectFit: "cover",
+									border: `1px solid ${theme.palette.divider}`,
+								}}
+							/>
+							<Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+								<Typography variant="body2" noWrap sx={{ maxWidth: 220 }}>
+									{att.originalName || "Image"}
+								</Typography>
+								<Button size="small" color="secondary" onClick={() => removeAttachment?.(att.url)}>
+									Remove
+								</Button>
+							</Box>
+						</Paper>
+					))}
+				</Box>
+			)}
 			<ChatForm onSubmit={(e) => e.preventDefault()}>
 				<EditableDiv
 					ref={divRef}
@@ -319,7 +365,11 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 					onFocus={handleSelectionChange}
 					aria-label="Chat message input"
 				/>
-				<Button type="button" variant="contained" endIcon={<SendIcon />} sx={{ height: 42 }} onClick={handleSend}>
+				<input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleFileChange} />
+				<IconButton color="primary" aria-label="Upload image" onClick={handleFileButtonClick} disabled={uploadingAttachment}>
+					{uploadingAttachment ? <CircularProgress size={24} /> : <ImageIcon />}
+				</IconButton>
+				<Button type="button" variant="contained" endIcon={<SendIcon />} sx={{ height: 42 }} onClick={handleSend} disabled={!canSend || uploadingAttachment}>
 					Send
 				</Button>
 			</ChatForm>
