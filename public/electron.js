@@ -1,7 +1,7 @@
 // main.mjs (or main.js with "type": "module" in package.json)
 
 import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import { dirname, extname, join } from "path";
 import { app, BrowserWindow, ipcMain, protocol } from "electron";
 import log from "electron-log";
 import updater from "electron-updater";
@@ -145,14 +145,31 @@ autoUpdater.on("update-downloaded", (info) => {
 
 // boot
 app.whenReady().then(async () => {
-	protocol.registerFileProtocol("app", (request, callback) => {
+	const mimeByExt = {
+		".js": "application/javascript",
+		".css": "text/css",
+		".html": "text/html",
+		".json": "application/json",
+		".svg": "image/svg+xml",
+		".woff": "font/woff",
+		".woff2": "font/woff2",
+	};
+	protocol.handle("app", async (request) => {
 		const url = new URL(request.url);
 		const pathname = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
 		const filePath = join(__dirname, decodeURIComponent(pathname));
 
-		callback({
-			path: filePath,
-		});
+		try {
+			const data = await readFile(filePath);
+			const contentType = mimeByExt[extname(filePath)];
+
+			return new Response(data, {
+				headers: contentType ? { "Content-Type": contentType } : undefined,
+			});
+		} catch (error) {
+			log.error("Failed to load app:// resource", { url: request.url, error });
+			return new Response("Not found", { status: 404 });
+		}
 	});
 
 	await createWindow();
