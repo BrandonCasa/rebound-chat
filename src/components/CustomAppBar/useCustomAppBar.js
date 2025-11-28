@@ -40,7 +40,7 @@ export default function useCustomAppBar(width) {
 	const handleLogout = async () => {
 		const oldDisplayName = displayName;
 		await dispatch(logoutUser({ disableAutoLogin: true }));
-		dispatch(disconnectSocket());
+		//dispatch(disconnectSocket());
 		dispatch(
 			addSnackbar({
 				snackbarMsg: `Goodbye ${oldDisplayName}`,

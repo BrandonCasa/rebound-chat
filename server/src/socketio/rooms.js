@@ -24,7 +24,7 @@ class ServerRooms {
 	async getRoomList() {
 		const idToName = {};
 		const idToRoom = {};
-		const rooms = await RoomModel.find({});
+		const rooms = await RoomModel.find({}).select("-messages");
 		for (const room of rooms) {
 			idToName[room._id] = room.name;
 			idToRoom[room._id] = room;
@@ -54,6 +54,7 @@ class ServerRooms {
 			socketsInRoom.forEach((s) => {
 				s.emit("user_list", roomId, usersInRoom, userProfile, "join");
 			});
+
 			logger.info(`User '${socket.user.username}' joined room '${roomId}'.`);
 		} catch (err) {
 			logger.error("Error notifying join:", err);
