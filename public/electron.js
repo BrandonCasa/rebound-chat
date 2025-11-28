@@ -2,6 +2,7 @@
 
 import { fileURLToPath } from "url";
 import { dirname, extname, join } from "path";
+import { readFile } from "fs/promises";
 import { app, BrowserWindow, ipcMain, protocol } from "electron";
 import log from "electron-log";
 import updater from "electron-updater";
@@ -50,29 +51,26 @@ function allowUpdateAction(actionName) {
 }
 
 async function createWindow() {
-	const preloadPath = join(__dirname, "preload.js");
-
 	mainWindow = new BrowserWindow({
 		width: 1280,
 		height: 720,
 		webPreferences: {
 			nodeIntegration: false,
 			contextIsolation: true,
-			preload: preloadPath,
+			preload: join(__dirname, "preload.js"),
 		},
 	});
 
-	if (isDev) {
-		mainWindow.loadURL("http://localhost:3000");
-	} else {
-		mainWindow.loadURL("app://-/index.html");
-		// mainWindow.webContents.openDevTools();
-		// autoUpdater.checkForUpdates();
-	}
-
-	mainWindow.on("closed", () => {
-		mainWindow = null;
+	// Helpful when diagnosing protocol issues:
+	mainWindow.webContents.on("did-fail-load", (_e, code, desc, url) => {
+		log.error("did-fail-load", { code, desc, url });
 	});
+
+	if (isDev) {
+		await mainWindow.loadURL("http://localhost:3000");
+	} else {
+		await mainWindow.loadURL("app://-/index.html");
+	}
 }
 
 // wire up IPC
@@ -143,31 +141,47 @@ autoUpdater.on("update-downloaded", (info) => {
 	sendStatus("update-downloaded", info);
 });
 
-// boot
 app.whenReady().then(async () => {
 	const mimeByExt = {
 		".js": "application/javascript",
+		".mjs": "application/javascript",
 		".css": "text/css",
 		".html": "text/html",
 		".json": "application/json",
 		".svg": "image/svg+xml",
+		".png": "image/png",
+		".jpg": "image/jpeg",
+		".jpeg": "image/jpeg",
+		".webp": "image/webp",
+		".ico": "image/x-icon",
+		".map": "application/json",
 		".woff": "font/woff",
 		".woff2": "font/woff2",
 	};
+
 	protocol.handle("app", async (request) => {
 		const url = new URL(request.url);
-		const pathname = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
-		const filePath = join(__dirname, decodeURIComponent(pathname));
+
+		// url.pathname is like "/index.html"
+		let pathname = decodeURIComponent(url.pathname);
+
+		// If you ever hit "app://-/" or empty, serve index.html
+		if (pathname === "/" || pathname === "") pathname = "/index.html";
+
+		// Resolve to disk
+		const filePath = join(__dirname, pathname);
 
 		try {
 			const data = await readFile(filePath);
-			const contentType = mimeByExt[extname(filePath)];
+			const ext = extname(filePath).toLowerCase();
+			const contentType = mimeByExt[ext] || "application/octet-stream";
 
 			return new Response(data, {
-				headers: contentType ? { "Content-Type": contentType } : undefined,
+				status: 200,
+				headers: { "Content-Type": contentType },
 			});
 		} catch (error) {
-			log.error("Failed to load app:// resource", { url: request.url, error });
+			log.error("Failed to load app:// resource", { url: request.url, filePath, error });
 			return new Response("Not found", { status: 404 });
 		}
 	});
