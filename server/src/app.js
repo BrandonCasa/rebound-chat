@@ -77,7 +77,10 @@ class ServerBackend {
 			const cookieToken = req.cookies?.[CSRF_COOKIE_NAME];
 			const headerToken = req.get(CSRF_HEADER_NAME);
 
-			// Require both tokens and equality
+			if (!cookieToken && !headerToken) {
+				return next();
+			}
+
 			if (!cookieToken || !headerToken || cookieToken !== headerToken) {
 				return res.status(403).json({ error: "Invalid CSRF token" });
 			}

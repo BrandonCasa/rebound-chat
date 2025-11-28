@@ -66,6 +66,19 @@ async function createWindow() {
 		log.error("did-fail-load", { code, desc, url });
 	});
 
+	mainWindow.webContents.session.webRequest.onHeadersReceived({ urls: ["https://rebound.nexus/*/*", "http://localhost:3000/*/*"] }, (details, callback) => {
+		const cookies = details.responseHeaders["Set-Cookie"];
+		if (cookies) {
+			const newCookie = Array.from(cookies).map((cookie) => cookie.concat("; SameSite=None"));
+			details.responseHeaders["Set-Cookie"] = [...newCookie];
+			callback({
+				responseHeaders: details.responseHeaders,
+			});
+		} else {
+			callback({ cancel: false });
+		}
+	});
+
 	if (isDev) {
 		await mainWindow.loadURL("http://localhost:3000");
 	} else {
