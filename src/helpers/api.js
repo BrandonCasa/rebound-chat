@@ -1,7 +1,7 @@
 export const getApiBase = () => {
 	//const envBase = typeof import.meta !== "undefined" ? import.meta.env?.VITE_API_BASE_URL : undefined;
 	//if (process.env.NODE_ENV === "development" & envBase) return envBase;
-	//if (process.env.NODE_ENV === "development") return "/api";
+	if (process.env.NODE_ENV === "development") return "/api";
 	if (globalThis.IN_ELECTRON_ENV) return "https://rebound.nexus/api";
 	return "/api";
 };
@@ -12,10 +12,10 @@ const AUTH_COOKIE_NAME = "authToken";
 const AUTH_SESSION_COOKIE_NAME = "auth-session-present";
 
 const getCookie = (name) => {
-        if (typeof document === "undefined" || !document.cookie) return null;
-        const match = document.cookie
-                .split(";")
-                .map((entry) => entry.trim())
+	if (typeof document === "undefined" || !document.cookie) return null;
+	const match = document.cookie
+		.split(";")
+		.map((entry) => entry.trim())
 		.find((entry) => entry.startsWith(`${name}=`));
 	if (!match) return null;
 	const [, value] = match.split("=");
@@ -23,8 +23,8 @@ const getCookie = (name) => {
 };
 
 const setCookie = (name, value) => {
-        if (!value || typeof document === "undefined") return;
-        const secureFlag = window.location.protocol === "https:" ? "; Secure" : "";
+	if (!value || typeof document === "undefined") return;
+	const secureFlag = window.location.protocol === "https:" ? "; Secure" : "";
 	document.cookie = `${name}=${value}; Path=/; SameSite=Strict${secureFlag}`;
 };
 
@@ -44,9 +44,9 @@ export const clearAuthSessionCookie = () => clearCookie(AUTH_SESSION_COOKIE_NAME
 export const hasAuthSessionCookie = () => Boolean(getCookie(AUTH_SESSION_COOKIE_NAME));
 
 export const clearAuthCookies = () => {
-        clearCookie(AUTH_COOKIE_NAME);
-        clearCookie(CSRF_COOKIE_NAME);
-        clearAuthSessionCookie();
+	clearCookie(AUTH_COOKIE_NAME);
+	clearCookie(CSRF_COOKIE_NAME);
+	clearAuthSessionCookie();
 };
 
 export const buildApiConfig = (authToken, config = {}) => {
