@@ -7,7 +7,6 @@ import serverDMs from "./dms.js";
 import serverWatchers from "./watchers.js";
 import UserModel from "../models/User.js";
 import { parseCookieHeader, validateAccessToken } from "../utils/auth.js";
-import { originDelegate as corsOriginDelegate } from "../config/cors.js";
 
 class SocketBackend {
 	constructor() {
@@ -17,7 +16,7 @@ class SocketBackend {
 	start(port = 6002) {
 		this.io = new Server({
 			path: "/socket.io",
-			cors: { origin: corsOriginDelegate, credentials: true },
+			cors: { origin: true, credentials: true },
 		});
 
 		this.io.use(this._authenticate.bind(this));
