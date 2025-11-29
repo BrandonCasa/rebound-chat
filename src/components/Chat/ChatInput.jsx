@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { styled, useTheme, darken } from "@mui/material/styles";
-import { Box, Chip, Typography, Paper } from "@mui/material";
+import { Box, Chip, Typography, ImageList, ImageListItem, ImageListItemBar, IconButton } from "@mui/material";
 import Button from "@mui/material/Button";
 import SendIcon from "@mui/icons-material/Send";
+import CloseIcon from "@mui/icons-material/CloseRounded";
 import DOMPurify from "dompurify";
 import { parseMentions, highlightMentions } from "../../helpers/mentions";
+import { scrollbarStyles } from "../../routes/scrollbarStyles";
 
 // --- Styled components ----------------------------------------------------
 const ChatForm = styled("form")(({ theme }) => ({
@@ -16,7 +18,7 @@ const ChatForm = styled("form")(({ theme }) => ({
 
 const EditableDiv = styled("div")(({ theme }) => ({
 	flex: 1,
-	minHeight: 16,
+	minHeight: "42px",
 	maxHeight: 180,
 	overflowY: "auto",
 	alignContent: "center",
@@ -111,11 +113,13 @@ const buildHighlightedHtml = (text, mentions) => {
 	return DOMPurify.sanitize(raw);
 };
 
-export default function ChatInput({ message, setMessage, sendMessage, users = [] }) {
+export default function ChatInput({ message, setMessage, sendMessage, users = [], attachments = [], uploadAttachment, removeAttachment, uploadingAttachment }) {
 	const theme = useTheme();
 	const divRef = useRef(null);
 	const [mentionQuery, setMentionQuery] = useState(null);
 	const [activeMentionIdx, setActiveMentionIdx] = useState(0);
+
+	const fileInputRef = useRef(null);
 
 	// Pre‑compute mentions + highlighted markup -----------------------------
 	const mentions = useMemo(() => parseMentions(message, users), [message, users]);
@@ -216,7 +220,10 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 
 	const handleSend = useCallback(() => {
 		const trimmed = divRef.current?.textContent.trim();
-		if (trimmed) {
+		const hasContent = Boolean(trimmed);
+		const hasAttachments = attachments.length > 0;
+
+		if (hasContent || hasAttachments) {
 			sendMessage();
 			setMessage("");
 			setMentionQuery(null);
@@ -225,7 +232,7 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 				if (divRef.current) divRef.current.innerHTML = "";
 			});
 		}
-	}, [sendMessage, setMessage]);
+	}, [attachments.length, sendMessage, setMessage]);
 
 	const handleKeyDown = (e) => {
 		if (mentionOptions.length) {
@@ -252,12 +259,151 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 		}
 	};
 
+	const handleFileButtonClick = () => {
+		fileInputRef.current?.click();
+	};
+
+	const handleFileChange = async (event) => {
+		const file = event.target?.files?.[0];
+		if (!file || !uploadAttachment) return;
+		await uploadAttachment(file);
+		event.target.value = "";
+	};
+
 	const handleSelectionChange = useCallback(() => {
 		syncFromDom(false);
 	}, [syncFromDom]);
 
+	const canSend = Boolean(message?.trim()) || attachments.length > 0;
+
+	const itemData = [
+		{
+			img: "https://images.unsplash.com/photo-1551963831-b3b1ca40c98e",
+			title: "Breakfast",
+			author: "@bkristastucchio",
+		},
+		{
+			img: "https://images.unsplash.com/photo-1551782450-a2132b4ba21d",
+			title: "Burger",
+			author: "@rollelflex_graphy726",
+		},
+		{
+			img: "https://images.unsplash.com/photo-1522770179533-24471fcdba45",
+			title: "Camera",
+			author: "@helloimnik",
+		},
+		{
+			img: "https://images.unsplash.com/photo-1444418776041-9c7e33cc5a9c",
+			title: "Coffee",
+			author: "@nolanissac",
+		},
+		{
+			img: "https://images.unsplash.com/photo-1533827432537-70133748f5c8",
+			title: "Hats",
+			author: "@hjrc33",
+		},
+		{
+			img: "https://images.unsplash.com/photo-1558642452-9d2a7deb7f62",
+			title: "Honey",
+			author: "@arwinneil",
+		},
+		{
+			img: "https://images.unsplash.com/photo-1516802273409-68526ee1bdd6",
+			title: "Basketball",
+			author: "@tjdragotta",
+		},
+		{
+			img: "https://images.unsplash.com/photo-1518756131217-31eb79b20e8f",
+			title: "Fern",
+			author: "@katie_wasserman",
+		},
+		{
+			img: "https://images.unsplash.com/photo-1597645587822-e99fa5d45d25",
+			title: "Mushrooms",
+			author: "@silverdalex",
+		},
+		{
+			img: "https://images.unsplash.com/photo-1567306301408-9b74779a11af",
+			title: "Tomato basil",
+			author: "@shelleypauls",
+		},
+		{
+			img: "https://images.unsplash.com/photo-1471357674240-e1a485acb3e1",
+			title: "Sea star",
+			author: "@peterlaster",
+		},
+		{
+			img: "https://images.unsplash.com/photo-1589118949245-7d38baf380d6",
+			title: "Bike",
+			author: "@southside_customs",
+		},
+	];
+
 	return (
-		<Box sx={{ width: "100%", display: "flex", flexDirection: "column", gap: 0.5 }}>
+		<Box sx={{ width: "100%", display: "flex", flexDirection: "column", gap: 1 }}>
+			<ImageList
+				aria-live="polite"
+				onWheel={(e) => {
+					e.currentTarget.scrollLeft += e.deltaY;
+				}}
+				sx={{
+					overflowY: "hidden",
+					overflowX: "auto",
+					mx: 1,
+					flexGrow: 1,
+					mb: -1,
+					padding: 1,
+					border: `2px solid ${theme.palette.divider}`,
+					backgroundColor: darken(theme.palette.background.paper, 0.05),
+					borderRadius: 1,
+					gridAutoFlow: "column",
+					...scrollbarStyles,
+				}}>
+				{itemData.map((item) => (
+					<ImageListItem
+						key={item.img}
+						style={{ height: "max(200px, 15vh)" }}
+						sx={{
+							backgroundColor: darken(theme.palette.background.paper, 0.05),
+							borderRadius: "12px",
+							aspectRatio: 1,
+							padding: "6px",
+							":hover": {
+								backgroundColor: darken(theme.palette.background.paper, 0.4),
+							},
+						}}>
+						<img
+							srcSet={`${item.img}`}
+							src={`${item.img}`}
+							alt={item.title}
+							loading="lazy"
+							style={{
+								borderRadius: "12px",
+								border: `3px solid ${darken(theme.palette.background.paper, 0.6)}`,
+								cursor: "pointer",
+								width: "100%",
+							}}
+						/>
+						<ImageListItemBar
+							title={item.title}
+							subtitle={<span> {"3.21 MB"}</span>}
+							position="top"
+							style={{
+								borderRadius: "12px",
+								border: `3px solid ${darken(theme.palette.background.paper, 0.6)}`,
+								cursor: "default",
+								margin: "16px",
+								backdropFilter: "blur(5px) brightness(0.7)",
+							}}
+							actionIcon={
+								<IconButton sx={{ color: "white" }} aria-label={`star ${item.title}`}>
+									<CloseIcon />
+								</IconButton>
+							}
+						/>
+					</ImageListItem>
+				))}
+			</ImageList>
 			{mentionOptions.length > 0 && (
 				<Box
 					aria-live="polite"
@@ -319,7 +465,7 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 					onFocus={handleSelectionChange}
 					aria-label="Chat message input"
 				/>
-				<Button type="button" variant="contained" endIcon={<SendIcon />} sx={{ height: 42 }} onClick={handleSend}>
+				<Button type="button" variant="contained" endIcon={<SendIcon />} sx={{ height: "42px" }} onClick={handleSend}>
 					Send
 				</Button>
 			</ChatForm>
