@@ -367,7 +367,7 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 						style={{ height: "max(200px, 15vh)" }}
 						sx={{
 							backgroundColor: darken(theme.palette.background.paper, 0.05),
-							borderRadius: "12px",
+							borderRadius: theme.shape.borderRadius * 0.25,
 							aspectRatio: 1,
 							padding: "6px",
 							":hover": {
@@ -380,7 +380,7 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 							alt={item.title}
 							loading="lazy"
 							style={{
-								borderRadius: "12px",
+								borderRadius: theme.shape.borderRadius * 2,
 								border: `3px solid ${darken(theme.palette.background.paper, 0.6)}`,
 								cursor: "pointer",
 								width: "100%",
@@ -391,11 +391,18 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 							subtitle={<span> {"3.21 MB"}</span>}
 							position="top"
 							style={{
-								borderRadius: "12px",
+								borderRadius: theme.shape.borderRadius * 2,
 								border: `3px solid ${darken(theme.palette.background.paper, 0.6)}`,
 								cursor: "default",
 								margin: "16px",
 								backdropFilter: "blur(5px) brightness(0.7)",
+							}}
+							sx={{
+								paddingRight: 1,
+								"& .MuiImageListItemBar-titleWrap": {
+									padding: 1,
+									paddingRight: 0,
+								},
 							}}
 							actionIcon={
 								<IconButton sx={{ color: "white" }} aria-label={`star ${item.title}`}>
