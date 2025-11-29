@@ -41,6 +41,8 @@ function IndividualMessage({
 	let sendTimeText = requestedTime ? formatDate(requestedTime) : formatDate(msg.createdAt);
 	const messageRef = React.useRef(null);
 	const longPressHandlers = useLongPress(({ x, y }) => onContextMenu(msg, { x, y }));
+	const messageText = msg.content || "";
+	const messageHasText = Boolean(messageText);
 
 	const onHoverStart = (_event) => {
 		onHoverMessage(currentMsg);
@@ -143,32 +145,52 @@ function IndividualMessage({
 							</Button>
 						</Box>
 					) : (
-						<Typography variant="subtitle1" sx={{ color: theme.palette.text.secondary }}>
-							{highlightMentions(msg.content, msg.mentions || []).map((p) => (
-								<span
-									key={p.key}
-									style={
-										p.mention
-											? {
-													display: "inline-flex",
-													alignItems: "center",
-													padding: "0 4px",
-													borderRadius: 16,
-													backgroundColor: theme.palette.warning.main,
-													cursor: "pointer",
-													color: theme.palette.primary.contrastText,
-													fontSize: "0.75rem",
-													lineHeight: "22px",
-													margin: "0 2px",
-												}
-											: {}
-									}>
-									{p.text}
-								</span>
-							))}
-						</Typography>
+						messageHasText && (
+							<Typography variant="subtitle1" sx={{ color: theme.palette.text.secondary }}>
+								{highlightMentions(messageText, msg.mentions || []).map((p) => (
+									<span
+										key={p.key}
+										style={
+											p.mention
+												? {
+														display: "inline-flex",
+														alignItems: "center",
+														padding: "0 4px",
+														borderRadius: 16,
+														backgroundColor: theme.palette.warning.main,
+														cursor: "pointer",
+														color: theme.palette.primary.contrastText,
+														fontSize: "0.75rem",
+														lineHeight: "22px",
+														margin: "0 2px",
+													}
+												: {}
+										}>
+										{p.text}
+									</span>
+								))}
+							</Typography>
+						)
 					)}
 				</Box>
+				{msg.attachments?.length > 0 && (
+					<Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: messageHasText ? 1 : 0.5 }}>
+						{msg.attachments.map((attachment) => (
+							<Box
+								key={attachment.url}
+								component="img"
+								src={attachment.url}
+								alt={attachment.originalName || "message attachment"}
+								sx={{
+									maxWidth: "100%",
+									width: "min(320px, 100%)",
+									borderRadius: 1,
+									border: `1px solid ${theme.palette.divider}`,
+								}}
+							/>
+						))}
+					</Box>
+				)}
 			</Box>
 		</ListItem>
 	);

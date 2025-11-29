@@ -7,8 +7,11 @@ import { fetchUserProfile } from "../../slices/userApiSlice";
 import { addSnackbar } from "../../slices/snackbarSlice";
 import { setActiveSocketRoom, emitSocketEvent } from "../../slices/socketSlice";
 import { getSocketClient } from "../../helpers/socketClient";
+import axios from "axios";
+import { buildApiConfig, getApiBase } from "../../helpers/api";
 
 const MESSAGE_PAGE_SIZE = 50;
+const MAX_ATTACHMENTS = 4;
 
 export default function useChatPage() {
 	const authState = useSelector((state) => state.auth);
@@ -19,6 +22,8 @@ export default function useChatPage() {
 	const [messages, setMessages] = useState([]);
 	const [channels, setChannels] = useState({});
 	const [users, setUsers] = useState([]);
+	const [attachments, setAttachments] = useState([]);
+	const [uploadingAttachment, setUploadingAttachment] = useState(false);
 
 	const [roomAnchorEl, setRoomAnchorEl] = useState(null);
 	const [userListAnchorEl, setUserListAnchorEl] = useState(null);
@@ -292,6 +297,7 @@ export default function useChatPage() {
 	useEffect(() => {
 		resetRoomState();
 		setMessages([]);
+		setAttachments([]);
 		if (!sockets.currentRoom) return;
 
 		fetchMessages();
@@ -304,12 +310,93 @@ export default function useChatPage() {
 		[dispatch]
 	);
 
+	const uploadChatAttachment = useCallback(
+		async (file) => {
+			if (!file) return null;
+			if (!sockets.currentRoom) return null;
+
+			if (attachments.length >= MAX_ATTACHMENTS) {
+				dispatch(
+					addSnackbar({
+						snackbarMsg: `You can attach up to ${MAX_ATTACHMENTS} images per message.`,
+						snackbarSeverity: "warning",
+						autoHideDuration: 2500,
+					})
+				);
+				return null;
+			}
+
+			const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+			if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+				dispatch(
+					addSnackbar({
+						snackbarMsg: "Only PNG, JPEG, WEBP, or GIF images are supported.",
+						snackbarSeverity: "error",
+						autoHideDuration: 2500,
+					})
+				);
+				return null;
+			}
+
+			const MAX_IMAGE_BYTES = 1 * 1024 * 1024;
+			if (file.size > MAX_IMAGE_BYTES) {
+				dispatch(
+					addSnackbar({
+						snackbarMsg: "Images must be 1MB or smaller.",
+						snackbarSeverity: "error",
+						autoHideDuration: 2500,
+					})
+				);
+				return null;
+			}
+
+			const formData = new FormData();
+			formData.append("file", file);
+
+			setUploadingAttachment(true);
+
+			try {
+				const { data } = await axios.post(`${getApiBase()}/rooms/${sockets.currentRoom}/media`, formData, buildApiConfig(authState.authToken));
+
+				if (data?.attachment) {
+					setAttachments((prev) => [...prev, data.attachment]);
+					return data.attachment;
+				}
+			} catch (err) {
+				const snackbarMsg = err?.response?.data?.error || "Unable to upload image.";
+				dispatch(
+					addSnackbar({
+						snackbarMsg,
+						snackbarSeverity: "error",
+						autoHideDuration: 2500,
+					})
+				);
+			} finally {
+				setUploadingAttachment(false);
+			}
+
+			return null;
+		},
+		[attachments.length, authState.authToken, dispatch, sockets.currentRoom]
+	);
+
+	const removeAttachment = useCallback((url) => {
+		setAttachments((prev) => prev.filter((att) => att.url !== url));
+	}, []);
+
 	const sendMessage = (e) => {
 		e?.preventDefault();
-		if (!message || !sockets.currentRoom) return;
+		if ((!message || message.trim() === "") && attachments.length === 0) return;
+		if (!sockets.currentRoom) return;
 		const mentions = parseMentions(message, users);
-		dispatch(emitSocketEvent({ event: "message_room", args: [sockets.currentRoom, message, mentions] }));
+		dispatch(
+			emitSocketEvent({
+				event: "message_room",
+				args: [sockets.currentRoom, message, mentions, attachments],
+			})
+		);
 		setMessage("");
+		setAttachments([]);
 	};
 
 	const clickRoomSelect = (e) => {
@@ -353,7 +440,7 @@ export default function useChatPage() {
 	const startEditSelectedMessage = () => {
 		if (!selectedMessage) return;
 		setEditingMessageId(selectedMessage._id);
-		setEditingText(selectedMessage.content);
+		setEditingText(selectedMessage.content || "");
 		closeMessageMenu();
 	};
 
@@ -399,6 +486,10 @@ export default function useChatPage() {
 		editingText,
 		setEditingText,
 		sendMessage,
+		attachments,
+		uploadChatAttachment,
+		removeAttachment,
+		uploadingAttachment,
 		clickRoomSelect,
 		clickUserList,
 		previewUser,
