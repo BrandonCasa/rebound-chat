@@ -3,6 +3,7 @@ import { styled, useTheme, darken } from "@mui/material/styles";
 import { Box, Chip, Typography, ImageList, ImageListItem, ImageListItemBar, IconButton } from "@mui/material";
 import Button from "@mui/material/Button";
 import SendIcon from "@mui/icons-material/Send";
+import AddIcon from "@mui/icons-material/AddRounded";
 import CloseIcon from "@mui/icons-material/CloseRounded";
 import DOMPurify from "dompurify";
 import { parseMentions, highlightMentions } from "../../helpers/mentions";
@@ -121,6 +122,8 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 
 	const fileInputRef = useRef(null);
 
+	const [canSend, setCanSend] = useState(!(Boolean(message?.trim() !== "") || attachments.length > 0));
+
 	// Pre‑compute mentions + highlighted markup -----------------------------
 	const mentions = useMemo(() => parseMentions(message, users), [message, users]);
 
@@ -138,6 +141,7 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 	}, [mentionQuery, users]);
 
 	useEffect(() => {
+		setCanSend(!(Boolean(message?.trim() !== "") || attachments.length > 0));
 		if (!message) {
 			setMentionQuery(null);
 			setActiveMentionIdx(0);
@@ -273,8 +277,6 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 	const handleSelectionChange = useCallback(() => {
 		syncFromDom(false);
 	}, [syncFromDom]);
-
-	const canSend = Boolean(message?.trim()) || attachments.length > 0;
 
 	const itemData = [
 		{
@@ -452,6 +454,9 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 				</Box>
 			)}
 			<ChatForm onSubmit={(e) => e.preventDefault()}>
+				<Button type="button" variant="contained" sx={{ height: "42px", width: "42px", padding: 0, minWidth: "42px" }} onClick={handleSend}>
+					<AddIcon />
+				</Button>
 				<EditableDiv
 					ref={divRef}
 					contentEditable
@@ -465,8 +470,8 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 					onFocus={handleSelectionChange}
 					aria-label="Chat message input"
 				/>
-				<Button type="button" variant="contained" endIcon={<SendIcon />} sx={{ height: "42px" }} onClick={handleSend}>
-					Send
+				<Button type="button" variant="contained" sx={{ height: "42px", width: "42px", padding: 0, minWidth: "42px" }} onClick={handleSend} disabled={canSend}>
+					<SendIcon />
 				</Button>
 			</ChatForm>
 		</Box>
