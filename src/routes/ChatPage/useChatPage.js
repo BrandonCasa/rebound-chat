@@ -41,6 +41,217 @@ export default function useChatPage() {
 
 	const pageInfoRef = useRef({ hasMoreBefore: false, hasMoreAfter: false, nextBefore: null, nextAfter: null, channel: null });
 
+	const uploadAttachments = useCallback(async () => {
+		if (!sockets.currentRoom) return [];
+
+		const validAttachments = [];
+		for (const file of attachments) {
+			if (!file) continue;
+
+			if (validAttachments.length >= MAX_ATTACHMENTS) {
+				dispatch(
+					addSnackbar({
+						snackbarMsg: `You can attach up to ${MAX_ATTACHMENTS} images per message.`,
+						snackbarSeverity: "warning",
+						autoHideDuration: 2500,
+					})
+				);
+				break;
+			}
+
+			if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+				dispatch(
+					addSnackbar({
+						snackbarMsg: "Only PNG, JPEG, WEBP, or GIF images are supported.",
+						snackbarSeverity: "error",
+						autoHideDuration: 2500,
+					})
+				);
+				continue;
+			}
+
+			if (file.size > MAX_IMAGE_BYTES) {
+				dispatch(
+					addSnackbar({
+						snackbarMsg: "Images must be 8MB or smaller.",
+						snackbarSeverity: "error",
+						autoHideDuration: 2500,
+					})
+				);
+				continue;
+			}
+
+			validAttachments.push(file);
+		}
+
+		setAttachments(validAttachments);
+
+		if (!validAttachments.length) return [];
+
+		try {
+			setUploadingAttachment(true);
+
+			const hashedAttachments = [];
+
+			for (const file of validAttachments) {
+				// Convert File → Image → Canvas → Raw Pixel Data
+				const img = await new Promise((resolve, reject) => {
+					const image = new Image();
+					image.onload = () => resolve(image);
+					image.onerror = reject;
+					image.src = URL.createObjectURL(file);
+				});
+
+				const canvas = new OffscreenCanvas(img.width, img.height);
+
+				const ctx = canvas.getContext("2d");
+				ctx.drawImage(img, 0, 0);
+
+				const { data: pixels } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+				// Compute coarse hash
+				const coarse = dctHashCoarse16bitFromRgb(pixels, canvas.width, canvas.height, 4, {
+					hashSize: 8,
+					dctSize: 32,
+					blurRadius: 1.5,
+				});
+
+				const fine = dctHashFineColor(pixels, canvas.width, canvas.height, 4, {
+					hashSize: 24,
+					dctSize: 128,
+				});
+
+				hashedAttachments.push({ file, coarse, fine });
+			}
+
+			const hashes = hashedAttachments.map(({ coarse, fine, file }) => ({
+				coarse,
+				fine,
+				size: file?.size,
+				name: file?.name,
+			}));
+
+			const { data } = await axios.post(`${getApiBase()}/media/check`, { hashes: hashes }, buildApiConfig(authState.authToken));
+
+			const results = data?.results ?? [];
+			const uploadsToKeep = [];
+			const resolvedAttachments = [];
+			const finalDocIds = [];
+
+			hashedAttachments.forEach((entry, idx) => {
+				const matches = results.find((resultEntry) => resultEntry.index === idx)?.matches ?? [];
+				if (!matches.length) {
+					uploadsToKeep.push(entry);
+					return;
+				}
+
+				const bestMatch = matches.reduce((curr, next) => {
+					if (!curr) return next;
+					return next.size > curr.size ? next : curr;
+				}, null);
+
+				const similarityText = typeof bestMatch?.similarity === "number" ? bestMatch.similarity.toFixed(2) : "unknown";
+				const confirmMessage = `A similar image already exists (${similarityText}% similarity). Use the existing file (${((bestMatch?.size ?? 0) / 1024).toFixed(1)} KB) instead of uploading ${entry.file.name}? Click Cancel to upload your version.`;
+
+				const useExisting = bestMatch && window.confirm(confirmMessage);
+
+				if (useExisting && bestMatch.size >= entry.file.size) {
+					dispatch(
+						addSnackbar({
+							snackbarMsg: `Using existing image for ${entry.file.name}.`,
+							snackbarSeverity: "info",
+							autoHideDuration: 2500,
+						})
+					);
+
+					resolvedAttachments.push({
+						url: bestMatch.url,
+						size: bestMatch.size,
+						contentType: bestMatch.contentType,
+						originalName: bestMatch.originalName,
+						mediaId: bestMatch._id,
+					});
+					return;
+				}
+
+				uploadsToKeep.push(entry);
+			});
+
+			if (!uploadsToKeep.length && resolvedAttachments.length) {
+				setAttachments([]);
+				return resolvedAttachments;
+			}
+
+			if (!uploadsToKeep.length) {
+				dispatch(
+					addSnackbar({
+						snackbarMsg: "No new images to upload after similarity check.",
+						snackbarSeverity: "info",
+						autoHideDuration: 2500,
+					})
+				);
+				setAttachments([]);
+				return resolvedAttachments;
+			}
+
+			const uploadMetadata = uploadsToKeep.map(({ coarse, fine, file }) => ({
+				coarse,
+				fine,
+				size: file.size,
+				name: file.name,
+				type: file.type,
+			}));
+
+			const formData = new FormData();
+			uploadsToKeep.forEach(({ file }) => formData.append("files", file));
+			formData.append("hashes", JSON.stringify(uploadMetadata));
+
+			const { data: uploadResponse } = await axios.post(
+				`${getApiBase()}/media/upload`,
+				formData,
+				buildApiConfig(authState.authToken, {
+					headers: { "Content-Type": "multipart/form-data" },
+				})
+			);
+
+			const uploaded = uploadResponse?.attachments ?? [];
+			const combined = [...resolvedAttachments, ...uploaded];
+			setAttachments([]);
+			return combined;
+		} catch (err) {
+			const snackbarMsg = err?.response?.data?.error || "Unable to upload image.";
+			dispatch(
+				addSnackbar({
+					snackbarMsg,
+					snackbarSeverity: "error",
+					autoHideDuration: 2500,
+				})
+			);
+			return [];
+		} finally {
+			setUploadingAttachment(false);
+		}
+	}, [attachments, authState.authToken, dispatch, sockets]);
+
+	const addChatAttachment = useCallback(
+		async (file) => {
+			if (!file) return null;
+			if (!sockets.currentRoom) return null;
+
+			const isValid = validateImageFile(file, attachments, dispatch);
+			if (!isValid) return null;
+
+			setAttachments((prev) => [...prev, file]);
+
+			return null;
+		},
+		[attachments, dispatch, sockets]
+	);
+
+	const removeAttachment = useCallback((fileToRemove) => {
+		setAttachments((prev) => prev.filter((file) => file !== fileToRemove));
+	}, []);
+
 	const mergeMessages = useCallback((existing, incoming) => {
 		const merged = new Map();
 		existing.forEach((msg) => merged.set(msg._id, msg));
@@ -450,216 +661,6 @@ export default function useChatPage() {
 
 		return true;
 	};
-
-	const uploadAttachments = useCallback(async () => {
-		if (!sockets.currentRoom) return [];
-
-		const validAttachments = [];
-		for (const file of attachments) {
-			if (!file) continue;
-
-			if (validAttachments.length >= MAX_ATTACHMENTS) {
-				dispatch(
-					addSnackbar({
-						snackbarMsg: `You can attach up to ${MAX_ATTACHMENTS} images per message.`,
-						snackbarSeverity: "warning",
-						autoHideDuration: 2500,
-					})
-				);
-				break;
-			}
-
-			if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-				dispatch(
-					addSnackbar({
-						snackbarMsg: "Only PNG, JPEG, WEBP, or GIF images are supported.",
-						snackbarSeverity: "error",
-						autoHideDuration: 2500,
-					})
-				);
-				continue;
-			}
-
-			if (file.size > MAX_IMAGE_BYTES) {
-				dispatch(
-					addSnackbar({
-						snackbarMsg: "Images must be 8MB or smaller.",
-						snackbarSeverity: "error",
-						autoHideDuration: 2500,
-					})
-				);
-				continue;
-			}
-
-			validAttachments.push(file);
-		}
-
-		setAttachments(validAttachments);
-
-		if (!validAttachments.length) return [];
-
-		try {
-			setUploadingAttachment(true);
-
-			const hashedAttachments = [];
-
-			for (const file of validAttachments) {
-				// Convert File → Image → Canvas → Raw Pixel Data
-				const img = await new Promise((resolve, reject) => {
-					const image = new Image();
-					image.onload = () => resolve(image);
-					image.onerror = reject;
-					image.src = URL.createObjectURL(file);
-				});
-
-				const canvas = new OffscreenCanvas(img.width, img.height);
-
-				const ctx = canvas.getContext("2d");
-				ctx.drawImage(img, 0, 0);
-
-				const { data: pixels } = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-				// Compute coarse hash
-				const coarse = dctHashCoarse16bitFromRgb(pixels, canvas.width, canvas.height, 4, {
-					hashSize: 8,
-					dctSize: 32,
-					blurRadius: 1.5,
-				});
-
-				const fine = dctHashFineColor(pixels, canvas.width, canvas.height, 4, {
-					hashSize: 24,
-					dctSize: 128,
-				});
-
-				hashedAttachments.push({ file, coarse, fine });
-			}
-
-			const payload = hashedAttachments.map(({ coarse, fine, file }) => ({
-				coarse,
-				fine,
-				size: file?.size,
-				name: file?.name,
-			}));
-
-			const { data } = await axios.post(`${getApiBase()}/media/check`, { hashes: payload }, buildApiConfig(authState.authToken));
-
-			const results = data?.results ?? [];
-			const uploadsToKeep = [];
-			const resolvedAttachments = [];
-
-			hashedAttachments.forEach((entry, idx) => {
-				const matches = results.find((resultEntry) => resultEntry.index === idx)?.matches ?? [];
-				if (!matches.length) {
-					uploadsToKeep.push(entry);
-					return;
-				}
-
-				const bestMatch = matches.reduce((curr, next) => {
-					if (!curr) return next;
-					return next.size > curr.size ? next : curr;
-				}, null);
-
-				const similarityText = typeof bestMatch?.similarity === "number" ? bestMatch.similarity.toFixed(2) : "unknown";
-				const confirmMessage = `A similar image already exists (${similarityText}% similarity). Use the existing file (${((bestMatch?.size ?? 0) / 1024).toFixed(1)} KB) instead of uploading ${entry.file.name}? Click Cancel to upload your version.`;
-
-				const useExisting = bestMatch && window.confirm(confirmMessage);
-
-				if (useExisting && bestMatch.size >= entry.file.size) {
-					dispatch(
-						addSnackbar({
-							snackbarMsg: `Using existing image for ${entry.file.name}.`,
-							snackbarSeverity: "info",
-							autoHideDuration: 2500,
-						})
-					);
-
-					resolvedAttachments.push({
-						url: bestMatch.url,
-						size: bestMatch.size,
-						contentType: bestMatch.contentType,
-						originalName: bestMatch.originalName,
-						mediaId: bestMatch._id,
-					});
-					return;
-				}
-
-				uploadsToKeep.push(entry);
-			});
-
-			if (!uploadsToKeep.length && resolvedAttachments.length) {
-				setAttachments([]);
-				return resolvedAttachments;
-			}
-
-			if (!uploadsToKeep.length) {
-				dispatch(
-					addSnackbar({
-						snackbarMsg: "No new images to upload after similarity check.",
-						snackbarSeverity: "info",
-						autoHideDuration: 2500,
-					})
-				);
-				setAttachments([]);
-				return resolvedAttachments;
-			}
-
-			const uploadMetadata = uploadsToKeep.map(({ coarse, fine, file }) => ({
-				coarse,
-				fine,
-				size: file.size,
-				name: file.name,
-				type: file.type,
-			}));
-
-			const formData = new FormData();
-			uploadsToKeep.forEach(({ file }) => formData.append("files", file));
-			formData.append("hashes", JSON.stringify(uploadMetadata));
-
-			const { data: uploadResponse } = await axios.post(
-				`${getApiBase()}/media/upload`,
-				formData,
-				buildApiConfig(authState.authToken, {
-					headers: { "Content-Type": "multipart/form-data" },
-				})
-			);
-
-			const uploaded = uploadResponse?.attachments ?? [];
-			const combined = [...resolvedAttachments, ...uploaded];
-			setAttachments([]);
-			return combined;
-		} catch (err) {
-			const snackbarMsg = err?.response?.data?.error || "Unable to upload image.";
-			dispatch(
-				addSnackbar({
-					snackbarMsg,
-					snackbarSeverity: "error",
-					autoHideDuration: 2500,
-				})
-			);
-			return [];
-		} finally {
-			setUploadingAttachment(false);
-		}
-	}, [attachments, authState.authToken, dispatch, sockets]);
-
-	const addChatAttachment = useCallback(
-		async (file) => {
-			if (!file) return null;
-			if (!sockets.currentRoom) return null;
-
-			const isValid = validateImageFile(file, attachments, dispatch);
-			if (!isValid) return null;
-
-			setAttachments((prev) => [...prev, file]);
-
-			return null;
-		},
-		[attachments, dispatch, sockets]
-	);
-
-	const removeAttachment = useCallback((fileToRemove) => {
-		setAttachments((prev) => prev.filter((file) => file !== fileToRemove));
-	}, []);
 
 	return {
 		authState,
