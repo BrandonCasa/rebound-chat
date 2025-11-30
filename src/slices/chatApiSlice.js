@@ -1,18 +1,25 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { buildApiConfig, getApiBase } from "../helpers/api";
-import { profileMediaUrl } from "../helpers/mediaUrl";
+import { profileMediaUrl, resolveMediaUrl } from "../helpers/mediaUrl";
 
 const base = getApiBase();
 
-export const mapMessages = (msgs) =>
-	msgs.map((m) => ({
+export const mapMessages = (msgs) => {
+	return msgs.map((m) => ({
 		...m,
 		sender: {
 			...m.sender,
 			avatarUrl: profileMediaUrl(m?.sender?.avatarUrl, "defaultpfp.webp"),
 		},
+		attachments: Array.isArray(m.attachments)
+			? m.attachments.filter(Boolean).map((attachment) => ({
+					...attachment,
+					url: resolveMediaUrl(attachment?.url),
+				}))
+			: [],
 	}));
+};
 
 export const fetchRoomMessages = createAsyncThunk("chatApi/fetchRoomMessages", async ({ roomId, authToken, before, after, limit }, { rejectWithValue }) => {
 	try {

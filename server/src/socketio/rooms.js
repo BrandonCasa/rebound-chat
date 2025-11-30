@@ -6,6 +6,19 @@ import socketio from "./index.js";
 import "dotenv/config";
 
 const MESSAGE_LIMIT = 50;
+const attachmentPopulate = { path: "attachments", select: "url contentType size originalName" };
+
+const populateMessage = async (messageDoc) => {
+	if (!messageDoc) return null;
+	const populated = await messageDoc.populate([{ path: "sender", select: "displayName avatarUrl" }, attachmentPopulate]);
+	return populated.toObject();
+};
+
+const normalizeAttachmentIds = (attachments) => {
+	if (!Array.isArray(attachments)) return undefined;
+	const ids = attachments.filter(Boolean).map((attachment) => attachment.mediaId || attachment._id || attachment);
+	return ids.length ? ids : undefined;
+};
 
 async function fetchRecentMessages(roomDoc, limit = MESSAGE_LIMIT) {
 	const messageIds = roomDoc?.messages ?? [];
@@ -15,6 +28,7 @@ async function fetchRecentMessages(roomDoc, limit = MESSAGE_LIMIT) {
 		.sort({ _id: -1 })
 		.limit(limit)
 		.populate({ path: "sender", select: "displayName avatarUrl" })
+		.populate(attachmentPopulate)
 		.lean();
 
 	return messages.reverse();
@@ -161,17 +175,18 @@ class ServerRooms {
 			}
 		});
 
-		socket.on("message_room", async (arg1, arg2, arg3) => {
+		socket.on("message_room", async (arg1, arg2, arg3, arg4) => {
 			try {
 				const [idToName] = await this.getRoomList();
-				let roomId, content, mentions;
+				let roomId, content, mentions, attachments;
 
 				if (Array.isArray(arg1) && arg2 === undefined) {
-					[roomId, content, mentions] = arg1;
+					[roomId, content, mentions, attachments] = arg1;
 				} else {
 					roomId = arg1;
 					content = arg2;
 					mentions = arg3;
+					attachments = arg4;
 				}
 
 				if (!idToName[roomId]) {
@@ -181,20 +196,26 @@ class ServerRooms {
 				const sender = await UserModel.findById(socket.user.id);
 				if (!sender) throw new Error("Sender not found.");
 
-				const msg = new MessageModel({ sender, content, mentions });
+				const msg = new MessageModel({
+					sender,
+					content: content,
+					mentions,
+					room: roomId,
+					attachments: normalizeAttachmentIds(attachments),
+				});
 				await msg.save();
 
 				const roomDoc = await RoomModel.findById(roomId);
 				roomDoc.messages.push(msg);
 				await roomDoc.save();
-				await msg.populate({ path: "sender", select: "displayName avatarUrl" });
+				const populatedMsg = await populateMessage(msg);
 
 				const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
 				socketsInRoom.forEach((s) => {
 					if (s.user.id === socket.user.id) {
-						s.emit("message_sent", roomId, msg);
+						s.emit("message_sent", roomId, populatedMsg);
 					} else {
-						s.emit("new_message", roomId, msg);
+						s.emit("new_message", roomId, populatedMsg);
 					}
 				});
 
@@ -220,11 +241,11 @@ class ServerRooms {
 				msg.content = content;
 				msg.mentions = mentions;
 				await msg.save();
-				await msg.populate({ path: "sender", select: "displayName avatarUrl" });
+				const populatedMsg = await populateMessage(msg);
 
 				const [, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
 				socketsInRoom.forEach((s) => {
-					s.emit("messages_updated", roomId, { type: "edit", message: msg });
+					s.emit("messages_updated", roomId, { type: "edit", message: populatedMsg });
 				});
 			} catch (err) {
 				logger.error("Error handling edit_message:", err);
