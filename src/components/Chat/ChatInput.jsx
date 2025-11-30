@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { styled, useTheme, darken } from "@mui/material/styles";
-import { Box, Chip, Typography, ImageList, ImageListItem, ImageListItemBar, IconButton } from "@mui/material";
+import { Box, Chip, Typography, ImageList, ImageListItem, ImageListItemBar, IconButton, CircularProgress } from "@mui/material";
 import Button from "@mui/material/Button";
 import SendIcon from "@mui/icons-material/Send";
 import AddIcon from "@mui/icons-material/AddRounded";
@@ -114,7 +114,7 @@ const buildHighlightedHtml = (text, mentions) => {
 	return DOMPurify.sanitize(raw);
 };
 
-export default function ChatInput({ message, setMessage, sendMessage, users = [], attachments = [], uploadAttachment, removeAttachment, uploadingAttachment }) {
+export default function ChatInput({ message, setMessage, sendMessage, users = [], attachments = [], addAttachment, removeAttachment, uploadingAttachment }) {
 	const theme = useTheme();
 	const divRef = useRef(null);
 	const [mentionQuery, setMentionQuery] = useState(null);
@@ -146,7 +146,7 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 			setMentionQuery(null);
 			setActiveMentionIdx(0);
 		}
-	}, [message]);
+	}, [message, attachments]);
 
 	useEffect(() => {
 		setActiveMentionIdx((idx) => (mentionOptions.length ? Math.min(idx, mentionOptions.length - 1) : 0));
@@ -269,8 +269,8 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 
 	const handleFileChange = async (event) => {
 		const file = event.target?.files?.[0];
-		if (!file || !uploadAttachment) return;
-		await uploadAttachment(file);
+		if (!file || !addAttachment) return;
+		await addAttachment(file);
 		event.target.value = "";
 	};
 
@@ -461,8 +461,15 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 				</Box>
 			)}
 			<ChatForm onSubmit={(e) => e.preventDefault()}>
-				<Button type="button" variant="contained" sx={{ height: "42px", width: "42px", padding: 0, minWidth: "42px" }} onClick={handleSend}>
-					<AddIcon />
+				<input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleFileChange} />
+				<Button
+					type="button"
+					variant="contained"
+					sx={{ height: "42px", width: "42px", padding: 0, minWidth: "42px" }}
+					onClick={handleFileButtonClick}
+					disabled={uploadingAttachment}
+					aria-label="Upload image">
+					{uploadingAttachment ? <CircularProgress size={24} color="text" /> : <AddIcon />}
 				</Button>
 				<EditableDiv
 					ref={divRef}

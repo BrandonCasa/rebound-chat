@@ -12,7 +12,7 @@
  * x: Array or typed array of length N (numbers).
  * Returns Float64Array of length N.
  */
-function dct1d(x) {
+export function dct1d(x) {
 	const N = x.length;
 	const result = new Float64Array(N);
 
@@ -35,7 +35,7 @@ function dct1d(x) {
  * a: 2D array (Array of Arrays) of size [rows][cols].
  * Returns 2D Float64Array matrix [rows][cols].
  */
-function dct2(a) {
+export function dct2(a) {
 	const rows = a.length;
 	const cols = a[0].length;
 
@@ -83,7 +83,7 @@ function dct2(a) {
  * Pack an array of bits (0/1 or false/true) into a hex string.
  * Equivalent to NumPy's np.packbits(...).tobytes().hex() with bitorder='big'.
  */
-function bitsToHex(bits) {
+export function bitsToHex(bits) {
 	const len = bits.length;
 	const bytes = [];
 	let byte = 0;
@@ -115,7 +115,7 @@ function bitsToHex(bits) {
 /**
  * Build a 1D Gaussian kernel for a given radius (sigma ~ radius).
  */
-function makeGaussianKernel(radius) {
+export function makeGaussianKernel(radius) {
 	if (radius <= 0) {
 		return new Float32Array([1]);
 	}
@@ -144,7 +144,7 @@ function makeGaussianKernel(radius) {
  * gray: Float32Array of length width*height
  * Returns new Float32Array.
  */
-function gaussianBlurGray(gray, width, height, radius) {
+export function gaussianBlurGray(gray, width, height, radius) {
 	if (radius <= 0) return gray.slice();
 
 	const kernel = makeGaussianKernel(radius);
@@ -194,7 +194,7 @@ function gaussianBlurGray(gray, width, height, radius) {
  * src: Float32Array of length srcW*srcH
  * Returns Float32Array of length dstW*dstH
  */
-function resizeGrayBilinear(src, srcW, srcH, dstW, dstH) {
+export function resizeGrayBilinear(src, srcW, srcH, dstW, dstH) {
 	const dst = new Float32Array(dstW * dstH);
 
 	const xRatio = srcW / dstW;
@@ -232,7 +232,7 @@ function resizeGrayBilinear(src, srcW, srcH, dstW, dstH) {
  * channels: 3 or 4
  * Returns Uint8ClampedArray length dstW*dstH*channels
  */
-function resizeRgbBilinear(src, srcW, srcH, dstW, dstH, channels) {
+export function resizeRgbBilinear(src, srcW, srcH, dstW, dstH, channels) {
 	const dst = new Uint8ClampedArray(dstW * dstH * channels);
 
 	const xRatio = srcW / dstW;
@@ -280,7 +280,7 @@ function resizeRgbBilinear(src, srcW, srcH, dstW, dstH, channels) {
  * pixels: Uint8ClampedArray (length width*height*3 or *4)
  * channels: 3 or 4
  */
-function rgbaToGrayscale(pixels, width, height, channels) {
+export function rgbaToGrayscale(pixels, width, height, channels) {
 	const out = new Float32Array(width * height);
 	for (let i = 0; i < width * height; i++) {
 		const offset = i * channels;
@@ -310,7 +310,7 @@ function rgbaToGrayscale(pixels, width, height, channels) {
  * Returns:
  *   Hex string representing packed hash bits.
  */
-function dctHashCoarse16bitFromGray(gray, width, height, { hashSize = 4, dctSize = 32, blurRadius = 1.5 } = {}) {
+export function dctHashCoarse16bitFromGray(gray, width, height, { hashSize = 4, dctSize = 32, blurRadius = 1.5 } = {}) {
 	// 1) Optional blur
 	const blurred = gaussianBlurGray(gray, width, height, blurRadius);
 
@@ -361,7 +361,7 @@ function dctHashCoarse16bitFromGray(gray, width, height, { hashSize = 4, dctSize
  * pixels: Uint8ClampedArray, length width*height*(3 or 4)
  * channels: 3 or 4
  */
-function dctHashCoarse16bitFromRgb(pixels, width, height, channels = 4, options = {}) {
+export function dctHashCoarse16bitFromRgb(pixels, width, height, channels = 4, options = {}) {
 	const gray = rgbaToGrayscale(pixels, width, height, channels);
 	return dctHashCoarse16bitFromGray(gray, width, height, options);
 }
@@ -382,7 +382,7 @@ function dctHashCoarse16bitFromRgb(pixels, width, height, channels = 4, options 
  * Returns:
  *   Hex string representing packed 768 bits (3 * 256).
  */
-function dctHashFineColor(pixels, width, height, channels = 4, { hashSize = 16, dctSize = 64 } = {}) {
+export function dctHashFineColor(pixels, width, height, channels = 4, { hashSize = 16, dctSize = 64 } = {}) {
 	// 1) Resize RGB to dctSize x dctSize
 	const resized = resizeRgbBilinear(pixels, width, height, dctSize, dctSize, channels);
 
@@ -461,12 +461,3 @@ function dctHashFineColor(pixels, width, height, channels = 4, { hashSize = 16, 
 // console.log("fine_hash   :", fine);
 
 // ---------- EXPORTS (for Node / bundlers) ----------
-
-module.exports = {
-	dct1d,
-	dct2,
-	bitsToHex,
-	dctHashCoarse16bitFromGray,
-	dctHashCoarse16bitFromRgb,
-	dctHashFineColor,
-};

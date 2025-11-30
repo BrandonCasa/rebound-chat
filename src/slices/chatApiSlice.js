@@ -5,14 +5,15 @@ import { profileMediaUrl } from "../helpers/mediaUrl";
 
 const base = getApiBase();
 
-export const mapMessages = (msgs) =>
-	msgs.map((m) => ({
+export const mapMessages = (msgs) => {
+	return msgs.map((m) => ({
 		...m,
 		sender: {
 			...m.sender,
 			avatarUrl: profileMediaUrl(m?.sender?.avatarUrl, "defaultpfp.webp"),
 		},
 	}));
+};
 
 export const fetchRoomMessages = createAsyncThunk("chatApi/fetchRoomMessages", async ({ roomId, authToken, before, after, limit }, { rejectWithValue }) => {
 	try {
