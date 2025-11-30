@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
+import axios from "axios";
 import { fetchRoomMessages, mapMessages } from "../../slices/chatApiSlice";
 import { parseMentions } from "../../helpers/mentions";
 import { fetchUserProfile } from "../../slices/userApiSlice";
@@ -8,6 +9,7 @@ import { addSnackbar } from "../../slices/snackbarSlice";
 import { setActiveSocketRoom, emitSocketEvent } from "../../slices/socketSlice";
 import { getSocketClient } from "../../helpers/socketClient";
 import { dctHashCoarse16bitFromRgb, dctHashFineColor } from "../../helpers/hashimage";
+import { buildApiConfig, getApiBase } from "../../helpers/api";
 
 const MESSAGE_PAGE_SIZE = 50;
 const MAX_ATTACHMENTS = 10;
@@ -504,15 +506,69 @@ export default function useChatPage() {
 					blurRadius: 1.5,
 				});
 
-				const fine = dctHashFineColor(pixels, width, height, 4, { hashSize: 24, dctSize: 128 });
+				const fine = dctHashFineColor(pixels, canvas.width, canvas.height, 4, {
+					hashSize: 24,
+					dctSize: 128,
+				});
 
 				hashResultsCoarse.push(coarse);
 				hashResultsFine.push(fine);
 			}
 
-			//WORK TO DO
+			const payload = hashResultsCoarse.map((coarse, idx) => ({
+				coarse,
+				fine: hashResultsFine[idx],
+				size: validAttachments[idx]?.size,
+				name: validAttachments[idx]?.name,
+			}));
 
-			console.log(hashResultsCoarse);
+			const { data } = await axios.post(`${getApiBase()}/media/check`, { hashes: payload }, buildApiConfig(authState.authToken));
+
+			const results = data?.results ?? [];
+			const uploadsToKeep = [];
+
+			validAttachments.forEach((file, idx) => {
+				const matches = results.find((entry) => entry.index === idx)?.matches ?? [];
+				if (!matches.length) {
+					uploadsToKeep.push(file);
+					return;
+				}
+
+				const bestMatch = matches.reduce((curr, next) => {
+					if (!curr) return next;
+					return next.size > curr.size ? next : curr;
+				}, null);
+
+				const similarityText = typeof bestMatch?.similarity === "number" ? bestMatch.similarity.toFixed(2) : "unknown";
+				const confirmMessage = `A similar image already exists (${similarityText}% similarity). Use the existing file (${((bestMatch?.size ?? 0) / 1024).toFixed(1)} KB) instead of uploading ${file.name}? Click Cancel to upload your version.`;
+
+				const useExisting = bestMatch && window.confirm(confirmMessage);
+
+				if (useExisting && bestMatch.size >= file.size) {
+					dispatch(
+						addSnackbar({
+							snackbarMsg: `Using existing image for ${file.name}.`,
+							snackbarSeverity: "info",
+							autoHideDuration: 2500,
+						})
+					);
+					return;
+				}
+
+				uploadsToKeep.push(file);
+			});
+
+			if (!uploadsToKeep.length) {
+				dispatch(
+					addSnackbar({
+						snackbarMsg: "No new images to upload after similarity check.",
+						snackbarSeverity: "info",
+						autoHideDuration: 2500,
+					})
+				);
+			}
+
+			setAttachments(uploadsToKeep);
 		} catch (err) {
 			const snackbarMsg = err?.response?.data?.error || "Unable to upload image.";
 			dispatch(

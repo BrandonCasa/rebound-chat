@@ -6,6 +6,7 @@ import usersApi from "./users.js";
 import chatApi from "./chat.js";
 import dmApi from "./dms.js";
 import contentRoutes from "../content.js";
+import mediaApi from "./media.js";
 import multer from "multer";
 
 const router = Router();
@@ -18,6 +19,7 @@ router.use("/", adminApi);
 
 router.use("/", chatApi);
 router.use("/", dmApi);
+router.use("/", mediaApi);
 
 router.use("/", contentRoutes);
 
