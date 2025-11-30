@@ -169,6 +169,7 @@ class ServerRooms {
 				if (Array.isArray(arg1) && arg2 === undefined) {
 					[roomId, content, mentions, attachments] = arg1;
 				} else {
+					console.log(arg4);
 					roomId = arg1;
 					content = arg2;
 					mentions = arg3;
@@ -181,13 +182,14 @@ class ServerRooms {
 
 				const sender = await UserModel.findById(socket.user.id);
 				if (!sender) throw new Error("Sender not found.");
+				console.log(attachments);
 
 				const msg = new MessageModel({
 					sender,
-					content,
+					content: content || "lol",
 					mentions,
 					room: roomId,
-					attachments: Array.isArray(attachments) ? attachments.filter(Boolean) : undefined,
+					attachments: Array.isArray(attachments) ? attachments.map((attachment) => attachment.mediaId) : undefined,
 				});
 				await msg.save();
 

@@ -537,20 +537,12 @@ export default function useChatPage() {
 			if (!trimmedMessage && !attachments.length) return;
 
 			const uploadedAttachments = (await uploadAttachments()) || [];
-			const attachmentLinks = uploadedAttachments.map((entry) => entry?.url).filter(Boolean);
 
-			const composedParts = [];
-			if (trimmedMessage) composedParts.push(trimmedMessage);
-			composedParts.push(...attachmentLinks);
-
-			const composedMessage = composedParts.join("\n");
-			if (!composedMessage) return;
-
-			const mentions = parseMentions(composedMessage, users);
+			const mentions = parseMentions(trimmedMessage, users);
 			dispatch(
 				emitSocketEvent({
 					event: "message_room",
-					args: [sockets.currentRoom, composedMessage, mentions],
+					args: [sockets.currentRoom, trimmedMessage, mentions, uploadedAttachments],
 				})
 			);
 			setMessage("");
