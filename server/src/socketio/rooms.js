@@ -196,7 +196,7 @@ class ServerRooms {
 				const sender = await UserModel.findById(socket.user.id);
 				if (!sender) throw new Error("Sender not found.");
 
-				if ((content?.trim?.() ?? "") !== "" || attachments?.length > 0) throw new Error("No message content or attachments.");
+				if ((content?.trim?.() ?? "") === "" && attachments?.length < 1) throw new Error("No message content or attachments.");
 
 				const msg = new MessageModel({
 					sender,
