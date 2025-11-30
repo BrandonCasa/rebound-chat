@@ -44,7 +44,6 @@ const hexHammingDistance = (hexA = "", hexB = "") => {
 		distance += NIBBLE_POPCOUNT[xor];
 	}
 
-	// Account for any trailing unmatched nibbles as full differences.
 	distance += (maxLength - minLength) * 4;
 
 	return distance;

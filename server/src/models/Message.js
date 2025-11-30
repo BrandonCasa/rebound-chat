@@ -7,7 +7,7 @@ const MessageSchema = new mongoose.Schema(
 			ref: "User",
 			required: [true, "is required"],
 		},
-		content: { type: String, required: [true, "is required"] },
+		content: { type: String },
 		mentions: [
 			{
 				user: { type: Schema.Types.ObjectId, ref: "User", required: true },

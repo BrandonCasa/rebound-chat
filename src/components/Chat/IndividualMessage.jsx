@@ -119,6 +119,7 @@ function IndividualMessage({
 						transition: "padding-left 0.1s ease-in-out, background 0.05s ease-in-out",
 						display: "flex",
 						justifyContent: "space-between",
+						flexDirection: "column",
 					}}>
 					{editingMessageId === msg._id ? (
 						<Box sx={{ display: "flex", gap: 1, width: "100%", justifyContent: "space-between", alignItems: "center", padding: 1 }}>

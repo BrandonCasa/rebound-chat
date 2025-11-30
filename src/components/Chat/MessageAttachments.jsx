@@ -14,7 +14,7 @@ function MessageAttachments({ attachments = [] }) {
 				gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
 				gap: 1,
 				width: "100%",
-				mt: 1,
+				mb: 1,
 			}}>
 			{visibleAttachments.map((attachment) => {
 				const key = attachment._id || attachment.url || attachment.originalName;
@@ -26,8 +26,10 @@ function MessageAttachments({ attachments = [] }) {
 						target="_blank"
 						rel="noreferrer"
 						sx={{
+							padding: 1,
+							margin: 0,
 							display: "block",
-							width: "100%",
+							width: "20vw",
 							borderRadius: 1,
 							border: `1px solid ${theme.palette.divider}`,
 							overflow: "hidden",

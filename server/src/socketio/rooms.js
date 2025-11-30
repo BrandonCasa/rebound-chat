@@ -198,7 +198,7 @@ class ServerRooms {
 
 				const msg = new MessageModel({
 					sender,
-					content: content || "lol",
+					content: content,
 					mentions,
 					room: roomId,
 					attachments: normalizeAttachmentIds(attachments),

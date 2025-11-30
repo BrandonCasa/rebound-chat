@@ -237,6 +237,13 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 		}
 	}, [attachments.length, sendMessage]);
 
+	const previewFileURL = useCallback(
+		(file) => {
+			return URL.createObjectURL(file);
+		},
+		[attachments]
+	);
+
 	const handleKeyDown = (e) => {
 		if (mentionOptions.length) {
 			if (e.key === "Tab") {
@@ -277,69 +284,6 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 		syncFromDom(false);
 	}, [syncFromDom]);
 
-	const itemData = [
-		{
-			img: "https://images.unsplash.com/photo-1551963831-b3b1ca40c98e",
-			title: "Breakfast",
-			author: "@bkristastucchio",
-		},
-		{
-			img: "https://images.unsplash.com/photo-1551782450-a2132b4ba21d",
-			title: "Burger",
-			author: "@rollelflex_graphy726",
-		},
-		{
-			img: "https://images.unsplash.com/photo-1522770179533-24471fcdba45",
-			title: "Camera",
-			author: "@helloimnik",
-		},
-		{
-			img: "https://images.unsplash.com/photo-1444418776041-9c7e33cc5a9c",
-			title: "Coffee",
-			author: "@nolanissac",
-		},
-		{
-			img: "https://images.unsplash.com/photo-1533827432537-70133748f5c8",
-			title: "Hats",
-			author: "@hjrc33",
-		},
-		{
-			img: "https://images.unsplash.com/photo-1558642452-9d2a7deb7f62",
-			title: "Honey",
-			author: "@arwinneil",
-		},
-		{
-			img: "https://images.unsplash.com/photo-1516802273409-68526ee1bdd6",
-			title: "Basketball",
-			author: "@tjdragotta",
-		},
-		{
-			img: "https://images.unsplash.com/photo-1518756131217-31eb79b20e8f",
-			title: "Fern",
-			author: "@katie_wasserman",
-		},
-		{
-			img: "https://images.unsplash.com/photo-1597645587822-e99fa5d45d25",
-			title: "Mushrooms",
-			author: "@silverdalex",
-		},
-		{
-			img: "https://images.unsplash.com/photo-1567306301408-9b74779a11af",
-			title: "Tomato basil",
-			author: "@shelleypauls",
-		},
-		{
-			img: "https://images.unsplash.com/photo-1471357674240-e1a485acb3e1",
-			title: "Sea star",
-			author: "@peterlaster",
-		},
-		{
-			img: "https://images.unsplash.com/photo-1589118949245-7d38baf380d6",
-			title: "Bike",
-			author: "@southside_customs",
-		},
-	];
-
 	function formatFileSize(bytes) {
 		if (bytes >= 1024 * 1024 * 1024) {
 			return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
@@ -360,13 +304,18 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 					e.currentTarget.scrollLeft += e.deltaY;
 				}}
 				sx={{
+					visibility: attachments.length > 0 ? "visible" : "hidden",
 					overflowY: "hidden",
 					overflowX: "auto",
+					height: attachments.length > 0 ? `calc(max(200px, 15vh) + ${theme.spacing(2)})` : `0px`,
+					marginTop: attachments.length > 0 ? 2 : 0,
+					transition: "visibility 0s, padding 0s, margin-top 0s, height 0.25s",
+					justifyContent: "center",
 					mx: 1,
 					flexGrow: 1,
 					mb: -1,
-					padding: 1,
-					border: `2px solid ${theme.palette.divider}`,
+					padding: attachments.length > 0 ? 1 : 0,
+					border: attachments.length > 0 ? `2px solid ${theme.palette.divider}` : 0,
 					backgroundColor: darken(theme.palette.background.paper, 0.05),
 					borderRadius: 1,
 					gridAutoFlow: "column",
@@ -375,19 +324,19 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 				{attachments.map((item, index) => (
 					<ImageListItem
 						key={index}
-						style={{ height: "max(200px, 15vh)" }}
+						style={{ height: `calc(max(200px, 15vh) - ${theme.spacing(0.5)})` }}
 						sx={{
 							backgroundColor: darken(theme.palette.background.paper, 0.05),
 							borderRadius: theme.shape.borderRadius * 0.25,
 							aspectRatio: 1,
-							padding: "6px",
+							padding: 0.5,
 							":hover": {
 								backgroundColor: darken(theme.palette.background.paper, 0.4),
 							},
 						}}>
 						<img
-							srcSet={`${item}`}
-							src={`${item}`}
+							srcSet={`${previewFileURL(item)}`}
+							src={`${previewFileURL(item)}`}
 							alt={item.name}
 							loading="lazy"
 							style={{
@@ -395,6 +344,9 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 								border: `3px solid ${darken(theme.palette.background.paper, 0.6)}`,
 								cursor: "pointer",
 								width: "100%",
+							}}
+							onLoad={(e) => {
+								URL.revokeObjectURL(e.currentTarget.src);
 							}}
 						/>
 						<ImageListItemBar
@@ -416,7 +368,12 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 								},
 							}}
 							actionIcon={
-								<IconButton sx={{ color: "white" }} aria-label={`star ${item.title}`}>
+								<IconButton
+									sx={{ color: "white" }}
+									aria-label={`close ${item.title}`}
+									onClick={() => {
+										removeAttachment(item);
+									}}>
 									<CloseIcon />
 								</IconButton>
 							}
