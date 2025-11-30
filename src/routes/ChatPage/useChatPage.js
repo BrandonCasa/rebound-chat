@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
+import axios from "axios";
 import { fetchRoomMessages, mapMessages } from "../../slices/chatApiSlice";
 import { parseMentions } from "../../helpers/mentions";
 import { fetchUserProfile } from "../../slices/userApiSlice";
@@ -8,6 +9,7 @@ import { addSnackbar } from "../../slices/snackbarSlice";
 import { setActiveSocketRoom, emitSocketEvent } from "../../slices/socketSlice";
 import { getSocketClient } from "../../helpers/socketClient";
 import { dctHashCoarse16bitFromRgb, dctHashFineColor } from "../../helpers/hashimage";
+import { buildApiConfig, getApiBase } from "../../helpers/api";
 
 const MESSAGE_PAGE_SIZE = 50;
 const MAX_ATTACHMENTS = 10;
@@ -315,15 +317,36 @@ export default function useChatPage() {
 		[dispatch]
 	);
 
-	const sendMessage = (e) => {
-		e?.preventDefault();
-		if (!(Boolean(message?.trim() !== "") || attachments.length > 0) || !sockets.currentRoom) return;
-		const mentions = parseMentions(message, users);
-		uploadAttachments();
-		dispatch(emitSocketEvent({ event: "message_room", args: [sockets.currentRoom, message, mentions] }));
-		setMessage("");
-		setAttachments([]);
-	};
+	const sendMessage = useCallback(
+		async (e) => {
+			e?.preventDefault();
+
+			if (!sockets.currentRoom) return;
+			const trimmedMessage = message?.trim?.() ?? "";
+			if (!trimmedMessage && !attachments.length) return;
+
+			const uploadedAttachments = (await uploadAttachments()) || [];
+			const attachmentLinks = uploadedAttachments.map((entry) => entry?.url).filter(Boolean);
+
+			const composedParts = [];
+			if (trimmedMessage) composedParts.push(trimmedMessage);
+			composedParts.push(...attachmentLinks);
+
+			const composedMessage = composedParts.join("\n");
+			if (!composedMessage) return;
+
+			const mentions = parseMentions(composedMessage, users);
+			dispatch(
+				emitSocketEvent({
+					event: "message_room",
+					args: [sockets.currentRoom, composedMessage, mentions],
+				})
+			);
+			setMessage("");
+			setAttachments([]);
+		},
+		[attachments.length, dispatch, message, sockets.currentRoom, uploadAttachments, users]
+	);
 
 	const clickRoomSelect = (e) => {
 		setRoomAnchorEl(e.currentTarget);
@@ -429,7 +452,7 @@ export default function useChatPage() {
 	};
 
 	const uploadAttachments = useCallback(async () => {
-		if (!sockets.currentRoom) return null;
+		if (!sockets.currentRoom) return [];
 
 		const validAttachments = [];
 		for (const file of attachments) {
@@ -473,13 +496,12 @@ export default function useChatPage() {
 
 		setAttachments(validAttachments);
 
-		if (!validAttachments.length) return null;
+		if (!validAttachments.length) return [];
 
 		try {
 			setUploadingAttachment(true);
 
-			let hashResultsCoarse = [];
-			let hashResultsFine = [];
+			const hashedAttachments = [];
 
 			for (const file of validAttachments) {
 				// Convert File → Image → Canvas → Raw Pixel Data
@@ -504,15 +526,107 @@ export default function useChatPage() {
 					blurRadius: 1.5,
 				});
 
-				const fine = dctHashFineColor(pixels, width, height, 4, { hashSize: 24, dctSize: 128 });
+				const fine = dctHashFineColor(pixels, canvas.width, canvas.height, 4, {
+					hashSize: 24,
+					dctSize: 128,
+				});
 
-				hashResultsCoarse.push(coarse);
-				hashResultsFine.push(fine);
+				hashedAttachments.push({ file, coarse, fine });
 			}
 
-			//WORK TO DO
+			const payload = hashedAttachments.map(({ coarse, fine, file }) => ({
+				coarse,
+				fine,
+				size: file?.size,
+				name: file?.name,
+			}));
 
-			console.log(hashResultsCoarse);
+			const { data } = await axios.post(`${getApiBase()}/media/check`, { hashes: payload }, buildApiConfig(authState.authToken));
+
+			const results = data?.results ?? [];
+			const uploadsToKeep = [];
+			const resolvedAttachments = [];
+
+			hashedAttachments.forEach((entry, idx) => {
+				const matches = results.find((resultEntry) => resultEntry.index === idx)?.matches ?? [];
+				if (!matches.length) {
+					uploadsToKeep.push(entry);
+					return;
+				}
+
+				const bestMatch = matches.reduce((curr, next) => {
+					if (!curr) return next;
+					return next.size > curr.size ? next : curr;
+				}, null);
+
+				const similarityText = typeof bestMatch?.similarity === "number" ? bestMatch.similarity.toFixed(2) : "unknown";
+				const confirmMessage = `A similar image already exists (${similarityText}% similarity). Use the existing file (${((bestMatch?.size ?? 0) / 1024).toFixed(1)} KB) instead of uploading ${entry.file.name}? Click Cancel to upload your version.`;
+
+				const useExisting = bestMatch && window.confirm(confirmMessage);
+
+				if (useExisting && bestMatch.size >= entry.file.size) {
+					dispatch(
+						addSnackbar({
+							snackbarMsg: `Using existing image for ${entry.file.name}.`,
+							snackbarSeverity: "info",
+							autoHideDuration: 2500,
+						})
+					);
+
+					resolvedAttachments.push({
+						url: bestMatch.url,
+						size: bestMatch.size,
+						contentType: bestMatch.contentType,
+						originalName: bestMatch.originalName,
+						mediaId: bestMatch._id,
+					});
+					return;
+				}
+
+				uploadsToKeep.push(entry);
+			});
+
+			if (!uploadsToKeep.length && resolvedAttachments.length) {
+				setAttachments([]);
+				return resolvedAttachments;
+			}
+
+			if (!uploadsToKeep.length) {
+				dispatch(
+					addSnackbar({
+						snackbarMsg: "No new images to upload after similarity check.",
+						snackbarSeverity: "info",
+						autoHideDuration: 2500,
+					})
+				);
+				setAttachments([]);
+				return resolvedAttachments;
+			}
+
+			const uploadMetadata = uploadsToKeep.map(({ coarse, fine, file }) => ({
+				coarse,
+				fine,
+				size: file.size,
+				name: file.name,
+				type: file.type,
+			}));
+
+			const formData = new FormData();
+			uploadsToKeep.forEach(({ file }) => formData.append("files", file));
+			formData.append("hashes", JSON.stringify(uploadMetadata));
+
+			const { data: uploadResponse } = await axios.post(
+				`${getApiBase()}/media/upload`,
+				formData,
+				buildApiConfig(authState.authToken, {
+					headers: { "Content-Type": "multipart/form-data" },
+				})
+			);
+
+			const uploaded = uploadResponse?.attachments ?? [];
+			const combined = [...resolvedAttachments, ...uploaded];
+			setAttachments([]);
+			return combined;
 		} catch (err) {
 			const snackbarMsg = err?.response?.data?.error || "Unable to upload image.";
 			dispatch(
@@ -522,11 +636,10 @@ export default function useChatPage() {
 					autoHideDuration: 2500,
 				})
 			);
+			return [];
 		} finally {
 			setUploadingAttachment(false);
 		}
-
-		return null;
 	}, [attachments, authState.authToken, dispatch, sockets]);
 
 	const addChatAttachment = useCallback(
