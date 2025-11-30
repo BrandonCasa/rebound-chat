@@ -17,13 +17,20 @@ const MessageSchema = new mongoose.Schema(
 		],
 		room: {
 			type: Schema.Types.ObjectId,
-			ref: "Server",
-			required: [true, "is required"],
+			ref: "Room",
+		},
+		dmThread: {
+			type: Schema.Types.ObjectId,
+			ref: "DmThread",
 		},
 		attachments: [{ type: Schema.Types.ObjectId, ref: "MediaAttachment" }],
 	},
 	{ timestamps: true }
 );
+
+MessageSchema.path("room").validate(function roomOrThreadRequired(value) {
+	return Boolean(value || this.dmThread);
+}, "room or dmThread is required");
 
 const MessageModel = mongoose.model("Message", MessageSchema);
 

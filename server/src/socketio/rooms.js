@@ -161,17 +161,18 @@ class ServerRooms {
 			}
 		});
 
-		socket.on("message_room", async (arg1, arg2, arg3) => {
+		socket.on("message_room", async (arg1, arg2, arg3, arg4) => {
 			try {
 				const [idToName] = await this.getRoomList();
-				let roomId, content, mentions;
+				let roomId, content, mentions, attachments;
 
 				if (Array.isArray(arg1) && arg2 === undefined) {
-					[roomId, content, mentions] = arg1;
+					[roomId, content, mentions, attachments] = arg1;
 				} else {
 					roomId = arg1;
 					content = arg2;
 					mentions = arg3;
+					attachments = arg4;
 				}
 
 				if (!idToName[roomId]) {
@@ -181,7 +182,13 @@ class ServerRooms {
 				const sender = await UserModel.findById(socket.user.id);
 				if (!sender) throw new Error("Sender not found.");
 
-				const msg = new MessageModel({ sender, content, mentions });
+				const msg = new MessageModel({
+					sender,
+					content,
+					mentions,
+					room: roomId,
+					attachments: Array.isArray(attachments) ? attachments.filter(Boolean) : undefined,
+				});
 				await msg.save();
 
 				const roomDoc = await RoomModel.findById(roomId);
