@@ -222,21 +222,20 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 		[setMessage, users]
 	);
 
-	const handleSend = useCallback(() => {
+	const handleSend = useCallback(async () => {
 		const trimmed = divRef.current?.textContent.trim();
 		const hasContent = Boolean(trimmed);
 		const hasAttachments = attachments.length > 0;
 
 		if (hasContent || hasAttachments) {
-			sendMessage();
-			setMessage("");
+			await sendMessage();
 			setMentionQuery(null);
 			setActiveMentionIdx(0);
 			requestAnimationFrame(() => {
 				if (divRef.current) divRef.current.innerHTML = "";
 			});
 		}
-	}, [attachments.length, sendMessage, setMessage]);
+	}, [attachments.length, sendMessage]);
 
 	const handleKeyDown = (e) => {
 		if (mentionOptions.length) {
