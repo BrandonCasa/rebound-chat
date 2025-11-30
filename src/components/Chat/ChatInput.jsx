@@ -340,6 +340,18 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 		},
 	];
 
+	function formatFileSize(bytes) {
+		if (bytes >= 1024 * 1024 * 1024) {
+			return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+		} else if (bytes >= 1024 * 1024) {
+			return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+		} else if (bytes >= 1024) {
+			return `${(bytes / 1024).toFixed(2)} KB`;
+		} else {
+			return `${bytes} B`;
+		}
+	}
+
 	return (
 		<Box sx={{ width: "100%", display: "flex", flexDirection: "column", gap: 1 }}>
 			<ImageList
@@ -360,9 +372,9 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 					gridAutoFlow: "column",
 					...scrollbarStyles,
 				}}>
-				{itemData.map((item) => (
+				{attachments.map((item, index) => (
 					<ImageListItem
-						key={item.img}
+						key={index}
 						style={{ height: "max(200px, 15vh)" }}
 						sx={{
 							backgroundColor: darken(theme.palette.background.paper, 0.05),
@@ -374,9 +386,9 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 							},
 						}}>
 						<img
-							srcSet={`${item.img}`}
-							src={`${item.img}`}
-							alt={item.title}
+							srcSet={`${item}`}
+							src={`${item}`}
+							alt={item.name}
 							loading="lazy"
 							style={{
 								borderRadius: theme.shape.borderRadius * 2,
@@ -386,8 +398,8 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 							}}
 						/>
 						<ImageListItemBar
-							title={item.title}
-							subtitle={<span> {"3.21 MB"}</span>}
+							title={`${item.name.split(".")[0].substring(0, 8)}${item.name.split(".")[0].length > 8 ? "..." : ""}`}
+							subtitle={<span>{`${formatFileSize(item.size)} (${item.name.split(".")[item.name.split(".").length - 1]})`}</span>}
 							position="top"
 							style={{
 								borderRadius: theme.shape.borderRadius * 2,
