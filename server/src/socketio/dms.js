@@ -11,7 +11,10 @@ class ServerDMs {
 		}).populate({
 			path: "messages",
 			options: { sort: { createdAt: 1 } },
-			populate: { path: "sender", select: "displayName avatarUrl" },
+			populate: [
+				{ path: "sender", select: "displayName avatarUrl" },
+				{ path: "attachments", select: "url contentType size originalName" },
+			],
 		});
 		if (!thread) {
 			thread = new DmThreadModel({ participants: [id1, id2], messages: [] });
@@ -37,19 +40,28 @@ class ServerDMs {
 			}
 		});
 
-                socket.on("message_dm", async (threadId, content, mentions) => {
+		socket.on("message_dm", async (threadId, content, mentions, attachments) => {
 			try {
 				const thread = await DmThreadModel.findById(threadId);
 				if (!thread) return;
 				if (!thread.participants.some((p) => p.toString() === socket.user.id)) return;
-                                const msg = new MessageModel({ sender: socket.user.id, content, mentions });
+				const msg = new MessageModel({
+					sender: socket.user.id,
+					content,
+					mentions,
+					dmThread: threadId,
+					attachments: Array.isArray(attachments) ? attachments.filter(Boolean) : undefined,
+				});
 				await msg.save();
 				thread.messages.push(msg);
 				await thread.save();
 				await thread.populate({
 					path: "messages",
 					options: { sort: { createdAt: 1 } },
-					populate: { path: "sender", select: "displayName avatarUrl" },
+					populate: [
+						{ path: "sender", select: "displayName avatarUrl" },
+						{ path: "attachments", select: "url contentType size originalName" },
+					],
 				});
 				const sockets = await socketio.io.in(threadId).fetchSockets();
 				sockets.forEach((s) => {
@@ -64,7 +76,7 @@ class ServerDMs {
 			}
 		});
 
-                socket.on("dm_edit_message", async (threadId, messageId, content, mentions) => {
+		socket.on("dm_edit_message", async (threadId, messageId, content, mentions) => {
 			try {
 				const thread = await DmThreadModel.findById(threadId);
 				if (!thread) return;
@@ -74,14 +86,14 @@ class ServerDMs {
 				if (!msg) return;
 				if (msg.sender.toString() !== socket.user.id) return;
 
-                                msg.content = content;
-                                msg.mentions = mentions;
-                                await msg.save();
+				msg.content = content;
+				msg.mentions = mentions;
+				await msg.save();
 
-				const msgDoc = await msg.populate({
-					path: "sender",
-					select: "displayName avatarUrl",
-				});
+				const msgDoc = await msg.populate([
+					{ path: "sender", select: "displayName avatarUrl" },
+					{ path: "attachments", select: "url contentType size originalName" },
+				]);
 
 				const sockets = await socketio.io.in(threadId).fetchSockets();
 				sockets.forEach((s) => {

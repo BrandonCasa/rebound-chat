@@ -19,6 +19,7 @@ function ChatPage() {
 		authState,
 		message,
 		setMessage,
+		attachments,
 		messages,
 		channels,
 		currentRoom,
@@ -38,6 +39,9 @@ function ChatPage() {
 		setEditingText,
 		setMessages,
 		sendMessage,
+		addChatAttachment,
+		removeAttachment,
+		uploadingAttachment,
 		clickRoomSelect,
 		clickUserList,
 		previewUser,
@@ -146,7 +150,16 @@ function ChatPage() {
 				</Box>
 
 				{/* input */}
-				<ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} users={users} />
+				<ChatInput
+					message={message}
+					setMessage={setMessage}
+					sendMessage={sendMessage}
+					users={users}
+					attachments={attachments}
+					addAttachment={addChatAttachment}
+					removeAttachment={removeAttachment}
+					uploadingAttachment={uploadingAttachment}
+				/>
 			</Paper>
 		</Box>
 	);

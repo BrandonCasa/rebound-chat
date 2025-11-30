@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { styled, useTheme, darken } from "@mui/material/styles";
-import { Box, Chip, Typography, Paper } from "@mui/material";
+import { Box, Chip, Typography, ImageList, ImageListItem, ImageListItemBar, IconButton, CircularProgress } from "@mui/material";
 import Button from "@mui/material/Button";
 import SendIcon from "@mui/icons-material/Send";
+import AddIcon from "@mui/icons-material/AddRounded";
+import CloseIcon from "@mui/icons-material/CloseRounded";
 import DOMPurify from "dompurify";
 import { parseMentions, highlightMentions } from "../../helpers/mentions";
+import { scrollbarStyles } from "../../routes/scrollbarStyles";
 
 // --- Styled components ----------------------------------------------------
 const ChatForm = styled("form")(({ theme }) => ({
@@ -16,7 +19,7 @@ const ChatForm = styled("form")(({ theme }) => ({
 
 const EditableDiv = styled("div")(({ theme }) => ({
 	flex: 1,
-	minHeight: 16,
+	minHeight: "42px",
 	maxHeight: 180,
 	overflowY: "auto",
 	alignContent: "center",
@@ -111,11 +114,15 @@ const buildHighlightedHtml = (text, mentions) => {
 	return DOMPurify.sanitize(raw);
 };
 
-export default function ChatInput({ message, setMessage, sendMessage, users = [] }) {
+export default function ChatInput({ message, setMessage, sendMessage, users = [], attachments = [], addAttachment, removeAttachment, uploadingAttachment }) {
 	const theme = useTheme();
 	const divRef = useRef(null);
 	const [mentionQuery, setMentionQuery] = useState(null);
 	const [activeMentionIdx, setActiveMentionIdx] = useState(0);
+
+	const fileInputRef = useRef(null);
+
+	const [canSend, setCanSend] = useState(!(Boolean(message?.trim() !== "") || attachments.length > 0));
 
 	// Pre‑compute mentions + highlighted markup -----------------------------
 	const mentions = useMemo(() => parseMentions(message, users), [message, users]);
@@ -134,11 +141,12 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 	}, [mentionQuery, users]);
 
 	useEffect(() => {
+		setCanSend(!(Boolean(message?.trim() !== "") || attachments.length > 0));
 		if (!message) {
 			setMentionQuery(null);
 			setActiveMentionIdx(0);
 		}
-	}, [message]);
+	}, [message, attachments]);
 
 	useEffect(() => {
 		setActiveMentionIdx((idx) => (mentionOptions.length ? Math.min(idx, mentionOptions.length - 1) : 0));
@@ -214,18 +222,27 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 		[setMessage, users]
 	);
 
-	const handleSend = useCallback(() => {
+	const handleSend = useCallback(async () => {
 		const trimmed = divRef.current?.textContent.trim();
-		if (trimmed) {
-			sendMessage();
-			setMessage("");
+		const hasContent = Boolean(trimmed);
+		const hasAttachments = attachments.length > 0;
+
+		if (hasContent || hasAttachments) {
+			await sendMessage();
 			setMentionQuery(null);
 			setActiveMentionIdx(0);
 			requestAnimationFrame(() => {
 				if (divRef.current) divRef.current.innerHTML = "";
 			});
 		}
-	}, [sendMessage, setMessage]);
+	}, [attachments.length, sendMessage]);
+
+	const previewFileURL = useCallback(
+		(file) => {
+			return URL.createObjectURL(file);
+		},
+		[attachments]
+	);
 
 	const handleKeyDown = (e) => {
 		if (mentionOptions.length) {
@@ -252,12 +269,118 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 		}
 	};
 
+	const handleFileButtonClick = () => {
+		fileInputRef.current?.click();
+	};
+
+	const handleFileChange = async (event) => {
+		const file = event.target?.files?.[0];
+		if (!file || !addAttachment) return;
+		await addAttachment(file);
+		event.target.value = "";
+	};
+
 	const handleSelectionChange = useCallback(() => {
 		syncFromDom(false);
 	}, [syncFromDom]);
 
+	function formatFileSize(bytes) {
+		if (bytes >= 1024 * 1024 * 1024) {
+			return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+		} else if (bytes >= 1024 * 1024) {
+			return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+		} else if (bytes >= 1024) {
+			return `${(bytes / 1024).toFixed(2)} KB`;
+		} else {
+			return `${bytes} B`;
+		}
+	}
+
 	return (
-		<Box sx={{ width: "100%", display: "flex", flexDirection: "column", gap: 0.5 }}>
+		<Box sx={{ width: "100%", display: "flex", flexDirection: "column", gap: 1 }}>
+			<ImageList
+				aria-live="polite"
+				onWheel={(e) => {
+					e.currentTarget.scrollLeft += e.deltaY;
+				}}
+				sx={{
+					visibility: attachments.length > 0 ? "visible" : "hidden",
+					overflowY: "hidden",
+					overflowX: "auto",
+					height: attachments.length > 0 ? `calc(max(200px, 15vh) + ${theme.spacing(2)})` : `0px`,
+					marginTop: attachments.length > 0 ? 2 : 0,
+					transition: "visibility 0s, padding 0s, margin-top 0s, height 0.25s",
+					justifyContent: "center",
+					mx: 1,
+					flexGrow: 1,
+					mb: -1,
+					padding: attachments.length > 0 ? 1 : 0,
+					border: attachments.length > 0 ? `2px solid ${theme.palette.divider}` : 0,
+					backgroundColor: darken(theme.palette.background.paper, 0.05),
+					borderRadius: 1,
+					gridAutoFlow: "column",
+					...scrollbarStyles,
+				}}>
+				{attachments.map((item, index) => (
+					<ImageListItem
+						key={index}
+						style={{ height: `calc(max(200px, 15vh) - ${theme.spacing(0.5)})` }}
+						sx={{
+							backgroundColor: darken(theme.palette.background.paper, 0.05),
+							borderRadius: theme.shape.borderRadius * 0.25,
+							aspectRatio: 1,
+							padding: 0.5,
+							":hover": {
+								backgroundColor: darken(theme.palette.background.paper, 0.4),
+							},
+						}}>
+						<img
+							srcSet={`${previewFileURL(item)}`}
+							src={`${previewFileURL(item)}`}
+							alt={item.name}
+							loading="lazy"
+							style={{
+								borderRadius: theme.shape.borderRadius * 2,
+								border: `3px solid ${darken(theme.palette.background.paper, 0.6)}`,
+								cursor: "pointer",
+								width: "100%",
+							}}
+							onLoad={(e) => {
+								URL.revokeObjectURL(e.currentTarget.src);
+							}}
+						/>
+						<ImageListItemBar
+							title={`${item.name.split(".")[0].substring(0, 8)}${item.name.split(".")[0].length > 8 ? "..." : ""}`}
+							subtitle={<span>{`${formatFileSize(item.size)} (${item.name.split(".")[item.name.split(".").length - 1]})`}</span>}
+							position="top"
+							style={{
+								borderRadius: theme.shape.borderRadius * 2,
+								border: `3px solid ${darken(theme.palette.background.paper, 0.6)}`,
+								cursor: "default",
+								margin: "16px",
+								backdropFilter: "blur(5px) brightness(0.7)",
+							}}
+							sx={{
+								paddingRight: 1,
+								"& .MuiImageListItemBar-titleWrap": {
+									padding: 1,
+									paddingRight: 0,
+								},
+							}}
+							actionIcon={
+								<IconButton
+									sx={{ color: "white" }}
+									aria-label={`close ${item.title}`}
+									onClick={() => {
+										removeAttachment(item);
+									}}>
+									<CloseIcon />
+								</IconButton>
+							}
+						/>
+					</ImageListItem>
+				))}
+			</ImageList>
 			{mentionOptions.length > 0 && (
 				<Box
 					aria-live="polite"
@@ -306,6 +429,16 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 				</Box>
 			)}
 			<ChatForm onSubmit={(e) => e.preventDefault()}>
+				<input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleFileChange} />
+				<Button
+					type="button"
+					variant="contained"
+					sx={{ height: "42px", width: "42px", padding: 0, minWidth: "42px" }}
+					onClick={handleFileButtonClick}
+					disabled={uploadingAttachment}
+					aria-label="Upload image">
+					{uploadingAttachment ? <CircularProgress size={24} color="text" /> : <AddIcon />}
+				</Button>
 				<EditableDiv
 					ref={divRef}
 					contentEditable
@@ -319,8 +452,8 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 					onFocus={handleSelectionChange}
 					aria-label="Chat message input"
 				/>
-				<Button type="button" variant="contained" endIcon={<SendIcon />} sx={{ height: 42 }} onClick={handleSend}>
-					Send
+				<Button type="button" variant="contained" sx={{ height: "42px", width: "42px", padding: 0, minWidth: "42px" }} onClick={handleSend} disabled={canSend}>
+					<SendIcon />
 				</Button>
 			</ChatForm>
 		</Box>
