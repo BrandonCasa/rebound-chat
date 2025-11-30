@@ -46,6 +46,7 @@ router.get("/rooms/:roomId/messages", messagesLimiter, auth.required, async (req
 			.sort({ _id: -1 })
 			.limit(limit + 1)
 			.populate({ path: "sender", select: "displayName avatarUrl" })
+			.populate({ path: "attachments", select: "url contentType size originalName" })
 			.lean();
 
 		const hasExtra = results.length > limit;

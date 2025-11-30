@@ -6,6 +6,7 @@ import socketio from "./index.js";
 import "dotenv/config";
 
 const MESSAGE_LIMIT = 50;
+const attachmentPopulate = { path: "attachments", select: "url contentType size originalName" };
 
 async function fetchRecentMessages(roomDoc, limit = MESSAGE_LIMIT) {
 	const messageIds = roomDoc?.messages ?? [];
@@ -15,6 +16,7 @@ async function fetchRecentMessages(roomDoc, limit = MESSAGE_LIMIT) {
 		.sort({ _id: -1 })
 		.limit(limit)
 		.populate({ path: "sender", select: "displayName avatarUrl" })
+		.populate(attachmentPopulate)
 		.lean();
 
 	return messages.reverse();
@@ -196,7 +198,7 @@ class ServerRooms {
 				const roomDoc = await RoomModel.findById(roomId);
 				roomDoc.messages.push(msg);
 				await roomDoc.save();
-				await msg.populate({ path: "sender", select: "displayName avatarUrl" });
+				await msg.populate([{ path: "sender", select: "displayName avatarUrl" }, attachmentPopulate]);
 
 				const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
 				socketsInRoom.forEach((s) => {
@@ -229,7 +231,7 @@ class ServerRooms {
 				msg.content = content;
 				msg.mentions = mentions;
 				await msg.save();
-				await msg.populate({ path: "sender", select: "displayName avatarUrl" });
+				await msg.populate([{ path: "sender", select: "displayName avatarUrl" }, attachmentPopulate]);
 
 				const [, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
 				socketsInRoom.forEach((s) => {

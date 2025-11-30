@@ -4,6 +4,7 @@ import React from "react";
 import useLongPress from "../../helpers/useLongPress";
 import { highlightMentions } from "../../helpers/mentions";
 import { profileMediaUrl } from "../../helpers/mediaUrl";
+import MessageAttachments from "./MessageAttachments";
 
 const formatDate = (timestamp) => {
 	const messageDate = new Date(timestamp);
@@ -53,6 +54,8 @@ function IndividualMessage({
 		e.preventDefault();
 		onContextMenu(msg, { x: e.clientX, y: e.clientY });
 	};
+
+	const hasContent = Boolean(msg.content);
 
 	return (
 		<ListItem
@@ -143,30 +146,35 @@ function IndividualMessage({
 							</Button>
 						</Box>
 					) : (
-						<Typography variant="subtitle1" sx={{ color: theme.palette.text.secondary }}>
-							{highlightMentions(msg.content, msg.mentions || []).map((p) => (
-								<span
-									key={p.key}
-									style={
-										p.mention
-											? {
-													display: "inline-flex",
-													alignItems: "center",
-													padding: "0 4px",
-													borderRadius: 16,
-													backgroundColor: theme.palette.warning.main,
-													cursor: "pointer",
-													color: theme.palette.primary.contrastText,
-													fontSize: "0.75rem",
-													lineHeight: "22px",
-													margin: "0 2px",
-												}
-											: {}
-									}>
-									{p.text}
-								</span>
-							))}
-						</Typography>
+						<>
+							{hasContent && (
+								<Typography variant="subtitle1" sx={{ color: theme.palette.text.secondary }}>
+									{highlightMentions(msg.content, msg.mentions || []).map((p) => (
+										<span
+											key={p.key}
+											style={
+												p.mention
+													? {
+															display: "inline-flex",
+															alignItems: "center",
+															padding: "0 4px",
+															borderRadius: 16,
+															backgroundColor: theme.palette.warning.main,
+															cursor: "pointer",
+															color: theme.palette.primary.contrastText,
+															fontSize: "0.75rem",
+															lineHeight: "22px",
+															margin: "0 2px",
+														}
+													: {}
+											}>
+											{p.text}
+										</span>
+									))}
+								</Typography>
+							)}
+							<MessageAttachments attachments={msg.attachments} />
+						</>
 					)}
 				</Box>
 			</Box>

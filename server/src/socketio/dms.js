@@ -11,7 +11,10 @@ class ServerDMs {
 		}).populate({
 			path: "messages",
 			options: { sort: { createdAt: 1 } },
-			populate: { path: "sender", select: "displayName avatarUrl" },
+			populate: [
+				{ path: "sender", select: "displayName avatarUrl" },
+				{ path: "attachments", select: "url contentType size originalName" },
+			],
 		});
 		if (!thread) {
 			thread = new DmThreadModel({ participants: [id1, id2], messages: [] });
@@ -55,7 +58,10 @@ class ServerDMs {
 				await thread.populate({
 					path: "messages",
 					options: { sort: { createdAt: 1 } },
-					populate: { path: "sender", select: "displayName avatarUrl" },
+					populate: [
+						{ path: "sender", select: "displayName avatarUrl" },
+						{ path: "attachments", select: "url contentType size originalName" },
+					],
 				});
 				const sockets = await socketio.io.in(threadId).fetchSockets();
 				sockets.forEach((s) => {
@@ -84,10 +90,10 @@ class ServerDMs {
 				msg.mentions = mentions;
 				await msg.save();
 
-				const msgDoc = await msg.populate({
-					path: "sender",
-					select: "displayName avatarUrl",
-				});
+				const msgDoc = await msg.populate([
+					{ path: "sender", select: "displayName avatarUrl" },
+					{ path: "attachments", select: "url contentType size originalName" },
+				]);
 
 				const sockets = await socketio.io.in(threadId).fetchSockets();
 				sockets.forEach((s) => {
