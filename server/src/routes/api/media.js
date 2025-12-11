@@ -12,7 +12,7 @@ const router = Router();
 
 const requireAuthContext = (context) => createAuthContextMiddleware(context, logger);
 
-const MAX_FILE_SIZE = 8 * 1024 * 1024;
+const MAX_FILE_SIZE = 16 * 1024 * 1024;
 const MAX_MEDIA_ATTACHMENTS = 10;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FILE_SIZE } });
 

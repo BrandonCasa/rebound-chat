@@ -14,7 +14,7 @@ import { buildApiConfig, getApiBase } from "../../helpers/api";
 const MESSAGE_PAGE_SIZE = 50;
 const MAX_ATTACHMENTS = 10;
 const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif", "video/webm", "video/mp4"];
-const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
 
 export default function useChatPage() {
 	const authState = useSelector((state) => state.auth);

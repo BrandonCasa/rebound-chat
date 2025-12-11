@@ -9,6 +9,8 @@ import DOMPurify from "dompurify";
 import { parseMentions, highlightMentions } from "../../helpers/mentions";
 import { scrollbarStyles } from "../../routes/scrollbarStyles";
 
+const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif", "video/webm", "video/mp4"].join(", ");
+
 // --- Styled components ----------------------------------------------------
 const ChatForm = styled("form")(({ theme }) => ({
 	display: "flex",
@@ -429,7 +431,7 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 				</Box>
 			)}
 			<ChatForm onSubmit={(e) => e.preventDefault()}>
-				<input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleFileChange} />
+				<input ref={fileInputRef} type="file" accept={ALLOWED_IMAGE_TYPES} hidden onChange={handleFileChange} />
 				<Button
 					type="button"
 					variant="contained"
