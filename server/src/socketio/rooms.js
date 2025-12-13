@@ -40,6 +40,7 @@ class ServerRooms {
 		const idToRoom = {};
 		const rooms = await RoomModel.find({}).select("-messages");
 		for (const room of rooms) {
+			if (room?.name?.startsWith("Hidden Chat ")) continue;
 			idToName[room._id] = room.name;
 			idToRoom[room._id] = room;
 		}
@@ -107,12 +108,12 @@ class ServerRooms {
 
 				if (Object.keys(idToName).length === 0) {
 					const r1 = new RoomModel({
-						name: "All Chat 1",
+						name: "All Chat",
 						description: "Public chat for everyone.",
 					});
 					const r2 = new RoomModel({
-						name: "All Chat 2",
-						description: "Public chat for everyone.",
+						name: "Hidden Chat 2",
+						description: "Hidden chat!",
 					});
 					await r1.save();
 					await r2.save();
