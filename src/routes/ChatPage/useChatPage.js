@@ -59,10 +59,10 @@ export default function useChatPage() {
 				break;
 			}
 
-			if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+			if (!ALLOWED_IMAGE_TYPES.includes(file.type.toLowerCase())) {
 				dispatch(
 					addSnackbar({
-						snackbarMsg: "Only PNG, JPEG, WEBP, or GIF images are supported.",
+						snackbarMsg: "Only PNG, JPEG, WEBP, GIF, MP4 and WEBM images/videos are supported.",
 						snackbarSeverity: "error",
 						autoHideDuration: 2500,
 					})
@@ -73,7 +73,7 @@ export default function useChatPage() {
 			if (file.size > MAX_IMAGE_BYTES) {
 				dispatch(
 					addSnackbar({
-						snackbarMsg: "Images must be 8MB or smaller.",
+						snackbarMsg: "Images must be 16MB or smaller.",
 						snackbarSeverity: "error",
 						autoHideDuration: 2500,
 					})
@@ -629,10 +629,10 @@ export default function useChatPage() {
 			return false;
 		}
 
-		if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+		if (!ALLOWED_IMAGE_TYPES.includes(file.type.toLowerCase())) {
 			dispatch(
 				addSnackbar({
-					snackbarMsg: "Only PNG, JPEG, WEBP, or GIF images are supported.",
+					snackbarMsg: "Only PNG, JPEG, WEBP, GIF, MP4 and WEBM images/videos are supported.",
 					snackbarSeverity: "error",
 					autoHideDuration: 2500,
 				})
@@ -643,7 +643,7 @@ export default function useChatPage() {
 		if (file.size > MAX_IMAGE_BYTES) {
 			dispatch(
 				addSnackbar({
-					snackbarMsg: "Images must be 8MB or smaller.",
+					snackbarMsg: "Images must be 16MB or smaller.",
 					snackbarSeverity: "error",
 					autoHideDuration: 2500,
 				})
