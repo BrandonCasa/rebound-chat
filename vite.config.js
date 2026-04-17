@@ -25,6 +25,14 @@ export default defineConfig(({ mode }) => ({
 					target: "http://localhost:6001",
 					changeOrigin: true,
 				},
+				"/live/api": {
+					target: "http://localhost:6001",
+					changeOrigin: true,
+				},
+				"/live/watch": {
+					target: "http://localhost:6001",
+					changeOrigin: true,
+				},
 			},
 		}),
 	},

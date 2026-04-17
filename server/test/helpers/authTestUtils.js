@@ -1,8 +1,11 @@
+import fs from "node:fs/promises";
 import { createRequire } from "node:module";
 
 process.env.NODE_ENV = "test";
 process.env.ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || "test-access-secret";
 process.env.REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "test-refresh-secret";
+process.env.LIVE_INGEST_CREATE_TOKEN = process.env.LIVE_INGEST_CREATE_TOKEN || "test-live-create-token";
+process.env.LIVE_STORAGE_DIR = process.env.LIVE_STORAGE_DIR || "./test-live-storage";
 
 const require = createRequire(import.meta.url);
 const chai = require("chai");
@@ -14,6 +17,7 @@ chai.use(chaiHttp);
 
 const { ServerBackend } = await import("../../src/app.js");
 const UserModel = (await import("../../src/models/User.js")).default;
+const StreamSessionModel = (await import("../../src/models/StreamSession.js")).default;
 
 let backendPromise = null;
 
@@ -89,6 +93,8 @@ const stopBackend = async () => {
 		backendPromise = null;
 		await backend.stopBackend();
 	}
+
+	await fs.rm(process.env.LIVE_STORAGE_DIR, { recursive: true, force: true });
 };
 
 process.once("exit", () => {
@@ -101,4 +107,9 @@ const resetUsers = async () => {
 	await UserModel.deleteMany({});
 };
 
-export { expect, request, extractCookie, registerUser, loginUser, createBackend, stopBackend, resetUsers };
+const resetLiveSessions = async () => {
+	await StreamSessionModel.deleteMany({});
+	await fs.rm(process.env.LIVE_STORAGE_DIR, { recursive: true, force: true });
+};
+
+export { expect, request, extractCookie, registerUser, loginUser, createBackend, stopBackend, resetUsers, resetLiveSessions };

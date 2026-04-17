@@ -10,6 +10,7 @@ import morgan from "morgan";
 
 import customPassport from "./config/passport.js";
 import databaseServer from "./database/index.js";
+import liveRuntime from "./live/runtime.js";
 import logger from "./logger.js";
 import routes from "./routes/index.js";
 import socketBackend from "./socketio/index.js";
@@ -50,6 +51,7 @@ class ServerBackend {
 			standardHeaders: true,
 			legacyHeaders: false,
 			message: { error: "Too many requests, please try again later." },
+			skip: (req) => req.path.startsWith("/live/"),
 		});
 		this.app.use(globalLimiter);
 
@@ -62,6 +64,10 @@ class ServerBackend {
 		this.app.use(express.json());
 
 		this.app.use((req, res, next) => {
+			if (req.path.startsWith("/live/")) {
+				return next();
+			}
+
 			let csrfToken = req.cookies?.[CSRF_COOKIE_NAME];
 			if (!csrfToken) {
 				csrfToken = crypto.randomBytes(32).toString("hex");
@@ -72,6 +78,10 @@ class ServerBackend {
 		});
 
 		this.app.use((req, res, next) => {
+			if (req.path.startsWith("/live/")) {
+				return next();
+			}
+
 			if (!CSRF_PROTECTED_METHODS.has(req.method)) return next();
 
 			const cookieToken = req.cookies?.[CSRF_COOKIE_NAME];
@@ -97,6 +107,7 @@ class ServerBackend {
 
 	async startBackend({ httpPort, startSockets = true } = {}) {
 		try {
+			liveRuntime.start();
 			await databaseServer.startServer();
 
 			if (startSockets) {
@@ -125,6 +136,8 @@ class ServerBackend {
 
 	async stopBackend() {
 		try {
+			liveRuntime.stop();
+
 			if (this.socketStarted && socketBackend.io) {
 				socketBackend.io.close(() => logger.info("Socket.IO server stopped"));
 				this.socketStarted = false;

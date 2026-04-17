@@ -17,3 +17,9 @@ We employ a level of account security far above the bare minimum. Check out your
 ## Frequent updates and additions
 
 Through the shear hatred of Discord, ego, and blind naivety of the only developer, new stuff is added near daily!
+
+## Live HLS Relay
+
+Rebound now includes an isolated `/live` route family for authenticated HTTPS HLS ingest and public HTTPS playback URLs that open directly in VLC on Apple TV.
+
+Setup and sender workflow notes live in [docs/live-hls-relay-setup.md](./docs/live-hls-relay-setup.md).

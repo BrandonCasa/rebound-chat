@@ -27,3 +27,4 @@ yarn-error.log*
 *.log
 /dev
 /logs
+/live-storage
