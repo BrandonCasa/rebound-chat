@@ -10,21 +10,37 @@ const resolveAllowedOrigins = () => {
 	return envOrigins.length ? envOrigins : DEFAULT_ALLOWED_ORIGINS;
 };
 
-const isOriginAllowed = (origin) => !origin || resolveAllowedOrigins().includes(origin);
+const isLivePath = (path = "") => path === "/live" || path.startsWith("/live/");
 
-const originDelegate = (origin, callback) => {
-	if (isOriginAllowed(origin)) {
+const isOriginAllowed = (origin, req) => {
+	if (!origin) return true;
+	if (isLivePath(req?.path)) return true;
+	return resolveAllowedOrigins().includes(origin);
+};
+
+const originDelegate = (origin, callback, req) => {
+	if (isOriginAllowed(origin, req)) {
 		return callback(null, true);
 	}
 
 	return callback(new Error("Not allowed by CORS"));
 };
 
-const corsOptions = {
-	origin: originDelegate,
-	credentials: true,
-	optionsSuccessStatus: 200,
-	allowedHeaders: ["Content-Type", "Authorization", "X-Csrf-Token"],
+const buildCorsOptions = (req, callback) => {
+	originDelegate(
+		req.get("origin"),
+		(err, allowedOrigin) => {
+			if (err) return callback(err);
+
+			return callback(null, {
+				origin: allowedOrigin,
+				credentials: !isLivePath(req.path),
+				optionsSuccessStatus: 200,
+				allowedHeaders: ["Content-Type", "Authorization", "X-Csrf-Token", "X-Live-Ingest-Secret"],
+			});
+		},
+		req
+	);
 };
 
-export { corsOptions, originDelegate, resolveAllowedOrigins };
+export { buildCorsOptions, originDelegate, resolveAllowedOrigins };

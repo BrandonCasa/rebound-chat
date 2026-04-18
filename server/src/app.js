@@ -15,7 +15,7 @@ import logger from "./logger.js";
 import routes from "./routes/index.js";
 import socketBackend from "./socketio/index.js";
 
-import { corsOptions } from "./config/cors.js";
+import { buildCorsOptions } from "./config/cors.js";
 
 const CSRF_COOKIE_NAME = "csrfToken";
 const CSRF_HEADER_NAME = "x-csrf-token";
@@ -42,8 +42,8 @@ class ServerBackend {
 	_initMiddleware() {
 		this.app.set("trust proxy", 1);
 
-		this.app.use(cors(corsOptions)); // main CORS
-		this.app.options(/.*/, cors(corsOptions));
+		this.app.use(cors(buildCorsOptions));
+		this.app.options(/.*/, cors(buildCorsOptions));
 
 		const globalLimiter = rateLimit({
 			windowMs: 5 * 60 * 1000,

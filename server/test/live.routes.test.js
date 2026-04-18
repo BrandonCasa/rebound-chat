@@ -134,6 +134,32 @@ describe("Live HLS relay routes", () => {
 		agent.close();
 	});
 
+	it("accepts live ingest requests from non-allowlisted origins", async () => {
+		const agent = request.agent(backend.server);
+		const origin = "https://uploader.example";
+		const createResponse = await agent
+			.post("/live/api/session")
+			.set("Origin", origin)
+			.set("Authorization", `Bearer ${process.env.LIVE_INGEST_CREATE_TOKEN}`)
+			.send({ label: "Remote uploader" });
+
+		expect(createResponse.status).to.equal(201);
+		expect(createResponse.header["access-control-allow-origin"]).to.equal(origin);
+
+		const { sessionId, ingestSecret } = createResponse.body;
+		const segmentResponse = await agent
+			.put(`/live/api/${sessionId}/segments/init.mp4`)
+			.set("Origin", origin)
+			.set("x-live-ingest-secret", ingestSecret)
+			.set("Content-Type", "video/mp4")
+			.send(Buffer.from("init-data"));
+
+		expect(segmentResponse.status).to.equal(204);
+		expect(segmentResponse.header["access-control-allow-origin"]).to.equal(origin);
+
+		agent.close();
+	});
+
 	it("keeps only a rolling segment window from the latest media playlist", async () => {
 		const agent = request.agent(backend.server);
 		const { sessionId, publicToken, ingestSecret } = await createSession(agent, { retainSegmentCount: 2 });
