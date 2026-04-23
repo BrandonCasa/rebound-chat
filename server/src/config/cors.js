@@ -1,4 +1,4 @@
-const DEFAULT_ALLOWED_ORIGINS = ["http://localhost:3000", "https://rebound.nexus", "app://-"];
+const DEFAULT_ALLOWED_ORIGINS = ["http://localhost:3000", "http://localhost:3001", "https://localhost:3000", "http://localhost:3000", "http://127.0.0.1:3001", "https://127.0.0.1:3000", "https://127.0.0.1:3001", "https://rebound.nexus", "app://-"];
 
 const parseEnvOrigins = () =>
 	process.env.ALLOWED_ORIGINS?.split(",")
@@ -10,7 +10,11 @@ const resolveAllowedOrigins = () => {
 	return envOrigins.length ? envOrigins : DEFAULT_ALLOWED_ORIGINS;
 };
 
-const isLivePath = (path = "") => path === "/live" || path.startsWith("/live/");
+const getRequestPath = (req) => req?.originalUrl || req?.path || "";
+const isLivePath = (req) => {
+  const path = getRequestPath(req);
+  return path.startsWith("/live") || path.startsWith("/live/") || path.startsWith("/api/live") || path.startsWith("/api/live/");
+};
 
 const isOriginAllowed = (origin, req) => {
 	if (!origin) return true;
