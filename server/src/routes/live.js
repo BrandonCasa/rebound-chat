@@ -165,6 +165,9 @@ router.put("/api/:sessionId/video.m3u8", ingestLimiter, requireIngestSession, pl
 
 router.put("/api/:sessionId/segments/:filename", ingestLimiter, requireIngestSession, rawSegmentParser, async (req, res) => {
 	try {
+		if (!Buffer.isBuffer(req.body)) {
+			throw new LiveServiceError(422, "Segment body must be binary data.", "invalid_segment_body_type");
+		}
 		await liveRuntime.service.uploadSegment(req.liveSession, req.params.filename, req.body);
 		return res.sendStatus(204);
 	} catch (err) {
