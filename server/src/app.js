@@ -64,32 +64,28 @@ class ServerBackend {
 		this.app.use(express.json());
 
 		this.app.use((req, res, next) => {
-			// Skip if CSRF Tokens are Unnecessary
 			if (req.path.startsWith("/live/")) return next();
 			if (!CSRF_PROTECTED_METHODS.has(req.method)) return next();
-
-			let csrfToken = undefined;
+			
 			let csrfTokenCookie = req.cookies?.[CSRF_COOKIE_NAME];
 			let csrfTokenHeader = req.get(CSRF_HEADER_NAME);
 			
-			if (!csrfTokenCookie && csrfTokenHeader) {
-				res.cookie(CSRF_COOKIE_NAME, csrfTokenHeader, CSRF_COOKIE_OPTIONS);
-				csrfToken = csrfTokenHeader;
-			} else if (csrfTokenCookie && !csrfTokenHeader) {
-				res.append(CSRF_HEADER_NAME, csrfTokenCookie);
-				req.headers[CSRF_HEADER_NAME] = csrfTokenCookie;
-				csrfToken = csrfTokenCookie;
+			if (!csrfTokenCookie || !csrfTokenHeader) {
+				return res.status(403).json({ error: "Missing CSRF token" });
 			}
-			
-			if (csrfToken === undefined) {
-				csrfToken = crypto.randomBytes(32).toString("hex");
-				res.cookie(CSRF_COOKIE_NAME, csrfToken, CSRF_COOKIE_OPTIONS);
-				res.append(CSRF_HEADER_NAME, csrfToken);
-				req.headers[CSRF_HEADER_NAME] = csrfToken;
-			}
-			
-			req.csrfToken = csrfToken;
-			next();
+		
+		  let cookieBuffer = Buffer.from(csrfTokenCookie, "utf8");
+		  let headerBuffer = Buffer.from(csrfTokenHeader, "utf8");
+		
+		  if (
+		    cookieBuffer.length !== headerBuffer.length ||
+		    !crypto.timingSafeEqual(cookieBuffer, headerBuffer)
+		  ) {
+		    return res.status(403).json({ error: "Invalid CSRF token" });
+		  }
+		
+		  req.csrfToken = csrfTokenCookie;
+		  next();
 		});
 
 		this.app.use(methodOverride());
