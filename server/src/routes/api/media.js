@@ -107,7 +107,12 @@ router.post(
 			return res.status(503).json({ error: "File store not ready." });
 		}
 
-		const files = req.files || [];
+		const uploadedFiles = req.files;
+		if (!Array.isArray(uploadedFiles)) {
+			return res.status(400).json({ error: "Invalid files payload." });
+		}
+
+		const files = uploadedFiles;
 		if (!files.length) {
 			return res.status(400).json({ error: "At least one file is required." });
 		}
