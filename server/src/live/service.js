@@ -288,7 +288,14 @@ class LiveService {
 		} catch (err) {
 			throw toValidationError(err, "Invalid segment filename.");
 		}
-		const body = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody || "");
+		let body;
+		if (Buffer.isBuffer(rawBody)) {
+			body = rawBody;
+		} else if (typeof rawBody === "string") {
+			body = Buffer.from(rawBody, "utf8");
+		} else {
+			throw new LiveServiceError(422, "Segment body must be binary data.", "invalid_segment_body_type");
+		}
 		if (!body.length) {
 			throw new LiveServiceError(422, "Segment body is required.", "missing_segment_body");
 		}
