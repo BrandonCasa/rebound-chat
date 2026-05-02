@@ -64,10 +64,8 @@ class ServerBackend {
 		this.app.use(express.json());
 
 		this.app.use((req, res, next) => {
-			if (req.path.startsWith("/live/")) {
-				return next();
-			}
-
+			// Skip if CSRF Tokens are Unnecessary
+			if (req.path.startsWith("/live/")) return next();
 			if (!CSRF_PROTECTED_METHODS.has(req.method)) return next();
 
 			let csrfToken = undefined;
@@ -92,25 +90,6 @@ class ServerBackend {
 			
 			req.csrfToken = csrfToken;
 			next();
-		});
-
-		this.app.use((req, res, next) => {
-			if (req.path.startsWith("/live/")) {
-				return next();
-			}
-
-			const cookieToken = req.cookies?.[CSRF_COOKIE_NAME];
-			const headerToken = req.get(CSRF_HEADER_NAME);
-
-			if (!cookieToken || !headerToken) {
-				return res.status(403).json({ error: "Missing CSRF token" });
-			}
-
-			if (cookieToken !== headerToken) {
-				return res.status(403).json({ error: "Invalid CSRF token" });
-			}
-
-			return next();
 		});
 
 		this.app.use(methodOverride());
