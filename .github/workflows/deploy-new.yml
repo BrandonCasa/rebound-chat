@@ -63,6 +63,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+        
       - name: Setup pnpm
         uses: pnpm/action-setup@v6.0.5
         with:
@@ -94,9 +97,6 @@ jobs:
           git add package.json server/package.json
           git commit -m "Bump version to $NEW_VERSION [skip ci]" || echo "No changes to commit"
           git push origin HEAD:${{ github.ref }}
-          
-      - name: Checkout code
-        uses: actions/checkout@v6.0.2
 
       - name: Install Packages and Build App
         run: |
