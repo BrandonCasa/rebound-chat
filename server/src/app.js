@@ -68,11 +68,28 @@ class ServerBackend {
 				return next();
 			}
 
-			let csrfToken = req.cookies?.[CSRF_COOKIE_NAME];
-			if (!csrfToken) {
+			if (!CSRF_PROTECTED_METHODS.has(req.method)) return next();
+
+			let csrfToken = undefined;
+			let csrfTokenCookie = req.cookies?.[CSRF_COOKIE_NAME];
+			let csrfTokenHeader = req.get(CSRF_HEADER_NAME);
+			
+			if (!csrfTokenCookie && csrfTokenHeader) {
+				res.cookie(CSRF_COOKIE_NAME, csrfTokenHeader, CSRF_COOKIE_OPTIONS);
+				csrfToken = csrfTokenHeader;
+			} else if (csrfTokenCookie && !csrfTokenHeader) {
+				res.append(CSRF_HEADER_NAME, csrfTokenCookie);
+				req.headers[CSRF_HEADER_NAME] = csrfTokenCookie;
+				csrfToken = csrfTokenCookie;
+			}
+			
+			if (csrfToken === undefined) {
 				csrfToken = crypto.randomBytes(32).toString("hex");
 				res.cookie(CSRF_COOKIE_NAME, csrfToken, CSRF_COOKIE_OPTIONS);
+				res.append(CSRF_HEADER_NAME, csrfToken);
+				req.headers[CSRF_HEADER_NAME] = csrfToken;
 			}
+			
 			req.csrfToken = csrfToken;
 			next();
 		});
@@ -81,8 +98,6 @@ class ServerBackend {
 			if (req.path.startsWith("/live/")) {
 				return next();
 			}
-
-			if (!CSRF_PROTECTED_METHODS.has(req.method)) return next();
 
 			const cookieToken = req.cookies?.[CSRF_COOKIE_NAME];
 			const headerToken = req.get(CSRF_HEADER_NAME);
