@@ -29,7 +29,8 @@ root.render(
 // or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
 reportWebVitals();
 
-if ("serviceWorker" in navigator) {
+
+if ("serviceworker" in navigator) {
 	window.addEventListener("load", () => {
 		navigator.serviceWorker.register("/sw.js").catch((err) => {
 			console.error("Service worker registration failed", err);

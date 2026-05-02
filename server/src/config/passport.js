@@ -3,6 +3,8 @@ import { Strategy as LocalStrategy } from "passport-local";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import crypto from "crypto";
 import UserModel from "../models/User.js";
+import { resolveGoogleCallbackUrl } from "../utils/auth.js";
+import logger from "../logger.js";
 
 class CustomPassport {
 	setupPassport() {
@@ -28,13 +30,20 @@ class CustomPassport {
 				}
 			)
 		);
+		const callbackURL = resolveGoogleCallbackUrl();
+
+		const hasGoogleConfig = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.NODE_ENV !== "test";
+		if (!hasGoogleConfig) {
+			logger.info("Google OAuth strategy disabled: missing credentials or running in test mode.");
+			return;
+		}
+
 		passport.use(
 			new GoogleStrategy(
 				{
 					clientID: process.env.GOOGLE_CLIENT_ID,
 					clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-					callbackURL:
-						process.env.NODE_ENV === "development" ? "http://localhost:6001/api/users/google/callback" : "https://rebound.nexus/api/users/google/callback",
+					callbackURL,
 				},
 				async function (accessToken, refreshToken, profile, cb) {
 					try {

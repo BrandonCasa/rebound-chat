@@ -27,6 +27,10 @@ on:
         description: "The name of PM2 Process to be restarted"
         required: false
         default: "rebound-express"
+      deploymentBranch:
+        description: "The branch to deploy from the repository"
+        required: false
+        default: "dev"
       bumpVersion:
         description: "Whether to bump the version in package.json files"
         required: false
@@ -38,6 +42,8 @@ env:
   EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
   SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
   SECRET: ${{ secrets.SECRET }}
+  ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_TOKEN_SECRET }}
+  REFRESH_TOKEN_SECRET: ${{ secrets.REFRESH_TOKEN_SECRET }}
   DB_USER: ${{ secrets.DB_USER }}
   DB_PASS: ${{ secrets.DB_PASS }}
   DB_AUTH: ${{ secrets.DB_AUTH }}
@@ -45,6 +51,13 @@ env:
   PORT: ${{ secrets.PORT }}
   GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
   GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+  LIVE_INGEST_CREATE_TOKEN: ${{ secrets.LIVE_INGEST_CREATE_TOKEN }}
+  LIVE_STORAGE_BACKEND: ${{ secrets.LIVE_STORAGE_BACKEND }}
+  LIVE_STORAGE_DIR: ${{ secrets.LIVE_STORAGE_DIR }}
+  LIVE_SESSION_TTL_MS: ${{ secrets.LIVE_SESSION_TTL_MS }}
+  LIVE_HEARTBEAT_INTERVAL_MS: ${{ secrets.LIVE_HEARTBEAT_INTERVAL_MS }}
+  LIVE_MAX_RETAINED_SEGMENTS: ${{ secrets.LIVE_MAX_RETAINED_SEGMENTS }}
+  LIVE_MAX_SEGMENT_BYTES: ${{ secrets.LIVE_MAX_SEGMENT_BYTES }}
 
 jobs:
   deploy:
@@ -57,13 +70,10 @@ jobs:
         if: ${{ github.event.inputs.bumpVersion == 'true' }}
         run: |
           echo "Bumping version in package.json"
-          # Bump version in the root package.json (patch version) without creating a git tag
           pnpm version patch --no-git-tag-version
           NEW_VERSION=$(node -p "require('./package.json').version")
           echo "New version: $NEW_VERSION"
-          # Update the version in server/package.json to match the new version
           jq --arg v "$NEW_VERSION" '.version = $v' server/package.json > server/package.tmp && mv server/package.tmp server/package.json
-          # Configure git and commit the changes
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add package.json server/package.json
@@ -74,11 +84,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22.x
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10
           run_install: false
+
       - name: Cache pnpm modules
         uses: actions/cache@v4
         with:
@@ -124,7 +136,13 @@ jobs:
                   git restore .
                   git clean -fd
                 fi
-                git pull origin dev
+                git fetch origin "${{ github.event.inputs.deploymentBranch }}"
+                if git rev-parse --verify "${{ github.event.inputs.deploymentBranch }}" >/dev/null 2>&1; then
+                  git checkout "${{ github.event.inputs.deploymentBranch }}"
+                else
+                  git checkout -b "${{ github.event.inputs.deploymentBranch }}" "origin/${{ github.event.inputs.deploymentBranch }}"
+                fi
+                git reset --hard "origin/${{ github.event.inputs.deploymentBranch }}"
               else
                 cd ..
                 rm -rf "${{ github.event.inputs.appDirectory }}"
@@ -139,9 +157,17 @@ jobs:
               cd "${{ github.event.inputs.appDirectory }}"
             fi
 
+            git fetch origin "${{ github.event.inputs.deploymentBranch }}"
+            if git rev-parse --verify "${{ github.event.inputs.deploymentBranch }}" >/dev/null 2>&1; then
+              git checkout "${{ github.event.inputs.deploymentBranch }}"
+            else
+              git checkout -b "${{ github.event.inputs.deploymentBranch }}" "origin/${{ github.event.inputs.deploymentBranch }}"
+            fi
+            git reset --hard "origin/${{ github.event.inputs.deploymentBranch }}"
+
             cd "${{ github.event.inputs.serverSubdirectory }}"
 
-            echo -e "SECRET=${{ secrets.SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}\nGOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}\nGOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" > .env
+            echo -e "SECRET=${{ secrets.SECRET }}\nACCESS_TOKEN_SECRET=${{ secrets.ACCESS_TOKEN_SECRET }}\nREFRESH_TOKEN_SECRET=${{ secrets.REFRESH_TOKEN_SECRET }}\nDB_USER=${{ secrets.DB_USER }}\nDB_PASS=${{ secrets.DB_PASS }}\nDB_AUTH=${{ secrets.DB_AUTH }}\nDB_NAME=${{ secrets.DB_NAME }}\nPORT=${{ secrets.PORT }}\nGOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}\nGOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}\nLIVE_INGEST_CREATE_TOKEN=${{ secrets.LIVE_INGEST_CREATE_TOKEN }}\nLIVE_STORAGE_BACKEND=${{ secrets.LIVE_STORAGE_BACKEND }}\nLIVE_STORAGE_DIR=${{ secrets.LIVE_STORAGE_DIR }}\nLIVE_SESSION_TTL_MS=${{ secrets.LIVE_SESSION_TTL_MS }}\nLIVE_HEARTBEAT_INTERVAL_MS=${{ secrets.LIVE_HEARTBEAT_INTERVAL_MS }}\nLIVE_MAX_RETAINED_SEGMENTS=${{ secrets.LIVE_MAX_RETAINED_SEGMENTS }}\nLIVE_MAX_SEGMENT_BYTES=${{ secrets.LIVE_MAX_SEGMENT_BYTES }}" > .env
 
             pnpm install --frozen-lockfile --ignore-scripts
 

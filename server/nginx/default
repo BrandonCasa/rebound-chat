@@ -4,6 +4,7 @@ server {
     root /var/www/html;
     index index.html index.htm index.nginx-debian.html;
     server_name _;
+    client_max_body_size 64m;
 
     location ^~ /api/content/ {
         # only allow GET/HEAD
@@ -13,6 +14,7 @@ server {
         proxy_pass         http://127.0.0.1:6001;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;
+        proxy_set_header   X-Forwarded-Host  $host;
         proxy_set_header   X-Forwarded-Proto $scheme;
         proxy_set_header   X-Real-IP         $remote_addr;
         proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
@@ -28,9 +30,82 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
-        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_cache_bypass $http_upgrade;
+    }
+
+    location ^~ /live/api/ {
+        limit_except POST PUT { deny all; }
+
+        proxy_pass http://localhost:6001;
+        proxy_http_version 1.1;
+        proxy_request_buffering off;
+        proxy_buffering off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_cache_bypass $http_upgrade;
+        add_header Cache-Control "no-store" always;
+    }
+
+    location = /live/api/session {
+        limit_except POST { deny all; }
+
+        proxy_pass http://localhost:6001;
+        proxy_http_version 1.1;
+        proxy_request_buffering off;
+        proxy_buffering off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_cache_bypass $http_upgrade;
+        add_header Cache-Control "no-store" always;
+    }
+
+    location ^~ /live/api/share/ {
+        limit_except GET HEAD { deny all; }
+
+        proxy_pass http://localhost:6001;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_cache_bypass $http_upgrade;
+        add_header Cache-Control "no-store" always;
+    }
+
+    location ^~ /live/watch/ {
+        limit_except GET HEAD { deny all; }
+
+        proxy_pass http://localhost:6001;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    location ^~ /live/share/ {
+        limit_except GET HEAD { deny all; }
+        try_files $uri $uri/ /index.html;
+    }
+
+    location ^~ /live/ {
+        return 404;
     }
 
     location /api/admin {
@@ -41,18 +116,20 @@ server {
 
         proxy_pass http://localhost:6001;
         proxy_http_version 1.1;
-        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_cache_bypass $http_upgrade;
     }
 
     location ~* \.io { # Socket.io
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Host $http_host;
         proxy_set_header X-NginX-Proxy false;
 
         proxy_pass http://localhost:6002;
@@ -71,6 +148,7 @@ server {
 
     root /var/www/html;
     index index.html index.htm index.nginx-debian.html;
+    client_max_body_size 64m;
 
     ssl_certificate /etc/letsencrypt/live/www.rebound.nexus/fullchain.pem; # managed by Certbot
     ssl_certificate_key /etc/letsencrypt/live/www.rebound.nexus/privkey.pem; # managed by Certbot
@@ -85,6 +163,8 @@ server {
         proxy_pass         http://127.0.0.1:6001;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;
+        proxy_set_header   X-Forwarded-Host  $host;
+        proxy_set_header   X-Forwarded-Proto $scheme;
         proxy_set_header   X-Real-IP         $remote_addr;
         proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_cache_bypass $http_upgrade;
@@ -100,7 +180,81 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_cache_bypass $http_upgrade;
+    }
+
+    location ^~ /live/api/ {
+        limit_except POST PUT { deny all; }
+
+        proxy_pass http://localhost:6001;
+        proxy_http_version 1.1;
+        proxy_request_buffering off;
+        proxy_buffering off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_cache_bypass $http_upgrade;
+        add_header Cache-Control "no-store" always;
+    }
+
+    location = /live/api/session {
+        limit_except POST { deny all; }
+
+        proxy_pass http://localhost:6001;
+        proxy_http_version 1.1;
+        proxy_request_buffering off;
+        proxy_buffering off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_cache_bypass $http_upgrade;
+        add_header Cache-Control "no-store" always;
+    }
+
+    location ^~ /live/api/share/ {
+        limit_except GET HEAD { deny all; }
+
+        proxy_pass http://localhost:6001;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_cache_bypass $http_upgrade;
+        add_header Cache-Control "no-store" always;
+    }
+
+    location ^~ /live/watch/ {
+        limit_except GET HEAD { deny all; }
+
+        proxy_pass http://localhost:6001;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    location ^~ /live/share/ {
+        limit_except GET HEAD { deny all; }
+        try_files $uri $uri/ /index.html;
+    }
+
+    location ^~ /live/ {
+        return 404;
     }
 
     location /api/admin {
@@ -111,18 +265,20 @@ server {
 
         proxy_pass http://localhost:6001;
         proxy_http_version 1.1;
-        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_cache_bypass $http_upgrade;
     }
 
     location ~* \.io { # Socket.io
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Host $http_host;
         proxy_set_header X-NginX-Proxy false;
 
         proxy_pass http://localhost:6002;

@@ -1,11 +1,14 @@
+const escapeRegExp = (value = "") => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 export function parseMentions(text, users = []) {
 	const mentions = [];
 	users.forEach((u) => {
-		if (!u?.displayName || !u?.id) return;
-		const regex = new RegExp(`@${u.displayName}\\b`, "g");
+		const userId = u?.id ?? u?._id;
+		if (!u?.displayName || !userId) return;
+		const regex = new RegExp(`@${escapeRegExp(u.displayName)}\\b`, "g");
 		let m;
 		while ((m = regex.exec(text)) !== null) {
-			mentions.push({ user: u.id, start: m.index, end: m.index + m[0].length });
+			mentions.push({ user: userId, start: m.index, end: m.index + m[0].length });
 		}
 	});
 	return mentions;
@@ -14,7 +17,7 @@ export function parseMentions(text, users = []) {
 export function highlightMentions(text, mentions) {
 	const parts = [];
 	let last = 0;
-	mentions
+	[...mentions]
 		.sort((a, b) => a.start - b.start)
 		.forEach(({ start, end }, idx) => {
 			if (start > last) {

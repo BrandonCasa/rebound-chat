@@ -1,6 +1,6 @@
 import { CssBaseline, ThemeProvider } from "@mui/material";
 import { styled } from "@mui/material/styles";
-import React, { useEffect, Suspense, lazy } from "react";
+import React, { useEffect, useRef, Suspense, lazy } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { BrowserRouter, HashRouter, Route, Routes } from "react-router-dom";
 
@@ -9,11 +9,13 @@ import "./App.css";
 import CustomAppBar from "./components/CustomAppBar/CustomAppBar";
 import LoginDialog from "./components/LoginDialog.comp";
 import RegisterDialog from "./components/RegisterDialog";
+import DraggableCallOverlay from "./components/CallOverlay/CallOverlay.comp";
 import SnackbarMapper from "./components/SnackbarMapper";
 import useDarkTheme from "./helpers/darkTheme";
-import socketIoHelper from "./helpers/socket";
-import { setLoggedIn, setLoggingIn, setSocketStatus, verifyUser, setAuthState } from "./slices/authSlice";
-import { addSnackbar } from "./slices/snackbarSlice";
+import { bootstrapAuth, refreshAuthToken, setAuthState, verifyUser } from "./slices/authSlice";
+import { connectSocket, disconnectSocket } from "./slices/socketSlice";
+import { hasAuthSessionCookie } from "./helpers/api";
+import { getTokenExpiry } from "./helpers/authToken";
 
 import useCustomAppBar from "./components/CustomAppBar/useCustomAppBar";
 import useWindowDimensions from "./helpers/useWindowDimensions";
@@ -24,9 +26,11 @@ const ProfilePage = lazy(() => import("./routes/ProfilePage/ProfilePage.route"))
 const ChatPage = lazy(() => import("./routes/ChatPage/ChatPage"));
 const ServersPage = lazy(() => import("./routes/ServersPage/ServersPage.route"));
 const TestingPage = lazy(() => import("./routes/TestingPage/TestingPage.route"));
+const SecurityPage = lazy(() => import("./routes/SecurityPage/SecurityPage.route"));
 const SettingsPage = lazy(() => import("./routes/SettingsPage/SettingsPage.route"));
 const FriendPage = lazy(() => import("./routes/FriendPage/FriendPage.route"));
 const DirectMessagePage = lazy(() => import("./routes/DirectMessagePage/DirectMessagePage"));
+const LiveSharePage = lazy(() => import("./routes/LiveSharePage/LiveSharePage.route"));
 
 const PageNotFoundContainer = styled("div")({
 	maxWidth: "100%",
@@ -34,7 +38,7 @@ const PageNotFoundContainer = styled("div")({
 });
 
 const AppRouter = ({ children }) => {
-	const Router = window.isElectron ? HashRouter : BrowserRouter;
+	const Router = window?.isElectron ? HashRouter : BrowserRouter;
 	return <Router>{children}</Router>;
 };
 
@@ -43,13 +47,14 @@ const App = () => {
 	const darkTheme = useDarkTheme();
 	const dispatch = useDispatch();
 	const customAppBarProps = useCustomAppBar(useWindowDimensions().width);
+	const refreshTimeoutRef = useRef(null);
 
 	useEffect(() => {
 		const params = new URLSearchParams(window.location.search);
 		const token = params.get("token");
 		if (token) {
-			window.localStorage.setItem("auth-token", token);
 			dispatch(setAuthState({ authToken: token }));
+			dispatch(verifyUser(token));
 			params.delete("token");
 			const newSearch = params.toString();
 			const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "");
@@ -57,73 +62,73 @@ const App = () => {
 		}
 	}, [dispatch]);
 
-	const useSocketConnection = (authToken, loggedIn) => {
-		useEffect(() => {
-			const connectSocket = async (token) => {
-				const socketClient = socketIoHelper.connectSocket(token);
+	useEffect(() => {
+		if (authState.initialized || authState.authToken) return;
 
-				socketClient.on("connected", () => {
-					dispatch(setSocketStatus({ connected: true }));
-				});
+		const hasSessionMarker = hasAuthSessionCookie();
+		if (!authState.skipAutoLogin || hasSessionMarker) {
+			dispatch(bootstrapAuth());
+		}
+	}, [authState.initialized, authState.skipAutoLogin, authState.authToken, dispatch]);
 
-				socketClient.on("disconnect", () => {
-					dispatch(setSocketStatus({ connected: false }));
-				});
-			};
+	useEffect(() => {
+		if (refreshTimeoutRef.current) {
+			clearTimeout(refreshTimeoutRef.current);
+			refreshTimeoutRef.current = null;
+		}
 
-			if (!socketIoHelper.getSocket()?.connected && loggedIn) {
-				connectSocket(authToken);
+		if (!authState.authToken) return undefined;
+
+		const REFRESH_BUFFER_MS = 60_000;
+		const MIN_REFRESH_DELAY_MS = 5_000;
+
+		const scheduleRefresh = (delayMs) => {
+			refreshTimeoutRef.current = window.setTimeout(() => {
+				dispatch(refreshAuthToken());
+			}, delayMs);
+		};
+
+		const tokenExpiry = getTokenExpiry(authState.authToken);
+
+		if (!tokenExpiry) {
+			scheduleRefresh(MIN_REFRESH_DELAY_MS);
+			return undefined;
+		}
+
+		const refreshIn = tokenExpiry - Date.now() - REFRESH_BUFFER_MS;
+
+		if (refreshIn <= 0) {
+			dispatch(refreshAuthToken());
+			return undefined;
+		}
+
+		scheduleRefresh(Math.max(refreshIn, MIN_REFRESH_DELAY_MS));
+		//scheduleRefresh(10_000);
+
+		return () => {
+			if (refreshTimeoutRef.current) {
+				clearTimeout(refreshTimeoutRef.current);
+				refreshTimeoutRef.current = null;
 			}
+		};
+	}, [authState.authToken, dispatch]);
 
-			return () => {
-				if (socketIoHelper.getSocket()?.connected) {
-					socketIoHelper.disconnectSocket();
-				}
-			};
-		}, [loggedIn, authToken]);
-	};
+	useEffect(() => {
+		if (authState.loggedIn && authState.authToken) {
+			dispatch(connectSocket());
+		} else {
+			dispatch(disconnectSocket());
+		}
+	}, [authState.loggedIn, authState.authToken, dispatch]);
 
-	const useVerifyUser = (authState) => {
-		useEffect(() => {
-			if (authState.authToken && !authState.loggedIn) {
-				dispatch(setLoggingIn({ loggingIn: true }));
-				dispatch(verifyUser(authState.authToken))
-					.unwrap()
-					.then((user) => {
-						dispatch(
-							addSnackbar({
-								snackbarMsg: `Hello ${user.displayName}!`,
-								snackbarSeverity: "success",
-								autoHideDuration: 1000,
-							})
-						);
-					})
-					.catch(() => {
-						dispatch(
-							addSnackbar({
-								snackbarMsg: "Failed to verify user. Please try logging in again.",
-								snackbarSeverity: "error",
-								autoHideDuration: 5000,
-							})
-						);
-						window.localStorage.removeItem("auth-token");
-						dispatch(setLoggedIn({ loggedIn: false, token: null }));
-					});
-			}
-		}, [authState.authToken, authState.loggedIn, dispatch]);
-	};
-
-	useSocketConnection(authState.authToken, authState.loggedIn);
-	useVerifyUser(authState);
+	const showAutoUpdate = window.isElectron;
 
 	return (
 		<ThemeProvider theme={darkTheme}>
-			{window.isElectron && <AutoUpdate />}
+			{showAutoUpdate && <AutoUpdate />}
 			<CssBaseline />
 			<SnackbarMapper drawerWidth={customAppBarProps.drawerWidth} drawerOpen={customAppBarProps.drawerOpen} />
 			<AppRouter>
-				<RegisterDialog />
-				<LoginDialog />
 				<CustomAppBar {...customAppBarProps}>
 					{!authState.loggingIn ? (
 						<Suspense fallback={<div>Loading...</div>}>
@@ -134,13 +139,18 @@ const App = () => {
 								<Route path="/chat" element={<ChatPage />} />
 								<Route path="/dm/:userId" element={<DirectMessagePage />} />
 								<Route path="/servers" element={<ServersPage />} />
+								<Route path="/live/share/:publicToken" element={<LiveSharePage />} />
 								<Route path="/testing" element={<TestingPage />} />
+								<Route path="/security" element={<SecurityPage />} />
 								<Route path="/settings" element={<SettingsPage />} />
 								<Route path="*" element={<PageNotFoundContainer>PAGE NOT FOUND</PageNotFoundContainer>} />
 							</Routes>
 						</Suspense>
 					) : null}
 				</CustomAppBar>
+				<RegisterDialog />
+				<LoginDialog />
+				{/** <DraggableCallOverlay /> **/ <></>}
 			</AppRouter>
 		</ThemeProvider>
 	);

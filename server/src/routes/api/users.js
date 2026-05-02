@@ -1,7 +1,8 @@
+import crypto from "crypto";
 import { Router } from "express";
 
-import UserModel from "../../models/User.js";
-import { auth, getTokenFromHeader } from "../auth.js";
+import UserModel, { hashRefreshToken } from "../../models/User.js";
+import { auth } from "../auth.js";
 
 import jwt from "jsonwebtoken";
 import passport from "passport";
@@ -10,81 +11,283 @@ import logger from "../../logger.js";
 import { sendFriendRequest, validateFriendById, validateUserById, removeFriend, declineFriend, cancelFriend } from "../../models/helpers/UserHelper.js";
 
 import multer from "multer";
-import databaseServer from "../../database/index.js"; // <— your DatabaseServer instance
+import databaseServer from "../../database/index.js";
 import { once } from "events";
 
 import serverWatchers from "../../socketio/watchers.js";
 import mongoose from "mongoose";
 import rateLimit from "express-rate-limit";
 
+import { buildRequestTokenDescriptor, createAuthContextMiddleware, parseCookieHeader, sanitizeIpAddress, resolveGoogleCallbackUrl } from "../../utils/auth.js";
+
 import "dotenv/config";
 
 const router = Router();
 
-const MAX_FILE_SIZE = 8 * 1024 * 1024; // 2 MB
+const MAX_FILE_SIZE = 8 * 1024 * 1024;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FILE_SIZE } });
 
-// ─── AUTH RATE LIMITER ────────────────────────────────────────────────────────
-// max 10 login/register attempts per hour per IP
 const authLimiter = rateLimit({
-	windowMs: 60 * 60 * 1000, // 1 hour
+	windowMs: 60 * 60 * 1000,
 	max: 20,
 	standardHeaders: true,
 	legacyHeaders: false,
 	message: { error: "Too many auth attempts, please try again later." },
 });
-// ─── MODIFY RATE LIMITER ────────────────────────────────────────────────────────
-// max 8 modify profile attempts per 30 minutes per IP
+
+const requireAuthContext = (context) => createAuthContextMiddleware(context, logger);
 const modifyLimiter = rateLimit({
-	windowMs: 30 * 60 * 1000, // 1 hour
+	windowMs: 30 * 60 * 1000,
 	max: 8,
 	standardHeaders: true,
 	legacyHeaders: false,
 	message: { error: "Too many modification attempts, please try again later." },
 });
 
-// ─── GENERAL RATE LIMITER ─────────────────────────────────────────────────────
-// fallback limiter for other user endpoints
 const generalLimiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 minutes
+	windowMs: 15 * 60 * 1000,
 	max: 100,
 	standardHeaders: true,
 	legacyHeaders: false,
 	message: { error: "Too many requests, please try again later." },
 });
 
-/**
- * /users/verify
- * Verify a user via token. Checks that the account is active and returns authentication data.
- */
-router.post("/users/verify", generalLimiter, async (req, res, next) => {
-	const token = getTokenFromHeader(req);
+const BASE_COOKIE_OPTIONS = {
+	httpOnly: true,
+	secure: process.env.NODE_ENV === "production",
+	sameSite: "strict",
+};
+
+const ACCESS_COOKIE_OPTIONS = {
+	...BASE_COOKIE_OPTIONS,
+	path: "/",
+};
+
+const REFRESH_COOKIE_OPTIONS = {
+	...BASE_COOKIE_OPTIONS,
+	path: "/api/users/refresh",
+};
+
+const CSRF_COOKIE_OPTIONS = {
+	httpOnly: false,
+	secure: process.env.NODE_ENV === "production",
+	sameSite: "strict",
+	path: "/",
+};
+
+const AUTH_SESSION_COOKIE_NAME = "auth-session-present";
+
+const AUTH_SESSION_COOKIE_OPTIONS = {
+	httpOnly: false,
+	secure: process.env.NODE_ENV === "production",
+	sameSite: "strict",
+	path: "/",
+};
+
+const normalizeRedirectTarget = (rawValue) => {
+	if (!rawValue) return null;
 
 	try {
-		const decoded = jwt.verify(token, process.env.SECRET);
-		const user = await UserModel.findById(decoded.id);
-		if (!user || user.active === false) {
-			return res.status(401).json({ error: "Invalid or deactivated account." });
+		const decoded = decodeURIComponent(rawValue);
+		const parsed = new URL(decoded);
+
+		if (!parsed?.protocol || !["http:", "https:"].includes(parsed.protocol)) {
+			return null;
 		}
-		return res.json({ user: user.toAuthJSON() });
+
+		return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
 	} catch (err) {
-		logger.error(`Verification error: ${err.message}`);
-		return next(err);
+		return null;
+	}
+};
+
+const resolveClientRedirectTarget = (req) => {
+	if (process.env.CLIENT_REDIRECT_BASE) return process.env.CLIENT_REDIRECT_BASE;
+
+	const referrerTarget = normalizeRedirectTarget(req.get("referer"));
+	if (referrerTarget) return referrerTarget;
+
+	const originTarget = normalizeRedirectTarget(req.get("origin"));
+	if (originTarget) return originTarget;
+
+	if (process.env.NODE_ENV === "development") return "http://localhost:3000";
+
+	return "/";
+};
+
+const withAuthErrorParam = (target) => `${target}${target.includes("?") ? "&" : "?"}authError=google`;
+
+const setCsrfCookie = (res) => {
+	const csrfToken = crypto.randomBytes(32).toString("hex");
+	res.cookie("csrfToken", csrfToken, CSRF_COOKIE_OPTIONS);
+	return csrfToken;
+};
+
+const setAuthSessionCookie = (res) => {
+	res.cookie(AUTH_SESSION_COOKIE_NAME, "true", AUTH_SESSION_COOKIE_OPTIONS);
+};
+
+const setAuthCookies = (res, accessToken, refreshToken) => {
+	res.cookie("token", accessToken, ACCESS_COOKIE_OPTIONS);
+	if (refreshToken) {
+		res.cookie("jid", refreshToken, REFRESH_COOKIE_OPTIONS);
+	}
+	setAuthSessionCookie(res);
+	return setCsrfCookie(res);
+};
+
+const clearAuthCookies = (res) => {
+	res.clearCookie("token", ACCESS_COOKIE_OPTIONS);
+	res.clearCookie("jid", REFRESH_COOKIE_OPTIONS);
+	res.clearCookie("csrfToken", CSRF_COOKIE_OPTIONS);
+	res.clearCookie(AUTH_SESSION_COOKIE_NAME, AUTH_SESSION_COOKIE_OPTIONS);
+};
+
+const resolveCurrentRefreshTokenHash = (req, user) => {
+	const rawToken = req.cookies?.jid || parseCookieHeader(req.headers?.cookie || "")?.jid;
+	if (rawToken) return hashRefreshToken(rawToken);
+
+	const accessIssuedAtMs = req.authContext?.decoded?.iat ? req.authContext.decoded.iat * 1000 : null;
+	if (!accessIssuedAtMs || !Array.isArray(user?.refreshTokens)) return null;
+
+	const WINDOW_MS = 5 * 60 * 1000; // 5 minutes grace between issued access token and stored refresh record
+
+	let nearest = null;
+	for (const token of user.refreshTokens) {
+		if (!token?.lastUsed) continue;
+
+		const lastUsedMs = token.lastUsed instanceof Date ? token.lastUsed.getTime() : new Date(token.lastUsed).getTime();
+		if (Number.isNaN(lastUsedMs)) continue;
+
+		const delta = Math.abs(lastUsedMs - accessIssuedAtMs);
+		if (delta <= WINDOW_MS && (!nearest || delta < nearest.delta)) {
+			nearest = { delta, tokenHash: token.tokenHash };
+		}
+	}
+
+	return nearest?.tokenHash || null;
+};
+
+const normalizeUnknownString = (value) => {
+	if (!value) return null;
+	const trimmed = String(value).trim();
+	return trimmed && trimmed.toLowerCase() !== "unknown" ? trimmed : null;
+};
+
+const normalizeRefreshSession = (tokenRecord, currentTokenHash = null) => {
+	if (!tokenRecord) return null;
+
+	const { _id, tokenHash, userAgent, userAgentParsed, userAgentDeviceType, deviceName, ipAddress, location, lastUsed, expiresAt } = tokenRecord;
+
+	if (!_id) return null;
+
+	const normalizedIpAddress = sanitizeIpAddress(ipAddress);
+	const normalizedIp = normalizedIpAddress || normalizeUnknownString(ipAddress) || "Unknown";
+	const normalizedLocation = normalizeUnknownString(location) || normalizedIpAddress || normalizeUnknownString(ipAddress) || "Unknown";
+	const userAgentDisplay = normalizeUnknownString(userAgentParsed) || normalizeUnknownString(userAgent) || "Unknown";
+	const deviceLabel = normalizeUnknownString(deviceName) || userAgentDisplay || "Unknown device";
+	const deviceType = normalizeUnknownString(userAgentDeviceType) || "desktop";
+
+	return {
+		id: _id.toString(),
+		userAgent: userAgentDisplay,
+		userAgentParsed: userAgentDisplay,
+		userAgentDeviceType: deviceType,
+		deviceName: deviceLabel,
+		ipAddress: normalizedIp,
+		location: normalizedLocation,
+		lastActive: lastUsed || expiresAt,
+		isCurrent: Boolean(currentTokenHash && tokenHash === currentTokenHash),
+	};
+};
+
+const generateStoredFilename = (fieldName, userId, originalName) => {
+	const ext = originalName.split(".").pop();
+	return `${fieldName}-${userId}-${Math.floor(Math.random() * 1000)}-${Date.now()}.${ext}`;
+};
+
+const deleteExistingGridFile = async (bucket, currentUrl) => {
+	if (!currentUrl || !currentUrl.startsWith("/content/")) return;
+
+	const existingName = currentUrl.replace("/content/", "");
+	const [fileDoc] = await bucket.find({ filename: existingName }).toArray();
+	if (fileDoc) {
+		await bucket.delete(fileDoc._id);
+	}
+};
+
+const uploadFileToGrid = async (bucket, file, filename) => {
+	const uploadStream = bucket.openUploadStream(filename, { contentType: file.mimetype });
+	uploadStream.end(file.buffer);
+	await once(uploadStream, "finish");
+};
+
+const processFileUpload = async (bucket, file, fieldName, userId, currentUrl) => {
+	if (!file) return currentUrl;
+
+	await deleteExistingGridFile(bucket, currentUrl);
+	const filename = generateStoredFilename(fieldName, userId, file.originalname);
+	await uploadFileToGrid(bucket, file, filename);
+	return `/content/${filename}`;
+};
+
+const friendAction = (label, action) => {
+	return async (req, res, next) => {
+		try {
+			await action(req, res);
+		} catch (err) {
+			logger.error(`${label} error: ${err.message}`);
+			return next(err);
+		}
+	};
+};
+
+router.post("/users/verify", authLimiter, requireAuthContext("Verification error"), (req, res) => {
+	const { user, token } = req.authContext;
+	return res.json({ user: user.toAuthJSON(token) });
+});
+
+router.post("/users/refresh", async (req, res, next) => {
+	const rawToken = req.cookies?.jid;
+	if (!rawToken) {
+		return res.status(401).json({ error: "Missing refresh token" });
+	}
+
+	try {
+		const payload = jwt.verify(rawToken, process.env.REFRESH_TOKEN_SECRET);
+
+		const user = await UserModel.findById(payload.id);
+		if (!user || !user.active) {
+			return res.status(401).json({ error: "Invalid user" });
+		}
+
+		if (user.tokenVersion !== payload.tokenVersion) {
+			return res.status(401).json({ error: "Token no longer valid" });
+		}
+
+		const tokenHash = hashRefreshToken(rawToken);
+		const now = new Date();
+		const storedIndex = user.refreshTokens.findIndex((t) => t.tokenHash === tokenHash && t.expiresAt > now);
+
+		if (storedIndex === -1) {
+			return res.status(401).json({ error: "Refresh token revoked or expired" });
+		}
+
+		const newAccessToken = user.generateAccessToken();
+		const newRefreshToken = await user.generateRefreshToken(buildRequestTokenDescriptor(req), tokenHash);
+
+		const csrfToken = setAuthCookies(res, newAccessToken, newRefreshToken);
+
+		res.json({ token: newAccessToken, csrfToken });
+	} catch (err) {
+		logger.error(`Refresh error: ${err.message}`);
+		return res.status(401).json({ error: "Invalid refresh token" });
 	}
 });
 
-/**
- * /users/profile
- * Retrieve a user's profile.
- * If a query parameter id is provided and does not match the requesting user,
- * returns the public profile (with mutual friend and server info).
- * Otherwise, returns the private profile.
- */
-router.get("/users/profile", generalLimiter, auth.required, async (req, res, next) => {
-	const token = getTokenFromHeader(req);
+router.get("/users/profile", generalLimiter, auth.required, requireAuthContext("Profile retrieval auth error"), async (req, res, next) => {
 	try {
-		const decoded = jwt.verify(token, process.env.SECRET);
-		// Use provided id if any, otherwise default to the logged-in user's id.
+		const { user: requestingUser, decoded } = req.authContext;
 		const targetUserId = req.query.id || decoded.id;
 		const user = await UserModel.findById(targetUserId);
 
@@ -92,15 +295,7 @@ router.get("/users/profile", generalLimiter, auth.required, async (req, res, nex
 			return res.sendStatus(404);
 		}
 
-		let profile;
-		// If the request is for the owner's profile, return the private version.
-		if (decoded.id === user._id.toString()) {
-			profile = await user.toProfilePrivJSON(user);
-		} else {
-			// For public profile, fetch the querying user's document to calculate mutual fields.
-			const queryingUser = await UserModel.findById(decoded.id);
-			profile = await user.toProfilePubJSON(queryingUser);
-		}
+		const profile = decoded.id === user._id.toString() ? await user.toProfilePrivJSON(requestingUser) : await user.toProfilePubJSON(requestingUser);
 
 		return res.json({ user: profile });
 	} catch (err) {
@@ -109,14 +304,68 @@ router.get("/users/profile", generalLimiter, auth.required, async (req, res, nex
 	}
 });
 
-/**
- * /users/login
- * Log in a user using passport local strategy.
- */
-router.get("/users/google", passport.authenticate("google", { scope: ["profile", "email"] }));
-router.get("/users/google/callback", passport.authenticate("google", { session: false, failureRedirect: "/" }), (req, res) => {
-	const token = req.user.generateJWT();
-	res.redirect(`${process.env.NODE_ENV === "development" ? "http://localhost:3000" : ""}/?token=${token}`);
+router.get("/users/sessions", generalLimiter, auth.required, requireAuthContext("Session retrieval auth error"), async (req, res, next) => {
+	try {
+		const { user } = req.authContext;
+		const currentTokenHash = resolveCurrentRefreshTokenHash(req, user);
+
+		user.pruneExpiredRefreshTokens();
+		await user.save();
+
+		const sessions = user.refreshTokens.map((token) => normalizeRefreshSession(token, currentTokenHash)).filter(Boolean);
+
+		return res.json({ sessions });
+	} catch (err) {
+		logger.error(`Session retrieval error: ${err.message}`);
+		return next(err);
+	}
+});
+
+router.get("/users/google", (req, res, next) => {
+	const redirectTarget = resolveClientRedirectTarget(req);
+	const callbackURL = resolveGoogleCallbackUrl(req);
+
+	if (!callbackURL) {
+		logger.error("Unable to resolve Google callback URL from request headers");
+		return res.redirect(withAuthErrorParam(redirectTarget));
+	}
+
+	return passport.authenticate("google", {
+		scope: ["profile", "email"],
+		state: encodeURIComponent(redirectTarget),
+		callbackURL,
+	})(req, res, next);
+});
+router.get("/users/google/callback", (req, res, next) => {
+	const redirectTarget = normalizeRedirectTarget(req.query?.state) || resolveClientRedirectTarget(req);
+	const callbackURL = resolveGoogleCallbackUrl(req);
+	const redirectWithError = () => res.redirect(withAuthErrorParam(redirectTarget));
+
+	if (!callbackURL) {
+		logger.error("Unable to resolve Google callback URL from request headers");
+		return redirectWithError();
+	}
+
+	return passport.authenticate("google", { session: false, callbackURL }, async (err, user) => {
+		if (err || !user) {
+			if (err) {
+				logger.error(`Google callback auth error: ${err.message}`);
+			}
+			return redirectWithError();
+		}
+
+		try {
+			const accessToken = user.generateAccessToken();
+			const refreshToken = await user.generateRefreshToken(buildRequestTokenDescriptor(req));
+
+			setAuthCookies(res, accessToken, refreshToken);
+
+			return res.redirect(redirectTarget);
+		} catch (e) {
+			logger.error(`Google callback token error: ${e.message}`);
+			return redirectWithError();
+		}
+	})(req, res, next);
 });
 router.post("/users/login", authLimiter, (req, res, next) => {
 	if (!req.body?.user?.email) {
@@ -126,23 +375,30 @@ router.post("/users/login", authLimiter, (req, res, next) => {
 		return res.status(422).json({ errors: { password: "is required" } });
 	}
 
-	passport.authenticate("local", { session: false }, (err, user, info) => {
+	passport.authenticate("local", { session: false }, async (err, user, info) => {
 		if (err) {
 			logger.error(`Login error: ${err.message}`);
 			return next(err);
 		}
-		if (user) {
-			return res.json({ user: user.toAuthJSON() });
-		} else {
+		if (!user) {
 			return res.status(422).json(info);
+		}
+
+		try {
+			const accessToken = user.generateAccessToken();
+			const existingTokenHash = resolveCurrentRefreshTokenHash(req, user);
+			const refreshToken = await user.generateRefreshToken(buildRequestTokenDescriptor(req), existingTokenHash);
+
+			const csrfToken = setAuthCookies(res, accessToken, refreshToken);
+
+			res.json({ user: user.toAuthJSON(accessToken), csrfToken });
+		} catch (e) {
+			logger.error(`Token generation error: ${e.message}`);
+			return next(e);
 		}
 	})(req, res, next);
 });
 
-/**
- * /users/register
- * Register a new user. Checks for a password with a minimum length.
- */
 router.post("/users/register", authLimiter, async (req, res, next) => {
 	try {
 		const { username, email, displayName, bio, password } = req.body.user;
@@ -153,102 +409,60 @@ router.post("/users/register", authLimiter, async (req, res, next) => {
 		user.setPassword(password);
 
 		await user.save();
-		return res.json({ user: user.toAuthJSON() });
+
+		const accessToken = user.generateAccessToken();
+		const refreshToken = await user.generateRefreshToken(buildRequestTokenDescriptor(req));
+
+		const csrfToken = setAuthCookies(res, accessToken, refreshToken);
+
+		return res.json({ user: user.toAuthJSON(accessToken), csrfToken });
 	} catch (err) {
 		logger.error(`Registration error: ${err.message}`);
 		return next(err);
 	}
 });
 
-/**
- * /users/modify
- * Update fields of the user's profile.
- * This endpoint uses a transaction, which is important for replica sets.
- */
 router.put(
 	"/users/modify",
 	modifyLimiter,
 	auth.required,
+	requireAuthContext("Token verification error in modify"),
 	upload.fields([
 		{ name: "banner", maxCount: 1 },
 		{ name: "avatar", maxCount: 1 },
 	]),
 	async (req, res, next) => {
-		// 1) Verify token
-		const token = getTokenFromHeader(req);
-		let decoded;
-		try {
-			decoded = jwt.verify(token, process.env.SECRET);
-		} catch (err) {
-			logger.error(`Token verification error in modify: ${err.message}`);
-			return res.sendStatus(401);
-		}
+		const { decoded } = req.authContext;
 
-		// 2) Start a session & transaction
 		const session = await mongoose.startSession();
 		try {
 			await session.withTransaction(async () => {
-				// 3) Load user under the session
 				const user = await UserModel.findById(decoded.id).session(session).exec();
 				if (!user) {
-					// throwing will abort the transaction
 					const err = new Error("User not found");
 					err.status = 404;
 					throw err;
 				}
 
-				// 4) Update text fields
 				const { displayName, bio } = req.body;
 				if (displayName != null) user.displayName = displayName;
 				if (bio != null) user.bio = bio;
 
-				// 5) File‐upload helper
-				const uploadToGrid = async (file, fieldName) => {
-					const ext = file.originalname.split(".").pop();
-					const filename = `${fieldName}-${decoded.id}-${Math.floor(Math.random() * 1000)}-${Date.now()}.${ext}`;
-					const uploadStream = databaseServer.gridfsBucket.openUploadStream(filename, { contentType: file.mimetype });
-					uploadStream.end(file.buffer);
-					await once(uploadStream, "finish");
-					return filename;
-				};
+				const bannerFile = req.files?.banner?.[0];
+				const avatarFile = req.files?.avatar?.[0];
 
-				// 6) Banner & avatar
-				if (req.files?.banner?.[0]) {
-					if (user.bannerUrl && user.bannerUrl.startsWith("/content/")) {
-						const oldBanner = user.bannerUrl.replace("/content/", "");
-						const [fileDoc] = await databaseServer.gridfsBucket.find({ filename: oldBanner }).toArray();
-						if (fileDoc) {
-							await databaseServer.gridfsBucket.delete(fileDoc._id);
-						}
-					}
+				user.bannerUrl = await processFileUpload(databaseServer.gridfsBucket, bannerFile, "banner", decoded.id, user.bannerUrl);
 
-					const storedName = await uploadToGrid(req.files.banner[0], "banner");
-					user.bannerUrl = `/content/${storedName}`;
-				}
-				if (req.files?.avatar?.[0]) {
-					if (user.avatarUrl && user.avatarUrl.startsWith("/content/")) {
-						const oldAvatar = user.avatarUrl.replace("/content/", "");
-						const [fileDoc] = await databaseServer.gridfsBucket.find({ filename: oldAvatar }).toArray();
-						if (fileDoc) {
-							await databaseServer.gridfsBucket.delete(fileDoc._id);
-						}
-					}
+				user.avatarUrl = await processFileUpload(databaseServer.gridfsBucket, avatarFile, "avatar", decoded.id, user.avatarUrl);
 
-					const storedName = await uploadToGrid(req.files.avatar[0], "avatar");
-					user.avatarUrl = `/content/${storedName}`;
-				}
-
-				// 7) Persist under the session
 				await user.save({ session });
 			});
 
-			// 8) After commit succeed: notify watchers & respond
 			serverWatchers.onUserSaved(decoded.id.toString());
 			const updated = await UserModel.findById(decoded.id).exec();
 			const profile = await updated.toProfilePrivJSON(updated);
 			return res.json({ user: profile });
 		} catch (err) {
-			// If you threw an Error with a .status, honor it:
 			if (err.status === 404) return res.sendStatus(404);
 			logger.error(`User modification error: ${err.message}`);
 			return next(err);
@@ -258,141 +472,164 @@ router.put(
 	}
 );
 
-/**
- * Friend-related endpoints
- */
-
-/**
- * /users/addfriend
- * Send a friend request.
- * The sender is the authenticated user and the recipient is provided in the request body.
- */
-router.put("/users/addfriend", generalLimiter, auth.required, async (req, res, next) => {
-	const token = getTokenFromHeader(req);
-	let decoded;
+router.put("/users/password", modifyLimiter, auth.required, requireAuthContext("Password change auth error"), async (req, res, next) => {
 	try {
-		decoded = jwt.verify(token, process.env.SECRET);
-	} catch (err) {
-		logger.error(`Token verification error in addfriend: ${err.message}`);
-		return res.sendStatus(401);
-	}
+		const { user } = req.authContext;
+		const currentPassword = req.body?.currentPassword;
+		const newPassword = req.body?.newPassword;
 
-	// Prevent a user from sending a friend request to themselves.
-	if (decoded.id === req.body.recipientId) {
-		return res.sendStatus(403);
-	}
+		if (!currentPassword) {
+			return res.status(422).json({ errors: { currentPassword: "is required" } });
+		}
 
-	try {
-		const sender = await validateUserById(decoded.id);
-		const recipient = await validateUserById(req.body.recipientId);
-		const result = await sendFriendRequest(sender, recipient);
-		return res.json(result);
+		if (!newPassword) {
+			return res.status(422).json({ errors: { newPassword: "is required" } });
+		}
+
+		if (String(newPassword).trim().length < 8) {
+			return res.status(422).json({ errors: { newPassword: "is invalid" } });
+		}
+
+		if (!user.validPassword(currentPassword)) {
+			return res.status(403).json({ errors: { currentPassword: "is incorrect" } });
+		}
+
+		user.setPassword(newPassword);
+		await user.save();
+
+		clearAuthCookies(res);
+		return res.json({ success: true });
 	} catch (err) {
-		logger.error(`Add friend error: ${err.message}`);
+		logger.error(`Password change error: ${err.message}`);
 		return next(err);
 	}
 });
 
-/**
- * /users/acceptfriend
- * Accept a pending friend request.
- * Only the intended recipient may confirm the request.
- */
-router.put("/users/acceptfriend", generalLimiter, auth.required, async (req, res, next) => {
-	const token = getTokenFromHeader(req);
-	let decoded;
+router.delete("/users/sessions", modifyLimiter, auth.required, requireAuthContext("Session bulk revoke auth error"), async (req, res, next) => {
 	try {
-		decoded = jwt.verify(token, process.env.SECRET);
-	} catch (err) {
-		logger.error(`Token verification error in acceptfriend: ${err.message}`);
-		return res.sendStatus(401);
-	}
+		const { user } = req.authContext;
+		const scope = req.query.scope;
+		const currentTokenHash = resolveCurrentRefreshTokenHash(req, user);
 
+		user.pruneExpiredRefreshTokens();
+
+		if (scope === "others" && currentTokenHash) {
+			user.refreshTokens = user.refreshTokens.filter((token) => token.tokenHash === currentTokenHash);
+		} else if (scope === "current" && currentTokenHash) {
+			user.refreshTokens = user.refreshTokens.filter((token) => token.tokenHash !== currentTokenHash);
+			clearAuthCookies(res);
+		} else if (scope === "current") {
+			clearAuthCookies(res);
+		} else {
+			user.refreshTokens = [];
+			clearAuthCookies(res);
+		}
+
+		await user.save();
+		return res.sendStatus(204);
+	} catch (err) {
+		logger.error(`Session bulk revoke error: ${err.message}`);
+		return next(err);
+	}
+});
+
+router.delete("/users/sessions/:sessionId", modifyLimiter, auth.required, requireAuthContext("Session revoke auth error"), async (req, res, next) => {
 	try {
+		const { user } = req.authContext;
+		const { sessionId } = req.params;
+		const currentTokenHash = resolveCurrentRefreshTokenHash(req, user);
+
+		user.pruneExpiredRefreshTokens();
+
+		const targetIndex = user.refreshTokens.findIndex((token) => token._id?.toString?.() === sessionId || token.tokenHash === sessionId);
+
+		if (targetIndex === -1) {
+			return res.status(404).json({ error: "Session not found" });
+		}
+
+		const [removed] = user.refreshTokens.splice(targetIndex, 1);
+
+		if (currentTokenHash && removed?.tokenHash === currentTokenHash) {
+			clearAuthCookies(res);
+		}
+
+		await user.save();
+		return res.sendStatus(204);
+	} catch (err) {
+		logger.error(`Session revoke error: ${err.message}`);
+		return next(err);
+	}
+});
+
+router.put(
+	"/users/addfriend",
+	generalLimiter,
+	auth.required,
+	requireAuthContext("Token verification error in addfriend"),
+	friendAction("Add friend", async (req, res) => {
+		const { decoded, user: sender } = req.authContext;
+
+		if (decoded.id === req.body.recipientId) {
+			return res.sendStatus(403);
+		}
+
+		const recipient = await validateUserById(req.body.recipientId);
+		const result = await sendFriendRequest(sender, recipient);
+		return res.json(result);
+	})
+);
+
+router.put(
+	"/users/acceptfriend",
+	generalLimiter,
+	auth.required,
+	requireAuthContext("Token verification error in acceptfriend"),
+	friendAction("Accept friend", async (req, res) => {
 		const friend = await validateFriendById(req.body.friendId);
 		if (friend.confirmed) {
 			return res.sendStatus(403);
 		}
-		if (friend.recipient.toString() !== decoded.id) {
+		if (friend.recipient.toString() !== req.authContext.decoded.id) {
 			return res.sendStatus(401);
 		}
 		friend.confirmed = true;
 		await friend.save();
+
 		return res.sendStatus(200);
-	} catch (err) {
-		logger.error(`Accept friend error: ${err.message}`);
-		return next(err);
-	}
-});
+	})
+);
 
-/**
- * /users/declinefriend
- * Decline a pending friend request.
- */
-router.put("/users/declinefriend", generalLimiter, auth.required, async (req, res, next) => {
-	const token = getTokenFromHeader(req);
-	let decoded;
-	try {
-		decoded = jwt.verify(token, process.env.SECRET);
-	} catch (err) {
-		logger.error(`Token verification error in declinefriend: ${err.message}`);
-		return res.sendStatus(401);
-	}
-
-	try {
-		// Call declineFriend with the friend request ID and current user ID.
-		await declineFriend(req.body.friendId, decoded.id);
+router.put(
+	"/users/declinefriend",
+	generalLimiter,
+	auth.required,
+	requireAuthContext("Token verification error in declinefriend"),
+	friendAction("Decline friend", async (req, res) => {
+		await declineFriend(req.body.friendId, req.authContext.decoded.id);
 		return res.sendStatus(200);
-	} catch (err) {
-		logger.error(`Decline friend error: ${err.message}`);
-		return next(err);
-	}
-});
+	})
+);
 
-/**
- * /users/cancelfriend
- * Cancel a sent friend request.
- */
-router.put("/users/cancelfriend", generalLimiter, auth.required, async (req, res, next) => {
-	const token = getTokenFromHeader(req);
-	let decoded;
-	try {
-		decoded = jwt.verify(token, process.env.SECRET);
-	} catch (err) {
-		logger.error(`Token verification error in cancelfriend: ${err.message}`);
-		return res.sendStatus(401);
-	}
-
-	try {
-		await cancelFriend(req.body.friendId, decoded.id);
+router.put(
+	"/users/cancelfriend",
+	generalLimiter,
+	auth.required,
+	requireAuthContext("Token verification error in cancelfriend"),
+	friendAction("Cancel friend", async (req, res) => {
+		await cancelFriend(req.body.friendId, req.authContext.decoded.id);
 		return res.sendStatus(200);
-	} catch (err) {
-		logger.error(`Cancel friend error: ${err.message}`);
-		return next(err);
-	}
-});
+	})
+);
 
-/**
- * /users/removefriend
- * Remove an existing friend.
- */
-router.put("/users/removefriend", generalLimiter, auth.required, async (req, res, next) => {
-	const token = getTokenFromHeader(req);
-	let decoded;
-	try {
-		decoded = jwt.verify(token, process.env.SECRET);
-	} catch (err) {
-		logger.error(`Token verification error in removefriend: ${err.message}`);
-		return res.sendStatus(401);
-	}
-
-	try {
-		await removeFriend(req.body.friendId, decoded.id);
+router.put(
+	"/users/removefriend",
+	generalLimiter,
+	auth.required,
+	requireAuthContext("Token verification error in removefriend"),
+	friendAction("Remove friend", async (req, res) => {
+		await removeFriend(req.body.friendId, req.authContext.decoded.id);
 		return res.sendStatus(200);
-	} catch (err) {
-		logger.error(`Remove friend error: ${err.message}`);
-		return next(err);
-	}
-});
+	})
+);
 
 export default router;

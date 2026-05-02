@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { fetchUserProfile, friendAction } from "../../slices/userApiSlice";
-import socketIoHelper from "../../helpers/socket";
+import { emitSocketEvent } from "../../slices/socketSlice";
+import { getSocketClient } from "../../helpers/socketClient";
 async function getUserInfo(userId, authToken, dispatch) {
 	try {
 		const { profile } = await dispatch(fetchUserProfile({ userId, authToken })).unwrap();
@@ -14,6 +15,7 @@ async function getUserInfo(userId, authToken, dispatch) {
 
 export default function useFriendPage() {
 	const auth = useSelector((state) => state.auth);
+	const sockets = useSelector((s) => s.sockets);
 	const dispatch = useDispatch();
 
 	const [friendItems, setFriendItems] = useState([]);
@@ -45,7 +47,6 @@ export default function useFriendPage() {
 			return;
 		}
 		let isMounted = true;
-		const socket = socketIoHelper.getSocket();
 
 		async function loadRelations() {
 			setLoading(true);
@@ -83,20 +84,23 @@ export default function useFriendPage() {
 		}
 
 		loadRelations();
-		if (socket) {
-			socket.emit("watch_user", auth.userId);
-			socket.on("watched_user_saved", ([watchedId]) => {
-				if (watchedId === auth.userId) loadRelations();
-			});
+		const socket = getSocketClient();
+		const onWatchedUserSaved = ([watchedId]) => {
+			if (watchedId === auth.userId) loadRelations();
+		};
+
+		if (socket && sockets.connected) {
+			dispatch(emitSocketEvent({ event: "watch_user", args: [auth.userId] }));
+			socket.on("watched_user_saved", onWatchedUserSaved);
 		}
 		return () => {
 			isMounted = false;
 			if (socket) {
-				socket.emit("unwatch_user", auth.userId);
-				socket.off("watched_user_saved");
+				dispatch(emitSocketEvent({ event: "unwatch_user", args: [auth.userId] }));
+				socket.off("watched_user_saved", onWatchedUserSaved);
 			}
 		};
-	}, [auth.authToken, auth.userId, auth.loggedIn, auth.socketInfo.connected]);
+	}, [auth.userId, auth.loggedIn, sockets.connected, dispatch]);
 
 	const callApi = async (ep, data, onSuccessId) => {
 		try {

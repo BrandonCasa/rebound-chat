@@ -1,8 +1,9 @@
 // main.mjs (or main.js with "type": "module" in package.json)
 
 import { fileURLToPath } from "url";
-import { dirname, join } from "path";
-import { app, BrowserWindow, ipcMain } from "electron";
+import { dirname, extname, join } from "path";
+import { readFile } from "fs/promises";
+import { app, BrowserWindow, ipcMain, protocol } from "electron";
 import log from "electron-log";
 import updater from "electron-updater";
 const { autoUpdater } = updater;
@@ -15,6 +16,23 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let mainWindow;
 
+protocol.registerSchemesAsPrivileged([
+	{
+		scheme: "app",
+		privileges: {
+			standard: true,
+			secure: true,
+			supportFetchAPI: true,
+			allowServiceWorkers: true,
+			corsEnabled: true,
+		},
+	},
+]);
+
+if (process.platform === "win32") {
+	app.setAppUserModelId("com.brandoncasa.rebound");
+}
+
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
 
@@ -24,36 +42,63 @@ function sendStatus(channel, payload = {}) {
 	}
 }
 
-async function createWindow() {
-	const preloadPath = join(__dirname, "preload.js");
+function allowUpdateAction(actionName) {
+	if (isDev) {
+		log.warn(`Skipping ${actionName} while running in development.`);
+		return false;
+	}
+	return true;
+}
 
+async function createWindow() {
 	mainWindow = new BrowserWindow({
 		width: 1280,
 		height: 720,
 		webPreferences: {
 			nodeIntegration: false,
 			contextIsolation: true,
-			preload: preloadPath,
+			preload: join(__dirname, "preload.js"),
 		},
 	});
 
-	if (isDev) {
-		mainWindow.loadURL("http://localhost:3000");
-	} else {
-		mainWindow.loadFile(join(__dirname, "index.html"));
-		// mainWindow.webContents.openDevTools();
-		// autoUpdater.checkForUpdates();
-	}
-
-	mainWindow.on("closed", () => {
-		mainWindow = null;
+	// Helpful when diagnosing protocol issues:
+	mainWindow.webContents.on("did-fail-load", (_e, code, desc, url) => {
+		log.error("did-fail-load", { code, desc, url });
 	});
+
+	mainWindow.webContents.session.webRequest.onHeadersReceived({ urls: ["https://rebound.nexus/*/*", "http://localhost:3000/*/*"] }, (details, callback) => {
+		const cookies = details.responseHeaders["Set-Cookie"];
+		if (cookies) {
+			const newCookie = Array.from(cookies).map((cookie) => cookie.concat("; SameSite=None"));
+			details.responseHeaders["Set-Cookie"] = [...newCookie];
+			callback({
+				responseHeaders: details.responseHeaders,
+			});
+		} else {
+			callback({ cancel: false });
+		}
+	});
+
+	if (isDev) {
+		await mainWindow.loadURL("http://localhost:3000");
+	} else {
+		await mainWindow.loadURL("app://-/index.html");
+	}
 }
 
 // wire up IPC
-ipcMain.on("check-for-updates", () => autoUpdater.checkForUpdates());
-ipcMain.on("download-update", () => autoUpdater.downloadUpdate());
-ipcMain.on("install-update", () => autoUpdater.quitAndInstall(true, true));
+ipcMain.on("check-for-updates", () => {
+	if (!allowUpdateAction("check-for-updates")) return;
+	autoUpdater.checkForUpdates();
+});
+ipcMain.on("download-update", () => {
+	if (!allowUpdateAction("download-update")) return;
+	autoUpdater.downloadUpdate();
+});
+ipcMain.on("install-update", () => {
+	if (!allowUpdateAction("install-update")) return;
+	autoUpdater.quitAndInstall(true, true);
+});
 ipcMain.on("simulate-update", async () => {
 	log.info("Simulating an update…");
 	autoUpdater.emit("checking-for-update");
@@ -109,8 +154,53 @@ autoUpdater.on("update-downloaded", (info) => {
 	sendStatus("update-downloaded", info);
 });
 
-// boot
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+	const mimeByExt = {
+		".js": "application/javascript",
+		".mjs": "application/javascript",
+		".css": "text/css",
+		".html": "text/html",
+		".json": "application/json",
+		".svg": "image/svg+xml",
+		".png": "image/png",
+		".jpg": "image/jpeg",
+		".jpeg": "image/jpeg",
+		".webp": "image/webp",
+		".ico": "image/x-icon",
+		".map": "application/json",
+		".woff": "font/woff",
+		".woff2": "font/woff2",
+	};
+
+	protocol.handle("app", async (request) => {
+		const url = new URL(request.url);
+
+		// url.pathname is like "/index.html"
+		let pathname = decodeURIComponent(url.pathname);
+
+		// If you ever hit "app://-/" or empty, serve index.html
+		if (pathname === "/" || pathname === "") pathname = "/index.html";
+
+		// Resolve to disk
+		const filePath = join(__dirname, pathname);
+
+		try {
+			const data = await readFile(filePath);
+			const ext = extname(filePath).toLowerCase();
+			const contentType = mimeByExt[ext] || "application/octet-stream";
+
+			return new Response(data, {
+				status: 200,
+				headers: { "Content-Type": contentType },
+			});
+		} catch (error) {
+			log.error("Failed to load app:// resource", { url: request.url, filePath, error });
+			return new Response("Not found", { status: 404 });
+		}
+	});
+
+	await createWindow();
+});
 
 app.on("window-all-closed", () => {
 	if (process.platform !== "darwin") app.quit();

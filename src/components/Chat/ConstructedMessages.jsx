@@ -18,7 +18,7 @@ const divideMessages = (messages) => {
 		}
 	});
 
-	return outputMessages;
+	return outputMessages.reverse();
 };
 
 const ConstructedMessages = React.memo(function ConstructedMessages({

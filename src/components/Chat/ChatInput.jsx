@@ -1,21 +1,15 @@
-import React, { useRef, useEffect, useMemo, useCallback } from "react";
-import { styled, useTheme } from "@mui/material/styles";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { styled, useTheme, darken } from "@mui/material/styles";
+import { Box, Chip, Typography, ImageList, ImageListItem, ImageListItemBar, IconButton, CircularProgress } from "@mui/material";
 import Button from "@mui/material/Button";
 import SendIcon from "@mui/icons-material/Send";
+import AddIcon from "@mui/icons-material/AddRounded";
+import CloseIcon from "@mui/icons-material/CloseRounded";
 import DOMPurify from "dompurify";
 import { parseMentions, highlightMentions } from "../../helpers/mentions";
+import { scrollbarStyles } from "../../routes/scrollbarStyles";
 
-/** -------------------------------------------------------------------------
- *  Redesigned ChatInput
- *  ------------------------------------------------------------------------
- *  Key goals:
- *   • **No overlay/layer trickery** – a single `contentEditable` element is the
- *     source of truth. This fixes selection, copy‑paste and accessibility woes.
- *   • **Shift+Enter → new line**, bare Enter → submit.
- *   • Mentions (`@username`) are highlighted on‑the‑fly by rewriting the inner
- *     HTML. DOMPurify keeps the content safe.
- *   • Uses only React hooks + MUI `styled`, no external rich‑text libs.
- * ------------------------------------------------------------------------*/
+const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif", "video/webm", "video/mp4"].join(", ");
 
 // --- Styled components ----------------------------------------------------
 const ChatForm = styled("form")(({ theme }) => ({
@@ -27,7 +21,7 @@ const ChatForm = styled("form")(({ theme }) => ({
 
 const EditableDiv = styled("div")(({ theme }) => ({
 	flex: 1,
-	minHeight: 16,
+	minHeight: "42px",
 	maxHeight: 180,
 	overflowY: "auto",
 	alignContent: "center",
@@ -46,15 +40,38 @@ const EditableDiv = styled("div")(({ theme }) => ({
 	},
 	// mention highlight
 	"& .mention": {
-		backgroundColor: `${theme.palette.warning.main}80`,
-		color: theme.palette.common.white,
-		borderRadius: 4,
-		padding: "0 2px",
+		display: "inline-flex",
+		alignItems: "center",
+		padding: "0 4px",
+		borderRadius: 16,
+		backgroundColor: theme.palette.warning.main,
+		":hover": {
+			cursor: "pointer",
+			backgroundColor: theme.palette.warning.dark,
+		},
+		color: theme.palette.primary.contrastText,
+		fontSize: "0.75rem",
+		lineHeight: "22px",
+		margin: "0 2px",
 	},
 }));
 
 // --- Utility helpers ------------------------------------------------------
 const escapeHtml = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+const getMentionQuery = (text = "", caret = 0) => {
+	const beforeCaret = text.slice(0, caret);
+	const lastAt = beforeCaret.lastIndexOf("@");
+	if (lastAt === -1) return null;
+
+	const charBefore = beforeCaret[lastAt - 1];
+	if (charBefore && !/\s/.test(charBefore)) return null;
+
+	const query = beforeCaret.slice(lastAt + 1);
+	if (query.includes("\n")) return null;
+
+	return query;
+};
 
 /** Save cursor position (offset from the start of the editable). */
 function getCaretCharacterOffsetWithin(element) {
@@ -92,19 +109,50 @@ function setCaretPosition(element, offset) {
 }
 
 // --- Component ------------------------------------------------------------
-export default function ChatInput({ message, setMessage, sendMessage, users = [] }) {
+const buildHighlightedHtml = (text, mentions) => {
+	if (!text) return "";
+	const parts = highlightMentions(text, mentions);
+	const raw = parts.map((p) => (p.mention ? `<span class="mention">${escapeHtml(p.text)}</span>` : escapeHtml(p.text))).join("");
+	return DOMPurify.sanitize(raw);
+};
+
+export default function ChatInput({ message, setMessage, sendMessage, users = [], attachments = [], addAttachment, removeAttachment, uploadingAttachment }) {
 	const theme = useTheme();
 	const divRef = useRef(null);
+	const [mentionQuery, setMentionQuery] = useState(null);
+	const [activeMentionIdx, setActiveMentionIdx] = useState(0);
+
+	const fileInputRef = useRef(null);
+
+	const [canSend, setCanSend] = useState(!(Boolean(message?.trim() !== "") || attachments.length > 0));
 
 	// Pre‑compute mentions + highlighted markup -----------------------------
 	const mentions = useMemo(() => parseMentions(message, users), [message, users]);
 
-	const highlightedHTML = useMemo(() => {
-		if (!message) return "";
-		const parts = highlightMentions(message, mentions);
-		const raw = parts.map((p) => (p.mention ? `<span class="mention">${escapeHtml(p.text)}</span>` : escapeHtml(p.text))).join("");
-		return DOMPurify.sanitize(raw);
-	}, [message, mentions]);
+	const highlightedHTML = useMemo(() => buildHighlightedHtml(message, mentions), [message, mentions]);
+
+	const mentionOptions = useMemo(() => {
+		if (mentionQuery === null) return [];
+
+		const normalizedQuery = mentionQuery.toLowerCase();
+		return users
+			.filter((u) => u?.displayName)
+			.sort((a, b) => a.displayName.localeCompare(b.displayName))
+			.filter((u) => (normalizedQuery ? u.displayName.toLowerCase().includes(normalizedQuery) : true))
+			.slice(0, 5);
+	}, [mentionQuery, users]);
+
+	useEffect(() => {
+		setCanSend(!(Boolean(message?.trim() !== "") || attachments.length > 0));
+		if (!message) {
+			setMentionQuery(null);
+			setActiveMentionIdx(0);
+		}
+	}, [message, attachments]);
+
+	useEffect(() => {
+		setActiveMentionIdx((idx) => (mentionOptions.length ? Math.min(idx, mentionOptions.length - 1) : 0));
+	}, [mentionOptions.length]);
 
 	// Keep DOM in sync when `message` changes (e.g. external clear) ---------
 	useEffect(() => {
@@ -119,67 +167,297 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 	}, [highlightedHTML]);
 
 	// Handle input events ----------------------------------------------------
-	const updatePlainText = useCallback(() => {
-		const el = divRef.current;
-		if (!el) return;
-		// textContent drops the markup – perfect for state
-		setMessage(el.textContent);
-	}, [setMessage]);
+	const syncFromDom = useCallback(
+		(resetActiveMention = false) => {
+			const el = divRef.current;
+			if (!el) return;
+			const caret = getCaretCharacterOffsetWithin(el);
+			const text = el.textContent || "";
+			setMessage(text);
+			setMentionQuery(getMentionQuery(text, caret));
+			if (resetActiveMention) setActiveMentionIdx(0);
+		},
+		[setMessage]
+	);
 
 	const handleInput = useCallback(() => {
-		updatePlainText();
-	}, [updatePlainText]);
+		syncFromDom(true);
+	}, [syncFromDom]);
 
 	const handlePaste = (e) => {
 		e.preventDefault();
 		const text = e.clipboardData.getData("text/plain");
 		document.execCommand("insertText", false, text); // execCommand is safe for plain text insertion here.
+		requestAnimationFrame(() => syncFromDom(true));
 	};
 
+	const applyMentionCompletion = useCallback(
+		(user) => {
+			if (!user?.displayName) return;
+			const el = divRef.current;
+			if (!el) return;
+
+			const currentText = el.textContent || "";
+			const caret = getCaretCharacterOffsetWithin(el);
+			const beforeCaret = currentText.slice(0, caret);
+			const atIndex = beforeCaret.lastIndexOf("@");
+
+			if (atIndex === -1) return;
+
+			const before = currentText.slice(0, atIndex + 1);
+			const after = currentText.slice(caret);
+			const withMention = `${before}${user.displayName} `;
+			const mergedText = `${withMention}${after}`;
+			const mergedMentions = parseMentions(mergedText, users);
+			const nextHTML = buildHighlightedHtml(mergedText, mergedMentions);
+
+			setMessage(mergedText);
+			setMentionQuery(null);
+			setActiveMentionIdx(0);
+
+			requestAnimationFrame(() => {
+				if (!divRef.current) return;
+				divRef.current.innerHTML = nextHTML;
+				setCaretPosition(divRef.current, withMention.length);
+			});
+		},
+		[setMessage, users]
+	);
+
+	const handleSend = useCallback(async () => {
+		const trimmed = divRef.current?.textContent.trim();
+		const hasContent = Boolean(trimmed);
+		const hasAttachments = attachments.length > 0;
+
+		if (hasContent || hasAttachments) {
+			await sendMessage();
+			setMentionQuery(null);
+			setActiveMentionIdx(0);
+			requestAnimationFrame(() => {
+				if (divRef.current) divRef.current.innerHTML = "";
+			});
+		}
+	}, [attachments.length, sendMessage]);
+
+	const previewFileURL = useCallback(
+		(file) => {
+			return URL.createObjectURL(file);
+		},
+		[attachments]
+	);
+
 	const handleKeyDown = (e) => {
+		if (mentionOptions.length) {
+			if (e.key === "Tab") {
+				e.preventDefault();
+				applyMentionCompletion(mentionOptions[activeMentionIdx]);
+				return;
+			}
+			if (e.key === "ArrowDown") {
+				e.preventDefault();
+				setActiveMentionIdx((idx) => (idx + 1) % mentionOptions.length);
+				return;
+			}
+			if (e.key === "ArrowUp") {
+				e.preventDefault();
+				setActiveMentionIdx((idx) => (idx - 1 + mentionOptions.length) % mentionOptions.length);
+				return;
+			}
+		}
+
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
-			const trimmed = divRef.current?.textContent.trim();
-			if (trimmed) {
-				sendMessage();
-				setMessage("");
-				// Clear editable
-				requestAnimationFrame(() => {
-					if (divRef.current) divRef.current.innerHTML = "";
-				});
-			}
+			handleSend();
 		}
 	};
 
+	const handleFileButtonClick = () => {
+		fileInputRef.current?.click();
+	};
+
+	const handleFileChange = async (event) => {
+		const file = event.target?.files?.[0];
+		if (!file || !addAttachment) return;
+		await addAttachment(file);
+		event.target.value = "";
+	};
+
+	const handleSelectionChange = useCallback(() => {
+		syncFromDom(false);
+	}, [syncFromDom]);
+
+	function formatFileSize(bytes) {
+		if (bytes >= 1024 * 1024 * 1024) {
+			return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+		} else if (bytes >= 1024 * 1024) {
+			return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+		} else if (bytes >= 1024) {
+			return `${(bytes / 1024).toFixed(2)} KB`;
+		} else {
+			return `${bytes} B`;
+		}
+	}
+
 	return (
-		<ChatForm onSubmit={(e) => e.preventDefault()}>
-			<EditableDiv
-				ref={divRef}
-				contentEditable
-				suppressContentEditableWarning
-				spellCheck={false}
-				onInput={handleInput}
-				onPaste={handlePaste}
-				onKeyDown={handleKeyDown}
-				aria-label="Chat message input"
-			/>
-			<Button
-				type="button"
-				variant="contained"
-				endIcon={<SendIcon />}
-				sx={{ height: 42 }}
-				onClick={() => {
-					const trimmed = divRef.current?.textContent.trim();
-					if (trimmed) {
-						sendMessage();
-						setMessage("");
-						requestAnimationFrame(() => {
-							if (divRef.current) divRef.current.innerHTML = "";
-						});
-					}
+		<Box sx={{ width: "100%", display: "flex", flexDirection: "column", gap: 1 }}>
+			<ImageList
+				aria-live="polite"
+				onWheel={(e) => {
+					e.currentTarget.scrollLeft += e.deltaY;
+				}}
+				sx={{
+					visibility: attachments.length > 0 ? "visible" : "hidden",
+					overflowY: "hidden",
+					overflowX: "auto",
+					height: attachments.length > 0 ? `calc(max(200px, 15vh) + ${theme.spacing(2)})` : `0px`,
+					marginTop: attachments.length > 0 ? 2 : 0,
+					transition: "visibility 0s, padding 0s, margin-top 0s, height 0.25s",
+					justifyContent: "center",
+					mx: 1,
+					flexGrow: 1,
+					mb: -1,
+					padding: attachments.length > 0 ? 1 : 0,
+					border: attachments.length > 0 ? `2px solid ${theme.palette.divider}` : 0,
+					backgroundColor: darken(theme.palette.background.paper, 0.05),
+					borderRadius: 1,
+					gridAutoFlow: "column",
+					...scrollbarStyles,
 				}}>
-				Send
-			</Button>
-		</ChatForm>
+				{attachments.map((item, index) => (
+					<ImageListItem
+						key={index}
+						style={{ height: `calc(max(200px, 15vh) - ${theme.spacing(0.5)})` }}
+						sx={{
+							backgroundColor: darken(theme.palette.background.paper, 0.05),
+							borderRadius: theme.shape.borderRadius * 0.25,
+							aspectRatio: 1,
+							padding: 0.5,
+							":hover": {
+								backgroundColor: darken(theme.palette.background.paper, 0.4),
+							},
+						}}>
+						<img
+							srcSet={`${previewFileURL(item)}`}
+							src={`${previewFileURL(item)}`}
+							alt={item.name}
+							loading="lazy"
+							style={{
+								borderRadius: theme.shape.borderRadius * 2,
+								border: `3px solid ${darken(theme.palette.background.paper, 0.6)}`,
+								cursor: "pointer",
+								width: "100%",
+							}}
+							onLoad={(e) => {
+								URL.revokeObjectURL(e.currentTarget.src);
+							}}
+						/>
+						<ImageListItemBar
+							title={`${item.name.split(".")[0].substring(0, 8)}${item.name.split(".")[0].length > 8 ? "..." : ""}`}
+							subtitle={<span>{`${formatFileSize(item.size)} (${item.name.split(".")[item.name.split(".").length - 1]})`}</span>}
+							position="top"
+							style={{
+								borderRadius: theme.shape.borderRadius * 2,
+								border: `3px solid ${darken(theme.palette.background.paper, 0.6)}`,
+								cursor: "default",
+								margin: "16px",
+								backdropFilter: "blur(5px) brightness(0.7)",
+							}}
+							sx={{
+								paddingRight: 1,
+								"& .MuiImageListItemBar-titleWrap": {
+									padding: 1,
+									paddingRight: 0,
+								},
+							}}
+							actionIcon={
+								<IconButton
+									sx={{ color: "white" }}
+									aria-label={`close ${item.title}`}
+									onClick={() => {
+										removeAttachment(item);
+									}}>
+									<CloseIcon />
+								</IconButton>
+							}
+						/>
+					</ImageListItem>
+				))}
+			</ImageList>
+			{mentionOptions.length > 0 && (
+				<Box
+					aria-live="polite"
+					sx={{
+						display: "flex",
+						flexWrap: "wrap",
+						alignItems: "center",
+						gap: 0.5,
+						px: 2,
+						py: 1,
+						mx: 1,
+						mb: -0.5,
+						border: `2px solid ${theme.palette.divider}`,
+						backgroundColor: `${darken(theme.palette.background.paper, 0.05)}`,
+						borderRadius: 2,
+						overflowX: "auto",
+						":hover": {
+							backgroundColor: `${darken(theme.palette.background.paper, 0.125)}`,
+						},
+					}}>
+					<Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, pr: 1 }}>
+						Mention:
+					</Typography>
+					{mentionOptions.map((u, idx) => (
+						<Chip
+							key={u.id || u._id || u.displayName}
+							label={`@${escapeHtml(u.displayName)}`}
+							size="small"
+							sx={{
+								backgroundColor: theme.palette.warning.main,
+								":hover": {
+									cursor: "pointer",
+									backgroundColor: theme.palette.warning.dark,
+								},
+							}}
+							onMouseDown={(evt) => {
+								evt.preventDefault();
+								applyMentionCompletion(u);
+							}}
+							onClick={(evt) => {
+								evt.preventDefault();
+								applyMentionCompletion(u);
+							}}
+						/>
+					))}
+				</Box>
+			)}
+			<ChatForm onSubmit={(e) => e.preventDefault()}>
+				<input ref={fileInputRef} type="file" accept={ALLOWED_IMAGE_TYPES} hidden onChange={handleFileChange} />
+				<Button
+					type="button"
+					variant="contained"
+					sx={{ height: "42px", width: "42px", padding: 0, minWidth: "42px" }}
+					onClick={handleFileButtonClick}
+					disabled={uploadingAttachment}
+					aria-label="Upload image">
+					{uploadingAttachment ? <CircularProgress size={24} color="text" /> : <AddIcon />}
+				</Button>
+				<EditableDiv
+					ref={divRef}
+					contentEditable
+					suppressContentEditableWarning
+					spellCheck={false}
+					onInput={handleInput}
+					onPaste={handlePaste}
+					onKeyDown={handleKeyDown}
+					onKeyUp={handleSelectionChange}
+					onMouseUp={handleSelectionChange}
+					onFocus={handleSelectionChange}
+					aria-label="Chat message input"
+				/>
+				<Button type="button" variant="contained" sx={{ height: "42px", width: "42px", padding: 0, minWidth: "42px" }} onClick={handleSend} disabled={canSend}>
+					<SendIcon />
+				</Button>
+			</ChatForm>
+		</Box>
 	);
 }

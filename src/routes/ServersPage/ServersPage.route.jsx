@@ -2,7 +2,7 @@ import { Box, Grid, Paper, Stack, useTheme, Card, CardContent, Typography, CardA
 import { styled } from "@mui/material/styles";
 import { TransitionGrid } from "../LandingPage/utils/TransitionGrid";
 import { ItemBox } from "../LandingPage/utils/ItemBox";
-import { scrollbarStyles } from "../LandingPage/utils/scrollbarStyles";
+import { scrollbarStyles } from "../scrollbarStyles";
 
 const sampleServers = [
 	{

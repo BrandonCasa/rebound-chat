@@ -4,6 +4,7 @@ import MessageRounded from "@mui/icons-material/MessageRounded";
 import DnsRounded from "@mui/icons-material/DnsRounded";
 import PersonRounded from "@mui/icons-material/PersonRounded";
 import ScienceTwoTone from "@mui/icons-material/ScienceTwoTone";
+import ShieldOutlined from "@mui/icons-material/ShieldOutlined";
 import SettingsRounded from "@mui/icons-material/SettingsRounded";
 import ChevronLeftRounded from "@mui/icons-material/ChevronLeftRounded";
 import { Toolbar, List, Divider, Drawer, Tooltip, ListItem, ListItemButton, ListItemIcon } from "@mui/material";
@@ -60,48 +61,67 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
 						title: "Friends",
 						path: "/friends",
 						Icon: PeopleAltRounded,
+						devOnly: false,
 					},
 					{
 						key: "chat",
 						title: "Chat",
 						path: "/chat",
 						Icon: MessageRounded,
+						devOnly: false,
 					},
 					{
 						key: "servers",
 						title: "Servers",
 						path: "/servers",
 						Icon: DnsRounded,
+						devOnly: true,
 					},
 					{
 						key: "profile",
 						title: "Profile",
 						path: "/profile",
 						Icon: PersonRounded,
+						devOnly: false,
 					},
 					{
 						key: "testing",
 						title: "Testing",
 						path: "/testing",
 						Icon: ScienceTwoTone,
+						devOnly: true,
+					},
+					{
+						key: "security",
+						title: "Security",
+						path: "/security",
+						Icon: ShieldOutlined,
+						devOnly: false,
 					},
 					{
 						key: "settings",
 						title: "Settings",
 						path: "/settings",
 						Icon: SettingsRounded,
+						devOnly: false,
 					},
-				].map(({ key, title, path, Icon }) => (
-					<ListItemWithTooltip key={key} title={title} placement="right">
-						<ListItemIcon
-							sx={{ opacity: isActive(path) ? 0.5 : 1.0 }}
-							onClick={() => {
-								navigate(path);
-							}}>
-							<Icon />
-						</ListItemIcon>
-					</ListItemWithTooltip>
-				))}
+				].map(({ key, title, path, Icon, devOnly }) => {
+					if (!devOnly || process.env.NODE_ENV === "development") {
+						return (
+							<ListItemWithTooltip key={key} title={title} placement="right">
+								<ListItemIcon
+									sx={{ opacity: isActive(path) ? 0.5 : 1.0 }}
+									onClick={() => {
+										navigate(path);
+									}}>
+									<Icon />
+								</ListItemIcon>
+							</ListItemWithTooltip>
+						);
+					} else {
+						return <></>;
+					}
+				})}
 			</List>
 
 			<List

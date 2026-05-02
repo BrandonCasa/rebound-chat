@@ -1,4 +1,3 @@
-// src/socket/rooms.js
 import logger from "../logger.js";
 import MessageModel from "../models/Message.js";
 import RoomModel from "../models/Room.js";
@@ -6,36 +5,61 @@ import UserModel from "../models/User.js";
 import socketio from "./index.js";
 import "dotenv/config";
 
+const MESSAGE_LIMIT = 50;
+const attachmentPopulate = { path: "attachments", select: "url contentType size originalName" };
+
+const populateMessage = async (messageDoc) => {
+	if (!messageDoc) return null;
+	const populated = await messageDoc.populate([{ path: "sender", select: "displayName avatarUrl" }, attachmentPopulate]);
+	return populated.toObject();
+};
+
+const normalizeAttachmentIds = (attachments) => {
+	if (!Array.isArray(attachments)) return undefined;
+	const ids = attachments.filter(Boolean).map((attachment) => attachment.mediaId || attachment._id || attachment);
+	return ids.length ? ids : undefined;
+};
+
+async function fetchRecentMessages(roomDoc, limit = MESSAGE_LIMIT) {
+	const messageIds = roomDoc?.messages ?? [];
+	if (!messageIds.length) return [];
+
+	const messages = await MessageModel.find({ _id: { $in: messageIds } })
+		.sort({ _id: -1 })
+		.limit(limit)
+		.populate({ path: "sender", select: "displayName avatarUrl" })
+		.populate(attachmentPopulate)
+		.lean();
+
+	return messages.reverse();
+}
+
 class ServerRooms {
-	/**
-	 * Fetch all rooms from the database and build two maps:
-	 *  - idToName:   roomId → room.name
-	 *  - idToRoom:   roomId → full Room document
-	 */
 	async getRoomList() {
 		const idToName = {};
 		const idToRoom = {};
-		const rooms = await RoomModel.find({});
+		const rooms = await RoomModel.find({}).select("-messages");
 		for (const room of rooms) {
+			if (room?.name?.startsWith("Hidden Chat ")) continue;
 			idToName[room._id] = room.name;
 			idToRoom[room._id] = room;
 		}
 		return [idToName, idToRoom];
 	}
 
-	/**
-	 * Clean up all room listeners for a given socket (leave all chat rooms).
-	 */
 	async listenerCleanup(socket) {
 		await this.leaveRooms(socket);
 	}
 
-	/**
-	 * Helper to notify everyone in a room that `socket.user` has joined.
-	 */
 	async joinRoom(socket, roomId, roomDoc) {
 		socket.join(roomId);
-		socket.emit("joined_room", roomId, roomDoc.messages);
+
+		try {
+			const messages = await fetchRecentMessages(roomDoc);
+			socket.emit("joined_room", roomId, messages);
+		} catch (err) {
+			logger.error("Error loading initial room messages:", err);
+		}
 
 		try {
 			const user = await UserModel.findById(socket.user.id);
@@ -45,15 +69,13 @@ class ServerRooms {
 			socketsInRoom.forEach((s) => {
 				s.emit("user_list", roomId, usersInRoom, userProfile, "join");
 			});
+
 			logger.info(`User '${socket.user.username}' joined room '${roomId}'.`);
 		} catch (err) {
 			logger.error("Error notifying join:", err);
 		}
 	}
 
-	/**
-	 * Leave _all_ previously joined chat rooms (but skip the socket.id room).
-	 */
 	async leaveRooms(socket) {
 		try {
 			const [idToName] = await this.getRoomList();
@@ -63,7 +85,6 @@ class ServerRooms {
 			const userProfile = await user.toProfilePubJSON(null);
 
 			for (const roomId of socket.rooms) {
-				// skip default socket room and any non-chat-room
 				if (!validRoomIds.has(roomId)) continue;
 
 				socket.leave(roomId);
@@ -81,20 +102,18 @@ class ServerRooms {
 	}
 
 	startListeners(socket) {
-		// Client asks for the list of rooms
 		socket.on("list_rooms", async () => {
 			try {
 				let [idToName, idToRoom] = await this.getRoomList();
 
-				// If no rooms exist yet, create two defaults
 				if (Object.keys(idToName).length === 0) {
 					const r1 = new RoomModel({
-						name: "All Chat 1",
+						name: "All Chat",
 						description: "Public chat for everyone.",
 					});
 					const r2 = new RoomModel({
-						name: "All Chat 2",
-						description: "Public chat for everyone.",
+						name: "Hidden Chat 2",
+						description: "Hidden chat!",
 					});
 					await r1.save();
 					await r2.save();
@@ -107,7 +126,6 @@ class ServerRooms {
 			}
 		});
 
-		// Client creates a new room
 		socket.on("make_room", async (name, description) => {
 			try {
 				const room = new RoomModel({ name, description });
@@ -119,7 +137,6 @@ class ServerRooms {
 			}
 		});
 
-		// Client wants to join a given room
 		socket.on("join_room", async (roomId) => {
 			try {
 				const [idToName] = await this.getRoomList();
@@ -133,7 +150,6 @@ class ServerRooms {
 					populate: { path: "sender", select: "displayName avatarUrl" },
 				});
 
-				// Leave any rooms we were in, then join the new one
 				await this.leaveRooms(socket);
 				await this.joinRoom(socket, roomId, roomDoc);
 			} catch (err) {
@@ -141,14 +157,11 @@ class ServerRooms {
 			}
 		});
 
-		// Client explicitly leaves a room
 		socket.on("leave_room", async (roomId) => {
 			try {
-				// If they specify a roomId, leave only that room; otherwise leave all
 				if (roomId) {
 					socket.leave(roomId);
 					logger.info(`User '${socket.user.username}' left room '${roomId}'.`);
-					// Optional: notify others in that room
 					const user = await UserModel.findById(socket.user.id);
 					const userProfile = await user.toProfilePubJSON(null);
 					const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
@@ -163,49 +176,49 @@ class ServerRooms {
 			}
 		});
 
-		// Client sends a message to a room
-                socket.on("message_room", async (arg1, arg2, arg3) => {
+		socket.on("message_room", async (arg1, arg2, arg3, arg4) => {
 			try {
 				const [idToName] = await this.getRoomList();
-                                let roomId, content, mentions;
+				let roomId, content, mentions, attachments;
 
-				// Support both ( [roomId, content] ) or ( roomId, content ) signatures
-                                if (Array.isArray(arg1) && arg2 === undefined) {
-                                        [roomId, content, mentions] = arg1;
-                                } else {
-                                        roomId = arg1;
-                                        content = arg2;
-                                        mentions = arg3;
-                                }
+				if (Array.isArray(arg1) && arg2 === undefined) {
+					[roomId, content, mentions, attachments] = arg1;
+				} else {
+					roomId = arg1;
+					content = arg2;
+					mentions = arg3;
+					attachments = arg4;
+				}
 
 				if (!idToName[roomId]) {
 					throw new Error("Room not found by ID.");
 				}
 
-				// Persist the message
 				const sender = await UserModel.findById(socket.user.id);
 				if (!sender) throw new Error("Sender not found.");
 
-                                const msg = new MessageModel({ sender, content, mentions });
+				if ((content?.trim?.() ?? "") === "" && attachments?.length < 1) throw new Error("No message content or attachments.");
+
+				const msg = new MessageModel({
+					sender,
+					content: content,
+					mentions,
+					room: roomId,
+					attachments: normalizeAttachmentIds(attachments),
+				});
 				await msg.save();
 
 				const roomDoc = await RoomModel.findById(roomId);
 				roomDoc.messages.push(msg);
 				await roomDoc.save();
+				const populatedMsg = await populateMessage(msg);
 
-				await roomDoc.populate({
-					path: "messages",
-					options: { sort: { createdAt: 1 } },
-					populate: { path: "sender", select: "displayName avatarUrl" },
-				});
-
-				// Broadcast to everyone in the room
 				const [usersInRoom, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
 				socketsInRoom.forEach((s) => {
 					if (s.user.id === socket.user.id) {
-						s.emit("message_sent", roomId, roomDoc.messages);
+						s.emit("message_sent", roomId, populatedMsg);
 					} else {
-						s.emit("new_message", roomId, roomDoc.messages);
+						s.emit("new_message", roomId, populatedMsg);
 					}
 				});
 
@@ -215,38 +228,33 @@ class ServerRooms {
 			}
 		});
 
-		// Client edits an existing message
-                socket.on("edit_message", async (roomId, messageId, content, mentions) => {
+		socket.on("edit_message", async (roomId, messageId, content, mentions) => {
 			try {
 				const [idToName] = await this.getRoomList();
 				if (!idToName[roomId]) {
 					throw new Error("Room not found by ID.");
 				}
 
+				const roomDoc = await RoomModel.findById(roomId).select("messages");
 				const msg = await MessageModel.findById(messageId);
 				if (!msg) return;
 				if (msg.sender.toString() !== socket.user.id) return;
+				if (!roomDoc?.messages?.some((m) => m.toString() === messageId)) return;
 
-                                msg.content = content;
-                                msg.mentions = mentions;
-                                await msg.save();
-
-				const roomDoc = await RoomModel.findById(roomId).populate({
-					path: "messages",
-					options: { sort: { createdAt: 1 } },
-					populate: { path: "sender", select: "displayName avatarUrl" },
-				});
+				msg.content = content;
+				msg.mentions = mentions;
+				await msg.save();
+				const populatedMsg = await populateMessage(msg);
 
 				const [, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
 				socketsInRoom.forEach((s) => {
-					s.emit("messages_updated", roomId, roomDoc.messages);
+					s.emit("messages_updated", roomId, { type: "edit", message: populatedMsg });
 				});
 			} catch (err) {
 				logger.error("Error handling edit_message:", err);
 			}
 		});
 
-		// Client deletes a message
 		socket.on("delete_message", async (roomId, messageId) => {
 			try {
 				const [idToName] = await this.getRoomList();
@@ -258,20 +266,17 @@ class ServerRooms {
 				if (!msg) return;
 				if (msg.sender.toString() !== socket.user.id) return;
 
+				const roomDoc = await RoomModel.findById(roomId).select("messages");
+				if (!roomDoc?.messages?.some((m) => m.toString() === messageId)) return;
+
 				await MessageModel.deleteOne({ _id: messageId });
 				await RoomModel.findByIdAndUpdate(roomId, {
 					$pull: { messages: messageId },
 				});
 
-				const roomDoc = await RoomModel.findById(roomId).populate({
-					path: "messages",
-					options: { sort: { createdAt: 1 } },
-					populate: { path: "sender", select: "displayName avatarUrl" },
-				});
-
 				const [, socketsInRoom] = await socketio.getSocketsInRoom(roomId);
 				socketsInRoom.forEach((s) => {
-					s.emit("messages_updated", roomId, roomDoc.messages);
+					s.emit("messages_updated", roomId, { type: "delete", messageId });
 				});
 			} catch (err) {
 				logger.error("Error handling delete_message:", err);

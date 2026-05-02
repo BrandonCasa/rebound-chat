@@ -6,6 +6,15 @@ import mongooseUniqueValidator from "mongoose-unique-validator";
 
 import serverWatchers from "../socketio/watchers.js";
 
+const hashRefreshToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
+const normalizeFingerprintValue = (value) => {
+        if (!value) return null;
+        const trimmed = String(value).trim().toLowerCase();
+        return trimmed || null;
+};
+
+const REFRESH_TOKEN_LIFETIME_DAYS = 60;
+
 const UserSchema = new Schema(
 	{
 		username: {
@@ -26,7 +35,6 @@ const UserSchema = new Schema(
 		},
 		googleId: { type: String, unique: true, sparse: true },
 
-		// —— newly added image fields ——
 		bannerUrl: { type: String, default: "" },
 		avatarUrl: { type: String, default: "" },
 
@@ -40,193 +48,277 @@ const UserSchema = new Schema(
 		blocked: [{ type: Schema.Types.ObjectId, ref: "User" }],
 		serverInvites: [{ type: Schema.Types.ObjectId, ref: "ServerInvite" }],
 		servers: [{ type: Schema.Types.ObjectId, ref: "Server" }],
+
 		active: { type: Boolean, default: true },
-	},
-	{ timestamps: true }
+		tokenVersion: {
+			type: Number,
+			default: 0,
+		},
+		passwordChangedAt: {
+			type: Date,
+		},
+                refreshTokens: [
+                        {
+                                tokenHash: { type: String, required: true },
+                                expiresAt: { type: Date, required: true },
+                                userAgent: { type: String },
+                                userAgentParsed: { type: String },
+                                userAgentDeviceType: { type: String },
+                                deviceName: { type: String },
+                                ipAddress: { type: String },
+                                location: { type: String },
+                                lastUsed: { type: Date },
+                        },
+                ],
+        },
+        { timestamps: true }
 );
 
 UserSchema.plugin(mongooseUniqueValidator, { message: "is already taken" });
 
-/**
- * Deactivate the user.
- */
 UserSchema.methods.deactivate = function () {
 	this.active = false;
 };
 
-/**
- * Check if the provided password is valid.
- * @param {String} password
- * @returns {Boolean}
- */
+UserSchema.methods.pruneExpiredRefreshTokens = function () {
+	const now = new Date();
+	this.refreshTokens = this.refreshTokens.filter((t) => t.expiresAt && t.expiresAt > now);
+};
+
 UserSchema.methods.validPassword = function (password) {
 	const hash = crypto.pbkdf2Sync(password, this.salt, 10000, 512, "sha512").toString("hex");
 	return this.hash === hash;
 };
 
-/**
- * Set the password for the user.
- * @param {String} password
- */
 UserSchema.methods.setPassword = function (password) {
 	this.salt = crypto.randomBytes(16).toString("hex");
 	this.hash = crypto.pbkdf2Sync(password, this.salt, 10000, 512, "sha512").toString("hex");
+	this.passwordChangedAt = new Date();
+	this.tokenVersion += 1;
+	this.refreshTokens = [];
 };
 
-/**
- * Generate a JSON Web Token for the user.
- * @returns {String} JWT
- */
-UserSchema.methods.generateJWT = function () {
-	const today = new Date();
-	const exp = new Date(today);
-	exp.setDate(today.getDate() + 60); // Expires in 60 days
+UserSchema.methods.generateAccessToken = function () {
+	const payload = {
+		id: this._id,
+		username: this.username,
+		tokenVersion: this.tokenVersion,
+	};
 
-	return jwt.sign(
-		{
-			id: this._id,
-			username: this.username,
-			exp: Math.floor(exp.getTime() / 1000),
-		},
-		process.env.SECRET
-	);
+	return jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, {
+		expiresIn: "15m",
+	});
 };
 
-/**
- * Return authentication JSON.
- * @returns {Object}
- */
-UserSchema.methods.toAuthJSON = function () {
-        return {
+UserSchema.methods.generateRefreshToken = async function (descriptor = {}, existingTokenHash = null) {
+        const payload = {
                 id: this._id,
-                username: this.username,
-                email: this.email,
-                displayName: this.displayName,
-                bio: this.bio,
-                bannerUrl: this.bannerUrl,
-                avatarUrl: this.avatarUrl,
-                createdAt: this.createdAt,
-                token: this.generateJWT(),
-                friends: this.friends,
-                blocked: this.blocked,
-                serverInvites: this.serverInvites,
+                tokenVersion: this.tokenVersion,
         };
+
+	const token = jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET, {
+		expiresIn: `${REFRESH_TOKEN_LIFETIME_DAYS}d`,
+	});
+
+        this.pruneExpiredRefreshTokens();
+
+        const descriptorFingerprint = {
+                userAgent: normalizeFingerprintValue(descriptor.userAgentParsed || descriptor.userAgent),
+                device: normalizeFingerprintValue(descriptor.deviceName),
+                ip: normalizeFingerprintValue(descriptor.ipAddress),
+        };
+
+        let targetIndex = existingTokenHash
+                ? this.refreshTokens.findIndex((t) => t.tokenHash === existingTokenHash)
+                : null;
+
+        if (targetIndex === null || targetIndex < 0 || targetIndex >= this.refreshTokens.length) {
+                targetIndex = this.refreshTokens.findIndex((t) => {
+                        const tokenFingerprint = {
+                                userAgent: normalizeFingerprintValue(t.userAgentParsed || t.userAgent),
+                                device: normalizeFingerprintValue(t.deviceName),
+                                ip: normalizeFingerprintValue(t.ipAddress),
+                        };
+
+                        return (
+                                descriptorFingerprint.userAgent &&
+                                descriptorFingerprint.device &&
+                                tokenFingerprint.userAgent === descriptorFingerprint.userAgent &&
+                                tokenFingerprint.device === descriptorFingerprint.device &&
+                                (!descriptorFingerprint.ip || tokenFingerprint.ip === descriptorFingerprint.ip)
+                        );
+                });
+        }
+
+        const expiresAt = new Date(Date.now() + REFRESH_TOKEN_LIFETIME_DAYS * 24 * 60 * 60 * 1000);
+        const lastUsed = new Date();
+
+        const tokenHash = hashRefreshToken(token);
+        const { userAgent, userAgentParsed, userAgentDeviceType, deviceName, ipAddress, location } = descriptor;
+        const existingId =
+                targetIndex != null && targetIndex >= 0 && targetIndex < this.refreshTokens.length
+                        ? this.refreshTokens[targetIndex]._id
+                        : null;
+
+        const tokenRecord = {
+                ...(existingId ? { _id: existingId } : {}),
+                tokenHash,
+                expiresAt,
+                userAgent: userAgent || "Unknown",
+                userAgentParsed: userAgentParsed || userAgent || "Unknown",
+                userAgentDeviceType: userAgentDeviceType || "desktop",
+                deviceName: deviceName || userAgentParsed || userAgent || "Unknown device",
+                ipAddress: ipAddress || "Unknown",
+                location: location || ipAddress || "Unknown",
+                lastUsed,
+        };
+
+        if (targetIndex === null || targetIndex < 0 || targetIndex >= this.refreshTokens.length) {
+                this.refreshTokens.push(tokenRecord);
+        } else {
+                this.refreshTokens[targetIndex] = tokenRecord;
+        }
+        await this.save();
+
+        return token;
 };
 
-/**
- * Return private profile information.
- * Only returns details if the requesting user is the owner.
- * @param {Object} requestingUser - The user requesting private details.
- * @param {Object} [session=null] - Optional mongoose session for transaction.
- * @returns {Object} Private profile data or an empty object.
- */
+UserSchema.methods.revokeRefreshToken = async function (rawToken) {
+	this.pruneExpiredRefreshTokens();
+
+	const tokenHash = hashRefreshToken(rawToken);
+	this.refreshTokens = this.refreshTokens.filter((t) => t.tokenHash !== tokenHash);
+	await this.save();
+};
+
+UserSchema.methods.revokeAllRefreshTokens = async function () {
+	this.refreshTokens = [];
+	await this.save();
+};
+
+UserSchema.methods.toAuthJSON = function (accessToken) {
+	return {
+		id: this._id,
+		username: this.username,
+		email: this.email,
+		displayName: this.displayName,
+		bio: this.bio,
+		bannerUrl: this.bannerUrl,
+		avatarUrl: this.avatarUrl,
+		createdAt: this.createdAt,
+		token: accessToken,
+		friends: this.friends,
+		blocked: this.blocked,
+		serverInvites: this.serverInvites,
+	};
+};
+
 UserSchema.methods.toProfilePrivJSON = async function (requestingUser, session = null) {
-	if (requestingUser._id.toString() !== this._id.toString()) return {};
+	if (!requestingUser || requestingUser._id.toString() !== this._id.toString()) return {};
 
-	await this.populate({ path: "friends", options: { session } });
-	await this.populate({ path: "serverInvites", options: { session } });
+	const populateOptions = session ? { session } : undefined;
 
-        return {
-                id: this._id,
-                username: this.username,
-                email: this.email,
-                displayName: this.displayName,
-                bio: this.bio,
-                bannerUrl: this.bannerUrl,
-                avatarUrl: this.avatarUrl,
-                createdAt: this.createdAt,
-                friends: this.friends,
-                blocked: this.blocked,
-                serverInvites: this.serverInvites,
-                servers: this.servers,
-        };
+	await this.populate({
+		path: "friends",
+		options: populateOptions ? { session: populateOptions.session } : {},
+	});
+	await this.populate({
+		path: "serverInvites",
+		options: populateOptions ? { session: populateOptions.session } : {},
+	});
+
+	return {
+		id: this._id,
+		username: this.username,
+		email: this.email,
+		displayName: this.displayName,
+		bio: this.bio,
+		bannerUrl: this.bannerUrl,
+		avatarUrl: this.avatarUrl,
+		createdAt: this.createdAt,
+		friends: this.friends,
+		blocked: this.blocked,
+		serverInvites: this.serverInvites,
+		servers: this.servers,
+	};
 };
 
-/**
- * Return public profile information.
- * Returns mutual confirmed friend IDs (if any) and any pending friend invite as separate fields.
- * Also calculates mutual servers and blocked status.
- * @param {Object|null} queryingUser - The user querying the profile (can be null).
- * @param {Object} [session=null] - Optional mongoose session for transaction.
- * @returns {Object} Public profile data.
- */
 UserSchema.methods.toProfilePubJSON = async function (queryingUser, session = null) {
 	if (!queryingUser) {
-                return {
-                        id: this._id,
-                        username: this.username,
-                        displayName: this.displayName,
-                        bio: this.bio,
-                        bannerUrl: this.bannerUrl,
-                        avatarUrl: this.avatarUrl,
-                        createdAt: this.createdAt,
-                        friends: [],
-                        blocked: [],
-                        servers: [],
-                };
+		return {
+			id: this._id,
+			username: this.username,
+			displayName: this.displayName,
+			bio: this.bio,
+			bannerUrl: this.bannerUrl,
+			avatarUrl: this.avatarUrl,
+			createdAt: this.createdAt,
+			mutualFriends: [],
+			pendingFriendInvite: null,
+			blocked: [],
+			servers: [],
+		};
 	}
 
-	await this.populate({ path: "friends", options: { session } });
+	const populateOptions = session ? { session } : undefined;
+
+	await this.populate({
+		path: "friends",
+		options: populateOptions ? { session: populateOptions.session } : {},
+	});
 	const outFriends = this.friends;
 
-	// find pending invite
 	const friendInvite = outFriends.find((f) => f.requester.toString() === queryingUser._id.toString() || f.recipient.toString() === queryingUser._id.toString());
 
-	// confirmed friends of this user
 	const myConfirmed = outFriends
 		.filter((f) => f.confirmed)
 		.map((f) => (f.requester.toString() === this._id.toString() ? f.recipient.toString() : f.requester.toString()));
 
-	// confirmed friends of querying user
-	const queryingData = await this.model("User").findById(queryingUser._id).populate({ path: "friends", options: { session } });
-	const theirConfirmed = queryingData.friends
-		.filter((f) => f.confirmed)
-		.map((f) => (f.requester.toString() === queryingData._id.toString() ? f.recipient.toString() : f.requester.toString()));
+	const queryingData = await this.model("User")
+		.findById(queryingUser._id)
+		.populate({
+			path: "friends",
+			options: populateOptions ? { session: populateOptions.session } : {},
+		});
+
+	let theirConfirmed = [];
+	if (queryingData && Array.isArray(queryingData.friends)) {
+		theirConfirmed = queryingData.friends
+			.filter((f) => f.confirmed)
+			.map((f) => (f.requester.toString() === queryingData._id.toString() ? f.recipient.toString() : f.requester.toString()));
+	}
 
 	const mutualFriendIds = myConfirmed.filter((id) => theirConfirmed.includes(id));
 
 	const isBlocked = this.blocked.some((b) => b.toString() === queryingUser._id.toString());
 	const blockedList = isBlocked ? [queryingUser._id.toString()] : [];
 
-	const theirServers = queryingUser.servers.map((s) => s.toString());
+	const theirServers = (queryingUser.servers || []).map((s) => s.toString());
 	const mutualServers = this.servers.filter((s) => theirServers.includes(s.toString()));
 
-        return {
-                id: this._id,
-                username: this.username,
-                displayName: this.displayName,
-                bio: this.bio,
-                bannerUrl: this.bannerUrl,
-                avatarUrl: this.avatarUrl,
-                createdAt: this.createdAt,
-                friends: [friendInvite, ...mutualFriendIds].filter((x) => x != null),
-                blocked: blockedList,
-                servers: mutualServers,
-        };
+	return {
+		id: this._id,
+		username: this.username,
+		displayName: this.displayName,
+		bio: this.bio,
+		bannerUrl: this.bannerUrl,
+		avatarUrl: this.avatarUrl,
+		createdAt: this.createdAt,
+		mutualFriends: mutualFriendIds,
+		pendingFriendInvite: friendInvite || null,
+		blocked: blockedList,
+		servers: mutualServers,
+	};
 };
 
-/**
- * Check if a given user is blocked.
- * @param {Object} user
- * @returns {Boolean}
- */
 UserSchema.methods.isBlocked = function (user) {
 	return this.blocked.some((blockedId) => blockedId.toString() === user._id.toString());
 };
 
-/**
- * Static helper to run a series of operations in a transaction.
- * Usage:
- * await UserModel.transaction(async (session) => {
- *    // perform operations with { session } option in queries / updates
- * });
- */
 UserSchema.statics.transaction = async function (callback) {
-	// 1) start a session on mongoose
 	const session = await mongoose.startSession();
 	let result;
 	try {
-		// 2) wrap your work in a transaction
 		await session.withTransaction(async () => {
 			result = await callback(session);
 		});
@@ -236,10 +328,14 @@ UserSchema.statics.transaction = async function (callback) {
 	}
 };
 
-// Post-save hook: Notify server watchers when a user is saved.
-UserSchema.post("save", async function (doc) {
-	serverWatchers.onUserSaved(doc._id.toString());
+UserSchema.post("save", function (doc) {
+	try {
+		serverWatchers.onUserSaved(doc._id.toString());
+	} catch (err) {
+		console.error("Error in onUserSaved hook:", err);
+	}
 });
 
 const UserModel = mongoose.model("User", UserSchema);
+export { hashRefreshToken };
 export default UserModel;

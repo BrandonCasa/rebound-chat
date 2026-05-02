@@ -1,25 +1,37 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
-import { getApiBase } from "../helpers/api";
-import { profileMediaUrl } from "../helpers/mediaUrl";
+import { buildApiConfig, getApiBase } from "../helpers/api";
+import { profileMediaUrl, resolveMediaUrl } from "../helpers/mediaUrl";
 
 const base = getApiBase();
 
-export const mapMessages = (msgs) =>
-	msgs.map((m) => ({
+export const mapMessages = (msgs) => {
+	return msgs.map((m) => ({
 		...m,
 		sender: {
 			...m.sender,
 			avatarUrl: profileMediaUrl(m?.sender?.avatarUrl, "defaultpfp.webp"),
 		},
+		attachments: Array.isArray(m.attachments)
+			? m.attachments.filter(Boolean).map((attachment) => ({
+					...attachment,
+					url: resolveMediaUrl(attachment?.url),
+				}))
+			: [],
 	}));
+};
 
-export const fetchRoomMessages = createAsyncThunk("chatApi/fetchRoomMessages", async ({ roomId, authToken }, { rejectWithValue }) => {
+export const fetchRoomMessages = createAsyncThunk("chatApi/fetchRoomMessages", async ({ roomId, authToken, before, after, limit }, { rejectWithValue }) => {
 	try {
-		const { data } = await axios.get(`${base}/rooms/${roomId}/messages`, {
-			headers: { Authorization: `Bearer ${authToken}` },
-		});
-		return { roomId, messages: await mapMessages(data.messages) };
+		const params = new URLSearchParams();
+		if (before) params.append("before", before);
+		if (after) params.append("after", after);
+		if (limit) params.append("limit", limit);
+
+		const query = params.toString();
+		const url = `${base}/rooms/${roomId}/messages${query ? `?${query}` : ""}`;
+		const { data } = await axios.get(url, buildApiConfig(authToken));
+		return { roomId, messages: await mapMessages(data.messages), pageInfo: data.pageInfo };
 	} catch (err) {
 		return rejectWithValue(err.response?.data || err.message);
 	}

@@ -1,11 +1,11 @@
 import { Router } from "express";
-import jwt from "jsonwebtoken";
-import { auth, getTokenFromHeader } from "../auth.js";
+import { auth } from "../auth.js";
 import DmThreadModel from "../../models/DmThread.js";
 import MessageModel from "../../models/Message.js";
 import UserModel from "../../models/User.js";
 import logger from "../../logger.js";
 import rateLimit from "express-rate-limit";
+import { createAuthContextMiddleware } from "../../utils/auth.js";
 
 const router = Router();
 
@@ -16,6 +16,8 @@ const messagesLimiter = rateLimit({
 	legacyHeaders: false,
 	message: { error: "Too many requests, please try again later." },
 });
+
+const requireAuthContext = (context) => createAuthContextMiddleware(context, logger);
 
 async function getThread(userId, otherId) {
 	if (userId === otherId) return;
@@ -33,10 +35,9 @@ async function getThread(userId, otherId) {
 	return thread;
 }
 
-router.get("/dms/:userId/messages", messagesLimiter, auth.required, async (req, res, next) => {
-	const token = getTokenFromHeader(req);
+router.get("/dms/:userId/messages", messagesLimiter, auth.required, requireAuthContext("Error fetching DM messages"), async (req, res, next) => {
 	try {
-		const decoded = jwt.verify(token, process.env.SECRET);
+		const { decoded } = req.authContext;
 		const otherId = req.params.userId;
 		if (decoded.id === otherId) return res.status(400).json({ error: "Cannot message yourself" });
 		if (!(await UserModel.exists({ _id: otherId }))) return res.sendStatus(404);
@@ -48,17 +49,16 @@ router.get("/dms/:userId/messages", messagesLimiter, auth.required, async (req, 
 	}
 });
 
-router.post("/dms/:userId/messages", auth.required, async (req, res, next) => {
-	const token = getTokenFromHeader(req);
+router.post("/dms/:userId/messages", auth.required, requireAuthContext("Error sending DM"), async (req, res, next) => {
 	try {
-		const decoded = jwt.verify(token, process.env.SECRET);
+		const { decoded } = req.authContext;
 		const otherId = req.params.userId;
 		if (decoded.id === otherId) return res.status(400).json({ error: "Cannot message yourself" });
 		const { content } = req.body;
 		if (!content) return res.status(400).json({ error: "Content required" });
 		if (!(await UserModel.exists({ _id: otherId }))) return res.sendStatus(404);
 		const thread = await getThread(decoded.id, otherId);
-		const msg = new MessageModel({ sender: decoded.id, content });
+		const msg = new MessageModel({ sender: decoded.id, content, dmThread: thread._id });
 		await msg.save();
 		thread.messages.push(msg);
 		await thread.save();

@@ -1,33 +1,22 @@
 import { expressjwt as jwt } from "express-jwt";
 import "dotenv/config";
 
-function getTokenFromHeader(req) {
-	if (
-		(req?.headers?.authorization && req?.headers?.authorization?.split(" ")[0] === "Token") ||
-		(req?.headers?.authorization && req?.headers?.authorization?.split(" ")[0] === "Bearer") ||
-		(req?.body?.headers?.authorization && req?.body?.headers?.authorization?.split(" ")[0] === "Token") ||
-		(req?.body?.headers?.authorization && req?.body?.headers?.authorization?.split(" ")[0] === "Bearer")
-	) {
-		return req?.headers?.authorization?.split(" ")[1] || req?.body?.headers?.authorization?.split(" ")[1];
-	}
-
-	return null;
-}
+import { getAccessToken, parseCookieHeader } from "../utils/auth.js";
 
 const auth = {
-	required: jwt({
-		secret: process.env.SECRET,
-		algorithms: ["HS256"],
-		userProperty: "payload",
-		getToken: getTokenFromHeader,
-	}),
-	optional: jwt({
-		secret: process.env.SECRET,
-		algorithms: ["HS256"],
-		userProperty: "payload",
-		credentialsRequired: false,
-		getToken: getTokenFromHeader,
-	}),
+        required: jwt({
+                secret: process.env.ACCESS_TOKEN_SECRET,
+                algorithms: ["HS256"],
+                userProperty: "payload",
+                getToken: getAccessToken,
+        }),
+        optional: jwt({
+                secret: process.env.ACCESS_TOKEN_SECRET,
+                algorithms: ["HS256"],
+                userProperty: "payload",
+                credentialsRequired: false,
+                getToken: getAccessToken,
+        }),
 };
 
-export { auth, getTokenFromHeader };
+export { auth, getAccessToken, parseCookieHeader };

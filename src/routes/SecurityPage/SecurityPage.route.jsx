@@ -1,0 +1,41 @@
+import { Box, Stack, Typography } from "@mui/material";
+import { styled, useTheme } from "@mui/material/styles";
+import React from "react";
+import { useSelector } from "react-redux";
+
+import DeviceSessionsPanel from "../../components/DeviceSessionManager/DeviceSessionManager.jsx";
+import PasswordResetCard from "../../components/Security/PasswordResetCard.jsx";
+
+import { scrollbarStyles } from "../scrollbarStyles.js";
+
+const ItemPaper = styled(Box)(({ theme }) => ({
+	...theme.typography.body2,
+	padding: theme.spacing(1),
+	textAlign: "center",
+	color: theme.palette.text.secondary,
+}));
+
+export default function SecurityPage() {
+	const theme = useTheme();
+	const authState = useSelector((state) => state.auth);
+
+	return (
+		<Box
+			sx={{
+				display: "flex",
+				justifyContent: "center",
+				flexGrow: 1,
+				flexDirection: "column",
+			}}>
+			<ItemPaper>
+				<Typography variant="h4" color="text.primary">
+					Security Dashboard
+				</Typography>
+			</ItemPaper>
+			<Box sx={{ overflowY: "scroll", flexGrow: 1, ...scrollbarStyles }}>
+				<DeviceSessionsPanel sx={{ mb: 2 }} />
+				<PasswordResetCard />
+			</Box>
+		</Box>
+	);
+}

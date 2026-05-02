@@ -1,6 +1,6 @@
 {
 	"name": "rebound-server",
-	"version": "1.0.25",
+	"version": "1.0.52",
 	"description": "Rebound Server",
 	"repository": {
 		"type": "git",
@@ -8,7 +8,9 @@
 	},
 	"main": "./src/app.js",
 	"scripts": {
-		"dev": "npx kill-port 6001 && npx kill-port 27017 && cross-env NODE_ENV=development nodemon ./src/app.js"
+		"dev": "npx kill-port 6001 && npx kill-port 27017 && cross-env NODE_ENV=development nodemon ./src/app.js",
+		"live:upload": "node ./scripts/live-uploader.js",
+		"test": "cross-env NODE_ENV=test mocha \"test/**/*.test.js\" --timeout 20000"
 	},
 	"author": {
 		"name": "Brandon Casamichana",
@@ -47,6 +49,7 @@
 		"prettier": "^3.5.3",
 		"rebound-server": "file:",
 		"socket.io": "^4.8.1",
+		"ua-parser-js": "^2.0.6",
 		"winston": "^3.17.0"
 	},
 	"devDependencies": {

@@ -1,34 +1,38 @@
-html {
+:root {
+	--app-height: 100vh;
+}
+
+@supports (height: 100dvh) {
+	:root {
+		--app-height: 100dvh;
+	}
+}
+
+@supports (height: 100svh) {
+	:root {
+		--app-height: 100svh;
+	}
+}
+
+html,
+body,
+#root {
 	margin: 0;
 	padding: 0;
-	width: 100vw;
-	height: 100vh;
+	width: 100%;
+	min-height: var(--app-height);
+	height: var(--app-height);
 	overflow: hidden;
-	position: absolute;
+	position: relative;
 }
 
 body {
-	margin: 0;
-	padding: 0;
-	width: 100vw;
-	height: 100vh;
-	overflow: hidden;
-	position: absolute;
-	font-family: "Roboto";
+	font-family: "Roboto", sans-serif;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 	touch-action: manipulation;
 }
 
-#root {
-	margin: 0;
-	padding: 0;
-	width: 100vw;
-	height: 100vh;
-	overflow: hidden;
-	position: absolute;
-}
-
 code {
-	font-family: "Roboto";
+	font-family: "Roboto", sans-serif;
 }

@@ -4,4 +4,22 @@ Welcome to Rebound! Our website is all about bringing people together and provid
 
 ## Mobile support
 
-Rebound now includes improved touch interactions. Long pressing on messages opens the context menu, and the interface disables double-tap zoom for a smoother experience on phones.
+Rebound includes mobile specific touch accommodations
+
+## Desktop client
+
+You can download the latest version of our desktop app in the releases section.
+
+## Modern Security
+
+We employ a level of account security far above the bare minimum. Check out your security dashboard!
+
+## Frequent updates and additions
+
+Through the shear hatred of Discord, ego, and blind naivety of the only developer, new stuff is added near daily!
+
+## Live HLS Relay
+
+Rebound now includes an isolated `/live` route family for authenticated HTTPS HLS ingest and public HTTPS playback URLs that open directly in VLC on Apple TV.
+
+Setup and sender workflow notes live in [docs/live-hls-relay-setup.md](./docs/live-hls-relay-setup.md).

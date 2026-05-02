@@ -4,7 +4,7 @@ import { throttle } from "lodash";
 import React, { useCallback, useMemo, useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
-import { scrollbarStyles } from "../../routes/LandingPage/utils/scrollbarStyles";
+import { scrollbarStyles } from "../scrollbarStyles";
 import { updateThemeOverride, resetThemeOverrides } from "../../slices/settingsSlice";
 
 const ItemPaper = styled(Paper)(({ theme }) => ({

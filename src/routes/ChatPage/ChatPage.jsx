@@ -4,6 +4,7 @@ import PeopleRounded from "@mui/icons-material/PeopleRounded";
 import { Box, Button, Divider, Paper, Popover, Typography, useTheme } from "@mui/material";
 
 import useChatPage from "./useChatPage";
+import useInfiniteScrollUpList from "./useInfiniteScroll";
 
 import ChatRoomMenu from "../../components/Chat/ChatRoomMenu";
 import UserListMenu from "../../components/Chat/UserListMenu";
@@ -18,8 +19,10 @@ function ChatPage() {
 		authState,
 		message,
 		setMessage,
+		attachments,
 		messages,
 		channels,
+		currentRoom,
 		users,
 		roomAnchorEl,
 		setRoomAnchorEl,
@@ -36,6 +39,9 @@ function ChatPage() {
 		setEditingText,
 		setMessages,
 		sendMessage,
+		addChatAttachment,
+		removeAttachment,
+		uploadingAttachment,
 		clickRoomSelect,
 		clickUserList,
 		previewUser,
@@ -45,8 +51,20 @@ function ChatPage() {
 		confirmDeleteSelectedMessage,
 		commitEditMessage,
 		cancelEditMessage,
-		listRef,
+		fetchOlderMessages,
+		pageInfoRef,
 	} = useChatPage();
+
+	const { listRef, topSentinelRef } = useInfiniteScrollUpList(
+		{
+			initialCount: 50,
+			chunkSize: 50,
+			debounceMs: 500,
+		},
+		fetchOlderMessages,
+		messages,
+		pageInfoRef
+	);
 
 	return (
 		<Box
@@ -102,7 +120,7 @@ function ChatPage() {
 					}}>
 					<Button variant="outlined" color="secondary" startIcon={<MenuRounded />} onClick={clickRoomSelect} sx={{ textTransform: "initial" }}>
 						<Typography variant="h6" align="center">
-							{channels[authState.socketInfo.currentRoom]?.name || "No Room"}
+							{channels[currentRoom]?.name || "No Room"}
 						</Typography>
 					</Button>
 					<Box flexGrow={1} />
@@ -127,11 +145,21 @@ function ChatPage() {
 						commitEdit={commitEditMessage}
 						cancelEdit={cancelEditMessage}
 						listRef={listRef}
+						topSentinelRef={topSentinelRef}
 					/>
 				</Box>
 
 				{/* input */}
-                                <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} users={users} />
+				<ChatInput
+					message={message}
+					setMessage={setMessage}
+					sendMessage={sendMessage}
+					users={users}
+					attachments={attachments}
+					addAttachment={addChatAttachment}
+					removeAttachment={removeAttachment}
+					uploadingAttachment={uploadingAttachment}
+				/>
 			</Paper>
 		</Box>
 	);
