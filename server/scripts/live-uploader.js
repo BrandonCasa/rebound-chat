@@ -9,6 +9,35 @@ const DEFAULT_POLL_MS = 1_000;
 
 const SEGMENT_EXTENSIONS = new Set([".aac", ".m4a", ".m4s", ".mp3", ".mp4", ".ts"]);
 
+const PLAYLIST_EXTENSIONS = new Set([".m3u8"]);
+
+const isSegmentFilename = (filename) => SEGMENT_EXTENSIONS.has(path.extname(filename).toLowerCase());
+
+const extractPlaylistSegmentNames = (playlistText) =>
+	playlistText
+		.split(/\r?\n/)
+		.map((line) => line.trim())
+		.filter((line) => line && !line.startsWith("#"))
+		.map((line) => path.basename(line.split("?")[0]))
+		.filter((filename) => isSegmentFilename(filename));
+
+const getFileSignature = async (filePath) => {
+	const first = await fs.stat(filePath);
+	if (!first.isFile() || first.size === 0) return null;
+
+	// Make sure ffmpeg is not still writing/renaming the file.
+	await sleep(100);
+
+	const second = await fs.stat(filePath);
+	if (!second.isFile() || second.size === 0) return null;
+
+	if (first.size !== second.size || first.mtimeMs !== second.mtimeMs) {
+		return null;
+	}
+
+	return `${second.size}:${second.mtimeMs}`;
+};
+
 const parseArgs = (argv) => {
 	const args = {};
 
@@ -221,17 +250,31 @@ const start = async () => {
 
 			for (const filename of candidates) {
 				const filePath = path.join(hlsDir, filename);
-				const stats = await fs.stat(filePath);
-				if (!stats.isFile() || stats.size === 0) continue;
+				const signature = await getFileSignature(filePath);
 
-				const signature = `${stats.size}:${stats.mtimeMs}`;
+				if (!signature) continue;
+
 				if (uploadState.get(filename) === signature) {
 					continue;
 				}
 
+				if (PLAYLIST_EXTENSIONS.has(path.extname(filename).toLowerCase())) {
+					const playlistText = await fs.readFile(filePath, "utf8");
+					const referencedSegments = extractPlaylistSegmentNames(playlistText);
+
+					const missingUploadedSegments = referencedSegments.filter((segmentName) => {
+						return !uploadState.has(segmentName);
+					});
+
+					if (missingUploadedSegments.length > 0) {
+						//console.log(`[defer] ${filename} waiting for ${missingUploadedSegments.length} segment(s): ${missingUploadedSegments.slice(0, 3).join(", ")}`);
+						continue;
+					}
+				}
+
 				await uploadFile(session, filename);
 				uploadState.set(filename, signature);
-				console.log(`[upload] ${filename}`);
+				//console.log(`[upload] ${filename}`);
 			}
 
 			loopError = null;

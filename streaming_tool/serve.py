@@ -18,7 +18,7 @@ import requests
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-MAX_ENCODER_AHEAD_SECONDS = 1.0
+MAX_ENCODER_AHEAD_SECONDS = 0.75
 ENCODER_RESUME_AHEAD_SECONDS = 0.35
 PACER_POLL_INTERVAL_SECONDS = 0.05
 APP_TITLE = "HLS Streamer (FFmpeg + VLC)"
