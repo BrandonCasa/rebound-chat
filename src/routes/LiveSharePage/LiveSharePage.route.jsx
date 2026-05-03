@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import LandingHeader from "../../components/LandingHeader";
+import LiveStreamPlayer from "../../components/Live/LiveStreamPlayer";
 import { getLiveShareApiUrl } from "../../helpers/live";
 import { scrollbarStyles } from "../scrollbarStyles";
 
@@ -48,7 +49,7 @@ function LiveSharePage() {
 				}));
 
 				const response = await fetch(getLiveShareApiUrl(publicToken), {
-					credentials: "include",
+					credentials: "omit",
 				});
 
 				if (!response.ok) {
@@ -121,7 +122,7 @@ function LiveSharePage() {
 				overflow: "hidden",
 			}}>
 			<Stack spacing={2} sx={{ width: "100%", height: "100%" }}>
-				<LandingHeader title="Live Share" subtitle="Open the HTTPS playlist URL in VLC on Apple TV." />
+				<LandingHeader title="Live Share" subtitle="Watch the stream here or open the HTTPS playlist URL externally." />
 				<Box
 					sx={{
 						width: "100%",
@@ -147,6 +148,8 @@ function LiveSharePage() {
 
 						{!state.loading && state.data ? (
 							<>
+								<LiveStreamPlayer stream={state.data} />
+
 								<Paper variant="outlined" sx={{ p: 2.5 }}>
 									<Stack spacing={1.5}>
 										<Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ xs: "flex-start", sm: "center" }} justifyContent="space-between">
@@ -208,27 +211,18 @@ function LiveSharePage() {
 										<Typography variant="body2" color="text.secondary">
 											Recent retained media files: {state.data.recentSegmentCount}
 										</Typography>
+										<Typography variant="body2" color="text.secondary">
+											Target segment duration:{" "}
+											{state.data.mediaInfo?.mediaPlaylist?.targetDuration ? `${state.data.mediaInfo.mediaPlaylist.targetDuration}s` : "Unavailable"}
+										</Typography>
+										<Typography variant="body2" color="text.secondary">
+											Latest segment: {state.data.mediaInfo?.latestSegment?.filename || "Unavailable"}
+										</Typography>
 										{state.data.endedAt ? (
 											<Typography variant="body2" color="text.secondary">
 												Ended: {formatDateTime(state.data.endedAt)}
 											</Typography>
 										) : null}
-									</Stack>
-								</Paper>
-
-								<Paper variant="outlined" sx={{ p: 2.5 }}>
-									<Stack spacing={1.25}>
-										<Typography variant="h6">Viewer Notes</Typography>
-										<Divider />
-										<Typography variant="body2" color="text.secondary">
-											Open the playlist URL directly inside VLC on Apple TV. A browser player is not part of this route.
-										</Typography>
-										<Typography variant="body2" color="text.secondary">
-											The sender can end this live link at any time, which immediately stops public playback.
-										</Typography>
-										<Typography variant="body2" color="text.secondary">
-											If the session is active but not yet playable, wait for the sender to upload the current playlists and segments.
-										</Typography>
 									</Stack>
 								</Paper>
 							</>

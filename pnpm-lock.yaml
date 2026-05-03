@@ -49,6 +49,9 @@ importers:
       electron-updater:
         specifier: ^6.6.2
         version: 6.6.2
+      hls.js:
+        specifier: ^1.6.16
+        version: 1.6.16
       lodash:
         specifier: ^4.17.21
         version: 4.17.21
@@ -2341,6 +2344,9 @@ packages:
   helmet@8.1.0:
     resolution: {integrity: sha512-jOiHyAZsmnr8LqoPGmCjYAaiuWwjAPLgY8ZX2XrmHawt99/u1y6RgrZMTeoPfpUbV96HOalYgz1qzkRbw54Pmg==}
     engines: {node: '>=18.0.0'}
+
+  hls.js@1.6.16:
+    resolution: {integrity: sha512-VSIRpLfRwlAAdGL4wiTucx2ScRipo0ed1FBatWkyt832jC4CReKstga6yIhYVwGu9LOBjuX9wzmRMeQdBJtzEA==}
 
   hoist-non-react-statics@3.3.2:
     resolution: {integrity: sha512-/gGivxi8JPKWNm/W0jSmzcMPpfpPLc3dY/6GxhX2hQ9iGj3aDfklV4ET7NjKpSinLpJ5vafa9iiGIEZg10SfBw==}
@@ -6400,6 +6406,8 @@ snapshots:
   he@1.2.0: {}
 
   helmet@8.1.0: {}
+
+  hls.js@1.6.16: {}
 
   hoist-non-react-statics@3.3.2:
     dependencies:

@@ -130,6 +130,70 @@ describe("Live HLS relay routes", () => {
 		expect(shareResponse.body.status).to.equal("active");
 		expect(shareResponse.body.isPlayable).to.equal(true);
 		expect(shareResponse.body.playbackUrl).to.match(new RegExp(`/live/watch/${publicToken}/master\\.m3u8$`));
+		expect(shareResponse.body.mediaInfo.masterPlaylist.resolution).to.equal("3840x2160");
+		expect(shareResponse.body.mediaInfo.mediaPlaylist.targetDuration).to.equal(2);
+
+		agent.close();
+	});
+
+	it("lists available streams with current ingest metadata", async () => {
+		const agent = request.agent(backend.server);
+		const playableSession = await createSession(agent, {
+			label: "Main deck",
+			retainSegmentCount: 4,
+		});
+		const pendingSession = await createSession(agent, {
+			label: "Waiting room",
+			retainSegmentCount: 2,
+		});
+
+		await uploadPlaylist(
+			agent,
+			playableSession.sessionId,
+			playableSession.ingestSecret,
+			"master.m3u8",
+			[
+				"#EXTM3U",
+				"#EXT-X-VERSION:7",
+				'#EXT-X-STREAM-INF:BANDWIDTH=9000000,CODECS="avc1.640028,mp4a.40.2",RESOLUTION=1920x1080,FRAME-RATE=60',
+				"video.m3u8",
+				"",
+			].join("\n")
+		);
+		await uploadSegment(agent, playableSession.sessionId, playableSession.ingestSecret, "segment-000001.m4s", Buffer.from("segment-one"));
+		await uploadSegment(agent, playableSession.sessionId, playableSession.ingestSecret, "segment-000002.m4s", Buffer.from("segment-two"));
+		await uploadPlaylist(
+			agent,
+			playableSession.sessionId,
+			playableSession.ingestSecret,
+			"video.m3u8",
+			[
+				"#EXTM3U",
+				"#EXT-X-VERSION:7",
+				"#EXT-X-TARGETDURATION:2",
+				"#EXT-X-MEDIA-SEQUENCE:1",
+				"#EXT-X-INDEPENDENT-SEGMENTS",
+				"#EXTINF:2.000,",
+				"segment-000001.m4s",
+				"#EXTINF:2.000,",
+				"segment-000002.m4s",
+				"",
+			].join("\n")
+		);
+
+		const listResponse = await agent.get("/live/api/streams");
+		expect(listResponse.status).to.equal(200);
+		expect(listResponse.body.streams).to.have.length(2);
+
+		const playableStream = listResponse.body.streams.find((stream) => stream.sessionId === playableSession.sessionId);
+		const pendingStream = listResponse.body.streams.find((stream) => stream.sessionId === pendingSession.sessionId);
+
+		expect(playableStream.isPlayable).to.equal(true);
+		expect(playableStream.mediaInfo.masterPlaylist.resolution).to.equal("1920x1080");
+		expect(playableStream.mediaInfo.masterPlaylist.frameRate).to.equal(60);
+		expect(playableStream.mediaInfo.mediaPlaylist.segmentCount).to.equal(2);
+		expect(playableStream.mediaInfo.latestSegment.filename).to.equal("segment-000002.m4s");
+		expect(pendingStream.isPlayable).to.equal(false);
 
 		agent.close();
 	});

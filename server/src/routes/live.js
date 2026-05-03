@@ -205,7 +205,22 @@ router.get("/api/share/:publicToken", playbackLimiter, async (req, res) => {
 	try {
 		const session = await liveRuntime.service.getShareSummary(req.params.publicToken);
 		res.setHeader("Cache-Control", "no-store");
-		return res.json(liveRuntime.service.createShareSummary(session, getRequestOrigin(req)));
+		return res.json(await liveRuntime.service.createDetailedShareSummary(session, getRequestOrigin(req)));
+	} catch (err) {
+		return sendLiveError(res, err);
+	}
+});
+
+router.get("/api/streams", playbackLimiter, async (req, res) => {
+	try {
+		const streams = await liveRuntime.service.listShareSummaries(getRequestOrigin(req), {
+			limit: req.query?.limit,
+		});
+		res.setHeader("Cache-Control", "no-store");
+		return res.json({
+			generatedAt: new Date().toISOString(),
+			streams,
+		});
 	} catch (err) {
 		return sendLiveError(res, err);
 	}

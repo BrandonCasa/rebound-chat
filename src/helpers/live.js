@@ -4,3 +4,5 @@ export const getLiveBase = () => {
 };
 
 export const getLiveShareApiUrl = (publicToken) => `${getLiveBase()}/live/api/share/${publicToken}`;
+
+export const getLiveStreamsApiUrl = () => `${getLiveBase()}/live/api/streams`;

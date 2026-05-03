@@ -2,6 +2,7 @@ import HomeRounded from "@mui/icons-material/HomeRounded";
 import PeopleAltRounded from "@mui/icons-material/PeopleAltRounded";
 import MessageRounded from "@mui/icons-material/MessageRounded";
 import DnsRounded from "@mui/icons-material/DnsRounded";
+import LiveTvRounded from "@mui/icons-material/LiveTvRounded";
 import PersonRounded from "@mui/icons-material/PersonRounded";
 import ScienceTwoTone from "@mui/icons-material/ScienceTwoTone";
 import ShieldOutlined from "@mui/icons-material/ShieldOutlined";
@@ -37,7 +38,10 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
 	const location = useLocation();
 
 	// helper to determine if this is the active route
-	const isActive = (path) => location.pathname === path;
+	const isActive = (path) => {
+		if (path === "/") return location.pathname === path;
+		return location.pathname === path || location.pathname.startsWith(`${path}/`);
+	};
 
 	return (
 		<Drawer sx={drawerStyles(drawerWidth, iconWidth)} anchor="left" variant="persistent" open={drawerOpen}>
@@ -76,6 +80,13 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
 						path: "/servers",
 						Icon: DnsRounded,
 						devOnly: true,
+					},
+					{
+						key: "streams",
+						title: "Streams",
+						path: "/live",
+						Icon: LiveTvRounded,
+						devOnly: false,
 					},
 					{
 						key: "profile",

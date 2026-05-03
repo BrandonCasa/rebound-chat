@@ -44,6 +44,168 @@ const toValidationError = (err, fallbackMessage = "Invalid live stream payload."
 	return new LiveServiceError(422, err?.message || fallbackMessage, "live_validation_error");
 };
 
+const toIsoStringOrNull = (value) => {
+	if (!value) return null;
+	const date = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
+
+const parseNumber = (value) => {
+	const parsed = Number(value);
+	return Number.isFinite(parsed) ? parsed : null;
+};
+
+const parseAttributeList = (value = "") => {
+	const attributes = {};
+	let key = "";
+	let token = "";
+	let inQuote = false;
+	let readingKey = true;
+
+	const commit = () => {
+		const cleanKey = key.trim();
+		if (!cleanKey) return;
+
+		const cleanToken = token.trim();
+		attributes[cleanKey] = cleanToken.replace(/^"|"$/g, "");
+		key = "";
+		token = "";
+		readingKey = true;
+	};
+
+	for (const char of value) {
+		if (char === '"') {
+			inQuote = !inQuote;
+			token += char;
+			continue;
+		}
+
+		if (!inQuote && char === "=" && readingKey) {
+			readingKey = false;
+			continue;
+		}
+
+		if (!inQuote && char === ",") {
+			commit();
+			continue;
+		}
+
+		if (readingKey) {
+			key += char;
+		} else {
+			token += char;
+		}
+	}
+
+	commit();
+	return attributes;
+};
+
+const parseMasterPlaylistInfo = (playlistText = "") => {
+	const lines = String(playlistText || "")
+		.split("\n")
+		.map((line) => line.trim())
+		.filter(Boolean);
+	const variantLine = lines.find((line) => line.startsWith("#EXT-X-STREAM-INF:"));
+
+	if (!variantLine) {
+		return null;
+	}
+
+	const attributes = parseAttributeList(variantLine.slice("#EXT-X-STREAM-INF:".length));
+	return {
+		bandwidth: parseNumber(attributes.BANDWIDTH),
+		averageBandwidth: parseNumber(attributes["AVERAGE-BANDWIDTH"]),
+		codecs: attributes.CODECS || "",
+		resolution: attributes.RESOLUTION || "",
+		frameRate: parseNumber(attributes["FRAME-RATE"]),
+		videoRange: attributes["VIDEO-RANGE"] || "",
+	};
+};
+
+const parseMediaPlaylistInfo = (playlistText = "") => {
+	const lines = String(playlistText || "")
+		.split("\n")
+		.map((line) => line.trim())
+		.filter(Boolean);
+	const segments = [];
+	let pendingDuration = null;
+	let targetDuration = null;
+	let mediaSequence = null;
+	let mapUri = "";
+	let hasEndList = false;
+	let independentSegments = false;
+
+	for (const line of lines) {
+		if (line.startsWith("#EXT-X-TARGETDURATION:")) {
+			targetDuration = parseNumber(line.slice("#EXT-X-TARGETDURATION:".length));
+			continue;
+		}
+
+		if (line.startsWith("#EXT-X-MEDIA-SEQUENCE:")) {
+			mediaSequence = parseNumber(line.slice("#EXT-X-MEDIA-SEQUENCE:".length));
+			continue;
+		}
+
+		if (line.startsWith("#EXT-X-MAP:")) {
+			mapUri = parseAttributeList(line.slice("#EXT-X-MAP:".length)).URI || "";
+			continue;
+		}
+
+		if (line.startsWith("#EXTINF:")) {
+			pendingDuration = parseNumber(line.slice("#EXTINF:".length).split(",")[0]);
+			continue;
+		}
+
+		if (line === "#EXT-X-ENDLIST") {
+			hasEndList = true;
+			continue;
+		}
+
+		if (line === "#EXT-X-INDEPENDENT-SEGMENTS") {
+			independentSegments = true;
+			continue;
+		}
+
+		if (!line.startsWith("#")) {
+			segments.push({
+				uri: line,
+				duration: pendingDuration,
+			});
+			pendingDuration = null;
+		}
+	}
+
+	const totalDuration = segments.reduce((sum, segment) => sum + (Number.isFinite(segment.duration) ? segment.duration : 0), 0);
+	const latestSegment = segments[segments.length - 1] || null;
+
+	return {
+		targetDuration,
+		mediaSequence,
+		segmentCount: segments.length,
+		totalDuration,
+		latestSegmentUri: latestSegment?.uri || "",
+		firstSegmentUri: segments[0]?.uri || "",
+		mapUri,
+		hasEndList,
+		independentSegments,
+	};
+};
+
+const serializeAsset = (asset) => {
+	if (!asset) return null;
+
+	return {
+		filename: asset.filename,
+		assetKind: asset.assetKind,
+		contentType: asset.contentType,
+		byteSize: asset.byteSize,
+		createdAt: toIsoStringOrNull(asset.createdAt),
+		updatedAt: toIsoStringOrNull(asset.updatedAt),
+		lastServedAt: toIsoStringOrNull(asset.lastServedAt),
+	};
+};
+
 class LiveService {
 	constructor(config = liveConfig) {
 		this.config = config;
@@ -79,7 +241,62 @@ class LiveService {
 		};
 	}
 
-	createShareSummary(session, origin = "") {
+	createAssetMediaInfo(session) {
+		const assets = session.assets || [];
+		const masterAsset = assets.find((asset) => asset.filename === "master.m3u8" && asset.assetKind === "master");
+		const mediaAsset = assets.find((asset) => asset.filename === "video.m3u8" && asset.assetKind === "media-playlist");
+		const segmentAssets = assets.filter((asset) => asset.assetKind === "segment");
+		const recentSegmentNames = [...(session.recentSegmentNames || [])];
+		const latestSegmentName = recentSegmentNames[recentSegmentNames.length - 1] || "";
+		const latestSegment =
+			segmentAssets.find((asset) => asset.filename === latestSegmentName) ||
+			[...segmentAssets].sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())[0];
+
+		return {
+			storageBackend: session.storageBackend,
+			maxRetainedSegments: session.maxRetainedSegments,
+			retainedSegmentNames: recentSegmentNames,
+			retainedSegmentCount: recentSegmentNames.length,
+			assetCount: assets.length,
+			totalRetainedBytes: assets.reduce((sum, asset) => sum + (asset.byteSize || 0), 0),
+			latestSegment: serializeAsset(latestSegment),
+			playlists: {
+				master: serializeAsset(masterAsset),
+				media: serializeAsset(mediaAsset),
+			},
+			masterPlaylist: null,
+			mediaPlaylist: null,
+		};
+	}
+
+	async readPlaylistInfo(session, filename, parser) {
+		const asset = (session.assets || []).find((candidate) => candidate.filename === filename);
+		if (!asset) return null;
+
+		try {
+			const storedObject = await this.storage.readObject(asset.storageKey);
+			return parser(storedObject.body.toString("utf8"));
+		} catch (err) {
+			logger.warn(`[live] failed to read ${filename} metadata for sessionId=${session.sessionId}: ${err.message}`);
+			return null;
+		}
+	}
+
+	async createMediaInfo(session) {
+		const baseInfo = this.createAssetMediaInfo(session);
+		const [masterPlaylist, mediaPlaylist] = await Promise.all([
+			this.readPlaylistInfo(session, "master.m3u8", parseMasterPlaylistInfo),
+			this.readPlaylistInfo(session, "video.m3u8", parseMediaPlaylistInfo),
+		]);
+
+		return {
+			...baseInfo,
+			masterPlaylist,
+			mediaPlaylist,
+		};
+	}
+
+	createShareSummary(session, origin = "", mediaInfo = null) {
 		const hasMasterPlaylist = session.assets.some((asset) => asset.filename === "master.m3u8" && asset.assetKind === "master");
 		const hasMediaPlaylist = session.assets.some((asset) => asset.filename === "video.m3u8" && asset.assetKind === "media-playlist");
 
@@ -97,7 +314,38 @@ class LiveService {
 			hasMasterPlaylist,
 			hasMediaPlaylist,
 			isPlayable: session.status === "active" && hasMasterPlaylist && hasMediaPlaylist,
+			mediaInfo: mediaInfo || this.createAssetMediaInfo(session),
 		};
+	}
+
+	async createDetailedShareSummary(session, origin = "") {
+		return this.createShareSummary(session, origin, await this.createMediaInfo(session));
+	}
+
+	async listShareSummaries(origin = "", { limit = 100 } = {}) {
+		const resolvedLimit = Math.min(200, Math.max(1, Number.parseInt(limit, 10) || 100));
+		const sessions = await StreamSessionModel.find({}).sort({ updatedAt: -1 }).limit(resolvedLimit);
+		const summaries = [];
+
+		for (const session of sessions) {
+			if (session.status === "active" && session.expiresAt <= new Date()) {
+				await this.markSessionExpired(session, "stream_list_timeout");
+			}
+
+			summaries.push(await this.createDetailedShareSummary(session, origin));
+		}
+
+		const statusWeight = {
+			active: 0,
+			ended: 1,
+			expired: 2,
+		};
+
+		return summaries.sort((left, right) => {
+			const statusDelta = (statusWeight[left.status] ?? 3) - (statusWeight[right.status] ?? 3);
+			if (statusDelta !== 0) return statusDelta;
+			return new Date(right.lastHeartbeatAt).getTime() - new Date(left.lastHeartbeatAt).getTime();
+		});
 	}
 
 	async createSession({ label = "", createdByIp = "", requestedRetainedSegments = null } = {}) {
