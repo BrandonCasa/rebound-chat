@@ -23,6 +23,7 @@ const VIDEO_CODEC_OPTIONS = [
 	"h264_videotoolbox",
 ];
 const AUDIO_CODEC_OPTIONS = ["aac", "libmp3lame"];
+const CAPTURE_BACKEND_OPTIONS = ["gfxcapture", "gdigrab"];
 const NVENC_CODECS = new Set(["h264_nvenc", "hevc_nvenc", "av1_nvenc"]);
 const SOFTWARE_VIDEO_CODECS = new Set(["libx264", "libx265", "libaom-av1", "libsvtav1"]);
 const QSV_VIDEO_CODECS = new Set(["h264_qsv", "hevc_qsv", "av1_qsv", "vp9_qsv"]);
@@ -81,6 +82,7 @@ const DEFAULT_SETTINGS = {
 	retainSegmentCount: 5,
 	ffmpegPath: "ffmpeg",
 	source: null,
+	captureBackend: "gfxcapture",
 	captureFps: 30,
 	manualInputArgs: "",
 	audioInputArgs: "",
@@ -224,6 +226,21 @@ const codecString = (videoCodec, audioCodec, includeAudio) => {
 const extensionForName = (filename) => {
 	const index = filename.lastIndexOf(".");
 	return index >= 0 ? filename.slice(index).toLowerCase() : "";
+};
+
+const escapeFilterValue = (value) =>
+	String(value || "")
+		.replace(/\\/g, "\\\\")
+		.replace(/'/g, "\\'")
+		.replace(/:/g, "\\:");
+
+const escapeRegex = (value) => String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const sourceNameToCaseInsensitiveRegex = (name) => `(?i)^${escapeRegex(name)}$`;
+
+const parseElectronScreenIndex = (sourceId) => {
+	const match = String(sourceId || "").match(/^screen:(\d+)/);
+	return match ? Number.parseInt(match[1], 10) : 0;
 };
 
 const splitCommandLine = (value) => {
@@ -402,6 +419,7 @@ class ElectronLiveStreamManager {
 			retainSegmentCount: parsePositiveInt(config.retainSegmentCount, "Retain segments"),
 			ffmpegPath: String(config.ffmpegPath || "ffmpeg").trim(),
 			source: config.source || null,
+			captureBackend: normalizeChoice(config.captureBackend, CAPTURE_BACKEND_OPTIONS, DEFAULT_SETTINGS.captureBackend, "Capture backend"),
 			captureFps,
 			manualInputArgs,
 			audioInputArgs,
@@ -483,6 +501,10 @@ class ElectronLiveStreamManager {
 		};
 	}
 
+	usesGfxCapture(config) {
+		return process.platform === "win32" && config.captureBackend === "gfxcapture" && !config.manualInputArgs.length;
+	}
+
 	buildCaptureInputArgs(config) {
 		if (config.manualInputArgs.length) return config.manualInputArgs;
 
@@ -505,14 +527,45 @@ class ElectronLiveStreamManager {
 		return args;
 	}
 
-	buildStreamVideoFilter(config) {
+	buildGfxCaptureSourceFilter(config) {
+		const sourceName = config.source?.name || "";
+		const sourceId = config.source?.id || "";
+		const options = [];
+
+		if (sourceId.startsWith("screen:")) {
+			options.push(`monitor_idx=${parseElectronScreenIndex(sourceId)}`);
+		} else {
+			options.push(`window_title='${escapeFilterValue(sourceNameToCaseInsensitiveRegex(sourceName))}'`);
+		}
+
+		options.push(`max_framerate=${config.captureFps}`);
+		options.push(`capture_cursor=${config.drawMouse ? "1" : "0"}`);
+
+		if (config.outputWidth && config.outputHeight) {
+			options.push(`width=${config.outputWidth}`);
+			options.push(`height=${config.outputHeight}`);
+			options.push("resize_mode=scale_aspect");
+		}
+
+		options.push("output_fmt=bgra");
+		return `gfxcapture=${options.join(":")}`;
+	}
+
+	buildStreamVideoFilter(config, { includeCaptureSource = false } = {}) {
 		const filters = [];
+		const usingGfxCapture = includeCaptureSource && this.usesGfxCapture(config);
+
+		if (usingGfxCapture) {
+			filters.push(this.buildGfxCaptureSourceFilter(config));
+			filters.push("hwdownload");
+			filters.push("format=bgra");
+		}
 
 		if (config.convertStreamToSdr) {
 			filters.push("zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p");
 		}
 
-		if (config.outputWidth && config.outputHeight) {
+		if (!usingGfxCapture && config.outputWidth && config.outputHeight) {
 			filters.push(`scale=${config.outputWidth}:${config.outputHeight}:force_original_aspect_ratio=decrease`);
 		}
 
@@ -520,27 +573,46 @@ class ElectronLiveStreamManager {
 			filters.push(`fps=${config.fps}`);
 		}
 
+		if (usingGfxCapture && !config.convertStreamToSdr) {
+			filters.push("format=yuv420p");
+		}
+
 		return filters.length ? filters.join(",") : null;
 	}
 
 	buildFfmpegCommand(config) {
 		const cmd = [config.ffmpegPath, "-y"];
-		cmd.push(...this.buildCaptureInputArgs(config));
+		const usingGfxCapture = this.usesGfxCapture(config);
+
+		if (!usingGfxCapture) {
+			cmd.push(...this.buildCaptureInputArgs(config));
+		}
 
 		if (config.audioInputArgs.length) {
 			cmd.push("-thread_queue_size", "1024", ...config.audioInputArgs);
 		}
 
-		cmd.push("-map", "0:v:0");
-		if (config.audioInputArgs.length) {
-			cmd.push("-map", "1:a:0");
-		} else if (config.mapSourceAudio) {
-			cmd.push("-map", "0:a?");
-		}
+		if (usingGfxCapture) {
+			const videoFilter = this.buildStreamVideoFilter(config, { includeCaptureSource: true });
+			cmd.push("-filter_complex", `${videoFilter}[v]`);
+			cmd.push("-map", "[v]");
+			if (config.audioInputArgs.length) {
+				cmd.push("-map", "0:a:0");
+			} else if (config.mapSourceAudio) {
+				this.log("Source audio mapping is not available with gfxcapture; provide audioInputArgs for audio capture.");
+			}
+		} else {
+			cmd.push("-map", "0:v:0");
+			if (config.audioInputArgs.length) {
+				cmd.push("-map", "1:a:0");
+			} else if (config.mapSourceAudio) {
+				cmd.push("-map", "0:a?");
+			}
 
-		const videoFilter = this.buildStreamVideoFilter(config);
-		if (videoFilter) {
-			cmd.push("-vf", videoFilter);
+			const videoFilter = this.buildStreamVideoFilter(config);
+			if (videoFilter) {
+				cmd.push("-vf", videoFilter);
+			}
 		}
 
 		const videoCodec = config.videoCodec;
