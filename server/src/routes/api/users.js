@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import { Router } from "express";
 
 import UserModel, { hashRefreshToken } from "../../models/User.js";
@@ -19,6 +18,7 @@ import mongoose from "mongoose";
 import rateLimit from "express-rate-limit";
 
 import { buildRequestTokenDescriptor, createAuthContextMiddleware, parseCookieHeader, sanitizeIpAddress, resolveGoogleCallbackUrl } from "../../utils/auth.js";
+import { CSRF_COOKIE_NAME, CSRF_COOKIE_OPTIONS, createCsrfToken, setCsrfResponseHeaders } from "../../utils/csrf.js";
 
 import "dotenv/config";
 
@@ -68,13 +68,6 @@ const REFRESH_COOKIE_OPTIONS = {
 	path: "/api/users/refresh",
 };
 
-const CSRF_COOKIE_OPTIONS = {
-	httpOnly: false,
-	secure: process.env.NODE_ENV === "production",
-	sameSite: "strict",
-	path: "/",
-};
-
 const AUTH_SESSION_COOKIE_NAME = "auth-session-present";
 
 const AUTH_SESSION_COOKIE_OPTIONS = {
@@ -118,8 +111,9 @@ const resolveClientRedirectTarget = (req) => {
 const withAuthErrorParam = (target) => `${target}${target.includes("?") ? "&" : "?"}authError=google`;
 
 const setCsrfCookie = (res) => {
-	const csrfToken = crypto.randomBytes(32).toString("hex");
-	res.cookie("csrfToken", csrfToken, CSRF_COOKIE_OPTIONS);
+	const csrfToken = createCsrfToken();
+	res.cookie(CSRF_COOKIE_NAME, csrfToken, CSRF_COOKIE_OPTIONS);
+	setCsrfResponseHeaders(res, csrfToken);
 	return csrfToken;
 };
 
@@ -139,7 +133,7 @@ const setAuthCookies = (res, accessToken, refreshToken) => {
 const clearAuthCookies = (res) => {
 	res.clearCookie("token", ACCESS_COOKIE_OPTIONS);
 	res.clearCookie("jid", REFRESH_COOKIE_OPTIONS);
-	res.clearCookie("csrfToken", CSRF_COOKIE_OPTIONS);
+	res.clearCookie(CSRF_COOKIE_NAME, CSRF_COOKIE_OPTIONS);
 	res.clearCookie(AUTH_SESSION_COOKIE_NAME, AUTH_SESSION_COOKIE_OPTIONS);
 };
 

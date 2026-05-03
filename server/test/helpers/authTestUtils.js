@@ -32,6 +32,11 @@ const extractCookie = (res, name) => {
 	return null;
 };
 
+const fetchCsrfToken = async (agent) => {
+	const res = await agent.get("/api/csrf");
+	return res.body?.csrfToken || res.headers?.["x-csrf-token"] || extractCookie(res, "csrfToken");
+};
+
 const uniqueUserPayload = (overrides = {}) => {
 	const uniqueSuffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 	return {
@@ -46,7 +51,8 @@ const uniqueUserPayload = (overrides = {}) => {
 
 const registerUser = async (agent, overrides = {}) => {
 	const userPayload = uniqueUserPayload(overrides);
-	const res = await agent.post("/api/users/register").send({ user: userPayload });
+	const requestCsrfToken = await fetchCsrfToken(agent);
+	const res = await agent.post("/api/users/register").set("x-csrf-token", requestCsrfToken).send({ user: userPayload });
 	const csrfToken = res.body?.csrfToken || extractCookie(res, "csrfToken");
 
 	return {
@@ -59,7 +65,8 @@ const registerUser = async (agent, overrides = {}) => {
 };
 
 const loginUser = async (agent, credentials, headers = {}) => {
-	let requester = agent.post("/api/users/login");
+	const requestCsrfToken = await fetchCsrfToken(agent);
+	let requester = agent.post("/api/users/login").set("x-csrf-token", requestCsrfToken);
 	Object.entries(headers).forEach(([key, value]) => {
 		requester = requester.set(key, value);
 	});
@@ -112,4 +119,4 @@ const resetLiveSessions = async () => {
 	await fs.rm(process.env.LIVE_STORAGE_DIR, { recursive: true, force: true });
 };
 
-export { expect, request, extractCookie, registerUser, loginUser, createBackend, stopBackend, resetUsers, resetLiveSessions };
+export { expect, request, extractCookie, fetchCsrfToken, registerUser, loginUser, createBackend, stopBackend, resetUsers, resetLiveSessions };

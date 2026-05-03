@@ -1,4 +1,4 @@
-import { expect, request, registerUser, loginUser, createBackend, resetUsers } from "./helpers/authTestUtils.js";
+import { expect, request, fetchCsrfToken, registerUser, loginUser, createBackend, resetUsers } from "./helpers/authTestUtils.js";
 
 describe("User login", () => {
 	let backend;
@@ -30,12 +30,19 @@ describe("User login", () => {
 
 	it("requires both email and password", async () => {
 		const agent = request.agent(backend.server);
+		const csrfToken = await fetchCsrfToken(agent);
 
-		const missingPassword = await agent.post("/api/users/login").send({ user: { email: "user@example.com" } });
-		expect(missingPassword.status).to.be.oneOf([422, 403]);
+		const missingPassword = await agent
+			.post("/api/users/login")
+			.set("x-csrf-token", csrfToken)
+			.send({ user: { email: "user@example.com" } });
+		expect(missingPassword.status).to.equal(422);
 
-		const missingEmail = await agent.post("/api/users/login").send({ user: { password: "strongPassword1" } });
-		expect(missingEmail.status).to.be.oneOf([422, 403]);
+		const missingEmail = await agent
+			.post("/api/users/login")
+			.set("x-csrf-token", csrfToken)
+			.send({ user: { password: "strongPassword1" } });
+		expect(missingEmail.status).to.equal(422);
 
 		agent.close();
 	});
@@ -44,9 +51,13 @@ describe("User login", () => {
 		const registrationAgent = request.agent(backend.server);
 		const { credentials } = await registerUser(registrationAgent);
 
-		const loginRes = await registrationAgent.post("/api/users/login").send({ user: { ...credentials, password: "wrongPassword!" } });
+		const csrfToken = await fetchCsrfToken(registrationAgent);
+		const loginRes = await registrationAgent
+			.post("/api/users/login")
+			.set("x-csrf-token", csrfToken)
+			.send({ user: { ...credentials, password: "wrongPassword!" } });
 
-		expect(loginRes.status).to.be.oneOf([422, 403]);
+		expect(loginRes.status).to.equal(422);
 
 		registrationAgent.close();
 	});

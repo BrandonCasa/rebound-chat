@@ -16,19 +16,17 @@ import routes from "./routes/index.js";
 import socketBackend from "./socketio/index.js";
 
 import { buildCorsOptions } from "./config/cors.js";
+import {
+	CSRF_COOKIE_NAME,
+	CSRF_COOKIE_OPTIONS,
+	CSRF_HEADER_NAME,
+	CSRF_PROTECTED_METHODS,
+	createCsrfToken,
+	isValidCsrfToken,
+	setCsrfResponseHeaders,
+} from "./utils/csrf.js";
 
 configDotenv();
-
-const CSRF_COOKIE_NAME = "csrfToken";
-const CSRF_HEADER_NAME = "x-csrf-token";
-const CSRF_PROTECTED_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-
-const CSRF_COOKIE_OPTIONS = {
-	httpOnly: false,
-	secure: process.env.NODE_ENV === "production",
-	sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
-	path: "/",
-};
 
 class ServerBackend {
 	constructor() {
@@ -76,38 +74,23 @@ class ServerBackend {
 	}
 
 	_csrfTokenMiddleware(req, res, next) {
-		if (req.path.startsWith("/live/")) return next();
+		if (this._isLiveRequest(req)) return next();
 
 		let csrfToken = req.cookies?.[CSRF_COOKIE_NAME];
 
-		if (!csrfToken) {
-			csrfToken = crypto.randomBytes(32).toString("hex");
+		if (!isValidCsrfToken(csrfToken)) {
+			csrfToken = createCsrfToken();
 			res.cookie(CSRF_COOKIE_NAME, csrfToken, CSRF_COOKIE_OPTIONS);
 		}
 
-		res.setHeader(CSRF_HEADER_NAME, csrfToken);
-
-		// Allows browser clients to read x-csrf-token from fetch/XHR responses.
-		const existingExposeHeaders = res.getHeader("Access-Control-Expose-Headers");
-
-		if (existingExposeHeaders) {
-			const exposeValue = String(existingExposeHeaders);
-
-			if (!exposeValue.toLowerCase().includes(CSRF_HEADER_NAME)) {
-				res.setHeader(
-					"Access-Control-Expose-Headers",
-					`${exposeValue}, ${CSRF_HEADER_NAME}`,
-				);
-			}
-		} else {
-			res.setHeader("Access-Control-Expose-Headers", CSRF_HEADER_NAME);
-		}
+		req.csrfToken = csrfToken;
+		setCsrfResponseHeaders(res, csrfToken);
 
 		next();
 	}
 
 	_csrfProtectionMiddleware(req, res, next) {
-		if (req.path.startsWith("/live/")) return next();
+		if (this._isLiveRequest(req)) return next();
 		if (!CSRF_PROTECTED_METHODS.has(req.method)) return next();
 
 		const csrfTokenCookie = req.cookies?.[CSRF_COOKIE_NAME];
@@ -117,16 +100,12 @@ class ServerBackend {
 			return res.status(403).json({ error: "Missing CSRF token" });
 		}
 
-		if (
-			typeof csrfTokenCookie !== "string" ||
-			typeof csrfTokenHeader !== "string" ||
-			csrfTokenCookie.length !== csrfTokenHeader.length
-		) {
+		if (!isValidCsrfToken(csrfTokenCookie) || !isValidCsrfToken(csrfTokenHeader) || csrfTokenCookie.length !== csrfTokenHeader.length) {
 			return res.status(403).json({ error: "Invalid CSRF token" });
 		}
 
-		const cookieBuffer = Buffer.from(csrfTokenCookie, "utf8");
-		const headerBuffer = Buffer.from(csrfTokenHeader, "utf8");
+		const cookieBuffer = Buffer.from(csrfTokenCookie, "hex");
+		const headerBuffer = Buffer.from(csrfTokenHeader, "hex");
 
 		if (!crypto.timingSafeEqual(cookieBuffer, headerBuffer)) {
 			return res.status(403).json({ error: "Invalid CSRF token" });
@@ -137,7 +116,17 @@ class ServerBackend {
 		next();
 	}
 
+	_isLiveRequest(req) {
+		return req.path === "/live" || req.path.startsWith("/live/");
+	}
+
+	_csrfTokenEndpoint(req, res) {
+		res.set("Cache-Control", "no-store");
+		return res.json({ csrfToken: req.csrfToken });
+	}
+
 	_initRoutes() {
+		this.app.get("/api/csrf", this._csrfTokenEndpoint.bind(this));
 		this.app.use(routes);
 	}
 
@@ -152,8 +141,7 @@ class ServerBackend {
 			await databaseServer.startServer();
 
 			if (startSockets) {
-				// Prefer attaching Socket.IO to the same HTTP server.
-				socketBackend.start(this.server);
+				socketBackend.start(Number(httpPort ?? process.env.PORT ?? 6001) + 1);
 				this.socketStarted = true;
 			}
 

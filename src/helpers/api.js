@@ -11,6 +11,8 @@ const CSRF_HEADER_NAME = "x-csrf-token";
 const AUTH_COOKIE_NAME = "authToken";
 const AUTH_SESSION_COOKIE_NAME = "auth-session-present";
 
+let csrfTokenRequest = null;
+
 const getCookie = (name) => {
 	if (typeof document === "undefined" || !document.cookie) return null;
 	const match = document.cookie
@@ -18,14 +20,14 @@ const getCookie = (name) => {
 		.map((entry) => entry.trim())
 		.find((entry) => entry.startsWith(`${name}=`));
 	if (!match) return null;
-	const [, value] = match.split("=");
+	const value = match.slice(name.length + 1);
 	return decodeURIComponent(value || "");
 };
 
 const setCookie = (name, value) => {
 	if (!value || typeof document === "undefined") return;
 	const secureFlag = window.location.protocol === "https:" ? "; Secure" : "";
-	document.cookie = `${name}=${value}; Path=/; SameSite=Strict${secureFlag}`;
+	document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; SameSite=Strict${secureFlag}`;
 };
 
 export const clearCookie = (name) => {
@@ -36,6 +38,38 @@ export const clearCookie = (name) => {
 export const getCsrfToken = () => getCookie(CSRF_COOKIE_NAME);
 
 export const setCsrfTokenCookie = (csrfToken) => setCookie(CSRF_COOKIE_NAME, csrfToken);
+
+export const ensureCsrfToken = async () => {
+	const existingToken = getCsrfToken();
+	if (existingToken) return existingToken;
+
+	if (!csrfTokenRequest) {
+		csrfTokenRequest = fetch(`${getApiBase()}/csrf`, {
+			credentials: "include",
+			headers: { Accept: "application/json" },
+		})
+			.then(async (response) => {
+				if (!response.ok) {
+					throw new Error("Unable to initialize CSRF token");
+				}
+
+				const data = await response.json().catch(() => ({}));
+				const csrfToken = data?.csrfToken || response.headers.get(CSRF_HEADER_NAME);
+
+				if (!csrfToken) {
+					throw new Error("CSRF token was not returned by the server");
+				}
+
+				setCsrfTokenCookie(csrfToken);
+				return csrfToken;
+			})
+			.finally(() => {
+				csrfTokenRequest = null;
+			});
+	}
+
+	return csrfTokenRequest;
+};
 
 export const setAuthSessionCookie = () => setCookie(AUTH_SESSION_COOKIE_NAME, "true");
 
@@ -50,17 +84,23 @@ export const clearAuthCookies = () => {
 };
 
 export const buildApiConfig = (authToken, config = {}) => {
-	const csrfToken = getCsrfToken();
+	const { csrfToken: explicitCsrfToken, ...requestConfig } = config;
+	const csrfToken = explicitCsrfToken || getCsrfToken();
 	const token = authToken;
 	const headers = {
 		...(csrfToken ? { [CSRF_HEADER_NAME]: csrfToken } : {}),
 		...(token ? { Authorization: `Bearer ${token}` } : {}),
-		...(config.headers || {}),
+		...(requestConfig.headers || {}),
 	};
 
 	return {
 		withCredentials: true,
-		...config,
+		...requestConfig,
 		headers,
 	};
+};
+
+export const buildCsrfApiConfig = async (authToken, config = {}) => {
+	const csrfToken = await ensureCsrfToken();
+	return buildApiConfig(authToken, { ...config, csrfToken });
 };
