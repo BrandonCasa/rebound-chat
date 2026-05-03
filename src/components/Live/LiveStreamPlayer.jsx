@@ -15,6 +15,15 @@ import LiveStreamInfoTooltip, { formatDuration } from "./LiveStreamInfoTooltip";
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
+const approach = (current, target, maxStep) => {
+	if (!Number.isFinite(current)) return target;
+
+	const delta = target - current;
+	if (Math.abs(delta) <= maxStep) return target;
+
+	return current + Math.sign(delta) * maxStep;
+};
+
 const getSeekableWindow = (video) => {
 	if (!video?.seekable?.length) return null;
 
@@ -39,6 +48,11 @@ const buildSyncTuning = (targetDuration) => {
 		targetLatency,
 		maxLatency,
 		minLatency,
+		minPlaybackRate: 0.5,
+		maxPlaybackRate: 2.0,
+		rateDeadbandSeconds: 0.18,
+		rateCorrectionPerSecond: 0.006,
+		maxRateStep: 0.1,
 	};
 };
 
@@ -86,25 +100,54 @@ function LiveStreamPlayer({ stream, sx }) {
 			const { start, end } = seekableWindow;
 			const availableWindow = Math.max(0, end - start);
 			const effectiveLatency = Math.min(syncTuning.targetLatency, Math.max(syncTuning.minLatency, availableWindow * 0.45));
+
 			const targetTime = clamp(end - effectiveLatency, start, end);
 			const currentTime = Number.isFinite(video.currentTime) ? video.currentTime : start;
 			const latency = Math.max(0, end - currentTime);
+			const targetLatency = Math.max(0, end - targetTime);
+			const latencyError = latency - targetLatency;
+
 			const driftedPastWindow = currentTime < start || currentTime > end;
+			const tooFarBehind = latency > syncTuning.maxLatency;
 			const tooCloseToNewestSegment = latency < syncTuning.minLatency;
-			let playbackRate = 1;
+
 			let syncLabel = `Live latency ${formatDuration(latency)}`;
 
-			if (force || driftedPastWindow || latency > syncTuning.maxLatency || tooCloseToNewestSegment) {
+			// Hard correction only when we are outside the safe range or user explicitly syncs.
+			if (force || driftedPastWindow || tooFarBehind || tooCloseToNewestSegment) {
 				video.currentTime = targetTime;
-				syncLabel = `Holding ${formatDuration(syncTuning.latestSegmentSafety)} behind latest segment`;
-			} else if (!video.paused && latency > syncTuning.targetLatency + syncTuning.segmentDuration) {
-				playbackRate = 1.04;
-				syncLabel = "Catching up gently";
-			} else {
-				syncLabel = "Near live";
+				video.playbackRate = 1;
+
+				setPlayerValue({
+					latency: targetLatency,
+					syncLabel: `Holding ${formatDuration(syncTuning.latestSegmentSafety)} behind latest segment`,
+				});
+				return;
 			}
 
-			video.playbackRate = playbackRate;
+			let desiredPlaybackRate = 1;
+
+			if (!video.paused && !video.seeking) {
+				if (Math.abs(latencyError) > syncTuning.rateDeadbandSeconds) {
+					desiredPlaybackRate = clamp(1 + latencyError * syncTuning.rateCorrectionPerSecond, syncTuning.minPlaybackRate, syncTuning.maxPlaybackRate);
+				}
+
+				const currentPlaybackRate = Number.isFinite(video.playbackRate) ? video.playbackRate : 1;
+				const nextPlaybackRate = approach(currentPlaybackRate, desiredPlaybackRate, syncTuning.maxRateStep);
+
+				video.playbackRate = Number(nextPlaybackRate.toFixed(4));
+
+				if (nextPlaybackRate > 1.003) {
+					syncLabel = "Catching up smoothly";
+				} else if (nextPlaybackRate < 0.997) {
+					syncLabel = "Easing back smoothly";
+				} else {
+					syncLabel = "Near live";
+				}
+			} else {
+				video.playbackRate = 1;
+			}
+
 			setPlayerValue({ latency, syncLabel });
 		},
 		[setPlayerValue, syncTuning]
@@ -141,7 +184,10 @@ function LiveStreamPlayer({ stream, sx }) {
 			video.playbackRate = 1;
 			setPlayerValue({ isPlaying: false });
 		};
-		const handleWaiting = () => setPlayerValue({ syncLabel: "Buffering" });
+		const handleWaiting = () => {
+			video.playbackRate = 1;
+			setPlayerValue({ syncLabel: "Buffering" });
+		};
 		const handlePlaying = () => setPlayerValue({ syncLabel: "Near live" });
 		const handleVolumeChange = () => {
 			setPlayerValue({
@@ -203,7 +249,7 @@ function LiveStreamPlayer({ stream, sx }) {
 			if (!video.paused && !video.seeking) {
 				syncToLive();
 			}
-		}, 3000);
+		}, 500);
 
 		return () => {
 			window.clearInterval(syncIntervalRef.current);

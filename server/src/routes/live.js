@@ -11,7 +11,7 @@ const router = Router();
 
 const createLimiter = rateLimit({
 	windowMs: 5 * 60 * 1000,
-	max: 20,
+	max: 200,
 	standardHeaders: true,
 	legacyHeaders: false,
 	message: { error: "Too many live session requests, please try again later." },
