@@ -84,16 +84,21 @@ const normalizeRedirectTarget = (rawValue) => {
 		const decoded = decodeURIComponent(rawValue);
 		const parsed = new URL(decoded);
 
-		if (!parsed?.protocol || !["http:", "https:", "app:"].includes(parsed.protocol)) {
-			return null;
+		if (parsed.protocol === "app:") {
+			if (parsed.host !== "-") return null;
+			return `${parsed.protocol}//${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}`;
 		}
 
-		if (parsed.protocol === "app:" && parsed.host !== "-") {
-			return null;
+		if (["http:", "https:"].includes(parsed.protocol)) {
+			const allowedHosts = new Set(["rebound.nexus", "www.rebound.nexus", "localhost:3000"]);
+
+			if (!allowedHosts.has(parsed.host)) return null;
+
+			return `${parsed.protocol}//${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}`;
 		}
 
-		return `${parsed.protocol}//${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}`;
-	} catch (err) {
+		return null;
+	} catch {
 		return null;
 	}
 };
@@ -339,7 +344,7 @@ router.get("/users/google", (req, res, next) => {
 
 	return passport.authenticate("google", {
 		scope: ["profile", "email"],
-		state: encodeURIComponent(redirectTarget),
+		state: redirectTarget,
 		callbackURL,
 	})(req, res, next);
 });
