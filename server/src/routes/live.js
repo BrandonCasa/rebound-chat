@@ -5,7 +5,7 @@ import logger from "../logger.js";
 import liveRuntime from "../live/runtime.js";
 import { PLAYLIST_CONTENT_TYPE } from "../live/mime.js";
 import { LiveServiceError } from "../live/service.js";
-import { getBearerToken } from "../utils/auth.js";
+import { getBearerToken, validateAccessTokenFromRequest } from "../utils/auth.js";
 
 const router = Router();
 
@@ -110,9 +110,19 @@ const requireIngestSession = async (req, res, next) => {
 	}
 };
 
+const requirePlaybackAuth = async (req, res, next) => {
+	try {
+		req.authContext = await validateAccessTokenFromRequest(req);
+		return next();
+	} catch (err) {
+		return res.status(err.status || 401).json({ error: "Login required to view live streams." });
+	}
+};
+
 const sendPlaylistResponse = (res, storedAsset) => {
 	res.setHeader("Content-Type", PLAYLIST_CONTENT_TYPE);
 	res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+	res.setHeader("Vary", "Authorization, Cookie");
 	res.setHeader("Pragma", "no-cache");
 	res.setHeader("Expires", "0");
 	res.setHeader("Content-Length", String(storedAsset.size));
@@ -123,7 +133,8 @@ const sendPlaylistResponse = (res, storedAsset) => {
 
 const sendSegmentResponse = (res, storedAsset) => {
 	res.setHeader("Content-Type", storedAsset.asset.contentType);
-	res.setHeader("Cache-Control", `public, max-age=${liveRuntime.config.segmentCacheSeconds}, immutable`);
+	res.setHeader("Cache-Control", `private, max-age=${liveRuntime.config.segmentCacheSeconds}, immutable`);
+	res.setHeader("Vary", "Authorization, Cookie");
 	res.setHeader("Content-Length", String(storedAsset.size));
 	res.setHeader("Last-Modified", new Date(storedAsset.lastModified).toUTCString());
 	res.setHeader("Accept-Ranges", "bytes");
@@ -201,7 +212,7 @@ router.post("/api/:sessionId/end", ingestLimiter, requireIngestSession, async (r
 	}
 });
 
-router.get("/api/share/:publicToken", playbackLimiter, async (req, res) => {
+router.get("/api/share/:publicToken", playbackLimiter, requirePlaybackAuth, async (req, res) => {
 	try {
 		const session = await liveRuntime.service.getShareSummary(req.params.publicToken);
 		res.setHeader("Cache-Control", "no-store");
@@ -211,7 +222,7 @@ router.get("/api/share/:publicToken", playbackLimiter, async (req, res) => {
 	}
 });
 
-router.get("/api/streams", playbackLimiter, async (req, res) => {
+router.get("/api/streams", playbackLimiter, requirePlaybackAuth, async (req, res) => {
 	try {
 		const streams = await liveRuntime.service.listShareSummaries(getRequestOrigin(req), {
 			limit: req.query?.limit,
@@ -226,7 +237,7 @@ router.get("/api/streams", playbackLimiter, async (req, res) => {
 	}
 });
 
-router.get("/watch/:publicToken/master.m3u8", playbackLimiter, async (req, res) => {
+router.get("/watch/:publicToken/master.m3u8", playbackLimiter, requirePlaybackAuth, async (req, res) => {
 	try {
 		const storedAsset = await liveRuntime.service.getPublicAsset(req.params.publicToken, "master.m3u8", "master");
 		return sendPlaylistResponse(res, storedAsset);
@@ -235,7 +246,7 @@ router.get("/watch/:publicToken/master.m3u8", playbackLimiter, async (req, res) 
 	}
 });
 
-router.get("/watch/:publicToken/video.m3u8", playbackLimiter, async (req, res) => {
+router.get("/watch/:publicToken/video.m3u8", playbackLimiter, requirePlaybackAuth, async (req, res) => {
 	try {
 		const storedAsset = await liveRuntime.service.getPublicAsset(req.params.publicToken, "video.m3u8", "media-playlist");
 		return sendPlaylistResponse(res, storedAsset);
@@ -244,7 +255,7 @@ router.get("/watch/:publicToken/video.m3u8", playbackLimiter, async (req, res) =
 	}
 });
 
-router.get("/watch/:publicToken/segments/:filename", playbackLimiter, async (req, res) => {
+router.get("/watch/:publicToken/segments/:filename", playbackLimiter, requirePlaybackAuth, async (req, res) => {
 	try {
 		const storedAsset = await liveRuntime.service.getPublicAsset(req.params.publicToken, req.params.filename, "segment");
 		return sendSegmentResponse(res, storedAsset);

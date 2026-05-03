@@ -8,7 +8,9 @@ import Hls from "hls.js";
 import { Box, Chip, IconButton, LinearProgress, Slider, Stack, Tooltip, Typography, useMediaQuery } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSelector } from "react-redux";
 
+import { buildLiveHlsConfig } from "../../helpers/live";
 import LiveStreamInfoTooltip, { formatDuration } from "./LiveStreamInfoTooltip";
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -43,6 +45,8 @@ const buildSyncTuning = (targetDuration) => {
 function LiveStreamPlayer({ stream, sx }) {
 	const theme = useTheme();
 	const alwaysShowControls = useMediaQuery(theme.breakpoints.down("sm"));
+	const authToken = useSelector((state) => state.auth.authToken);
+	const authTokenRef = useRef(authToken);
 	const videoRef = useRef(null);
 	const playerRef = useRef(null);
 	const hlsRef = useRef(null);
@@ -58,6 +62,10 @@ function LiveStreamPlayer({ stream, sx }) {
 
 	const targetDuration = stream?.mediaInfo?.mediaPlaylist?.targetDuration || 2;
 	const syncTuning = useMemo(() => buildSyncTuning(targetDuration), [targetDuration]);
+
+	useEffect(() => {
+		authTokenRef.current = authToken;
+	}, [authToken]);
 
 	const setPlayerValue = useCallback((patch) => {
 		setPlayerState((current) => ({
@@ -158,6 +166,7 @@ function LiveStreamPlayer({ stream, sx }) {
 				liveSyncDuration: syncTuning.targetLatency,
 				liveMaxLatencyDuration: syncTuning.maxLatency,
 				maxLiveSyncPlaybackRate: 1.05,
+				...buildLiveHlsConfig(() => authTokenRef.current),
 			});
 
 			hlsRef.current = hls;
@@ -295,7 +304,6 @@ function LiveStreamPlayer({ stream, sx }) {
 			<video
 				ref={videoRef}
 				playsInline
-				crossOrigin="anonymous"
 				style={{
 					width: "100%",
 					height: "100%",

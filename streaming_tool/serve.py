@@ -27,6 +27,22 @@ READRATE_HEADROOM = 0.05
 UPLOAD_POLL_INTERVAL_SECONDS = 0.75
 SEGMENT_EXTENSIONS = {".aac", ".m4a", ".m4s", ".mp3", ".mp4", ".ts"}
 NVENC_CODECS = {"h264_nvenc", "hevc_nvenc"}
+SOFTWARE_VIDEO_CODECS = {"libx264", "libx265"}
+QSV_VIDEO_CODECS = {"h264_qsv", "hevc_qsv"}
+VIDEOTOOLBOX_VIDEO_CODECS = {"h264_videotoolbox", "hevc_videotoolbox"}
+HEVC_VIDEO_CODECS = {"libx265", "hevc_nvenc", "hevc_qsv", "hevc_videotoolbox"}
+H264_VIDEO_CODECS = {"libx264", "h264_nvenc", "h264_qsv", "h264_videotoolbox"}
+VIDEO_CODEC_OPTIONS = [
+    "hevc_nvenc",
+    "h264_nvenc",
+    "libx265",
+    "libx264",
+    "hevc_qsv",
+    "h264_qsv",
+    "hevc_videotoolbox",
+    "h264_videotoolbox",
+]
+AUDIO_CODEC_OPTIONS = ["aac", "libmp3lame"]
 NVENC_PRESET_LADDER = ["p7", "p6", "p5", "p4", "p3", "p2", "p1"]
 NVENC_PRESET_ALIASES = {
     "slowest": "p7",
@@ -36,6 +52,27 @@ NVENC_PRESET_ALIASES = {
     "fast": "p4",
     "faster": "p3",
     "fastest": "p1",
+}
+SOFTWARE_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo"]
+QSV_PRESETS = ["veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"]
+VIDEOTOOLBOX_PRESETS = ["realtime"]
+ENCODER_PRESETS = {
+    "nvenc": NVENC_PRESET_LADDER,
+    "software": SOFTWARE_PRESETS,
+    "qsv": QSV_PRESETS,
+    "videotoolbox": VIDEOTOOLBOX_PRESETS,
+}
+DEFAULT_ENCODER_PRESETS = {
+    "nvenc": DEFAULT_NVENC_PRESET,
+    "software": "medium",
+    "qsv": "medium",
+    "videotoolbox": "realtime",
+}
+CODEC_SETTING_NOTES = {
+    "nvenc": "NVENC uses p7..p1 presets; adaptive mode can restart at faster presets when segment encode speed falls behind.",
+    "software": "Software x264/x265 uses FFmpeg's encoder preset ladder. Slower presets improve efficiency but can fall behind live playback.",
+    "qsv": "Intel QSV uses its own preset ladder with the same bitrate and keyframe settings as the other live encoders.",
+    "videotoolbox": "VideoToolbox runs in realtime mode and does not expose an FFmpeg preset in this tool.",
 }
 FFMPEG_TIME_RE = re.compile(r"time=(\d+):(\d+):(\d+(?:\.\d+)?)")
 FFMPEG_SPEED_RE = re.compile(r"speed=\s*([0-9.]+)x")
@@ -47,11 +84,62 @@ def is_nvenc_codec(video_codec: str) -> bool:
     return video_codec.strip().lower() in NVENC_CODECS
 
 
+def is_software_codec(video_codec: str) -> bool:
+    return video_codec.strip().lower() in SOFTWARE_VIDEO_CODECS
+
+
+def is_qsv_codec(video_codec: str) -> bool:
+    return video_codec.strip().lower() in QSV_VIDEO_CODECS
+
+
+def is_videotoolbox_codec(video_codec: str) -> bool:
+    return video_codec.strip().lower() in VIDEOTOOLBOX_VIDEO_CODECS
+
+
+def is_hevc_codec(video_codec: str) -> bool:
+    return video_codec.strip().lower() in HEVC_VIDEO_CODECS
+
+
+def codec_family(video_codec: str) -> str:
+    codec = video_codec.strip().lower()
+    if codec in NVENC_CODECS:
+        return "nvenc"
+    if codec in SOFTWARE_VIDEO_CODECS:
+        return "software"
+    if codec in QSV_VIDEO_CODECS:
+        return "qsv"
+    if codec in VIDEOTOOLBOX_VIDEO_CODECS:
+        return "videotoolbox"
+    raise ValueError(f"Video codec must be one of {', '.join(VIDEO_CODEC_OPTIONS)}")
+
+
 def normalize_nvenc_preset(value: str) -> str:
     text = (value or DEFAULT_NVENC_PRESET).strip().lower()
     text = NVENC_PRESET_ALIASES.get(text, text)
     if text not in NVENC_PRESET_LADDER:
         raise ValueError(f"NVENC preset must be one of {', '.join(NVENC_PRESET_LADDER)}")
+    return text
+
+
+def normalize_encoder_preset(video_codec: str, value: str) -> str:
+    family = codec_family(video_codec)
+    if family == "nvenc":
+        return normalize_nvenc_preset(value)
+
+    presets = ENCODER_PRESETS[family]
+    default_preset = DEFAULT_ENCODER_PRESETS[family]
+    text = (value or default_preset).strip().lower()
+    if text not in presets:
+        raise ValueError(f"{video_codec} preset must be one of {', '.join(presets)}")
+    return text
+
+
+def normalize_audio_codec(value: str) -> str:
+    text = (value or "").strip().lower()
+    if text == "mp3":
+        text = "libmp3lame"
+    if text not in AUDIO_CODEC_OPTIONS:
+        raise ValueError(f"Audio codec must be one of {', '.join(AUDIO_CODEC_OPTIONS)}")
     return text
 
 
@@ -113,14 +201,14 @@ def codec_string(video_codec: str, audio_codec: str) -> str:
     video_codec = video_codec.strip().lower()
     audio_codec = audio_codec.strip().lower()
 
-    if video_codec in {"libx265", "hevc_nvenc", "hevc_qsv", "hevc_videotoolbox"}:
+    if video_codec in HEVC_VIDEO_CODECS:
         codecs.append("hvc1")
-    elif video_codec in {"libx264", "h264_nvenc", "h264_qsv", "h264_videotoolbox"}:
+    elif video_codec in H264_VIDEO_CODECS:
         codecs.append("avc1")
 
     if audio_codec == "aac":
         codecs.append("mp4a.40.2")
-    elif audio_codec == "mp3":
+    elif audio_codec in {"mp3", "libmp3lame"}:
         codecs.append("mp4a.40.34")
 
     return ",".join(codecs)
@@ -166,7 +254,7 @@ class StreamConfig:
     video_bitrate: str
     audio_bitrate: str
     fps: Optional[int]
-    nvenc_preset: str
+    encoder_preset: str
     target_speed: float
     adaptive_nvenc: bool
     convert_stream_to_sdr: bool
@@ -486,7 +574,7 @@ class StreamController:
             self.stop_event.clear()
             self.restart_event.clear()
             self.pending_nvenc_preset = None
-            self.current_nvenc_preset = normalize_nvenc_preset(config.nvenc_preset)
+            self.current_nvenc_preset = normalize_nvenc_preset(config.encoder_preset) if is_nvenc_codec(config.output_video_codec) else DEFAULT_NVENC_PRESET
             self.ffmpeg_generation = 0
             self.input_start_offset_seconds = 0.0
             self.last_remote_output_seconds = 0.0
@@ -736,11 +824,17 @@ class StreamController:
         if video_filter:
             cmd += ["-vf", video_filter]
 
-        cmd += ["-c:v", config.output_video_codec]
-        if config.output_video_codec in {"libx265", "hevc_nvenc", "hevc_qsv", "hevc_videotoolbox"}:
+        video_codec = config.output_video_codec
+        encoder_preset = normalize_encoder_preset(video_codec, config.encoder_preset)
+
+        cmd += ["-c:v", video_codec]
+        if is_hevc_codec(video_codec):
             cmd += ["-tag:v", "hvc1"]
-        if config.output_video_codec == "libx265":
+
+        if video_codec == "libx265":
             cmd += ["-x265-params", "repeat-headers=1:keyint=48:min-keyint=48:scenecut=0"]
+        elif video_codec == "libx264":
+            cmd += ["-x264-params", "keyint=48:min-keyint=48:scenecut=0"]
         else:
             cmd += ["-g", "48", "-keyint_min", "48", "-sc_threshold", "0"]
 
@@ -748,11 +842,13 @@ class StreamController:
         cmd += ["-maxrate", config.video_bitrate]
         cmd += ["-bufsize", str(parse_bitrate_to_bps(config.video_bitrate) * 2)]
 
-        if is_nvenc_codec(config.output_video_codec):
-            cmd += ["-preset", normalize_nvenc_preset(nvenc_preset or config.nvenc_preset)]
+        if is_nvenc_codec(video_codec):
+            cmd += ["-preset", normalize_nvenc_preset(nvenc_preset or encoder_preset)]
             cmd += ["-rc", "vbr", "-spatial_aq", "1", "-temporal_aq", "1"]
-        elif config.output_video_codec.startswith("libx"):
-            cmd += ["-preset", "medium"]
+        elif is_software_codec(video_codec) or is_qsv_codec(video_codec):
+            cmd += ["-preset", encoder_preset]
+        elif is_videotoolbox_codec(video_codec):
+            cmd += ["-realtime", "1"]
 
         cmd += ["-c:a", config.output_audio_codec, "-b:a", config.audio_bitrate]
         if config.output_audio_codec == "aac":
@@ -889,7 +985,8 @@ class App(tk.Tk):
         self.video_bitrate_var = tk.StringVar(value="18M")
         self.audio_bitrate_var = tk.StringVar(value="192k")
         self.fps_var = tk.StringVar(value="24")
-        self.nvenc_preset_var = tk.StringVar(value=DEFAULT_NVENC_PRESET)
+        self.encoder_preset_var = tk.StringVar(value=DEFAULT_NVENC_PRESET)
+        self.codec_settings_note_var = tk.StringVar()
         self.target_speed_var = tk.StringVar(value=str(DEFAULT_TARGET_SPEED))
         self.local_port_var = tk.StringVar(value=str(DEFAULT_LOCAL_PORT))
         self.ffmpeg_path_var = tk.StringVar(value="ffmpeg")
@@ -899,8 +996,13 @@ class App(tk.Tk):
         self.open_local_browser_preview_var = tk.BooleanVar(value=False)
         self.use_alt_audio_var = tk.BooleanVar(value=False)
         self.adaptive_nvenc_var = tk.BooleanVar(value=True)
+        self.video_codec_combo: Optional[ttk.Combobox] = None
+        self.audio_codec_combo: Optional[ttk.Combobox] = None
+        self.encoder_preset_combo: Optional[ttk.Combobox] = None
+        self.adaptive_nvenc_check: Optional[ttk.Checkbutton] = None
 
         self._build_ui()
+        self._on_video_codec_change()
         self.after(250, self._drain_logs)
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
@@ -928,15 +1030,17 @@ class App(tk.Tk):
 
         codecs = ttk.LabelFrame(main, text="Stream output")
         codecs.pack(fill="x", pady=(12, 0))
-        self._entry_row(codecs, 0, "Video codec", self.video_codec_var)
-        self._entry_row(codecs, 1, "Audio codec", self.audio_codec_var)
+        self.video_codec_combo = self._combo_row(codecs, 0, "Video codec", self.video_codec_var, VIDEO_CODEC_OPTIONS)
+        self.video_codec_combo.bind("<<ComboboxSelected>>", self._on_video_codec_change)
+        self.audio_codec_combo = self._combo_row(codecs, 1, "Audio codec", self.audio_codec_var, AUDIO_CODEC_OPTIONS)
         self._entry_row(codecs, 2, "Width", self.width_var)
         self._entry_row(codecs, 3, "Height", self.height_var)
         self._entry_row(codecs, 4, "Video bitrate", self.video_bitrate_var)
         self._entry_row(codecs, 5, "Audio bitrate", self.audio_bitrate_var)
         self._entry_row(codecs, 6, "FPS", self.fps_var)
-        self._entry_row(codecs, 7, "NVENC initial preset", self.nvenc_preset_var)
+        self.encoder_preset_combo = self._combo_row(codecs, 7, "Encoder preset / mode", self.encoder_preset_var, NVENC_PRESET_LADDER)
         self._entry_row(codecs, 8, "Target encode speed", self.target_speed_var)
+        ttk.Label(codecs, textvariable=self.codec_settings_note_var, wraplength=820).grid(row=9, column=1, sticky="w", padx=8, pady=(0, 4))
 
         tools = ttk.LabelFrame(main, text="Tools and preview")
         tools.pack(fill="x", pady=(12, 0))
@@ -950,7 +1054,8 @@ class App(tk.Tk):
         ttk.Checkbutton(options, text="Open local VLC preview on original source", variable=self.open_local_vlc_var).grid(row=1, column=0, sticky="w", padx=8, pady=4)
         ttk.Checkbutton(options, text="Open localhost browser HLS preview", variable=self.open_local_browser_preview_var).grid(row=2, column=0, sticky="w", padx=8, pady=4)
         ttk.Checkbutton(options, text="Use separate audio file for streamed output only", variable=self.use_alt_audio_var).grid(row=3, column=0, sticky="w", padx=8, pady=4)
-        ttk.Checkbutton(options, text="Auto-nudge NVENC preset when a segment is below target speed", variable=self.adaptive_nvenc_var).grid(row=4, column=0, sticky="w", padx=8, pady=4)
+        self.adaptive_nvenc_check = ttk.Checkbutton(options, text="Auto-nudge NVENC preset when a segment is below target speed", variable=self.adaptive_nvenc_var)
+        self.adaptive_nvenc_check.grid(row=4, column=0, sticky="w", padx=8, pady=4)
 
         buttons = ttk.Frame(main)
         buttons.pack(fill="x", pady=(12, 0))
@@ -970,11 +1075,42 @@ class App(tk.Tk):
         entry.grid(row=row, column=1, sticky="ew", padx=8, pady=4)
         parent.grid_columnconfigure(1, weight=1)
 
+    def _combo_row(self, parent, row: int, label: str, variable: tk.StringVar, values: List[str]) -> ttk.Combobox:
+        ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=8, pady=4)
+        combo = ttk.Combobox(parent, textvariable=variable, values=values, state="readonly", width=88)
+        combo.grid(row=row, column=1, sticky="ew", padx=8, pady=4)
+        parent.grid_columnconfigure(1, weight=1)
+        return combo
+
     def _file_row(self, parent, row: int, label: str, variable: tk.StringVar, command) -> None:
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=8, pady=4)
         ttk.Entry(parent, textvariable=variable, width=78).grid(row=row, column=1, sticky="ew", padx=8, pady=4)
         ttk.Button(parent, text="Browse", command=command).grid(row=row, column=2, sticky="ew", padx=8, pady=4)
         parent.grid_columnconfigure(1, weight=1)
+
+    def _on_video_codec_change(self, _event=None) -> None:
+        try:
+            family = codec_family(self.video_codec_var.get())
+        except ValueError:
+            family = "nvenc"
+
+        preset_values = ENCODER_PRESETS[family]
+        current_preset = self.encoder_preset_var.get().strip().lower()
+        if current_preset not in preset_values:
+            self.encoder_preset_var.set(DEFAULT_ENCODER_PRESETS[family])
+
+        if self.encoder_preset_combo:
+            self.encoder_preset_combo.configure(values=preset_values)
+            self.encoder_preset_combo.configure(state="disabled" if family == "videotoolbox" else "readonly")
+
+        if self.adaptive_nvenc_check:
+            if family == "nvenc":
+                self.adaptive_nvenc_check.state(["!disabled"])
+            else:
+                self.adaptive_nvenc_var.set(False)
+                self.adaptive_nvenc_check.state(["disabled"])
+
+        self.codec_settings_note_var.set(CODEC_SETTING_NOTES[family])
 
     def pick_video(self) -> None:
         path = filedialog.askopenfilename(title="Choose video file")
@@ -1031,6 +1167,11 @@ class App(tk.Tk):
         if target_speed <= 0:
             raise ValueError("Target encode speed must be greater than 0")
 
+        video_codec = self.video_codec_var.get().strip().lower()
+        codec_family(video_codec)
+        audio_codec = normalize_audio_codec(self.audio_codec_var.get())
+        encoder_preset = normalize_encoder_preset(video_codec, self.encoder_preset_var.get())
+
         return StreamConfig(
             video_path=video_path,
             alt_audio_path=alt_audio_path,
@@ -1038,16 +1179,16 @@ class App(tk.Tk):
             live_create_token=live_create_token,
             session_label=self.session_label_var.get().strip(),
             retain_segment_count=retain_segments,
-            output_video_codec=self.video_codec_var.get().strip().lower(),
-            output_audio_codec=self.audio_codec_var.get().strip().lower(),
+            output_video_codec=video_codec,
+            output_audio_codec=audio_codec,
             output_width=self._parse_optional_int(self.width_var.get()),
             output_height=self._parse_optional_int(self.height_var.get()),
             video_bitrate=self.video_bitrate_var.get().strip(),
             audio_bitrate=self.audio_bitrate_var.get().strip(),
             fps=self._parse_optional_int(self.fps_var.get()),
-            nvenc_preset=normalize_nvenc_preset(self.nvenc_preset_var.get()),
+            encoder_preset=encoder_preset,
             target_speed=target_speed,
-            adaptive_nvenc=self.adaptive_nvenc_var.get(),
+            adaptive_nvenc=self.adaptive_nvenc_var.get() and is_nvenc_codec(video_codec),
             convert_stream_to_sdr=self.convert_stream_to_sdr_var.get(),
             open_local_vlc=self.open_local_vlc_var.get(),
             open_local_browser_preview=self.open_local_browser_preview_var.get(),

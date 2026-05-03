@@ -4,10 +4,12 @@ import SensorsRounded from "@mui/icons-material/SensorsRounded";
 import { Alert, Box, Button, Chip, CircularProgress, Divider, IconButton, Paper, Stack, Tooltip, Typography } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import React, { useEffect, useMemo, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
 
 import LiveStreamInfoTooltip, { formatBytes, formatDateTime, formatDuration } from "../../components/Live/LiveStreamInfoTooltip";
 import LiveStreamPlayer from "../../components/Live/LiveStreamPlayer";
-import { getLiveStreamsApiUrl } from "../../helpers/live";
+import { buildLiveFetchConfig, getLiveStreamsApiUrl } from "../../helpers/live";
+import { setDialogOpened } from "../../slices/dialogSlice";
 import { scrollbarStyles } from "../scrollbarStyles";
 
 const getStatusColor = (status) => {
@@ -139,6 +141,8 @@ const SelectedStreamDetails = ({ stream }) => {
 };
 
 function AvailableStreamsPage() {
+	const dispatch = useDispatch();
+	const auth = useSelector((state) => state.auth);
 	const [state, setState] = useState({
 		loading: true,
 		refreshing: false,
@@ -149,6 +153,10 @@ function AvailableStreamsPage() {
 	const [selectedId, setSelectedId] = useState("");
 
 	useEffect(() => {
+		if (!auth.loggedIn || !auth.authToken) {
+			return undefined;
+		}
+
 		let mounted = true;
 
 		const loadStreams = async (silent = false) => {
@@ -162,12 +170,14 @@ function AvailableStreamsPage() {
 					}));
 				}
 
-				const response = await fetch(getLiveStreamsApiUrl(), {
-					credentials: "omit",
-					headers: {
-						Accept: "application/json",
-					},
-				});
+				const response = await fetch(
+					getLiveStreamsApiUrl(),
+					buildLiveFetchConfig(auth.authToken, {
+						headers: {
+							Accept: "application/json",
+						},
+					})
+				);
 
 				if (!response.ok) {
 					const payload = await response.json().catch(() => ({}));
@@ -202,7 +212,7 @@ function AvailableStreamsPage() {
 			mounted = false;
 			window.clearInterval(refreshTimer);
 		};
-	}, []);
+	}, [auth.loggedIn, auth.authToken]);
 
 	useEffect(() => {
 		if (!state.streams.length) {
@@ -222,13 +232,12 @@ function AvailableStreamsPage() {
 	const playableCount = state.streams.filter((stream) => stream.isPlayable).length;
 
 	const handleRefresh = async () => {
+		if (!auth.loggedIn || !auth.authToken) return;
+
 		setState((current) => ({ ...current, refreshing: true }));
 
 		try {
-			const response = await fetch(getLiveStreamsApiUrl(), {
-				credentials: "omit",
-				headers: { Accept: "application/json" },
-			});
+			const response = await fetch(getLiveStreamsApiUrl(), buildLiveFetchConfig(auth.authToken, { headers: { Accept: "application/json" } }));
 
 			if (!response.ok) {
 				const payload = await response.json().catch(() => ({}));
@@ -251,6 +260,43 @@ function AvailableStreamsPage() {
 			}));
 		}
 	};
+
+	const handleLogin = () => {
+		dispatch(
+			setDialogOpened({
+				dialogName: "loginDialogOpen",
+				newState: true,
+				conflictingDialogs: ["registerDialogOpen"],
+			})
+		);
+	};
+
+	if (auth.loggingIn) {
+		return (
+			<Stack spacing={1.5} alignItems="center" justifyContent="center" sx={{ minHeight: 240 }}>
+				<CircularProgress size={26} />
+				<Typography variant="body2" color="text.secondary">
+					Checking login
+				</Typography>
+			</Stack>
+		);
+	}
+
+	if (!auth.loggedIn) {
+		return (
+			<Box sx={{ width: "100%" }}>
+				<Alert
+					severity="info"
+					action={
+						<Button color="inherit" size="small" onClick={handleLogin}>
+							Log In
+						</Button>
+					}>
+					Log in to view live streams.
+				</Alert>
+			</Box>
+		);
+	}
 
 	return (
 		<Box
