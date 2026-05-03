@@ -29,24 +29,31 @@ DEFAULT_NVENC_PRESET = "p6"
 READRATE_HEADROOM = 0.05
 UPLOAD_POLL_INTERVAL_SECONDS = 0.75
 SEGMENT_EXTENSIONS = {".aac", ".m4a", ".m4s", ".mp3", ".mp4", ".ts"}
-NVENC_CODECS = {"h264_nvenc", "hevc_nvenc"}
-SOFTWARE_VIDEO_CODECS = {"libx264", "libx265"}
-QSV_VIDEO_CODECS = {"h264_qsv", "hevc_qsv"}
+NVENC_CODECS = {"h264_nvenc", "hevc_nvenc", "av1_nvenc"}
+SOFTWARE_VIDEO_CODECS = {"libx264", "libx265", "libaom-av1", "libsvtav1"}
+QSV_VIDEO_CODECS = {"h264_qsv", "hevc_qsv", "av1_qsv"}
 VIDEOTOOLBOX_VIDEO_CODECS = {"h264_videotoolbox", "hevc_videotoolbox"}
 HEVC_VIDEO_CODECS = {"libx265", "hevc_nvenc", "hevc_qsv", "hevc_videotoolbox"}
 H264_VIDEO_CODECS = {"libx264", "h264_nvenc", "h264_qsv", "h264_videotoolbox"}
+AV1_VIDEO_CODECS = {"av1_nvenc", "av1_qsv", "libaom-av1", "libsvtav1"}
 VIDEO_CODEC_OPTIONS = [
+    "av1_nvenc",
     "hevc_nvenc",
     "h264_nvenc",
-    "libx265",
-    "libx264",
+    "av1_qsv",
     "hevc_qsv",
     "h264_qsv",
+    "libsvtav1",
+    "libaom-av1",
+    "libx265",
+    "libx264",
     "hevc_videotoolbox",
     "h264_videotoolbox",
 ]
 AUDIO_CODEC_OPTIONS = ["aac", "libmp3lame"]
 NVENC_PRESET_LADDER = ["p7", "p6", "p5", "p4", "p3", "p2", "p1"]
+NVENC_TUNE_OPTIONS = ["hq", "ll", "ull", "lossless"]
+NVENC_MULTIPASS_OPTIONS = ["disabled", "qres", "fullres"]
 NVENC_PRESET_ALIASES = {
     "slowest": "p7",
     "slower": "p7",
@@ -55,25 +62,37 @@ NVENC_PRESET_ALIASES = {
     "fast": "p4",
     "faster": "p3",
     "fastest": "p1",
+    "hq": "p6",
+    "ll": "p4",
+    "ull": "p3",
+    "lossless": "p7",
 }
 SOFTWARE_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo"]
+SVT_AV1_PRESETS = [str(value) for value in range(13)]
+LIBAOM_AV1_PRESETS = [str(value) for value in range(9)]
 QSV_PRESETS = ["veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"]
 VIDEOTOOLBOX_PRESETS = ["realtime"]
 ENCODER_PRESETS = {
     "nvenc": NVENC_PRESET_LADDER,
     "software": SOFTWARE_PRESETS,
+    "svt_av1": SVT_AV1_PRESETS,
+    "libaom_av1": LIBAOM_AV1_PRESETS,
     "qsv": QSV_PRESETS,
     "videotoolbox": VIDEOTOOLBOX_PRESETS,
 }
 DEFAULT_ENCODER_PRESETS = {
     "nvenc": DEFAULT_NVENC_PRESET,
     "software": "medium",
+    "svt_av1": "8",
+    "libaom_av1": "6",
     "qsv": "medium",
     "videotoolbox": "realtime",
 }
 CODEC_SETTING_NOTES = {
-    "nvenc": "NVENC uses p7..p1 presets; adaptive mode can restart at faster presets when segment encode speed falls behind.",
+    "nvenc": "NVENC uses p7..p1 presets. AV1 NVENC also uses tune/multipass defaults in this tool: tune=hq and multipass=fullres.",
     "software": "Software x264/x265 uses FFmpeg's encoder preset ladder. Slower presets improve efficiency but can fall behind live playback.",
+    "svt_av1": "SVT-AV1 uses numeric presets 0..12 where lower is slower/better and higher is faster.",
+    "libaom_av1": "libaom-av1 uses cpu-used 0..8 where lower is slower/better and higher is faster.",
     "qsv": "Intel QSV uses its own preset ladder with the same bitrate and keyframe settings as the other live encoders.",
     "videotoolbox": "VideoToolbox runs in realtime mode and does not expose an FFmpeg preset in this tool.",
 }
@@ -103,10 +122,18 @@ def is_hevc_codec(video_codec: str) -> bool:
     return video_codec.strip().lower() in HEVC_VIDEO_CODECS
 
 
+def is_av1_codec(video_codec: str) -> bool:
+    return video_codec.strip().lower() in AV1_VIDEO_CODECS
+
+
 def codec_family(video_codec: str) -> str:
     codec = video_codec.strip().lower()
     if codec in NVENC_CODECS:
         return "nvenc"
+    if codec == "libsvtav1":
+        return "svt_av1"
+    if codec == "libaom-av1":
+        return "libaom_av1"
     if codec in SOFTWARE_VIDEO_CODECS:
         return "software"
     if codec in QSV_VIDEO_CODECS:
@@ -208,6 +235,8 @@ def codec_string(video_codec: str, audio_codec: str) -> str:
         codecs.append("hvc1")
     elif video_codec in H264_VIDEO_CODECS:
         codecs.append("avc1")
+    elif video_codec in AV1_VIDEO_CODECS:
+        codecs.append("av01")
 
     if audio_codec == "aac":
         codecs.append("mp4a.40.2")
@@ -905,11 +934,17 @@ class StreamController:
         cmd += ["-c:v", video_codec]
         if is_hevc_codec(video_codec):
             cmd += ["-tag:v", "hvc1"]
+        elif is_av1_codec(video_codec):
+            cmd += ["-tag:v", "av01"]
 
         if video_codec == "libx265":
             cmd += ["-x265-params", "repeat-headers=1:keyint=48:min-keyint=48:scenecut=0"]
         elif video_codec == "libx264":
             cmd += ["-x264-params", "keyint=48:min-keyint=48:scenecut=0"]
+        elif video_codec == "libsvtav1":
+            cmd += ["-g", "48", "-svtav1-params", "keyint=48:scd=0"]
+        elif video_codec == "libaom-av1":
+            cmd += ["-g", "48", "-keyint_min", "48", "-cpu-used", encoder_preset]
         else:
             cmd += ["-g", "48", "-keyint_min", "48", "-sc_threshold", "0"]
 
@@ -919,7 +954,12 @@ class StreamController:
 
         if is_nvenc_codec(video_codec):
             cmd += ["-preset", normalize_nvenc_preset(nvenc_preset or encoder_preset)]
+            cmd += ["-tune", "hq", "-multipass", "fullres"]
             cmd += ["-rc", "vbr", "-spatial_aq", "1", "-temporal_aq", "1"]
+            if video_codec == "av1_nvenc":
+                cmd += ["-cq", "23"]
+        elif video_codec == "libsvtav1":
+            cmd += ["-preset", encoder_preset]
         elif is_software_codec(video_codec) or is_qsv_codec(video_codec):
             cmd += ["-preset", encoder_preset]
         elif is_videotoolbox_codec(video_codec):
@@ -1057,7 +1097,7 @@ class App(tk.Tk):
         self.live_create_token_var = tk.StringVar()
         self.session_label_var = tk.StringVar()
         self.retain_segments_var = tk.StringVar(value=str(DEFAULT_RETAIN_SEGMENTS))
-        self.video_codec_var = tk.StringVar(value="hevc_nvenc")
+        self.video_codec_var = tk.StringVar(value="av1_nvenc")
         self.audio_codec_var = tk.StringVar(value="aac")
         self.width_var = tk.StringVar(value="3840")
         self.height_var = tk.StringVar(value="2160")
