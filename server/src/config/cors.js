@@ -50,7 +50,7 @@ const buildCorsOptions = (req, callback) => {
 				origin: allowedOrigin,
 				credentials: !isLivePath(req),
 				optionsSuccessStatus: 200,
-				allowedHeaders: ["Content-Type", "Authorization", "X-Csrf-Token", "X-Live-Ingest-Secret"],
+				allowedHeaders: ["Content-Type", "Authorization", "X-Csrf-Token", "X-Live-Ingest-Secret", "X-Live-Create-Token"],
 			});
 		},
 		req

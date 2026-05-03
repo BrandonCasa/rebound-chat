@@ -32,6 +32,7 @@ const FriendPage = lazy(() => import("./routes/FriendPage/FriendPage.route"));
 const DirectMessagePage = lazy(() => import("./routes/DirectMessagePage/DirectMessagePage"));
 const LiveSharePage = lazy(() => import("./routes/LiveSharePage/LiveSharePage.route"));
 const AvailableStreamsPage = lazy(() => import("./routes/AvailableStreamsPage/AvailableStreamsPage.route"));
+const DesktopLivePage = lazy(() => import("./routes/DesktopLivePage/DesktopLivePage.route"));
 
 const PageNotFoundContainer = styled("div")({
 	maxWidth: "100%",
@@ -53,12 +54,19 @@ const App = () => {
 	useEffect(() => {
 		const params = new URLSearchParams(window.location.search);
 		const token = params.get("token");
+		const authComplete = params.get("authComplete");
 		if (token) {
 			dispatch(setAuthState({ authToken: token }));
 			dispatch(verifyUser(token));
 			params.delete("token");
+		}
+		if (authComplete === "google") {
+			dispatch(bootstrapAuth());
+			params.delete("authComplete");
+		}
+		if (token || authComplete) {
 			const newSearch = params.toString();
-			const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "");
+			const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "") + window.location.hash;
 			window.history.replaceState({}, "", newUrl);
 		}
 	}, [dispatch]);
@@ -142,6 +150,7 @@ const App = () => {
 								<Route path="/servers" element={<ServersPage />} />
 								<Route path="/live" element={<AvailableStreamsPage />} />
 								<Route path="/live/streams" element={<AvailableStreamsPage />} />
+								<Route path="/live/broadcast" element={<DesktopLivePage />} />
 								<Route path="/live/share/:publicToken" element={<LiveSharePage />} />
 								<Route path="/testing" element={<TestingPage />} />
 								<Route path="/security" element={<SecurityPage />} />

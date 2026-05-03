@@ -3,11 +3,13 @@
 import { fileURLToPath } from "url";
 import { dirname, extname, join } from "path";
 import { readFile } from "fs/promises";
-import { app, BrowserWindow, ipcMain, protocol } from "electron";
+import { app, BrowserWindow, desktopCapturer, ipcMain, protocol, shell } from "electron";
 import log from "electron-log";
 import updater from "electron-updater";
 const { autoUpdater } = updater;
 import isDev from "electron-is-dev";
+import { registerLiveStreamIpc } from "./electron-live-stream.js";
+import ffmpeg from "@ffmpeg-installer/ffmpeg";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -50,6 +52,15 @@ function allowUpdateAction(actionName) {
 	return true;
 }
 
+registerLiveStreamIpc({
+	ipcMain,
+	app,
+	desktopCapturer,
+	shell,
+	sendToRenderer: sendStatus,
+	logger: log,
+});
+
 async function createWindow() {
 	mainWindow = new BrowserWindow({
 		width: 1280,
@@ -59,6 +70,12 @@ async function createWindow() {
 			contextIsolation: true,
 			preload: join(__dirname, "preload.js"),
 		},
+	});
+
+	mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+		// open url in a browser and prevent default
+		shell.openExternal(url);
+		return { action: "deny" };
 	});
 
 	// Helpful when diagnosing protocol issues:
@@ -155,6 +172,8 @@ autoUpdater.on("update-downloaded", (info) => {
 });
 
 app.whenReady().then(async () => {
+	ipcMain.handle("system:get-ffmpeg-path", () => ffmpeg.path);
+
 	const mimeByExt = {
 		".js": "application/javascript",
 		".mjs": "application/javascript",

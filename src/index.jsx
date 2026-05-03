@@ -16,6 +16,10 @@ import "./index.css";
 import store from "./store";
 
 window.isElectron = "electronAPI" in window;
+let ffmpegPath = await window.electronAPI.system.getFfmpegPath();
+ffmpegPath = ffmpegPath.replace("app.asar", "app.asar.unpacked");
+ffmpegPath = ffmpegPath.replace("app.asar.unpacked.unpacked", "app.asar.unpacked");
+window.ffmpegPath = ffmpegPath;
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
@@ -28,7 +32,6 @@ root.render(
 // to log results (for example: reportWebVitals(console.log))
 // or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
 reportWebVitals();
-
 
 if ("serviceworker" in navigator) {
 	window.addEventListener("load", () => {

@@ -5,6 +5,31 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	downloadUpdate: () => ipcRenderer.send("download-update"),
 	installUpdate: () => ipcRenderer.send("install-update"),
 	simulateUpdate: () => ipcRenderer.send("simulate-update"),
+	system: {
+		getFfmpegPath: () => ipcRenderer.invoke("system:get-ffmpeg-path"),
+	},
+	liveStream: {
+		getSources: (options) => ipcRenderer.invoke("live-stream:get-sources", options),
+		getState: () => ipcRenderer.invoke("live-stream:get-state"),
+		start: (config) => ipcRenderer.invoke("live-stream:start", config),
+		stop: () => ipcRenderer.invoke("live-stream:stop"),
+		openUrl: (url) => ipcRenderer.invoke("live-stream:open-url", url),
+		onLog: (cb) => {
+			const listener = (_event, payload) => cb(payload);
+			ipcRenderer.on("live-stream-log", listener);
+			return () => ipcRenderer.removeListener("live-stream-log", listener);
+		},
+		onState: (cb) => {
+			const listener = (_event, payload) => cb(payload);
+			ipcRenderer.on("live-stream-state", listener);
+			return () => ipcRenderer.removeListener("live-stream-state", listener);
+		},
+		onSession: (cb) => {
+			const listener = (_event, payload) => cb(payload);
+			ipcRenderer.on("live-stream-session", listener);
+			return () => ipcRenderer.removeListener("live-stream-session", listener);
+		},
+	},
 
 	onChecking: (cb) => ipcRenderer.on("update-checking", () => cb()),
 	onUpdateAvailable: (cb) => ipcRenderer.on("update-available", (_e, info) => cb(info)),

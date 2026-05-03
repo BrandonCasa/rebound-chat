@@ -18,6 +18,8 @@ export interface StreamSessionMetadata {
 	label: string;
 	publicToken: string;
 	createdByIp: string;
+	createdByUser: string | null;
+	createdByUsername: string;
 	status: StreamSessionStatus;
 	playbackPath: string;
 	sharePath: string;
@@ -37,6 +39,8 @@ export interface StreamSessionMetadata {
 export interface LiveShareSummary {
 	sessionId: string;
 	label: string;
+	createdByUser: string | null;
+	createdByUsername: string;
 	status: StreamSessionStatus;
 	createdAt: Date;
 	lastHeartbeatAt: Date;

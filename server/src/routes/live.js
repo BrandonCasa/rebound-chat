@@ -86,19 +86,26 @@ router.use((req, res, next) => {
 	next();
 });
 
-const requireCreateToken = (req, res, next) => {
-	const requestToken = getBearerToken(req.get("authorization")) || req.get("x-live-create-token");
+const authorizeCreateSession = async (req, res, next) => {
+	const requestToken = req.get("x-live-create-token") || getBearerToken(req.get("authorization"));
 	const expectedToken = liveRuntime.config.createToken;
 
-	if (!expectedToken) {
-		return res.status(503).json({ error: "Live ingest create token is not configured." });
+	if (expectedToken && requestToken === expectedToken) {
+		req.liveCreateMode = "create-token";
+		return next();
 	}
 
-	if (!requestToken || requestToken !== expectedToken) {
-		return res.status(401).json({ error: "Invalid live ingest create token." });
-	}
+	try {
+		req.authContext = await validateAccessTokenFromRequest(req);
+		req.liveCreateMode = "account";
+		return next();
+	} catch (_err) {
+		if (!expectedToken) {
+			return res.status(401).json({ error: "Login required to create a live stream." });
+		}
 
-	return next();
+		return res.status(401).json({ error: "Invalid live ingest create token or login session." });
+	}
 };
 
 const requireIngestSession = async (req, res, next) => {
@@ -142,12 +149,17 @@ const sendSegmentResponse = (res, storedAsset) => {
 	return res.send(storedAsset.body);
 };
 
-router.post("/api/session", createLimiter, requireCreateToken, jsonParser, async (req, res) => {
+router.post("/api/session", createLimiter, authorizeCreateSession, jsonParser, async (req, res) => {
 	try {
+		const accountUser = req.liveCreateMode === "account" ? req.authContext?.user : null;
+		const accountLabel = accountUser ? accountUser.displayName || accountUser.username : "";
 		const { session, ingestSecret } = await liveRuntime.service.createSession({
-			label: req.body?.label,
+			label: accountUser ? accountLabel : req.body?.label,
 			createdByIp: req.ip,
 			requestedRetainedSegments: req.body?.retainSegmentCount,
+			createdByUser: accountUser?._id,
+			createdByUsername: accountLabel,
+			enforceSingleUserActive: Boolean(accountUser),
 		});
 
 		return res.status(201).json(liveRuntime.service.createSessionResponse(session, ingestSecret, getRequestOrigin(req)));

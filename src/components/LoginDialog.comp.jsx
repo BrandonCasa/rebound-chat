@@ -11,39 +11,39 @@ import { addSnackbar } from "../slices/snackbarSlice";
 
 const LoginDialog = () => {
 	const loginDialogState = useSelector((state) => state.dialogs.loginDialogOpen);
-        const dispatch = useDispatch();
+	const dispatch = useDispatch();
 
-        const [email, setEmail] = useState("");
-        const [password, setPassword] = useState("");
+	const [email, setEmail] = useState("");
+	const [password, setPassword] = useState("");
 
-        const handleUserLogin = () => {
-                const trimmedEmail = email.trim();
-                const trimmedPassword = password.trim();
+	const handleUserLogin = () => {
+		const trimmedEmail = email.trim();
+		const trimmedPassword = password.trim();
 
-                if (!trimmedEmail || !trimmedPassword) {
-                        dispatch(
-                                addSnackbar({
-                                        snackbarMsg: "Please enter both email and password.",
-                                        snackbarSeverity: "error",
-                                        autoHideDuration: 3000,
-                                })
-                        );
-                        return;
-                }
+		if (!trimmedEmail || !trimmedPassword) {
+			dispatch(
+				addSnackbar({
+					snackbarMsg: "Please enter both email and password.",
+					snackbarSeverity: "error",
+					autoHideDuration: 3000,
+				})
+			);
+			return;
+		}
 
-                dispatch(loginUser({ email: trimmedEmail, password: trimmedPassword }))
-                        .unwrap()
-                        .then((user) => {
-                                dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
-                                dispatch(
-                                        addSnackbar({
-                                                snackbarMsg: `Login Successful. Hello ${user.displayName}`,
-                                                snackbarSeverity: "success",
-                                                autoHideDuration: 2000,
-                                        })
-                                );
-                        })
-                        .catch((error) => {
+		dispatch(loginUser({ email: trimmedEmail, password: trimmedPassword }))
+			.unwrap()
+			.then((user) => {
+				dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
+				dispatch(
+					addSnackbar({
+						snackbarMsg: `Login Successful. Hello ${user.displayName}`,
+						snackbarSeverity: "success",
+						autoHideDuration: 2000,
+					})
+				);
+			})
+			.catch((error) => {
 				console.log(error);
 				const loginErrors = error?.errors;
 				if (!loginErrors) {
@@ -70,6 +70,11 @@ const LoginDialog = () => {
 					});
 				}
 			});
+	};
+
+	const handleGoogleLogin = () => {
+		const redirectTarget = `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`;
+		window.location.href = `${getApiBase()}/users/google?redirect=${encodeURIComponent(redirectTarget)}`;
 	};
 
 	return (
@@ -110,11 +115,7 @@ const LoginDialog = () => {
 				/>
 
 				<Box sx={{ display: "flex", justifyContent: "center", py: 1 }}>
-					<GoogleButton
-						onClick={() => {
-							window.location.href = `${getApiBase()}/users/google`;
-						}}
-					/>
+					<GoogleButton onClick={handleGoogleLogin} />
 				</Box>
 			</Box>
 			<DialogActions>

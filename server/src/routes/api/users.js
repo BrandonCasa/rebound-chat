@@ -29,7 +29,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX
 
 const authLimiter = rateLimit({
 	windowMs: 60 * 60 * 1000,
-	max: 20,
+	max: process.env.NODE_ENV === "test" ? 1000 : 500,
 	standardHeaders: true,
 	legacyHeaders: false,
 	message: { error: "Too many auth attempts, please try again later." },
@@ -38,7 +38,7 @@ const authLimiter = rateLimit({
 const requireAuthContext = (context) => createAuthContextMiddleware(context, logger);
 const modifyLimiter = rateLimit({
 	windowMs: 30 * 60 * 1000,
-	max: 8,
+	max: 50,
 	standardHeaders: true,
 	legacyHeaders: false,
 	message: { error: "Too many modification attempts, please try again later." },
@@ -84,11 +84,15 @@ const normalizeRedirectTarget = (rawValue) => {
 		const decoded = decodeURIComponent(rawValue);
 		const parsed = new URL(decoded);
 
-		if (!parsed?.protocol || !["http:", "https:"].includes(parsed.protocol)) {
+		if (!parsed?.protocol || !["http:", "https:", "app:"].includes(parsed.protocol)) {
 			return null;
 		}
 
-		return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
+		if (parsed.protocol === "app:" && parsed.host !== "-") {
+			return null;
+		}
+
+		return `${parsed.protocol}//${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}`;
 	} catch (err) {
 		return null;
 	}
@@ -96,6 +100,9 @@ const normalizeRedirectTarget = (rawValue) => {
 
 const resolveClientRedirectTarget = (req) => {
 	if (process.env.CLIENT_REDIRECT_BASE) return process.env.CLIENT_REDIRECT_BASE;
+
+	const explicitTarget = normalizeRedirectTarget(req.query?.redirect);
+	if (explicitTarget) return explicitTarget;
 
 	const referrerTarget = normalizeRedirectTarget(req.get("referer"));
 	if (referrerTarget) return referrerTarget;
@@ -108,7 +115,13 @@ const resolveClientRedirectTarget = (req) => {
 	return "/";
 };
 
-const withAuthErrorParam = (target) => `${target}${target.includes("?") ? "&" : "?"}authError=google`;
+const withRedirectParam = (target, key, value) => {
+	const [base, hash = ""] = target.split("#", 2);
+	return `${base}${base.includes("?") ? "&" : "?"}${key}=${encodeURIComponent(value)}${hash ? `#${hash}` : ""}`;
+};
+
+const withAuthErrorParam = (target) => withRedirectParam(target, "authError", "google");
+const withAuthSuccessParam = (target) => withRedirectParam(target, "authComplete", "google");
 
 const setCsrfCookie = (res) => {
 	const csrfToken = createCsrfToken();
@@ -354,7 +367,7 @@ router.get("/users/google/callback", (req, res, next) => {
 
 			setAuthCookies(res, accessToken, refreshToken);
 
-			return res.redirect(redirectTarget);
+			return res.redirect(withAuthSuccessParam(redirectTarget));
 		} catch (e) {
 			logger.error(`Google callback token error: ${e.message}`);
 			return redirectWithError();
@@ -626,4 +639,5 @@ router.put(
 	})
 );
 
+export { normalizeRedirectTarget, resolveClientRedirectTarget, withAuthErrorParam, withAuthSuccessParam };
 export default router;

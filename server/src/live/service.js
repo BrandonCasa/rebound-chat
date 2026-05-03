@@ -50,6 +50,13 @@ const toIsoStringOrNull = (value) => {
 	return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
 
+const toIdStringOrNull = (value) => {
+	if (!value) return null;
+	if (value._id) return value._id.toString();
+	if (typeof value.toString === "function") return value.toString();
+	return null;
+};
+
 const parseNumber = (value) => {
 	const parsed = Number(value);
 	return Number.isFinite(parsed) ? parsed : null;
@@ -303,6 +310,8 @@ class LiveService {
 		return {
 			sessionId: session.sessionId,
 			label: session.label,
+			createdByUser: toIdStringOrNull(session.createdByUser),
+			createdByUsername: session.createdByUsername || "",
 			status: session.status,
 			createdAt: session.createdAt,
 			lastHeartbeatAt: session.lastHeartbeatAt,
@@ -348,8 +357,50 @@ class LiveService {
 		});
 	}
 
-	async createSession({ label = "", createdByIp = "", requestedRetainedSegments = null } = {}) {
+	async expireInactiveAccountSessions(userId, now = new Date()) {
+		if (!userId) return [];
+
+		const activeSessions = await StreamSessionModel.find({
+			createdByUser: userId,
+			status: "active",
+		});
+
+		const stillActive = [];
+		for (const session of activeSessions) {
+			if (session.expiresAt <= now) {
+				await this.markSessionExpired(session, "account_session_create_timeout");
+			} else {
+				stillActive.push(session);
+			}
+		}
+
+		return stillActive;
+	}
+
+	async createSession({
+		label = "",
+		createdByIp = "",
+		requestedRetainedSegments = null,
+		createdByUser = null,
+		createdByUsername = "",
+		enforceSingleUserActive = false,
+	} = {}) {
 		const now = new Date();
+		const createdByUserId = toIdStringOrNull(createdByUser);
+		const normalizedAccountLabel = String(createdByUsername || "")
+			.trim()
+			.slice(0, 120);
+		const normalizedLabel = String(label || "")
+			.trim()
+			.slice(0, 120);
+
+		if (enforceSingleUserActive && createdByUserId) {
+			const activeAccountSessions = await this.expireInactiveAccountSessions(createdByUserId, now);
+			if (activeAccountSessions.length > 0) {
+				throw new LiveServiceError(409, "This account already has an active live stream.", "account_live_stream_limit");
+			}
+		}
+
 		const expiresAt = new Date(now.getTime() + this.config.sessionTtlMs);
 		const cleanupAfterAt = new Date(expiresAt);
 		const sessionId = generateToken(12);
@@ -362,12 +413,12 @@ class LiveService {
 
 		const session = await StreamSessionModel.create({
 			sessionId,
-			label: String(label || "")
-				.trim()
-				.slice(0, 120),
+			label: normalizedAccountLabel || normalizedLabel,
 			publicToken,
 			ingestSecretHash: hashSecret(ingestSecret),
 			createdByIp,
+			createdByUser: createdByUserId,
+			createdByUsername: normalizedAccountLabel,
 			lastHeartbeatAt: now,
 			expiresAt,
 			cleanupAfterAt,

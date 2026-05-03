@@ -67,6 +67,17 @@ const StreamSessionSchema = new Schema(
 			type: String,
 			default: "",
 		},
+		createdByUser: {
+			type: Schema.Types.ObjectId,
+			ref: "User",
+			default: null,
+			index: true,
+		},
+		createdByUsername: {
+			type: String,
+			default: "",
+			maxlength: 120,
+		},
 		lastHeartbeatAt: {
 			type: Date,
 			required: true,

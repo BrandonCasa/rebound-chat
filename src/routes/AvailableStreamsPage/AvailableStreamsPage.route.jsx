@@ -1,10 +1,12 @@
 import LaunchRounded from "@mui/icons-material/LaunchRounded";
+import DesktopWindowsRounded from "@mui/icons-material/DesktopWindowsRounded";
 import RefreshRounded from "@mui/icons-material/RefreshRounded";
 import SensorsRounded from "@mui/icons-material/SensorsRounded";
 import { Alert, Box, Button, Chip, CircularProgress, Divider, IconButton, Paper, Stack, Tooltip, Typography } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 
 import LiveStreamInfoTooltip, { formatBytes, formatDateTime, formatDuration } from "../../components/Live/LiveStreamInfoTooltip";
 import LiveStreamPlayer from "../../components/Live/LiveStreamPlayer";
@@ -142,6 +144,7 @@ const SelectedStreamDetails = ({ stream }) => {
 
 function AvailableStreamsPage() {
 	const dispatch = useDispatch();
+	const navigate = useNavigate();
 	const auth = useSelector((state) => state.auth);
 	const [state, setState] = useState({
 		loading: true,
@@ -321,6 +324,11 @@ function AvailableStreamsPage() {
 						<Chip size="small" label={`${state.streams.length} total`} />
 						<Chip size="small" color="success" label={`${activeCount} active`} />
 						<Chip size="small" color="primary" label={`${playableCount} playable`} />
+						{window.isElectron ? (
+							<Button size="small" variant="contained" startIcon={<DesktopWindowsRounded />} onClick={() => navigate("/live/broadcast")}>
+								Go Live
+							</Button>
+						) : null}
 						<Tooltip title="Refresh streams">
 							<span>
 								<IconButton onClick={handleRefresh} disabled={state.refreshing} aria-label="Refresh streams">
@@ -350,7 +358,7 @@ function AvailableStreamsPage() {
 							flexDirection: "column",
 						}}>
 						<Stack spacing={1} sx={{ p: 1.5, borderBottom: (theme) => `1px solid ${theme.palette.divider}` }}>
-							<Typography variant="subtitle1">Complete List</Typography>
+							<Typography variant="subtitle1">Stream List</Typography>
 						</Stack>
 						<Box
 							sx={{
@@ -383,6 +391,87 @@ function AvailableStreamsPage() {
 								</Stack>
 							) : null}
 						</Box>
+						{window?.isElectron ? (
+							<Stack spacing={1} sx={{ p: 1.5, borderTop: (theme) => `1px solid ${theme.palette.divider}`, minHeight: "64px" }}>
+								<div style={{ textDecoration: "none", display: "block", width: "100%", height: "100%" }}>
+									<Chip
+										label="Share My Stream URL"
+										color="info"
+										clickable
+										sx={{
+											width: "100%",
+											height: "100%",
+											fontWeight: 700,
+											cursor: "pointer",
+											transition: "transform 160ms ease, box-shadow 160ms ease, filter 160ms ease",
+											boxShadow: (theme) => `0 0 8px ${theme.palette.info.main}`,
+											animation: "chipGlow 0.8s ease-in-out infinite alternate",
+
+											"&:hover": {
+												transform: "translateY(-1px) scale(1.03)",
+												filter: "brightness(1.08)",
+												boxShadow: (theme) => `0 0 12px ${theme.palette.info.main}, 0 0 24px ${theme.palette.info.main}`,
+											},
+
+											"&:active": {
+												transform: "translateY(0) scale(0.98)",
+											},
+
+											"@keyframes chipGlow": {
+												from: {
+													boxShadow: (theme) => `0 0 4px ${theme.palette.info.main}`,
+												},
+												to: {
+													boxShadow: (theme) => `0 0 10px ${theme.palette.info.main}, 0 0 16px ${theme.palette.info.main}`,
+												},
+											},
+										}}
+									/>
+								</div>
+							</Stack>
+						) : (
+							<Stack spacing={1} sx={{ p: 1.5, borderTop: (theme) => `1px solid ${theme.palette.divider}`, minHeight: "64px" }}>
+								<a
+									href="https://github.com/BrandonCasa/rebound-chat/releases/latest"
+									target="_blank"
+									rel="noopener noreferrer"
+									style={{ textDecoration: "none", display: "block", width: "100%", height: "100%" }}>
+									<Chip
+										label="Download App to Stream!"
+										color="info"
+										clickable
+										sx={{
+											width: "100%",
+											height: "100%",
+											fontWeight: 700,
+											cursor: "pointer",
+											transition: "transform 160ms ease, box-shadow 160ms ease, filter 160ms ease",
+											boxShadow: (theme) => `0 0 8px ${theme.palette.info.main}`,
+											animation: "chipGlow 0.8s ease-in-out infinite alternate",
+
+											"&:hover": {
+												transform: "translateY(-1px) scale(1.03)",
+												filter: "brightness(1.08)",
+												boxShadow: (theme) => `0 0 12px ${theme.palette.info.main}, 0 0 24px ${theme.palette.info.main}`,
+											},
+
+											"&:active": {
+												transform: "translateY(0) scale(0.98)",
+											},
+
+											"@keyframes chipGlow": {
+												from: {
+													boxShadow: (theme) => `0 0 4px ${theme.palette.info.main}`,
+												},
+												to: {
+													boxShadow: (theme) => `0 0 10px ${theme.palette.info.main}, 0 0 16px ${theme.palette.info.main}`,
+												},
+											},
+										}}
+									/>
+								</a>
+							</Stack>
+						)}
 					</Paper>
 
 					<Stack spacing={2} sx={{ minWidth: 0, minHeight: 0, overflowY: "auto", overflowX: "hidden", pr: 0.5, ...scrollbarStyles }}>

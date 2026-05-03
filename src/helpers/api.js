@@ -41,7 +41,8 @@ export const setCsrfTokenCookie = (csrfToken) => setCookie(CSRF_COOKIE_NAME, csr
 
 export const ensureCsrfToken = async () => {
 	const existingToken = getCsrfToken();
-	if (existingToken) return existingToken;
+	const shouldForceRefresh = Boolean(globalThis.IN_ELECTRON_ENV);
+	if (existingToken && !shouldForceRefresh) return existingToken;
 
 	if (!csrfTokenRequest) {
 		csrfTokenRequest = fetch(`${getApiBase()}/csrf`, {

@@ -169,6 +169,39 @@ describe("Live HLS relay routes", () => {
 		agent.close();
 	});
 
+	it("lets a logged-in account create one named live stream without a create token", async () => {
+		const agent = request.agent(backend.server);
+		const { response: registerResponse, accessToken } = await registerUser(agent, {
+			username: "streamhost",
+			displayName: "Stream Host",
+		});
+		expect(registerResponse.status).to.equal(200);
+
+		const createResponse = await agent
+			.post("/live/api/session")
+			.set("Authorization", `Bearer ${accessToken}`)
+			.send({ label: "Ignored custom title", retainSegmentCount: 3 });
+
+		expect(createResponse.status).to.equal(201);
+		const session = await StreamSessionModel.findOne({ sessionId: createResponse.body.sessionId });
+		expect(session.label).to.equal("Stream Host");
+		expect(session.createdByUsername).to.equal("Stream Host");
+		expect(session.createdByUser.toString()).to.equal(registerResponse.body.user.id);
+
+		const secondCreateResponse = await agent.post("/live/api/session").set("Authorization", `Bearer ${accessToken}`).send({ label: "Second stream" });
+
+		expect(secondCreateResponse.status).to.equal(409);
+		expect(secondCreateResponse.body.code).to.equal("account_live_stream_limit");
+
+		const endResponse = await agent.post(`/live/api/${createResponse.body.sessionId}/end`).set("x-live-ingest-secret", createResponse.body.ingestSecret);
+		expect(endResponse.status).to.equal(200);
+
+		const createAfterEndResponse = await agent.post("/live/api/session").set("Authorization", `Bearer ${accessToken}`).send({});
+		expect(createAfterEndResponse.status).to.equal(201);
+
+		agent.close();
+	});
+
 	it("lists available streams with current ingest metadata", async () => {
 		const agent = request.agent(backend.server);
 		await authenticateViewer(agent);
