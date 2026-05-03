@@ -37,7 +37,7 @@ const getSeekableWindow = (video) => {
 
 const buildSyncTuning = (targetDuration) => {
 	const segmentDuration = Number(targetDuration) > 0 ? Number(targetDuration) : 2;
-	const latestSegmentSafety = 4;
+	const latestSegmentSafety = 2;
 	const targetLatency = segmentDuration + latestSegmentSafety;
 	const maxLatency = Math.max(targetLatency + segmentDuration * 3, targetLatency + 6);
 	const minLatency = Math.max(targetLatency - 0.5, latestSegmentSafety);
