@@ -26,12 +26,14 @@ const getSeekableWindow = (video) => {
 
 const buildSyncTuning = (targetDuration) => {
 	const segmentDuration = Number(targetDuration) > 0 ? Number(targetDuration) : 2;
-	const targetLatency = clamp(segmentDuration * 2.5, 4, 8);
-	const maxLatency = clamp(targetLatency + segmentDuration * 3, 10, 18);
-	const minLatency = Math.max(segmentDuration * 1.25, 2);
+	const latestSegmentSafety = 2;
+	const targetLatency = segmentDuration + latestSegmentSafety;
+	const maxLatency = Math.max(targetLatency + segmentDuration * 3, targetLatency + 6);
+	const minLatency = Math.max(targetLatency - 0.5, latestSegmentSafety);
 
 	return {
 		segmentDuration,
+		latestSegmentSafety,
 		targetLatency,
 		maxLatency,
 		minLatency,
@@ -75,22 +77,21 @@ function LiveStreamPlayer({ stream, sx }) {
 
 			const { start, end } = seekableWindow;
 			const availableWindow = Math.max(0, end - start);
-			const effectiveLatency = Math.min(syncTuning.targetLatency, Math.max(syncTuning.segmentDuration, availableWindow * 0.35));
+			const effectiveLatency = Math.min(syncTuning.targetLatency, Math.max(syncTuning.minLatency, availableWindow * 0.45));
 			const targetTime = clamp(end - effectiveLatency, start, end);
 			const currentTime = Number.isFinite(video.currentTime) ? video.currentTime : start;
 			const latency = Math.max(0, end - currentTime);
 			const driftedPastWindow = currentTime < start || currentTime > end;
+			const tooCloseToNewestSegment = latency < syncTuning.minLatency;
 			let playbackRate = 1;
 			let syncLabel = `Live latency ${formatDuration(latency)}`;
 
-			if (force || driftedPastWindow || latency > syncTuning.maxLatency) {
+			if (force || driftedPastWindow || latency > syncTuning.maxLatency || tooCloseToNewestSegment) {
 				video.currentTime = targetTime;
-				syncLabel = "Synced near live";
+				syncLabel = `Holding ${formatDuration(syncTuning.latestSegmentSafety)} behind latest segment`;
 			} else if (!video.paused && latency > syncTuning.targetLatency + syncTuning.segmentDuration) {
 				playbackRate = 1.04;
 				syncLabel = "Catching up gently";
-			} else if (latency < syncTuning.minLatency) {
-				syncLabel = "On the live edge";
 			} else {
 				syncLabel = "Near live";
 			}
@@ -152,10 +153,10 @@ function LiveStreamPlayer({ stream, sx }) {
 		if (Hls.isSupported()) {
 			const hls = new Hls({
 				enableWorker: true,
-				lowLatencyMode: true,
+				lowLatencyMode: false,
 				backBufferLength: 30,
-				liveSyncDurationCount: 3,
-				liveMaxLatencyDurationCount: 8,
+				liveSyncDuration: syncTuning.targetLatency,
+				liveMaxLatencyDuration: syncTuning.maxLatency,
 				maxLiveSyncPlaybackRate: 1.05,
 			});
 
