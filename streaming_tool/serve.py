@@ -31,20 +31,23 @@ UPLOAD_POLL_INTERVAL_SECONDS = 0.75
 SEGMENT_EXTENSIONS = {".aac", ".m4a", ".m4s", ".mp3", ".mp4", ".ts"}
 NVENC_CODECS = {"h264_nvenc", "hevc_nvenc", "av1_nvenc"}
 SOFTWARE_VIDEO_CODECS = {"libx264", "libx265", "libaom-av1", "libsvtav1"}
-QSV_VIDEO_CODECS = {"h264_qsv", "hevc_qsv", "av1_qsv"}
+QSV_VIDEO_CODECS = {"h264_qsv", "hevc_qsv", "av1_qsv", "vp9_qsv"}
 VIDEOTOOLBOX_VIDEO_CODECS = {"h264_videotoolbox", "hevc_videotoolbox"}
 HEVC_VIDEO_CODECS = {"libx265", "hevc_nvenc", "hevc_qsv", "hevc_videotoolbox"}
 H264_VIDEO_CODECS = {"libx264", "h264_nvenc", "h264_qsv", "h264_videotoolbox"}
 AV1_VIDEO_CODECS = {"av1_nvenc", "av1_qsv", "libaom-av1", "libsvtav1"}
+VP9_VIDEO_CODECS = {"libvpx-vp9", "vp9_qsv"}
 VIDEO_CODEC_OPTIONS = [
     "av1_nvenc",
     "hevc_nvenc",
     "h264_nvenc",
     "av1_qsv",
+    "vp9_qsv",
     "hevc_qsv",
     "h264_qsv",
     "libsvtav1",
     "libaom-av1",
+    "libvpx-vp9",
     "libx265",
     "libx264",
     "hevc_videotoolbox",
@@ -171,6 +174,7 @@ DEFAULT_NVENC_PROFILE = "balanced_live"
 SOFTWARE_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo"]
 SVT_AV1_PRESETS = [str(value) for value in range(13)]
 LIBAOM_AV1_PRESETS = [str(value) for value in range(9)]
+LIBVPX_VP9_PRESETS = [str(value) for value in range(9)]
 QSV_PRESETS = ["veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"]
 VIDEOTOOLBOX_PRESETS = ["realtime"]
 ENCODER_PRESETS = {
@@ -178,6 +182,7 @@ ENCODER_PRESETS = {
     "software": SOFTWARE_PRESETS,
     "svt_av1": SVT_AV1_PRESETS,
     "libaom_av1": LIBAOM_AV1_PRESETS,
+    "libvpx_vp9": LIBVPX_VP9_PRESETS,
     "qsv": QSV_PRESETS,
     "videotoolbox": VIDEOTOOLBOX_PRESETS,
 }
@@ -186,6 +191,7 @@ DEFAULT_ENCODER_PRESETS = {
     "software": "medium",
     "svt_av1": "8",
     "libaom_av1": "6",
+    "libvpx_vp9": "5",
     "qsv": "medium",
     "videotoolbox": "realtime",
 }
@@ -194,6 +200,7 @@ CODEC_SETTING_NOTES = {
     "software": "Software x264/x265 uses FFmpeg's encoder preset ladder. Slower presets improve efficiency but can fall behind live playback.",
     "svt_av1": "SVT-AV1 uses numeric presets 0..12 where lower is slower/better and higher is faster.",
     "libaom_av1": "libaom-av1 uses cpu-used 0..8 where lower is slower/better and higher is faster.",
+    "libvpx_vp9": "libvpx-vp9 uses cpu-used 0..8 in realtime mode, where lower is slower/better and higher is faster.",
     "qsv": "Intel QSV uses its own preset ladder with the same bitrate and keyframe settings as the other live encoders.",
     "videotoolbox": "VideoToolbox runs in realtime mode and does not expose an FFmpeg preset in this tool.",
 }
@@ -227,6 +234,10 @@ def is_av1_codec(video_codec: str) -> bool:
     return video_codec.strip().lower() in AV1_VIDEO_CODECS
 
 
+def is_vp9_codec(video_codec: str) -> bool:
+    return video_codec.strip().lower() in VP9_VIDEO_CODECS
+
+
 def codec_family(video_codec: str) -> str:
     codec = video_codec.strip().lower()
     if codec in NVENC_CODECS:
@@ -235,6 +246,8 @@ def codec_family(video_codec: str) -> str:
         return "svt_av1"
     if codec == "libaom-av1":
         return "libaom_av1"
+    if codec == "libvpx-vp9":
+        return "libvpx_vp9"
     if codec in SOFTWARE_VIDEO_CODECS:
         return "software"
     if codec in QSV_VIDEO_CODECS:
@@ -362,6 +375,8 @@ def codec_string(video_codec: str, audio_codec: str) -> str:
         codecs.append("avc1")
     elif video_codec in AV1_VIDEO_CODECS:
         codecs.append("av01")
+    elif video_codec in VP9_VIDEO_CODECS:
+        codecs.append("vp09")
 
     if audio_codec == "aac":
         codecs.append("mp4a.40.2")
@@ -1073,6 +1088,8 @@ class StreamController:
             cmd += ["-tag:v", "hvc1"]
         elif is_av1_codec(video_codec):
             cmd += ["-tag:v", "av01"]
+        elif is_vp9_codec(video_codec):
+            cmd += ["-tag:v", "vp09"]
 
         gop_size = str(config.gop_size)
 
@@ -1090,8 +1107,26 @@ class StreamController:
             cmd += ["-g", gop_size, "-svtav1-params", f"keyint={gop_size}:scd=0"]
         elif video_codec == "libaom-av1":
             cmd += ["-g", gop_size, "-keyint_min", gop_size, "-cpu-used", encoder_preset]
+        elif video_codec == "libvpx-vp9":
+            cmd += [
+                "-g",
+                gop_size,
+                "-keyint_min",
+                gop_size,
+                "-deadline",
+                "realtime",
+                "-cpu-used",
+                encoder_preset,
+                "-row-mt",
+                "1",
+                "-lag-in-frames",
+                "0",
+            ]
         else:
             cmd += ["-g", gop_size, "-keyint_min", gop_size, "-sc_threshold", "0"]
+
+        if video_codec == "libvpx-vp9":
+            cmd += ["-pix_fmt", "yuv420p"]
 
         cmd += ["-b:v", config.video_bitrate]
         cmd += ["-maxrate", config.video_bitrate]

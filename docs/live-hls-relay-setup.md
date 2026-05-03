@@ -112,6 +112,41 @@ Notes:
 - `2` second segments with a `6` entry live list keeps delay short without making the relay overly chatty.
 - If your PC cannot sustain realtime 4K HEVC, lower the resolution or use a hardware encoder. The server will still relay whatever you upload without transcoding.
 
+## ffmpeg example for VP9 browser playback and AAC
+
+VP9 can be sent through the same HLS relay as fragmented MP4 segments. This is mainly useful for browser playback on clients that support VP9 in MP4 through Media Source Extensions; for Apple TV/VLC targets, H.264 or HEVC is usually the safer choice.
+
+```bash
+ffmpeg -re \
+  -i input.mp4 \
+  -c:v libvpx-vp9 \
+  -deadline realtime \
+  -cpu-used 5 \
+  -row-mt 1 \
+  -lag-in-frames 0 \
+  -pix_fmt yuv420p \
+  -tag:v vp09 \
+  -g 48 \
+  -keyint_min 48 \
+  -b:v 6M \
+  -maxrate 6M \
+  -bufsize 12M \
+  -vf "scale=1920:1080:force_original_aspect_ratio=decrease" \
+  -c:a aac \
+  -b:a 160k \
+  -ar 48000 \
+  -ac 2 \
+  -f hls \
+  -hls_time 2 \
+  -hls_list_size 6 \
+  -hls_segment_type fmp4 \
+  -hls_fmp4_init_filename init.mp4 \
+  -hls_flags independent_segments+delete_segments+temp_file \
+  -master_pl_name master.m3u8 \
+  -hls_segment_filename "./tmp/live-hls/segment-%06d.m4s" \
+  ./tmp/live-hls/video.m3u8
+```
+
 ## VLC on Apple TV
 
 1. In the uploader output, copy the `playbackUrl`.
