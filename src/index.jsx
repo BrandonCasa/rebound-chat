@@ -16,10 +16,6 @@ import "./index.css";
 import store from "./store";
 
 window.isElectron = "electronAPI" in window;
-let ffmpegPath = await window.electronAPI.system.getFfmpegPath();
-ffmpegPath = ffmpegPath.replace("app.asar", "app.asar.unpacked");
-ffmpegPath = ffmpegPath.replace("app.asar.unpacked.unpacked", "app.asar.unpacked");
-window.ffmpegPath = ffmpegPath;
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(

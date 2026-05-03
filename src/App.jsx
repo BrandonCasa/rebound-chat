@@ -130,6 +130,21 @@ const App = () => {
 		}
 	}, [authState.loggedIn, authState.authToken, dispatch]);
 
+	useEffect(() => {
+		async function fetchFfmpegPath() {
+			let ffmpegPath = undefined;
+
+			ffmpegPath = await window.electronAPI.system.getFfmpegPath();
+			ffmpegPath = ffmpegPath.replace("app.asar", "app.asar.unpacked");
+			ffmpegPath = ffmpegPath.replace("app.asar.unpacked.unpacked", "app.asar.unpacked");
+
+			window.ffmpegPath = ffmpegPath;
+		}
+		if (window.isElectron && !window.ffmpegPath) {
+			fetchFfmpegPath();
+		}
+	}, []);
+
 	const showAutoUpdate = window.isElectron;
 
 	return (
