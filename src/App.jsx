@@ -20,6 +20,7 @@ import { getTokenExpiry } from "./helpers/authToken";
 import useCustomAppBar from "./components/CustomAppBar/useCustomAppBar";
 import useWindowDimensions from "./helpers/useWindowDimensions";
 import AutoUpdate from "./components/AutoUpdate";
+import { setDialogOpened } from "./slices/dialogSlice";
 
 const LandingPage = lazy(() => import("./routes/LandingPage/LandingPage.route"));
 const ProfilePage = lazy(() => import("./routes/ProfilePage/ProfilePage.route"));
@@ -55,20 +56,36 @@ const App = () => {
 		const params = new URLSearchParams(window.location.search);
 		const token = params.get("token");
 		const authComplete = params.get("authComplete");
+		const authError = params.get("authError");
 		if (token) {
 			dispatch(setAuthState({ authToken: token }));
 			dispatch(verifyUser(token));
 			params.delete("token");
 		}
 		if (authComplete === "google") {
-			dispatch(bootstrapAuth());
+			dispatch(bootstrapAuth({ force: true }));
+			dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
 			params.delete("authComplete");
 		}
-		if (token || authComplete) {
+		if (authError === "google") {
+			params.delete("authError");
+		}
+		if (token || authComplete || authError) {
 			const newSearch = params.toString();
 			const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "") + window.location.hash;
 			window.history.replaceState({}, "", newUrl);
 		}
+	}, [dispatch]);
+
+	useEffect(() => {
+		if (!window.electronAPI?.auth?.onGoogleLoginComplete) return undefined;
+
+		return window.electronAPI.auth.onGoogleLoginComplete((payload) => {
+			if (payload?.success) {
+				dispatch(bootstrapAuth({ force: true }));
+				dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
+			}
+		});
 	}, [dispatch]);
 
 	useEffect(() => {

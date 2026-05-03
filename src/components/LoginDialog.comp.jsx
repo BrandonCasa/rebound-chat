@@ -72,8 +72,25 @@ const LoginDialog = () => {
 			});
 	};
 
-	const handleGoogleLogin = () => {
+	const handleGoogleLogin = async () => {
 		const redirectTarget = `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`;
+
+		if (window.electronAPI?.auth?.startGoogleLogin) {
+			try {
+				await window.electronAPI.auth.startGoogleLogin(redirectTarget);
+				return;
+			} catch (error) {
+				dispatch(
+					addSnackbar({
+						snackbarMsg: `Google sign-in failed, ${error?.message || "unable to open sign-in window."}`,
+						snackbarSeverity: "error",
+						autoHideDuration: 4000,
+					})
+				);
+				return;
+			}
+		}
+
 		window.location.href = `${getApiBase()}/users/google?redirect=${encodeURIComponent(redirectTarget)}`;
 	};
 

@@ -120,11 +120,11 @@ export const refreshAuthToken = createAsyncThunk("auth/refreshAuthToken", async 
 	}
 });
 
-export const bootstrapAuth = createAsyncThunk("auth/bootstrapAuth", async (_, { dispatch, rejectWithValue }) => {
+export const bootstrapAuth = createAsyncThunk("auth/bootstrapAuth", async ({ force = false } = {}, { dispatch, rejectWithValue }) => {
 	try {
 		const hasSessionMarker = typeof window !== "undefined" && (window.localStorage.getItem(AUTH_SESSION_MARKER) === "true" || hasAuthSessionCookie());
 
-		if (!hasSessionMarker) {
+		if (!force && !hasSessionMarker) {
 			return rejectWithValue("No prior auth session");
 		}
 

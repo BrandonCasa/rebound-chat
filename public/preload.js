@@ -5,6 +5,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	downloadUpdate: () => ipcRenderer.send("download-update"),
 	installUpdate: () => ipcRenderer.send("install-update"),
 	simulateUpdate: () => ipcRenderer.send("simulate-update"),
+	auth: {
+		startGoogleLogin: (redirectTarget) => ipcRenderer.invoke("auth:start-google-login", redirectTarget),
+		onGoogleLoginComplete: (cb) => {
+			const listener = (_event, payload) => cb(payload);
+			ipcRenderer.on("auth:google-complete", listener);
+			return () => ipcRenderer.removeListener("auth:google-complete", listener);
+		},
+	},
 	system: {
 		getFfmpegPath: () => ipcRenderer.invoke("system:get-ffmpeg-path"),
 	},

@@ -17,6 +17,65 @@ const __dirname = dirname(__filename);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let mainWindow;
+let googleAuthWindow;
+let completingGoogleAuth = false;
+
+const getParsedUrl = (url) => {
+	try {
+		return new URL(url);
+	} catch {
+		return null;
+	}
+};
+
+const isAllowedOAuthRedirectTarget = (url) => {
+	const parsed = getParsedUrl(url);
+	if (!parsed) return false;
+
+	if (parsed.protocol === "app:") {
+		return parsed.host === "-";
+	}
+
+	return ["http:", "https:"].includes(parsed.protocol) && ["localhost:3000", "rebound.nexus", "www.rebound.nexus"].includes(parsed.host);
+};
+
+const isGoogleAuthCompletionUrl = (url) => {
+	const parsed = getParsedUrl(url);
+	if (!parsed || !isAllowedOAuthRedirectTarget(url)) return false;
+
+	return parsed.searchParams.get("authComplete") === "google" || parsed.searchParams.get("authError") === "google";
+};
+
+const makeElectronCompatibleCookie = (cookie, isSecureUrl) => {
+	let normalized = cookie.replace(/;\s*SameSite=(Strict|Lax|None)/gi, "");
+
+	if (isSecureUrl) {
+		normalized += "; SameSite=None";
+	} else {
+		normalized += "; SameSite=Lax";
+	}
+
+	if (isSecureUrl && !/;\s*Secure/i.test(normalized)) {
+		normalized += "; Secure";
+	}
+
+	return normalized;
+};
+
+const rewriteOAuthCookiesForElectron = (details) => {
+	const headers = details.responseHeaders || {};
+	const cookieHeaderName = Object.keys(headers).find((name) => name.toLowerCase() === "set-cookie");
+
+	if (!cookieHeaderName) return null;
+
+	const isSecureUrl = details.url.startsWith("https:");
+	const cookies = Array.isArray(headers[cookieHeaderName]) ? headers[cookieHeaderName] : [headers[cookieHeaderName]].filter(Boolean);
+
+	return {
+		...headers,
+		[cookieHeaderName]: cookies.map((cookie) => makeElectronCompatibleCookie(cookie, isSecureUrl)),
+	};
+};
 
 protocol.registerSchemesAsPrivileged([
 	{
@@ -83,18 +142,18 @@ async function createWindow() {
 		log.error("did-fail-load", { code, desc, url });
 	});
 
-	mainWindow.webContents.session.webRequest.onHeadersReceived({ urls: ["https://rebound.nexus/*/*", "http://localhost:3000/*/*"] }, (details, callback) => {
-		const cookies = details.responseHeaders["Set-Cookie"];
-		if (cookies) {
-			const newCookie = Array.from(cookies).map((cookie) => cookie.concat("; SameSite=None"));
-			details.responseHeaders["Set-Cookie"] = [...newCookie];
-			callback({
-				responseHeaders: details.responseHeaders,
-			});
-		} else {
+	mainWindow.webContents.session.webRequest.onHeadersReceived(
+		{ urls: ["https://rebound.nexus/*", "http://localhost:6001/*", "http://localhost:3000/*"] },
+		(details, callback) => {
+			const responseHeaders = rewriteOAuthCookiesForElectron(details);
+			if (responseHeaders) {
+				callback({ responseHeaders });
+				return;
+			}
+
 			callback({ cancel: false });
 		}
-	});
+	);
 
 	if (isDev) {
 		await mainWindow.loadURL("http://localhost:3000");
@@ -103,7 +162,96 @@ async function createWindow() {
 	}
 }
 
+const completeGoogleAuthNavigation = async (url) => {
+	if (!mainWindow || completingGoogleAuth || !isGoogleAuthCompletionUrl(url)) return false;
+
+	completingGoogleAuth = true;
+
+	try {
+		const parsed = getParsedUrl(url);
+		const authComplete = parsed?.searchParams.get("authComplete") === "google";
+		const authError = parsed?.searchParams.get("authError") === "google";
+
+		mainWindow.webContents.send("auth:google-complete", {
+			success: authComplete,
+			error: authError,
+			url,
+		});
+
+		if (googleAuthWindow && !googleAuthWindow.isDestroyed()) {
+			googleAuthWindow.close();
+		}
+
+		googleAuthWindow = null;
+		mainWindow.focus();
+		return true;
+	} finally {
+		completingGoogleAuth = false;
+	}
+};
+
+const startGoogleLogin = async (_event, redirectTarget) => {
+	if (!mainWindow) {
+		throw new Error("Main window is not ready.");
+	}
+
+	const target = isAllowedOAuthRedirectTarget(redirectTarget) ? redirectTarget : "app://-/index.html";
+	const apiBase = isDev ? "http://localhost:6001/api" : "https://rebound.nexus/api";
+	const authUrl = `${apiBase}/users/google?redirect=${encodeURIComponent(target)}`;
+
+	if (googleAuthWindow && !googleAuthWindow.isDestroyed()) {
+		googleAuthWindow.close();
+	}
+
+	googleAuthWindow = new BrowserWindow({
+		width: 520,
+		height: 720,
+		parent: mainWindow,
+		modal: false,
+		show: true,
+		webPreferences: {
+			nodeIntegration: false,
+			contextIsolation: true,
+			session: mainWindow.webContents.session,
+		},
+	});
+
+	const handleNavigation = async (event, url) => {
+		if (!isGoogleAuthCompletionUrl(url)) return;
+		if (typeof event?.preventDefault === "function") {
+			event.preventDefault();
+		}
+
+		try {
+			await completeGoogleAuthNavigation(url);
+		} catch (error) {
+			log.error("Failed to complete Google auth navigation", { url, error });
+		}
+	};
+
+	googleAuthWindow.webContents.setWindowOpenHandler(({ url }) => {
+		if (isGoogleAuthCompletionUrl(url)) {
+			void completeGoogleAuthNavigation(url);
+			return { action: "deny" };
+		}
+
+		shell.openExternal(url);
+		return { action: "deny" };
+	});
+	googleAuthWindow.webContents.on("did-start-navigation", handleNavigation);
+	googleAuthWindow.webContents.on("will-navigate", handleNavigation);
+	googleAuthWindow.webContents.on("will-redirect", handleNavigation);
+	googleAuthWindow.webContents.on("did-redirect-navigation", handleNavigation);
+	googleAuthWindow.webContents.on("did-navigate", handleNavigation);
+	googleAuthWindow.on("closed", () => {
+		googleAuthWindow = null;
+	});
+
+	await googleAuthWindow.loadURL(authUrl);
+};
+
 // wire up IPC
+ipcMain.handle("auth:start-google-login", startGoogleLogin);
 ipcMain.on("check-for-updates", () => {
 	if (!allowUpdateAction("check-for-updates")) return;
 	autoUpdater.checkForUpdates();
