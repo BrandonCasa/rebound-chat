@@ -29,3 +29,4 @@ vite-dev*.log
 dist/
 app/
 node-compile-cache/
+streaming_tool/venv/**/*

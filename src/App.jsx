@@ -31,6 +31,7 @@ const SettingsPage = lazy(() => import("./routes/SettingsPage/SettingsPage.route
 const FriendPage = lazy(() => import("./routes/FriendPage/FriendPage.route"));
 const DirectMessagePage = lazy(() => import("./routes/DirectMessagePage/DirectMessagePage"));
 const LiveSharePage = lazy(() => import("./routes/LiveSharePage/LiveSharePage.route"));
+const AvailableStreamsPage = lazy(() => import("./routes/AvailableStreamsPage/AvailableStreamsPage.route"));
 
 const PageNotFoundContainer = styled("div")({
 	maxWidth: "100%",
@@ -139,6 +140,8 @@ const App = () => {
 								<Route path="/chat" element={<ChatPage />} />
 								<Route path="/dm/:userId" element={<DirectMessagePage />} />
 								<Route path="/servers" element={<ServersPage />} />
+								<Route path="/live" element={<AvailableStreamsPage />} />
+								<Route path="/live/streams" element={<AvailableStreamsPage />} />
 								<Route path="/live/share/:publicToken" element={<LiveSharePage />} />
 								<Route path="/testing" element={<TestingPage />} />
 								<Route path="/security" element={<SecurityPage />} />

@@ -48,4 +48,36 @@ export interface LiveShareSummary {
 	hasMasterPlaylist: boolean;
 	hasMediaPlaylist: boolean;
 	isPlayable: boolean;
+	mediaInfo: {
+		storageBackend: "local" | "s3";
+		maxRetainedSegments: number;
+		retainedSegmentNames: string[];
+		retainedSegmentCount: number;
+		assetCount: number;
+		totalRetainedBytes: number;
+		latestSegment: StreamAssetMetadata | null;
+		playlists: {
+			master: StreamAssetMetadata | null;
+			media: StreamAssetMetadata | null;
+		};
+		masterPlaylist: {
+			bandwidth: number | null;
+			averageBandwidth: number | null;
+			codecs: string;
+			resolution: string;
+			frameRate: number | null;
+			videoRange: string;
+		} | null;
+		mediaPlaylist: {
+			targetDuration: number | null;
+			mediaSequence: number | null;
+			segmentCount: number;
+			totalDuration: number;
+			latestSegmentUri: string;
+			firstSegmentUri: string;
+			mapUri: string;
+			hasEndList: boolean;
+			independentSegments: boolean;
+		} | null;
+	};
 }

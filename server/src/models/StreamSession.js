@@ -111,9 +111,9 @@ const StreamSessionSchema = new Schema(
 		},
 		maxRetainedSegments: {
 			type: Number,
-			default: 18,
+			default: 5,
 			min: 1,
-			max: 240,
+			max: 10,
 		},
 		recentSegmentNames: [
 			{

@@ -4,3 +4,27 @@ export const getLiveBase = () => {
 };
 
 export const getLiveShareApiUrl = (publicToken) => `${getLiveBase()}/live/api/share/${publicToken}`;
+
+export const getLiveStreamsApiUrl = () => `${getLiveBase()}/live/api/streams`;
+
+export const buildLiveAuthHeaders = (authToken, headers = {}) => ({
+	...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+	...headers,
+});
+
+export const buildLiveFetchConfig = (authToken, config = {}) => ({
+	credentials: "same-origin",
+	...config,
+	headers: buildLiveAuthHeaders(authToken, config.headers),
+});
+
+const resolveLiveAuthToken = (authToken) => (typeof authToken === "function" ? authToken() : authToken);
+
+export const buildLiveHlsConfig = (authToken) => ({
+	xhrSetup: (xhr) => {
+		const token = resolveLiveAuthToken(authToken);
+		if (token) {
+			xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+		}
+	},
+});

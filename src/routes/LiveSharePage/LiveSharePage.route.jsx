@@ -2,10 +2,13 @@ import ContentCopyRounded from "@mui/icons-material/ContentCopyRounded";
 import LaunchRounded from "@mui/icons-material/LaunchRounded";
 import { Alert, Box, Button, Chip, CircularProgress, Divider, Paper, Stack, Typography } from "@mui/material";
 import React, { useEffect, useMemo, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import { useParams } from "react-router-dom";
 
 import LandingHeader from "../../components/LandingHeader";
-import { getLiveShareApiUrl } from "../../helpers/live";
+import LiveStreamPlayer from "../../components/Live/LiveStreamPlayer";
+import { buildLiveFetchConfig, getLiveShareApiUrl } from "../../helpers/live";
+import { setDialogOpened } from "../../slices/dialogSlice";
 import { scrollbarStyles } from "../scrollbarStyles";
 
 const formatDateTime = (value) => {
@@ -29,6 +32,8 @@ const getStatusColor = (status) => {
 
 function LiveSharePage() {
 	const { publicToken } = useParams();
+	const dispatch = useDispatch();
+	const auth = useSelector((state) => state.auth);
 	const [state, setState] = useState({
 		loading: true,
 		error: "",
@@ -37,6 +42,10 @@ function LiveSharePage() {
 	});
 
 	useEffect(() => {
+		if (!auth.loggedIn || !auth.authToken) {
+			return undefined;
+		}
+
 		let ignore = false;
 
 		const loadShare = async () => {
@@ -47,9 +56,7 @@ function LiveSharePage() {
 					error: "",
 				}));
 
-				const response = await fetch(getLiveShareApiUrl(publicToken), {
-					credentials: "include",
-				});
+				const response = await fetch(getLiveShareApiUrl(publicToken), buildLiveFetchConfig(auth.authToken));
 
 				if (!response.ok) {
 					const payload = await response.json().catch(() => ({}));
@@ -82,7 +89,7 @@ function LiveSharePage() {
 		return () => {
 			ignore = true;
 		};
-	}, [publicToken]);
+	}, [auth.loggedIn, auth.authToken, publicToken]);
 
 	const liveStatusLabel = useMemo(() => {
 		if (!state.data?.status) return "Unavailable";
@@ -112,6 +119,16 @@ function LiveSharePage() {
 		}
 	};
 
+	const handleLogin = () => {
+		dispatch(
+			setDialogOpened({
+				dialogName: "loginDialogOpen",
+				newState: true,
+				conflictingDialogs: ["registerDialogOpen"],
+			})
+		);
+	};
+
 	return (
 		<Box
 			sx={{
@@ -121,7 +138,7 @@ function LiveSharePage() {
 				overflow: "hidden",
 			}}>
 			<Stack spacing={2} sx={{ width: "100%", height: "100%" }}>
-				<LandingHeader title="Live Share" subtitle="Open the HTTPS playlist URL in VLC on Apple TV." />
+				<LandingHeader title="Live Share" subtitle="Watch the stream from a logged-in session." />
 				<Box
 					sx={{
 						width: "100%",
@@ -132,7 +149,30 @@ function LiveSharePage() {
 						...scrollbarStyles,
 					}}>
 					<Stack spacing={2}>
-						{state.loading ? (
+						{auth.loggingIn ? (
+							<Paper variant="outlined" sx={{ p: 3, minHeight: 180 }}>
+								<Stack spacing={2} alignItems="center" justifyContent="center" sx={{ height: "100%" }}>
+									<CircularProgress size={28} />
+									<Typography variant="body2" color="text.secondary">
+										Checking login
+									</Typography>
+								</Stack>
+							</Paper>
+						) : null}
+
+						{!auth.loggingIn && !auth.loggedIn ? (
+							<Alert
+								severity="info"
+								action={
+									<Button color="inherit" size="small" onClick={handleLogin}>
+										Log In
+									</Button>
+								}>
+								Log in to view this live stream.
+							</Alert>
+						) : null}
+
+						{auth.loggedIn && state.loading ? (
 							<Paper variant="outlined" sx={{ p: 3, minHeight: 180 }}>
 								<Stack spacing={2} alignItems="center" justifyContent="center" sx={{ height: "100%" }}>
 									<CircularProgress size={28} />
@@ -143,17 +183,19 @@ function LiveSharePage() {
 							</Paper>
 						) : null}
 
-						{!state.loading && state.error ? <Alert severity="error">{state.error}</Alert> : null}
+						{auth.loggedIn && !state.loading && state.error ? <Alert severity="error">{state.error}</Alert> : null}
 
-						{!state.loading && state.data ? (
+						{auth.loggedIn && !state.loading && state.data ? (
 							<>
+								<LiveStreamPlayer stream={state.data} />
+
 								<Paper variant="outlined" sx={{ p: 2.5 }}>
 									<Stack spacing={1.5}>
 										<Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ xs: "flex-start", sm: "center" }} justifyContent="space-between">
 											<Stack spacing={0.5}>
 												<Typography variant="h6">{state.data.label || "Live session"}</Typography>
 												<Typography variant="body2" color="text.secondary">
-													Use the direct playlist URL below in VLC on Apple TV.
+													Direct playlist access requires your logged-in browser session.
 												</Typography>
 											</Stack>
 											<Chip color={getStatusColor(state.data.status)} label={liveStatusLabel} size="small" />
@@ -208,27 +250,18 @@ function LiveSharePage() {
 										<Typography variant="body2" color="text.secondary">
 											Recent retained media files: {state.data.recentSegmentCount}
 										</Typography>
+										<Typography variant="body2" color="text.secondary">
+											Target segment duration:{" "}
+											{state.data.mediaInfo?.mediaPlaylist?.targetDuration ? `${state.data.mediaInfo.mediaPlaylist.targetDuration}s` : "Unavailable"}
+										</Typography>
+										<Typography variant="body2" color="text.secondary">
+											Latest segment: {state.data.mediaInfo?.latestSegment?.filename || "Unavailable"}
+										</Typography>
 										{state.data.endedAt ? (
 											<Typography variant="body2" color="text.secondary">
 												Ended: {formatDateTime(state.data.endedAt)}
 											</Typography>
 										) : null}
-									</Stack>
-								</Paper>
-
-								<Paper variant="outlined" sx={{ p: 2.5 }}>
-									<Stack spacing={1.25}>
-										<Typography variant="h6">Viewer Notes</Typography>
-										<Divider />
-										<Typography variant="body2" color="text.secondary">
-											Open the playlist URL directly inside VLC on Apple TV. A browser player is not part of this route.
-										</Typography>
-										<Typography variant="body2" color="text.secondary">
-											The sender can end this live link at any time, which immediately stops public playback.
-										</Typography>
-										<Typography variant="body2" color="text.secondary">
-											If the session is active but not yet playable, wait for the sender to upload the current playlists and segments.
-										</Typography>
 									</Stack>
 								</Paper>
 							</>

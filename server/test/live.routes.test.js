@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { expect, request, createBackend, stopBackend, resetLiveSessions } from "./helpers/authTestUtils.js";
+import { expect, request, createBackend, stopBackend, resetUsers, registerUser, resetLiveSessions } from "./helpers/authTestUtils.js";
 
 const StreamSessionModel = (await import("../src/models/StreamSession.js")).default;
 const liveRuntime = (await import("../src/live/runtime.js")).default;
@@ -36,6 +36,12 @@ const uploadSegment = async (agent, sessionId, ingestSecret, filename, body) => 
 	expect(response.status).to.equal(204);
 };
 
+const authenticateViewer = async (agent) => {
+	const { response, accessToken } = await registerUser(agent);
+	expect(response.status).to.equal(200);
+	return accessToken;
+};
+
 const getResponseText = (response) => {
 	if (typeof response.text === "string") return response.text;
 	if (Buffer.isBuffer(response.body)) return response.body.toString("utf8");
@@ -54,11 +60,34 @@ describe("Live HLS relay routes", () => {
 	});
 
 	beforeEach(async () => {
+		await resetUsers();
 		await resetLiveSessions();
 	});
 
-	it("creates a live session, ingests assets, and serves public playback with HLS headers", async () => {
+	it("rejects stream discovery and playback without a logged-in user", async () => {
 		const agent = request.agent(backend.server);
+
+		const streamListResponse = await agent.get("/live/api/streams");
+		expect(streamListResponse.status).to.equal(401);
+
+		const shareResponse = await agent.get("/live/api/share/not-a-real-token");
+		expect(shareResponse.status).to.equal(401);
+
+		const playlistResponse = await agent.get("/live/watch/not-a-real-token/master.m3u8");
+		expect(playlistResponse.status).to.equal(401);
+
+		const segmentResponse = await agent.get("/live/watch/not-a-real-token/segments/segment-000001.m4s");
+		expect(segmentResponse.status).to.equal(401);
+
+		agent.close();
+	});
+
+	it("creates a live session, ingests assets, and serves authenticated playback with HLS headers", async () => {
+		const agent = request.agent(backend.server);
+		const accessToken = await authenticateViewer(agent);
+		const viewerAgent = request.agent(backend.server);
+		const setViewerAuth = (requestBuilder) => requestBuilder.set("Authorization", `Bearer ${accessToken}`);
+
 		const { sessionId, publicToken, ingestSecret, playbackUrl, shareUrl } = await createSession(agent, {
 			label: "Patio camera",
 			retainSegmentCount: 6,
@@ -104,32 +133,102 @@ describe("Live HLS relay routes", () => {
 			].join("\n")
 		);
 
-		const masterResponse = await agent.get(`/live/watch/${publicToken}/master.m3u8`);
+		const masterResponse = await setViewerAuth(viewerAgent.get(`/live/watch/${publicToken}/master.m3u8`));
 		const masterText = getResponseText(masterResponse);
 		expect(masterResponse.status).to.equal(200);
 		expect(masterResponse.header["content-type"]).to.include("application/vnd.apple.mpegurl");
 		expect(masterResponse.header["cache-control"]).to.include("no-store");
+		expect(masterResponse.header.vary).to.include("Authorization");
 		expect(masterText).to.include("video.m3u8");
 		expect(masterText).to.not.include("source-video.m3u8");
 
-		const videoResponse = await agent.get(`/live/watch/${publicToken}/video.m3u8`);
+		const videoResponse = await setViewerAuth(viewerAgent.get(`/live/watch/${publicToken}/video.m3u8`));
 		const videoText = getResponseText(videoResponse);
 		expect(videoResponse.status).to.equal(200);
 		expect(videoResponse.header["cache-control"]).to.include("no-store");
 		expect(videoText).to.include('URI="segments/init.mp4"');
 		expect(videoText).to.include("segments/segment-000001.m4s");
 
-		const segmentResponse = await agent.get(`/live/watch/${publicToken}/segments/segment-000001.m4s`);
+		const segmentResponse = await setViewerAuth(viewerAgent.get(`/live/watch/${publicToken}/segments/segment-000001.m4s`));
 		expect(segmentResponse.status).to.equal(200);
 		expect(segmentResponse.header["content-type"]).to.include("video/iso.segment");
+		expect(segmentResponse.header["cache-control"]).to.include("private");
 		expect(segmentResponse.header["cache-control"]).to.include("immutable");
+		expect(segmentResponse.header.vary).to.include("Authorization");
 		expect(segmentResponse.header["content-length"]).to.equal(String(Buffer.byteLength("segment-one")));
 
-		const shareResponse = await agent.get(`/live/api/share/${publicToken}`);
+		const shareResponse = await setViewerAuth(viewerAgent.get(`/live/api/share/${publicToken}`));
 		expect(shareResponse.status).to.equal(200);
 		expect(shareResponse.body.status).to.equal("active");
 		expect(shareResponse.body.isPlayable).to.equal(true);
 		expect(shareResponse.body.playbackUrl).to.match(new RegExp(`/live/watch/${publicToken}/master\\.m3u8$`));
+		expect(shareResponse.body.mediaInfo.masterPlaylist.resolution).to.equal("3840x2160");
+		expect(shareResponse.body.mediaInfo.mediaPlaylist.targetDuration).to.equal(2);
+
+		viewerAgent.close();
+		agent.close();
+	});
+
+	it("lists available streams with current ingest metadata", async () => {
+		const agent = request.agent(backend.server);
+		await authenticateViewer(agent);
+
+		const playableSession = await createSession(agent, {
+			label: "Main deck",
+			retainSegmentCount: 4,
+		});
+		const pendingSession = await createSession(agent, {
+			label: "Waiting room",
+			retainSegmentCount: 2,
+		});
+
+		await uploadPlaylist(
+			agent,
+			playableSession.sessionId,
+			playableSession.ingestSecret,
+			"master.m3u8",
+			[
+				"#EXTM3U",
+				"#EXT-X-VERSION:7",
+				'#EXT-X-STREAM-INF:BANDWIDTH=9000000,CODECS="avc1.640028,mp4a.40.2",RESOLUTION=1920x1080,FRAME-RATE=60',
+				"video.m3u8",
+				"",
+			].join("\n")
+		);
+		await uploadSegment(agent, playableSession.sessionId, playableSession.ingestSecret, "segment-000001.m4s", Buffer.from("segment-one"));
+		await uploadSegment(agent, playableSession.sessionId, playableSession.ingestSecret, "segment-000002.m4s", Buffer.from("segment-two"));
+		await uploadPlaylist(
+			agent,
+			playableSession.sessionId,
+			playableSession.ingestSecret,
+			"video.m3u8",
+			[
+				"#EXTM3U",
+				"#EXT-X-VERSION:7",
+				"#EXT-X-TARGETDURATION:2",
+				"#EXT-X-MEDIA-SEQUENCE:1",
+				"#EXT-X-INDEPENDENT-SEGMENTS",
+				"#EXTINF:2.000,",
+				"segment-000001.m4s",
+				"#EXTINF:2.000,",
+				"segment-000002.m4s",
+				"",
+			].join("\n")
+		);
+
+		const listResponse = await agent.get("/live/api/streams");
+		expect(listResponse.status).to.equal(200);
+		expect(listResponse.body.streams).to.have.length(2);
+
+		const playableStream = listResponse.body.streams.find((stream) => stream.sessionId === playableSession.sessionId);
+		const pendingStream = listResponse.body.streams.find((stream) => stream.sessionId === pendingSession.sessionId);
+
+		expect(playableStream.isPlayable).to.equal(true);
+		expect(playableStream.mediaInfo.masterPlaylist.resolution).to.equal("1920x1080");
+		expect(playableStream.mediaInfo.masterPlaylist.frameRate).to.equal(60);
+		expect(playableStream.mediaInfo.mediaPlaylist.segmentCount).to.equal(2);
+		expect(playableStream.mediaInfo.latestSegment.filename).to.equal("segment-000002.m4s");
+		expect(pendingStream.isPlayable).to.equal(false);
 
 		agent.close();
 	});
@@ -162,6 +261,8 @@ describe("Live HLS relay routes", () => {
 
 	it("keeps only a rolling segment window from the latest media playlist", async () => {
 		const agent = request.agent(backend.server);
+		await authenticateViewer(agent);
+
 		const { sessionId, publicToken, ingestSecret } = await createSession(agent, { retainSegmentCount: 2 });
 
 		await uploadSegment(agent, sessionId, ingestSecret, "segment-a.ts", Buffer.from("aaa"));
@@ -196,6 +297,8 @@ describe("Live HLS relay routes", () => {
 
 	it("ends a session and revokes further public playback", async () => {
 		const agent = request.agent(backend.server);
+		await authenticateViewer(agent);
+
 		const { sessionId, publicToken, ingestSecret } = await createSession(agent);
 
 		const endResponse = await agent.post(`/live/api/${sessionId}/end`).set("x-live-ingest-secret", ingestSecret);
