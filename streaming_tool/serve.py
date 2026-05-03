@@ -54,6 +54,20 @@ AUDIO_CODEC_OPTIONS = ["aac", "libmp3lame"]
 NVENC_PRESET_LADDER = ["p7", "p6", "p5", "p4", "p3", "p2", "p1"]
 NVENC_TUNE_OPTIONS = ["hq", "ll", "ull", "lossless"]
 NVENC_MULTIPASS_OPTIONS = ["disabled", "qres", "fullres"]
+NVENC_RC_OPTIONS = ["vbr", "cbr", "constqp"]
+
+DEFAULT_NVENC_TUNE = "ull"
+DEFAULT_NVENC_MULTIPASS = "fullres"
+DEFAULT_NVENC_RC = "vbr"
+DEFAULT_NVENC_CQ = "23"
+DEFAULT_NVENC_B_REF_MODE = "middle"
+DEFAULT_NVENC_B_FRAMES = "3"
+DEFAULT_NVENC_LOOKAHEAD = "16"
+DEFAULT_GOP_SIZE = "48"
+DEFAULT_HLS_TIME = "2"
+DEFAULT_HLS_LIST_SIZE = "6"
+
+NVENC_B_REF_MODE_OPTIONS = ["disabled", "each", "middle"]
 NVENC_PRESET_ALIASES = {
     "slowest": "p7",
     "slower": "p7",
@@ -67,6 +81,93 @@ NVENC_PRESET_ALIASES = {
     "ull": "p3",
     "lossless": "p7",
 }
+
+NVENC_PROFILE_OPTIONS = [
+    "quality_live",
+    "balanced_live",
+    "fast_live",
+    "low_latency",
+    "ultra_low_latency",
+    "custom"
+]
+
+NVENC_PROFILE_DEFAULTS = {
+    "quality_live": {
+        "preset": "p6",
+        "tune": "hq",
+        "multipass": "fullres",
+        "rc": "vbr",
+        "cq": "23",
+        "spatial_aq": True,
+        "temporal_aq": True,
+        "b_ref_mode": "middle",
+        "b_frames": "3",
+        "lookahead": "16",
+    },
+    "balanced_live": {
+        "preset": "p5",
+        "tune": "hq",
+        "multipass": "qres",
+        "rc": "vbr",
+        "cq": "25",
+        "spatial_aq": True,
+        "temporal_aq": True,
+        "b_ref_mode": "middle",
+        "b_frames": "2",
+        "lookahead": "8",
+    },
+    "fast_live": {
+        "preset": "p4",
+        "tune": "ll",
+        "multipass": "qres",
+        "rc": "vbr",
+        "cq": "26",
+        "spatial_aq": True,
+        "temporal_aq": False,
+        "b_ref_mode": "middle",
+        "b_frames": "1",
+        "lookahead": "4",
+    },
+    "low_latency": {
+        "preset": "p3",
+        "tune": "ll",
+        "multipass": "disabled",
+        "rc": "cbr",
+        "cq": "",
+        "spatial_aq": True,
+        "temporal_aq": False,
+        "b_ref_mode": "disabled",
+        "b_frames": "0",
+        "lookahead": "0",
+    },
+    "ultra_low_latency": {
+        "preset": "p2",
+        "tune": "ull",
+        "multipass": "disabled",
+        "rc": "cbr",
+        "cq": "",
+        "spatial_aq": False,
+        "temporal_aq": False,
+        "b_ref_mode": "disabled",
+        "b_frames": "0",
+        "lookahead": "0",
+    },
+    "custom": {
+        "preset": "p2",
+        "tune": "ull",
+        "multipass": "disabled",
+        "rc": "cbr",
+        "cq": "",
+        "spatial_aq": False,
+        "temporal_aq": False,
+        "b_ref_mode": "disabled",
+        "b_frames": "0",
+        "lookahead": "0",
+    },
+}
+
+DEFAULT_NVENC_PROFILE = "balanced_live"
+
 SOFTWARE_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo"]
 SVT_AV1_PRESETS = [str(value) for value in range(13)]
 LIBAOM_AV1_PRESETS = [str(value) for value in range(9)]
@@ -162,6 +263,30 @@ def normalize_encoder_preset(video_codec: str, value: str) -> str:
     if text not in presets:
         raise ValueError(f"{video_codec} preset must be one of {', '.join(presets)}")
     return text
+
+
+def normalize_choice(value: str, allowed: List[str], default: str, label: str) -> str:
+    text = (value or default).strip().lower()
+    if text not in allowed:
+        raise ValueError(f"{label} must be one of {', '.join(allowed)}")
+    return text
+
+
+def parse_optional_positive_int(value: str, label: str) -> Optional[int]:
+    text = value.strip()
+    if not text:
+        return None
+    number = int(text)
+    if number < 0:
+        raise ValueError(f"{label} must be 0 or greater")
+    return number
+
+
+def parse_positive_int(value: str, label: str) -> int:
+    number = int(value.strip())
+    if number <= 0:
+        raise ValueError(f"{label} must be greater than 0")
+    return number
 
 
 def normalize_audio_codec(value: str) -> str:
@@ -287,6 +412,18 @@ class StreamConfig:
     audio_bitrate: str
     fps: Optional[int]
     encoder_preset: str
+    nvenc_tune: str
+    nvenc_multipass: str
+    nvenc_rc: str
+    nvenc_cq: Optional[int]
+    nvenc_spatial_aq: bool
+    nvenc_temporal_aq: bool
+    nvenc_b_ref_mode: str
+    nvenc_b_frames: Optional[int]
+    nvenc_lookahead: Optional[int]
+    gop_size: int
+    hls_time: str
+    hls_list_size: int
     target_speed: float
     adaptive_nvenc: bool
     convert_stream_to_sdr: bool
@@ -895,7 +1032,7 @@ class StreamController:
         cmd += ["-map", "0:v:0", "-map", "0:a?"]
         cmd += ["-c:v", "copy", "-c:a", "copy"]
         cmd += ["-f", "hls"]
-        cmd += ["-hls_time", "2", "-hls_list_size", "6"]
+        cmd += ["-hls_time", config.hls_time, "-hls_list_size", str(config.hls_list_size)]
         cmd += ["-hls_flags", "delete_segments+independent_segments+temp_file"]
         cmd += ["-hls_segment_type", "fmp4", "-hls_fmp4_init_filename", "init.mp4"]
         cmd += ["-master_pl_name", "master.m3u8"]
@@ -937,16 +1074,24 @@ class StreamController:
         elif is_av1_codec(video_codec):
             cmd += ["-tag:v", "av01"]
 
+        gop_size = str(config.gop_size)
+
         if video_codec == "libx265":
-            cmd += ["-x265-params", "repeat-headers=1:keyint=48:min-keyint=48:scenecut=0"]
+            cmd += [
+                "-x265-params",
+                f"repeat-headers=1:keyint={gop_size}:min-keyint={gop_size}:scenecut=0",
+            ]
         elif video_codec == "libx264":
-            cmd += ["-x264-params", "keyint=48:min-keyint=48:scenecut=0"]
+            cmd += [
+                "-x264-params",
+                f"keyint={gop_size}:min-keyint={gop_size}:scenecut=0",
+            ]
         elif video_codec == "libsvtav1":
-            cmd += ["-g", "48", "-svtav1-params", "keyint=48:scd=0"]
+            cmd += ["-g", gop_size, "-svtav1-params", f"keyint={gop_size}:scd=0"]
         elif video_codec == "libaom-av1":
-            cmd += ["-g", "48", "-keyint_min", "48", "-cpu-used", encoder_preset]
+            cmd += ["-g", gop_size, "-keyint_min", gop_size, "-cpu-used", encoder_preset]
         else:
-            cmd += ["-g", "48", "-keyint_min", "48", "-sc_threshold", "0"]
+            cmd += ["-g", gop_size, "-keyint_min", gop_size, "-sc_threshold", "0"]
 
         cmd += ["-b:v", config.video_bitrate]
         cmd += ["-maxrate", config.video_bitrate]
@@ -954,10 +1099,36 @@ class StreamController:
 
         if is_nvenc_codec(video_codec):
             cmd += ["-preset", normalize_nvenc_preset(nvenc_preset or encoder_preset)]
-            cmd += ["-tune", "hq", "-multipass", "fullres"]
-            cmd += ["-rc", "vbr", "-spatial_aq", "1", "-temporal_aq", "1"]
-            if video_codec == "av1_nvenc":
-                cmd += ["-cq", "23"]
+            cmd += ["-tune", config.nvenc_tune]
+
+            if config.nvenc_multipass != "disabled":
+                cmd += ["-multipass", config.nvenc_multipass]
+
+            cmd += ["-rc", config.nvenc_rc]
+
+            if config.nvenc_spatial_aq:
+                cmd += ["-spatial_aq", "1"]
+            else:
+                cmd += ["-spatial_aq", "0"]
+
+            if config.nvenc_temporal_aq:
+                cmd += ["-temporal_aq", "1"]
+            else:
+                cmd += ["-temporal_aq", "0"]
+
+            if config.nvenc_cq is not None and config.nvenc_rc in {"vbr", "constqp"}:
+                cmd += ["-cq", str(config.nvenc_cq)]
+
+            if config.nvenc_b_ref_mode != "disabled":
+                cmd += ["-b_ref_mode", config.nvenc_b_ref_mode]
+            else:
+                cmd += ["-b_ref_mode", "disabled"]
+
+            if config.nvenc_b_frames is not None:
+                cmd += ["-bf", str(config.nvenc_b_frames)]
+
+            if config.nvenc_lookahead is not None and config.nvenc_lookahead > 0:
+                cmd += ["-rc-lookahead", str(config.nvenc_lookahead)]
         elif video_codec == "libsvtav1":
             cmd += ["-preset", encoder_preset]
         elif is_software_codec(video_codec) or is_qsv_codec(video_codec):
@@ -970,7 +1141,7 @@ class StreamController:
             cmd += ["-ac", "2", "-ar", "48000"]
 
         cmd += ["-f", "hls"]
-        cmd += ["-hls_time", "2", "-hls_list_size", "6"]
+        cmd += ["-hls_time", config.hls_time, "-hls_list_size", str(config.hls_list_size)]
         hls_flags = "delete_segments+independent_segments+temp_file"
         if discontinuity:
             hls_flags += "+discont_start"
@@ -1105,6 +1276,19 @@ class App(tk.Tk):
         self.audio_bitrate_var = tk.StringVar(value="192k")
         self.fps_var = tk.StringVar(value="24")
         self.encoder_preset_var = tk.StringVar(value=DEFAULT_NVENC_PRESET)
+        self.nvenc_tune_var = tk.StringVar(value=DEFAULT_NVENC_TUNE)
+        self.nvenc_multipass_var = tk.StringVar(value=DEFAULT_NVENC_MULTIPASS)
+        self.nvenc_rc_var = tk.StringVar(value=DEFAULT_NVENC_RC)
+        self.nvenc_cq_var = tk.StringVar(value=DEFAULT_NVENC_CQ)
+        self.nvenc_spatial_aq_var = tk.BooleanVar(value=True)
+        self.nvenc_temporal_aq_var = tk.BooleanVar(value=True)
+        self.nvenc_b_ref_mode_var = tk.StringVar(value=DEFAULT_NVENC_B_REF_MODE)
+        self.nvenc_b_frames_var = tk.StringVar(value=DEFAULT_NVENC_B_FRAMES)
+        self.nvenc_lookahead_var = tk.StringVar(value=DEFAULT_NVENC_LOOKAHEAD)
+        self.nvenc_profile_var = tk.StringVar(value=DEFAULT_NVENC_PROFILE)
+        self.gop_size_var = tk.StringVar(value=DEFAULT_GOP_SIZE)
+        self.hls_time_var = tk.StringVar(value=DEFAULT_HLS_TIME)
+        self.hls_list_size_var = tk.StringVar(value=DEFAULT_HLS_LIST_SIZE)
         self.codec_settings_note_var = tk.StringVar()
         self.target_speed_var = tk.StringVar(value=str(DEFAULT_TARGET_SPEED))
         self.local_port_var = tk.StringVar(value=str(DEFAULT_LOCAL_PORT))
@@ -1115,15 +1299,47 @@ class App(tk.Tk):
         self.open_local_browser_preview_var = tk.BooleanVar(value=False)
         self.use_alt_audio_var = tk.BooleanVar(value=False)
         self.adaptive_nvenc_var = tk.BooleanVar(value=True)
+        self.nvenc_profile_combo: Optional[ttk.Combobox] = None
         self.video_codec_combo: Optional[ttk.Combobox] = None
         self.audio_codec_combo: Optional[ttk.Combobox] = None
         self.encoder_preset_combo: Optional[ttk.Combobox] = None
         self.adaptive_nvenc_check: Optional[ttk.Checkbutton] = None
+        self.nvenc_tune_combo: Optional[ttk.Combobox] = None
+        self.nvenc_multipass_combo: Optional[ttk.Combobox] = None
+        self.nvenc_rc_combo: Optional[ttk.Combobox] = None
+        self.nvenc_b_ref_mode_combo: Optional[ttk.Combobox] = None
+        self.applying_nvenc_profile =  tk.BooleanVar(value=False)
+
+        for var in [
+            self.encoder_preset_var,
+            self.nvenc_tune_var,
+            self.nvenc_multipass_var,
+            self.nvenc_rc_var,
+            self.nvenc_cq_var,
+            self.nvenc_b_ref_mode_var,
+            self.nvenc_b_frames_var,
+            self.nvenc_lookahead_var,
+        ]:
+            var.trace_add("write", self._mark_nvenc_profile_custom)
+
+        for var in [
+            self.nvenc_spatial_aq_var,
+            self.nvenc_temporal_aq_var,
+        ]:
+            var.trace_add("write", self._mark_nvenc_profile_custom)
 
         self._build_ui()
+        self._apply_nvenc_profile(DEFAULT_NVENC_PROFILE)
         self._on_video_codec_change()
         self.after(250, self._drain_logs)
         self.protocol("WM_DELETE_WINDOW", self.on_close)
+    
+    def _mark_nvenc_profile_custom(self, *_args) -> None:
+        if self.applying_nvenc_profile:
+            return
+
+        if self.nvenc_profile_var.get() != "custom":
+            self.nvenc_profile_var.set("custom")
 
     def default_vlc_path(self) -> str:
         if sys.platform == "darwin":
@@ -1131,6 +1347,35 @@ class App(tk.Tk):
         if os.name == "nt":
             return r"C:\Program Files\VideoLAN\VLC\vlc.exe"
         return "vlc"
+    
+    def _apply_nvenc_profile(self, profile_name: str) -> None:
+        profile = NVENC_PROFILE_DEFAULTS.get(profile_name)
+        if not profile:
+            return
+
+        self.applying_nvenc_profile = True
+        try:
+            self.encoder_preset_var.set(profile["preset"])
+            self.nvenc_tune_var.set(profile["tune"])
+            self.nvenc_multipass_var.set(profile["multipass"])
+            self.nvenc_rc_var.set(profile["rc"])
+            self.nvenc_cq_var.set(profile["cq"])
+            self.nvenc_spatial_aq_var.set(profile["spatial_aq"])
+            self.nvenc_temporal_aq_var.set(profile["temporal_aq"])
+            self.nvenc_b_ref_mode_var.set(profile["b_ref_mode"])
+            self.nvenc_b_frames_var.set(profile["b_frames"])
+            self.nvenc_lookahead_var.set(profile["lookahead"])
+        finally:
+            self.applying_nvenc_profile = False
+
+
+    def _on_nvenc_profile_change(self, _event=None) -> None:
+        profile_name = self.nvenc_profile_var.get().strip().lower()
+
+        if profile_name == "custom":
+            return
+
+        self._apply_nvenc_profile(profile_name)
 
     def _build_ui(self) -> None:
         main = ttk.Frame(self, padding=12)
@@ -1157,9 +1402,56 @@ class App(tk.Tk):
         self._entry_row(codecs, 4, "Video bitrate", self.video_bitrate_var)
         self._entry_row(codecs, 5, "Audio bitrate", self.audio_bitrate_var)
         self._entry_row(codecs, 6, "FPS", self.fps_var)
-        self.encoder_preset_combo = self._combo_row(codecs, 7, "Encoder preset / mode", self.encoder_preset_var, NVENC_PRESET_LADDER)
-        self._entry_row(codecs, 8, "Target encode speed", self.target_speed_var)
-        ttk.Label(codecs, textvariable=self.codec_settings_note_var, wraplength=820).grid(row=9, column=1, sticky="w", padx=8, pady=(0, 4))
+
+        self.nvenc_profile_combo = self._combo_row(
+            codecs, 7, "NVENC profile", self.nvenc_profile_var, NVENC_PROFILE_OPTIONS
+        )
+        self.nvenc_profile_combo.bind("<<ComboboxSelected>>", self._on_nvenc_profile_change)
+
+        self.encoder_preset_combo = self._combo_row(
+            codecs, 8, "Encoder preset / mode", self.encoder_preset_var, NVENC_PRESET_LADDER
+        )
+
+        self.nvenc_tune_combo = self._combo_row(
+            codecs, 9, "NVENC tune", self.nvenc_tune_var, NVENC_TUNE_OPTIONS
+        )
+        self.nvenc_multipass_combo = self._combo_row(
+            codecs, 10, "NVENC multipass", self.nvenc_multipass_var, NVENC_MULTIPASS_OPTIONS
+        )
+        self.nvenc_rc_combo = self._combo_row(
+            codecs, 11, "NVENC rate control", self.nvenc_rc_var, NVENC_RC_OPTIONS
+        )
+
+        self._entry_row(codecs, 12, "NVENC CQ / quality", self.nvenc_cq_var)
+
+        ttk.Checkbutton(
+            codecs,
+            text="NVENC spatial AQ",
+            variable=self.nvenc_spatial_aq_var,
+        ).grid(row=13, column=1, sticky="w", padx=8, pady=4)
+
+        ttk.Checkbutton(
+            codecs,
+            text="NVENC temporal AQ",
+            variable=self.nvenc_temporal_aq_var,
+        ).grid(row=14, column=1, sticky="w", padx=8, pady=4)
+
+        self.nvenc_b_ref_mode_combo = self._combo_row(
+            codecs, 15, "NVENC B-ref mode", self.nvenc_b_ref_mode_var, NVENC_B_REF_MODE_OPTIONS
+        )
+
+        self._entry_row(codecs, 16, "NVENC B-frames", self.nvenc_b_frames_var)
+        self._entry_row(codecs, 17, "NVENC lookahead", self.nvenc_lookahead_var)
+        self._entry_row(codecs, 18, "GOP size / keyint", self.gop_size_var)
+        self._entry_row(codecs, 19, "HLS segment seconds", self.hls_time_var)
+        self._entry_row(codecs, 20, "HLS playlist size", self.hls_list_size_var)
+        self._entry_row(codecs, 21, "Target encode speed", self.target_speed_var)
+
+        ttk.Label(
+            codecs,
+            textvariable=self.codec_settings_note_var,
+            wraplength=820,
+        ).grid(row=22, column=1, sticky="w", padx=8, pady=(0, 4))
 
         tools = ttk.LabelFrame(main, text="Tools and preview")
         tools.pack(fill="x", pady=(12, 0))
@@ -1222,8 +1514,19 @@ class App(tk.Tk):
             self.encoder_preset_combo.configure(values=preset_values)
             self.encoder_preset_combo.configure(state="disabled" if family == "videotoolbox" else "readonly")
 
+        is_nvenc = family == "nvenc"
+
+        for widget in [
+            self.nvenc_tune_combo,
+            self.nvenc_multipass_combo,
+            self.nvenc_rc_combo,
+            self.nvenc_b_ref_mode_combo,
+        ]:
+            if widget:
+                widget.configure(state="readonly" if is_nvenc else "disabled")
+
         if self.adaptive_nvenc_check:
-            if family == "nvenc":
+            if is_nvenc:
                 self.adaptive_nvenc_check.state(["!disabled"])
             else:
                 self.adaptive_nvenc_var.set(False)
@@ -1291,6 +1594,43 @@ class App(tk.Tk):
         audio_codec = normalize_audio_codec(self.audio_codec_var.get())
         encoder_preset = normalize_encoder_preset(video_codec, self.encoder_preset_var.get())
 
+        nvenc_tune = normalize_choice(
+            self.nvenc_tune_var.get(),
+            NVENC_TUNE_OPTIONS,
+            DEFAULT_NVENC_TUNE,
+            "NVENC tune",
+        )
+        nvenc_multipass = normalize_choice(
+            self.nvenc_multipass_var.get(),
+            NVENC_MULTIPASS_OPTIONS,
+            DEFAULT_NVENC_MULTIPASS,
+            "NVENC multipass",
+        )
+        nvenc_rc = normalize_choice(
+            self.nvenc_rc_var.get(),
+            NVENC_RC_OPTIONS,
+            DEFAULT_NVENC_RC,
+            "NVENC rate control",
+        )
+        nvenc_b_ref_mode = normalize_choice(
+            self.nvenc_b_ref_mode_var.get(),
+            NVENC_B_REF_MODE_OPTIONS,
+            DEFAULT_NVENC_B_REF_MODE,
+            "NVENC B-ref mode",
+        )
+
+        nvenc_cq = parse_optional_positive_int(self.nvenc_cq_var.get(), "NVENC CQ")
+        nvenc_b_frames = parse_optional_positive_int(self.nvenc_b_frames_var.get(), "NVENC B-frames")
+        nvenc_lookahead = parse_optional_positive_int(self.nvenc_lookahead_var.get(), "NVENC lookahead")
+        gop_size = parse_positive_int(self.gop_size_var.get(), "GOP size")
+        hls_list_size = parse_positive_int(self.hls_list_size_var.get(), "HLS playlist size")
+
+        hls_time = self.hls_time_var.get().strip()
+        if not hls_time:
+            raise ValueError("HLS segment seconds is required")
+        if float(hls_time) <= 0:
+            raise ValueError("HLS segment seconds must be greater than 0")
+
         return StreamConfig(
             video_path=video_path,
             alt_audio_path=alt_audio_path,
@@ -1306,6 +1646,18 @@ class App(tk.Tk):
             audio_bitrate=self.audio_bitrate_var.get().strip(),
             fps=self._parse_optional_int(self.fps_var.get()),
             encoder_preset=encoder_preset,
+            nvenc_tune=nvenc_tune,
+            nvenc_multipass=nvenc_multipass,
+            nvenc_rc=nvenc_rc,
+            nvenc_cq=nvenc_cq,
+            nvenc_spatial_aq=self.nvenc_spatial_aq_var.get(),
+            nvenc_temporal_aq=self.nvenc_temporal_aq_var.get(),
+            nvenc_b_ref_mode=nvenc_b_ref_mode,
+            nvenc_b_frames=nvenc_b_frames,
+            nvenc_lookahead=nvenc_lookahead,
+            gop_size=gop_size,
+            hls_time=hls_time,
+            hls_list_size=hls_list_size,
             target_speed=target_speed,
             adaptive_nvenc=self.adaptive_nvenc_var.get() and is_nvenc_codec(video_codec),
             convert_stream_to_sdr=self.convert_stream_to_sdr_var.get(),
