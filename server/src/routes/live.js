@@ -19,7 +19,7 @@ const createLimiter = rateLimit({
 
 const ingestLimiter = rateLimit({
 	windowMs: 60 * 1000,
-	max: 1_200,
+	limit: 3000,
 	standardHeaders: true,
 	legacyHeaders: false,
 	message: { error: "Too many live ingest requests, please try again later." },
@@ -27,7 +27,7 @@ const ingestLimiter = rateLimit({
 
 const playbackLimiter = rateLimit({
 	windowMs: 60 * 1000,
-	max: 600,
+	limit: 6000,
 	standardHeaders: true,
 	legacyHeaders: false,
 	message: { error: "Too many live playback requests, please try again later." },

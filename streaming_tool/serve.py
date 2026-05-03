@@ -1,5 +1,6 @@
 import os
 import queue
+import re
 import shutil
 import subprocess
 import sys
@@ -20,8 +21,81 @@ from tkinter import filedialog, messagebox, ttk
 APP_TITLE = "HLS Streamer (FFmpeg + VLC)"
 DEFAULT_LOCAL_PORT = 8777
 DEFAULT_RETAIN_SEGMENTS = 18
+DEFAULT_TARGET_SPEED = 1.2
+DEFAULT_NVENC_PRESET = "p6"
+READRATE_HEADROOM = 0.05
 UPLOAD_POLL_INTERVAL_SECONDS = 0.75
 SEGMENT_EXTENSIONS = {".aac", ".m4a", ".m4s", ".mp3", ".mp4", ".ts"}
+NVENC_CODECS = {"h264_nvenc", "hevc_nvenc"}
+NVENC_PRESET_LADDER = ["p7", "p6", "p5", "p4", "p3", "p2", "p1"]
+NVENC_PRESET_ALIASES = {
+    "slowest": "p7",
+    "slower": "p7",
+    "slow": "p6",
+    "medium": "p5",
+    "fast": "p4",
+    "faster": "p3",
+    "fastest": "p1",
+}
+FFMPEG_TIME_RE = re.compile(r"time=(\d+):(\d+):(\d+(?:\.\d+)?)")
+FFMPEG_SPEED_RE = re.compile(r"speed=\s*([0-9.]+)x")
+FFMPEG_HLS_SEGMENT_RE = re.compile(r"Opening '.*?segment-(\d+)\.[^']*' for writing")
+HLS_SEGMENT_FILE_RE = re.compile(r"segment-(\d+)\.")
+
+
+def is_nvenc_codec(video_codec: str) -> bool:
+    return video_codec.strip().lower() in NVENC_CODECS
+
+
+def normalize_nvenc_preset(value: str) -> str:
+    text = (value or DEFAULT_NVENC_PRESET).strip().lower()
+    text = NVENC_PRESET_ALIASES.get(text, text)
+    if text not in NVENC_PRESET_LADDER:
+        raise ValueError(f"NVENC preset must be one of {', '.join(NVENC_PRESET_LADDER)}")
+    return text
+
+
+def format_ffmpeg_seconds(seconds: float) -> str:
+    return f"{max(0.0, seconds):.3f}"
+
+
+def ffmpeg_readrate_for_target(target_speed: float) -> float:
+    # -re caps reported speed near 1.0x, so use readrate with a small margin above the watchdog target.
+    return max(1.0, target_speed + READRATE_HEADROOM)
+
+
+def parse_ffmpeg_time_seconds(line: str) -> Optional[float]:
+    match = FFMPEG_TIME_RE.search(line)
+    if not match:
+        return None
+    hours = int(match.group(1))
+    minutes = int(match.group(2))
+    seconds = float(match.group(3))
+    return hours * 3600 + minutes * 60 + seconds
+
+
+def parse_ffmpeg_speed(line: str) -> Optional[float]:
+    match = FFMPEG_SPEED_RE.search(line)
+    if not match:
+        return None
+    try:
+        return float(match.group(1))
+    except ValueError:
+        return None
+
+
+def parse_hls_segment_number(line: str) -> Optional[int]:
+    match = FFMPEG_HLS_SEGMENT_RE.search(line)
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def parse_hls_segment_file_number(filename: str) -> Optional[int]:
+    match = HLS_SEGMENT_FILE_RE.search(filename)
+    if not match:
+        return None
+    return int(match.group(1))
 
 
 def parse_bitrate_to_bps(value: str) -> int:
@@ -92,6 +166,9 @@ class StreamConfig:
     video_bitrate: str
     audio_bitrate: str
     fps: Optional[int]
+    nvenc_preset: str
+    target_speed: float
+    adaptive_nvenc: bool
     convert_stream_to_sdr: bool
     open_local_vlc: bool
     open_local_browser_preview: bool
@@ -316,6 +393,19 @@ class StreamController:
         self.local_server: Optional[LocalPreviewServer] = None
         self.active_config: Optional[StreamConfig] = None
         self.stdout_threads: List[threading.Thread] = []
+        self.state_lock = threading.RLock()
+        self.stop_event = threading.Event()
+        self.restart_event = threading.Event()
+        self.adaptive_thread: Optional[threading.Thread] = None
+        self.pending_nvenc_preset: Optional[str] = None
+        self.current_nvenc_preset = DEFAULT_NVENC_PRESET
+        self.ffmpeg_generation = 0
+        self.input_start_offset_seconds = 0.0
+        self.last_remote_output_seconds = 0.0
+        self.next_segment_start_number = 0
+        self.current_segment_min_speed: Optional[float] = None
+        self.last_adapted_segment_number: Optional[int] = None
+        self.adaptation_exhausted = False
 
     def log(self, message: str) -> None:
         self.log_queue.put(message)
@@ -358,19 +448,24 @@ class StreamController:
             heartbeat_interval_seconds=max(5, int(heartbeat_interval_ms / 1000)),
         )
 
-    def _consume_output(self, stream, prefix: str) -> None:
+    def _consume_output(self, stream, prefix: str, on_line=None) -> None:
         try:
             for line in iter(stream.readline, ""):
                 line = line.strip()
                 if line:
                     self.log(f"{prefix}: {line}")
+                    if on_line:
+                        try:
+                            on_line(line)
+                        except Exception as exc:
+                            self.log(f"{prefix} monitor error: {exc}")
         finally:
             try:
                 stream.close()
             except Exception:
                 pass
 
-    def _spawn_logged_process(self, cmd: List[str], cwd: Optional[str], prefix: str) -> subprocess.Popen:
+    def _spawn_logged_process(self, cmd: List[str], cwd: Optional[str], prefix: str, on_line=None) -> subprocess.Popen:
         self.log(f"Running: {' '.join(cmd)}")
         process = subprocess.Popen(
             cmd,
@@ -381,10 +476,206 @@ class StreamController:
             bufsize=1,
         )
         if process.stdout is not None:
-            thread = threading.Thread(target=self._consume_output, args=(process.stdout, prefix), daemon=True)
+            thread = threading.Thread(target=self._consume_output, args=(process.stdout, prefix, on_line), daemon=True)
             thread.start()
             self.stdout_threads.append(thread)
         return process
+
+    def _reset_adaptive_state(self, config: StreamConfig) -> None:
+        with self.state_lock:
+            self.stop_event.clear()
+            self.restart_event.clear()
+            self.pending_nvenc_preset = None
+            self.current_nvenc_preset = normalize_nvenc_preset(config.nvenc_preset)
+            self.ffmpeg_generation = 0
+            self.input_start_offset_seconds = 0.0
+            self.last_remote_output_seconds = 0.0
+            self.next_segment_start_number = 0
+            self.current_segment_min_speed = None
+            self.last_adapted_segment_number = None
+            self.adaptation_exhausted = False
+
+    def _next_faster_nvenc_preset(self) -> Optional[str]:
+        try:
+            index = NVENC_PRESET_LADDER.index(self.current_nvenc_preset)
+        except ValueError:
+            return None
+        next_index = index + 1
+        if next_index >= len(NVENC_PRESET_LADDER):
+            return None
+        return NVENC_PRESET_LADDER[next_index]
+
+    def _on_remote_ffmpeg_line(self, generation: int, line: str) -> None:
+        output_seconds = parse_ffmpeg_time_seconds(line)
+        speed = parse_ffmpeg_speed(line)
+        segment_number = parse_hls_segment_number(line)
+
+        with self.state_lock:
+            if generation != self.ffmpeg_generation:
+                return
+
+            if output_seconds is not None:
+                self.last_remote_output_seconds = output_seconds
+
+            if speed is not None:
+                if self.current_segment_min_speed is None:
+                    self.current_segment_min_speed = speed
+                else:
+                    self.current_segment_min_speed = min(self.current_segment_min_speed, speed)
+
+            if segment_number is None:
+                return
+
+            segment_min_speed = self.current_segment_min_speed
+            self.next_segment_start_number = max(self.next_segment_start_number, segment_number + 1)
+            self.current_segment_min_speed = None
+            self._maybe_request_adaptive_restart(segment_number, segment_min_speed)
+
+    def _maybe_request_adaptive_restart(self, segment_number: int, segment_min_speed: Optional[float]) -> None:
+        config = self.active_config
+        if (
+            not config
+            or not config.adaptive_nvenc
+            or not is_nvenc_codec(config.output_video_codec)
+            or segment_min_speed is None
+            or self.stop_event.is_set()
+            or self.restart_event.is_set()
+        ):
+            return
+
+        if segment_min_speed >= config.target_speed:
+            return
+
+        if self.last_adapted_segment_number == segment_number:
+            return
+
+        next_preset = self._next_faster_nvenc_preset()
+        if not next_preset:
+            if not self.adaptation_exhausted:
+                self.log(
+                    f"Segment {segment_number:06d} minimum speed was {segment_min_speed:.2f}x, "
+                    f"below target {config.target_speed:.2f}x, but NVENC is already at fastest preset {self.current_nvenc_preset}."
+                )
+                self.adaptation_exhausted = True
+            return
+
+        self.pending_nvenc_preset = next_preset
+        self.last_adapted_segment_number = segment_number
+        self.log(
+            f"Segment {segment_number:06d} minimum speed was {segment_min_speed:.2f}x, "
+            f"below target {config.target_speed:.2f}x; nudging NVENC preset "
+            f"{self.current_nvenc_preset} -> {next_preset}."
+        )
+        self.restart_event.set()
+
+    def _adaptive_restart_loop(self) -> None:
+        while not self.stop_event.is_set():
+            if not self.restart_event.wait(timeout=0.5):
+                continue
+            self.restart_event.clear()
+            if self.stop_event.is_set():
+                return
+            try:
+                self._restart_remote_ffmpeg_for_adaptation()
+            except Exception as exc:
+                self.log(f"Adaptive NVENC restart failed: {exc}")
+
+    def _terminate_process(self, process: Optional[subprocess.Popen]) -> None:
+        if process and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+
+    def _next_segment_start_from_files(self, directory: Path) -> int:
+        highest_segment_number = -1
+        for file_path in directory.glob("segment-*"):
+            segment_number = parse_hls_segment_file_number(file_path.name)
+            if segment_number is not None:
+                highest_segment_number = max(highest_segment_number, segment_number)
+        return highest_segment_number + 1
+
+    def _restart_remote_ffmpeg_for_adaptation(self) -> None:
+        with self.state_lock:
+            config = self.active_config
+            process = self.ffmpeg_process
+            next_preset = self.pending_nvenc_preset
+            if not config or not process or not next_preset:
+                return
+
+            previous_preset = self.current_nvenc_preset
+            restart_offset = self.input_start_offset_seconds + self.last_remote_output_seconds
+            segment_start_number = self.next_segment_start_number
+            self.ffmpeg_generation += 1
+
+        self.log(f"Restarting FFmpeg at {format_ffmpeg_seconds(restart_offset)}s with NVENC preset {next_preset}.")
+        self._terminate_process(process)
+
+        with self.state_lock:
+            if self.active_config is not config or self.stop_event.is_set():
+                return
+
+            segment_start_number = max(segment_start_number, self._next_segment_start_from_files(config.remote_dir))
+            self.next_segment_start_number = segment_start_number
+            self.current_nvenc_preset = next_preset
+            self.pending_nvenc_preset = None
+            self.input_start_offset_seconds = restart_offset
+            self.last_remote_output_seconds = 0.0
+            self.current_segment_min_speed = None
+            generation = self.ffmpeg_generation
+
+        self.log(f"Continuing HLS at segment start {segment_start_number}.")
+
+        remote_cmd = self.build_remote_ffmpeg_cmd(
+            config,
+            input_offset_seconds=restart_offset,
+            segment_start_number=segment_start_number,
+            nvenc_preset=next_preset,
+            discontinuity=segment_start_number > 0,
+        )
+        process = self._spawn_logged_process(
+            remote_cmd,
+            cwd=str(config.remote_dir),
+            prefix="remote-ffmpeg",
+            on_line=lambda line: self._on_remote_ffmpeg_line(generation, line),
+        )
+
+        with self.state_lock:
+            if self.active_config is config and not self.stop_event.is_set():
+                self.ffmpeg_process = process
+            else:
+                self._terminate_process(process)
+
+        self.log(f"Adaptive preset change applied: {previous_preset} -> {next_preset}")
+
+    def _start_adaptive_thread(self) -> None:
+        if self.adaptive_thread and self.adaptive_thread.is_alive():
+            return
+        self.adaptive_thread = threading.Thread(target=self._adaptive_restart_loop, daemon=True)
+        self.adaptive_thread.start()
+
+    def _spawn_remote_ffmpeg(self, config: StreamConfig, discontinuity: bool = False) -> subprocess.Popen:
+        with self.state_lock:
+            self.ffmpeg_generation += 1
+            generation = self.ffmpeg_generation
+            input_offset = self.input_start_offset_seconds
+            segment_start_number = self.next_segment_start_number
+            nvenc_preset = self.current_nvenc_preset
+
+        remote_cmd = self.build_remote_ffmpeg_cmd(
+            config,
+            input_offset_seconds=input_offset,
+            segment_start_number=segment_start_number,
+            nvenc_preset=nvenc_preset,
+            discontinuity=discontinuity,
+        )
+        return self._spawn_logged_process(
+            remote_cmd,
+            cwd=str(config.remote_dir),
+            prefix="remote-ffmpeg",
+            on_line=lambda line: self._on_remote_ffmpeg_line(generation, line),
+        )
 
     def build_stream_video_filter(self, config: StreamConfig) -> Optional[str]:
         filters: List[str] = []
@@ -420,8 +711,18 @@ class StreamController:
         cmd += ["video.m3u8"]
         return cmd
 
-    def build_remote_ffmpeg_cmd(self, config: StreamConfig) -> List[str]:
-        cmd = [config.ffmpeg_path, "-y", "-re", "-i", config.video_path]
+    def build_remote_ffmpeg_cmd(
+        self,
+        config: StreamConfig,
+        input_offset_seconds: float = 0.0,
+        segment_start_number: int = 0,
+        nvenc_preset: Optional[str] = None,
+        discontinuity: bool = False,
+    ) -> List[str]:
+        cmd = [config.ffmpeg_path, "-y"]
+        if input_offset_seconds > 0:
+            cmd += ["-ss", format_ffmpeg_seconds(input_offset_seconds)]
+        cmd += ["-readrate", f"{ffmpeg_readrate_for_target(config.target_speed):g}", "-i", config.video_path]
         if config.use_separate_audio_for_stream and config.alt_audio_path:
             cmd += ["-stream_loop", "-1", "-i", config.alt_audio_path]
 
@@ -447,7 +748,10 @@ class StreamController:
         cmd += ["-maxrate", config.video_bitrate]
         cmd += ["-bufsize", str(parse_bitrate_to_bps(config.video_bitrate) * 2)]
 
-        if config.output_video_codec.startswith("libx"):
+        if is_nvenc_codec(config.output_video_codec):
+            cmd += ["-preset", normalize_nvenc_preset(nvenc_preset or config.nvenc_preset)]
+            cmd += ["-rc", "vbr", "-spatial_aq", "1", "-temporal_aq", "1"]
+        elif config.output_video_codec.startswith("libx"):
             cmd += ["-preset", "medium"]
 
         cmd += ["-c:a", config.output_audio_codec, "-b:a", config.audio_bitrate]
@@ -456,9 +760,14 @@ class StreamController:
 
         cmd += ["-f", "hls"]
         cmd += ["-hls_time", "2", "-hls_list_size", "6"]
-        cmd += ["-hls_flags", "delete_segments+independent_segments+temp_file"]
+        hls_flags = "delete_segments+independent_segments+temp_file"
+        if discontinuity:
+            hls_flags += "+discont_start"
+        cmd += ["-hls_flags", hls_flags]
         cmd += ["-hls_segment_type", "fmp4", "-hls_fmp4_init_filename", "init.mp4"]
         cmd += ["-master_pl_name", "master.m3u8"]
+        if segment_start_number > 0:
+            cmd += ["-start_number", str(segment_start_number)]
         cmd += ["-hls_segment_filename", "segment-%06d.m4s"]
         cmd += ["video.m3u8"]
         return cmd
@@ -484,6 +793,7 @@ class StreamController:
         if self.active_config is not None:
             raise RuntimeError("A stream is already active")
 
+        self._reset_adaptive_state(config)
         config.remote_dir.mkdir(parents=True, exist_ok=True)
         config.local_dir.mkdir(parents=True, exist_ok=True)
 
@@ -507,13 +817,28 @@ class StreamController:
 
         self.open_local_vlc(config)
 
-        remote_cmd = self.build_remote_ffmpeg_cmd(config)
-        self.ffmpeg_process = self._spawn_logged_process(remote_cmd, cwd=str(config.remote_dir), prefix="remote-ffmpeg")
         self.active_config = config
+        if is_nvenc_codec(config.output_video_codec):
+            self.log(
+                f"NVENC enabled with preset {self.current_nvenc_preset}; "
+                f"target segment speed is {config.target_speed:.2f}x."
+            )
+            if config.adaptive_nvenc:
+                self._start_adaptive_thread()
+        elif config.adaptive_nvenc:
+            self.log("Adaptive NVENC is enabled, but the selected video codec is not an NVENC codec.")
+
+        self.ffmpeg_process = self._spawn_remote_ffmpeg(config)
         self.log("Streaming started")
 
     def stop(self) -> None:
         self.log("Stopping stream...")
+        self.stop_event.set()
+        self.restart_event.set()
+
+        if self.adaptive_thread and self.adaptive_thread.is_alive() and threading.current_thread() is not self.adaptive_thread:
+            self.adaptive_thread.join(timeout=5)
+        self.adaptive_thread = None
 
         if self.uploader:
             self.uploader.stop()
@@ -521,12 +846,7 @@ class StreamController:
             self.uploader = None
 
         for process in [self.ffmpeg_process, self.local_preview_process, self.local_vlc_process]:
-            if process and process.poll() is None:
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
+            self._terminate_process(process)
 
         self.ffmpeg_process = None
         self.local_preview_process = None
@@ -562,13 +882,15 @@ class App(tk.Tk):
         self.live_create_token_var = tk.StringVar()
         self.session_label_var = tk.StringVar()
         self.retain_segments_var = tk.StringVar(value=str(DEFAULT_RETAIN_SEGMENTS))
-        self.video_codec_var = tk.StringVar(value="libx265")
+        self.video_codec_var = tk.StringVar(value="hevc_nvenc")
         self.audio_codec_var = tk.StringVar(value="aac")
         self.width_var = tk.StringVar(value="3840")
         self.height_var = tk.StringVar(value="2160")
         self.video_bitrate_var = tk.StringVar(value="18M")
         self.audio_bitrate_var = tk.StringVar(value="192k")
         self.fps_var = tk.StringVar(value="24")
+        self.nvenc_preset_var = tk.StringVar(value=DEFAULT_NVENC_PRESET)
+        self.target_speed_var = tk.StringVar(value=str(DEFAULT_TARGET_SPEED))
         self.local_port_var = tk.StringVar(value=str(DEFAULT_LOCAL_PORT))
         self.ffmpeg_path_var = tk.StringVar(value="ffmpeg")
         self.vlc_path_var = tk.StringVar(value=self.default_vlc_path())
@@ -576,6 +898,7 @@ class App(tk.Tk):
         self.open_local_vlc_var = tk.BooleanVar(value=True)
         self.open_local_browser_preview_var = tk.BooleanVar(value=False)
         self.use_alt_audio_var = tk.BooleanVar(value=False)
+        self.adaptive_nvenc_var = tk.BooleanVar(value=True)
 
         self._build_ui()
         self.after(250, self._drain_logs)
@@ -612,6 +935,8 @@ class App(tk.Tk):
         self._entry_row(codecs, 4, "Video bitrate", self.video_bitrate_var)
         self._entry_row(codecs, 5, "Audio bitrate", self.audio_bitrate_var)
         self._entry_row(codecs, 6, "FPS", self.fps_var)
+        self._entry_row(codecs, 7, "NVENC initial preset", self.nvenc_preset_var)
+        self._entry_row(codecs, 8, "Target encode speed", self.target_speed_var)
 
         tools = ttk.LabelFrame(main, text="Tools and preview")
         tools.pack(fill="x", pady=(12, 0))
@@ -625,6 +950,7 @@ class App(tk.Tk):
         ttk.Checkbutton(options, text="Open local VLC preview on original source", variable=self.open_local_vlc_var).grid(row=1, column=0, sticky="w", padx=8, pady=4)
         ttk.Checkbutton(options, text="Open localhost browser HLS preview", variable=self.open_local_browser_preview_var).grid(row=2, column=0, sticky="w", padx=8, pady=4)
         ttk.Checkbutton(options, text="Use separate audio file for streamed output only", variable=self.use_alt_audio_var).grid(row=3, column=0, sticky="w", padx=8, pady=4)
+        ttk.Checkbutton(options, text="Auto-nudge NVENC preset when a segment is below target speed", variable=self.adaptive_nvenc_var).grid(row=4, column=0, sticky="w", padx=8, pady=4)
 
         buttons = ttk.Frame(main)
         buttons.pack(fill="x", pady=(12, 0))
@@ -701,6 +1027,10 @@ class App(tk.Tk):
         if retain_segments <= 0:
             raise ValueError("Retain segments must be greater than 0")
 
+        target_speed = float(self.target_speed_var.get().strip())
+        if target_speed <= 0:
+            raise ValueError("Target encode speed must be greater than 0")
+
         return StreamConfig(
             video_path=video_path,
             alt_audio_path=alt_audio_path,
@@ -708,13 +1038,16 @@ class App(tk.Tk):
             live_create_token=live_create_token,
             session_label=self.session_label_var.get().strip(),
             retain_segment_count=retain_segments,
-            output_video_codec=self.video_codec_var.get().strip(),
-            output_audio_codec=self.audio_codec_var.get().strip(),
+            output_video_codec=self.video_codec_var.get().strip().lower(),
+            output_audio_codec=self.audio_codec_var.get().strip().lower(),
             output_width=self._parse_optional_int(self.width_var.get()),
             output_height=self._parse_optional_int(self.height_var.get()),
             video_bitrate=self.video_bitrate_var.get().strip(),
             audio_bitrate=self.audio_bitrate_var.get().strip(),
             fps=self._parse_optional_int(self.fps_var.get()),
+            nvenc_preset=normalize_nvenc_preset(self.nvenc_preset_var.get()),
+            target_speed=target_speed,
+            adaptive_nvenc=self.adaptive_nvenc_var.get(),
             convert_stream_to_sdr=self.convert_stream_to_sdr_var.get(),
             open_local_vlc=self.open_local_vlc_var.get(),
             open_local_browser_preview=self.open_local_browser_preview_var.get(),
