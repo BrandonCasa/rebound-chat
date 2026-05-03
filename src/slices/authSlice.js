@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
 import {
-	buildApiConfig,
+	buildCsrfApiConfig,
 	clearAuthCookies,
 	clearAuthSessionCookie,
 	getApiBase,
@@ -87,7 +87,7 @@ export const verifyUser = createAsyncThunk("auth/verifyUser", async (token, { ge
 	const base = getApiBase();
 	const authToken = token || getState().auth.authToken;
 	try {
-		const { data } = await axios.post(`${base}/users/verify`, {}, buildApiConfig(authToken, { headers: { "Content-Type": "application/json" } }));
+		const { data } = await axios.post(`${base}/users/verify`, {}, await buildCsrfApiConfig(authToken, { headers: { "Content-Type": "application/json" } }));
 		const u = data.user;
 
 		return {
@@ -110,7 +110,7 @@ export const verifyUser = createAsyncThunk("auth/verifyUser", async (token, { ge
 export const refreshAuthToken = createAsyncThunk("auth/refreshAuthToken", async (_, { rejectWithValue }) => {
 	const base = getApiBase();
 	try {
-		const { data } = await axios.post(`${base}/users/refresh`, {}, buildApiConfig(null, { headers: { "Content-Type": "application/json" } }));
+		const { data } = await axios.post(`${base}/users/refresh`, {}, await buildCsrfApiConfig(null, { headers: { "Content-Type": "application/json" } }));
 
 		setCsrfTokenCookie(data.csrfToken);
 		setAuthSessionPresent(true);
@@ -143,7 +143,7 @@ export const loginUser = createAsyncThunk("auth/loginUser", async ({ email, pass
 			{
 				user: { email, password },
 			},
-			buildApiConfig(null, { headers: { "Content-Type": "application/json" } })
+			await buildCsrfApiConfig(null, { headers: { "Content-Type": "application/json" } })
 		);
 		const u = data.user;
 		setCsrfTokenCookie(data.csrfToken);
@@ -178,7 +178,7 @@ export const changePassword = createAsyncThunk("auth/changePassword", async ({ c
 		const { data } = await axios.put(
 			`${base}/users/password`,
 			{ currentPassword, newPassword },
-			buildApiConfig(authToken, { headers: { "Content-Type": "application/json" } })
+			await buildCsrfApiConfig(authToken, { headers: { "Content-Type": "application/json" } })
 		);
 		return data;
 	} catch (err) {
@@ -191,7 +191,7 @@ export const logoutUser = createAsyncThunk("auth/logoutUser", async ({ disableAu
 	const authToken = getState().auth.authToken;
 
 	try {
-		await axios.delete(`${base}/users/sessions`, buildApiConfig(authToken, { params: { scope: "current" } }));
+		await axios.delete(`${base}/users/sessions`, await buildCsrfApiConfig(authToken, { params: { scope: "current" } }));
 		clearAuthCookies();
 		setAuthSessionPresent(false);
 		return { disableAutoLogin };
@@ -210,7 +210,7 @@ export const registerUser = createAsyncThunk("auth/registerUser", async ({ usern
 			{
 				user: { username, email, displayName, bio, password },
 			},
-			buildApiConfig(null, { headers: { "Content-Type": "application/json" } })
+			await buildCsrfApiConfig(null, { headers: { "Content-Type": "application/json" } })
 		);
 		const u = data.user;
 		setCsrfTokenCookie(data.csrfToken);

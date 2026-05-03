@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { addSnackbar } from "./snackbarSlice";
-import { buildApiConfig, getApiBase } from "../helpers/api";
+import { buildApiConfig, buildCsrfApiConfig, getApiBase } from "../helpers/api";
 import { profileMediaUrl } from "../helpers/mediaUrl";
 
 const initialState = {
@@ -30,7 +30,7 @@ export const fetchUserProfile = createAsyncThunk("userApi/fetchUserProfile", asy
 export const modifyProfile = createAsyncThunk("userApi/modifyProfile", async ({ formData, authToken }, { rejectWithValue }) => {
 	const base = getApiBase();
 	try {
-		const { data } = await axios.put(`${base}/users/modify`, formData, buildApiConfig(authToken));
+		const { data } = await axios.put(`${base}/users/modify`, formData, await buildCsrfApiConfig(authToken));
 		const u = data.user;
 		return {
 			id: u.id,
@@ -50,7 +50,7 @@ export const friendAction = createAsyncThunk(
 	async ({ ep, data, authToken, message, severity = "success" }, { dispatch, rejectWithValue }) => {
 		const base = getApiBase();
 		try {
-			await axios.put(`${base}/users/${ep}`, data, buildApiConfig(authToken));
+			await axios.put(`${base}/users/${ep}`, data, await buildCsrfApiConfig(authToken));
 			if (message) {
 				dispatch(addSnackbar({ snackbarMsg: message, snackbarSeverity: severity, autoHideDuration: 1500 }));
 			}

@@ -1,4 +1,4 @@
-import { expect, request, registerUser, createBackend, resetUsers } from "./helpers/authTestUtils.js";
+import { expect, request, fetchCsrfToken, registerUser, createBackend, resetUsers } from "./helpers/authTestUtils.js";
 
 describe("User registration", () => {
 	let backend;
@@ -30,16 +30,20 @@ describe("User registration", () => {
 
 	it("rejects weak passwords during registration", async () => {
 		const agent = request.agent(backend.server);
+		const csrfToken = await fetchCsrfToken(agent);
 
-		const res = await agent.post("/api/users/register").send({
-			user: {
-				username: "shortuser",
-				email: "shortuser@example.com",
-				displayName: "Short User",
-				bio: "",
-				password: "short",
-			},
-		});
+		const res = await agent
+			.post("/api/users/register")
+			.set("x-csrf-token", csrfToken)
+			.send({
+				user: {
+					username: "shortuser",
+					email: "shortuser@example.com",
+					displayName: "Short User",
+					bio: "",
+					password: "short",
+				},
+			});
 
 		expect(res.status).to.equal(422);
 		expect(res.body?.errors?.password).to.exist;

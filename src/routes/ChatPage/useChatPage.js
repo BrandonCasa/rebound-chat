@@ -9,7 +9,7 @@ import { addSnackbar } from "../../slices/snackbarSlice";
 import { setActiveSocketRoom, emitSocketEvent } from "../../slices/socketSlice";
 import { getSocketClient } from "../../helpers/socketClient";
 import { dctHashCoarse16bitFromRgb, dctHashFineColor } from "../../helpers/hashimage";
-import { buildApiConfig, getApiBase } from "../../helpers/api";
+import { buildCsrfApiConfig, getApiBase } from "../../helpers/api";
 
 const MESSAGE_PAGE_SIZE = 50;
 const MAX_ATTACHMENTS = 10;
@@ -131,7 +131,7 @@ export default function useChatPage() {
 				name: file?.name,
 			}));
 
-			const { data } = await axios.post(`${getApiBase()}/media/check`, { hashes: hashes }, buildApiConfig(authState.authToken));
+			const { data } = await axios.post(`${getApiBase()}/media/check`, { hashes: hashes }, await buildCsrfApiConfig(authState.authToken));
 
 			const results = data?.results ?? [];
 			const uploadsToKeep = [];
@@ -209,7 +209,7 @@ export default function useChatPage() {
 			const { data: uploadResponse } = await axios.post(
 				`${getApiBase()}/media/upload`,
 				formData,
-				buildApiConfig(authState.authToken, {
+				await buildCsrfApiConfig(authState.authToken, {
 					headers: { "Content-Type": "multipart/form-data" },
 				})
 			);

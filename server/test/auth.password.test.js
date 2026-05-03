@@ -1,4 +1,4 @@
-import { expect, request, registerUser, createBackend, resetUsers } from "./helpers/authTestUtils.js";
+import { expect, request, registerUser, loginUser, createBackend, resetUsers } from "./helpers/authTestUtils.js";
 
 describe("Password security", () => {
 	let backend;
@@ -24,17 +24,16 @@ describe("Password security", () => {
 		const verifyRes = await agent.post("/api/users/verify").set("x-csrf-token", csrfToken);
 		expect(verifyRes.status).to.be.oneOf([401, 403]);
 
-		const oldPasswordLogin = await request.agent(backend.server).post("/api/users/login").send({
-			user: credentials,
-		});
-		expect(oldPasswordLogin.status).to.be.oneOf([403, 422]);
+		const oldLoginAgent = request.agent(backend.server);
+		const oldPasswordLogin = await loginUser(oldLoginAgent, credentials);
+		expect(oldPasswordLogin.response.status).to.equal(422);
 
 		const newLoginAgent = request.agent(backend.server);
-		const loginRes = await newLoginAgent.post("/api/users/login").send({
-			user: { email: credentials.email, password: "NewStrongPassword2" },
-		});
-		expect(loginRes.status).to.equal(200);
+		const loginRes = await loginUser(newLoginAgent, { email: credentials.email, password: "NewStrongPassword2" });
+		expect(loginRes.response.status).to.equal(200);
 
 		agent.close();
+		oldLoginAgent.close();
+		newLoginAgent.close();
 	});
 });
