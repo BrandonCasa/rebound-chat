@@ -10,6 +10,7 @@ import webbrowser
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
+from urllib.parse import quote
 
 import requests
 import tkinter as tk
@@ -20,6 +21,7 @@ APP_TITLE = "HLS Streamer (FFmpeg + VLC)"
 DEFAULT_LOCAL_PORT = 8777
 DEFAULT_RETAIN_SEGMENTS = 18
 UPLOAD_POLL_INTERVAL_SECONDS = 0.75
+SEGMENT_EXTENSIONS = {".aac", ".m4a", ".m4s", ".mp3", ".mp4", ".ts"}
 
 
 def parse_bitrate_to_bps(value: str) -> int:
@@ -108,7 +110,7 @@ class HttpHlsUploader(threading.Thread):
         self.config = config
         self.log_queue = log_queue
         self.stop_event = threading.Event()
-        self.last_uploaded: Dict[Path, float] = {}
+        self.last_uploaded: Dict[Path, str] = {}
         self.session = requests.Session()
 
     def log(self, message: str) -> None:
@@ -143,28 +145,32 @@ class HttpHlsUploader(threading.Thread):
     def remote_url_for_path(self, file_path: Path) -> str:
         rel = file_path.relative_to(self.config.remote_dir)
         parts = rel.parts
+        filename = parts[-1]
 
-        if parts[-1] == "master.m3u8":
+        if filename == "master.m3u8":
             return f"{self.api_base}/master.m3u8"
 
-        if parts[-1] == "video.m3u8":
+        if filename == "video.m3u8":
             return f"{self.api_base}/video.m3u8"
 
-        if len(parts) >= 2 and parts[0] == "segments":
-            return f"{self.api_base}/segments/{parts[-1]}"
-
-        return f"{self.api_base}/segments/{parts[-1]}"
+        return f"{self.api_base}/segments/{quote(filename, safe='')}"
 
     def upload_file(self, file_path: Path) -> None:
         url = self.remote_url_for_path(file_path)
         headers = self.build_ingest_headers()
         headers["Content-Type"] = self.mime_type_for_path(file_path)
+        is_playlist = file_path.suffix.lower() == ".m3u8"
+        signature = self.file_signature(file_path)
 
-        with file_path.open("rb") as handle:
-            response = self.session.put(url, data=handle, headers=headers, timeout=30)
+        if is_playlist:
+            body = file_path.read_text(encoding="utf-8")
+            response = self.session.put(url, data=body, headers=headers, timeout=30)
+        else:
+            with file_path.open("rb") as handle:
+                response = self.session.put(url, data=handle, headers=headers, timeout=30)
 
         raise_for_status_with_body(response)
-        self.last_uploaded[file_path] = file_path.stat().st_mtime
+        self.last_uploaded[file_path] = signature
         self.log(f"Uploaded: {file_path.name}")
 
     def send_heartbeat(self) -> None:
@@ -187,8 +193,11 @@ class HttpHlsUploader(threading.Thread):
         stats = file_path.stat()
         if stats.st_size <= 0:
             return False
-        previous_mtime = self.last_uploaded.get(file_path)
-        return previous_mtime is None or stats.st_mtime > previous_mtime
+        return self.last_uploaded.get(file_path) != self.file_signature(file_path, stats)
+
+    def file_signature(self, file_path: Path, stats: Optional[os.stat_result] = None) -> str:
+        stats = stats or file_path.stat()
+        return f"{stats.st_size}:{stats.st_mtime_ns}"
 
     def ensure_fallback_master_playlist(self) -> None:
         master_path = self.config.remote_dir / "master.m3u8"
@@ -215,21 +224,25 @@ class HttpHlsUploader(threading.Thread):
         self.log("Generated fallback master.m3u8")
 
     def iter_candidate_files(self) -> List[Path]:
-        candidates: List[Path] = []
+        def priority(file_path: Path) -> int:
+            if file_path.name == "master.m3u8":
+                return 2
+            if file_path.name == "video.m3u8":
+                return 1
+            return 0
 
-        segments_dir = self.config.remote_dir / "segments"
-        if segments_dir.exists():
-            candidates.extend(sorted(p for p in segments_dir.iterdir() if p.is_file()))
-
-        media_playlist = self.config.remote_dir / "video.m3u8"
-        if media_playlist.exists():
-            candidates.append(media_playlist)
-
-        master_playlist = self.config.remote_dir / "master.m3u8"
-        if master_playlist.exists():
-            candidates.append(master_playlist)
-
-        return candidates
+        return sorted(
+            (
+                file_path
+                for file_path in self.config.remote_dir.iterdir()
+                if file_path.is_file()
+                and (
+                    file_path.name in {"master.m3u8", "video.m3u8"}
+                    or file_path.suffix.lower() in SEGMENT_EXTENSIONS
+                )
+            ),
+            key=lambda file_path: (priority(file_path), file_path.name),
+        )
 
     def run(self) -> None:
         self.log("Uploader started")
@@ -395,28 +408,19 @@ class StreamController:
         if not config.open_local_browser_preview:
             return None
 
-        local_segments_dir = config.local_dir / "segments"
-        local_segments_dir.mkdir(parents=True, exist_ok=True)
-        media_path = config.local_dir / "video.m3u8"
-
         cmd = [config.ffmpeg_path, "-y", "-re", "-i", config.video_path]
         cmd += ["-map", "0:v:0", "-map", "0:a?"]
         cmd += ["-c:v", "copy", "-c:a", "copy"]
         cmd += ["-f", "hls"]
         cmd += ["-hls_time", "2", "-hls_list_size", "6"]
-        cmd += ["-hls_flags", "delete_segments+append_list+independent_segments+temp_file"]
-        cmd += ["-hls_segment_type", "fmp4", "-hls_fmp4_init_filename", "segments/init.mp4"]
+        cmd += ["-hls_flags", "delete_segments+independent_segments+temp_file"]
+        cmd += ["-hls_segment_type", "fmp4", "-hls_fmp4_init_filename", "init.mp4"]
         cmd += ["-master_pl_name", "master.m3u8"]
-        cmd += ["-hls_segment_filename", str(local_segments_dir / "seg_%06d.m4s")]
-        cmd += [str(media_path)]
+        cmd += ["-hls_segment_filename", "segment-%06d.m4s"]
+        cmd += ["video.m3u8"]
         return cmd
 
     def build_remote_ffmpeg_cmd(self, config: StreamConfig) -> List[str]:
-        remote_segments_dir = config.remote_dir / "segments"
-        remote_segments_dir.mkdir(parents=True, exist_ok=True)
-
-        media_playlist_path = config.remote_dir / "video.m3u8"
-
         cmd = [config.ffmpeg_path, "-y", "-re", "-i", config.video_path]
         if config.use_separate_audio_for_stream and config.alt_audio_path:
             cmd += ["-stream_loop", "-1", "-i", config.alt_audio_path]
@@ -452,11 +456,11 @@ class StreamController:
 
         cmd += ["-f", "hls"]
         cmd += ["-hls_time", "2", "-hls_list_size", "6"]
-        cmd += ["-hls_flags", "delete_segments+append_list+independent_segments+temp_file"]
-        cmd += ["-hls_segment_type", "fmp4", "-hls_fmp4_init_filename", "segments/init.mp4"]
+        cmd += ["-hls_flags", "delete_segments+independent_segments+temp_file"]
+        cmd += ["-hls_segment_type", "fmp4", "-hls_fmp4_init_filename", "init.mp4"]
         cmd += ["-master_pl_name", "master.m3u8"]
-        cmd += ["-hls_segment_filename", str(remote_segments_dir / "seg_%06d.m4s")]
-        cmd += [str(media_playlist_path)]
+        cmd += ["-hls_segment_filename", "segment-%06d.m4s"]
+        cmd += ["video.m3u8"]
         return cmd
 
     def open_local_vlc(self, config: StreamConfig) -> None:
