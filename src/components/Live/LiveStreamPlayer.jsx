@@ -31,8 +31,8 @@ const buildSyncTuning = (targetDuration) => {
 
 	// Normal HLS playback should not chase the newest segment directly.
 	// Stay a few segments behind the live edge so the browser has a stable buffer.
-	const targetLatency = Math.max(segmentDuration * 3, 6);
-	const maxLatency = Math.max(targetLatency + segmentDuration * 3, targetLatency + 10);
+	const targetLatency = Math.max(segmentDuration * 2, 4);
+	const maxLatency = Math.max(targetLatency + segmentDuration * 2, targetLatency + 6);
 
 	return {
 		segmentDuration,
