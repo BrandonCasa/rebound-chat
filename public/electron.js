@@ -243,11 +243,23 @@ const startGoogleLogin = async (_event, redirectTarget) => {
 	googleAuthWindow.webContents.on("will-redirect", handleNavigation);
 	googleAuthWindow.webContents.on("did-redirect-navigation", handleNavigation);
 	googleAuthWindow.webContents.on("did-navigate", handleNavigation);
+	googleAuthWindow.webContents.on("did-fail-load", (_event, code, desc, url) => {
+		if (isGoogleAuthCompletionUrl(url)) {
+			void completeGoogleAuthNavigation(url);
+			return;
+		}
+
+		log.warn("Google auth window failed to load", { code, desc, url });
+	});
 	googleAuthWindow.on("closed", () => {
 		googleAuthWindow = null;
 	});
 
-	await googleAuthWindow.loadURL(authUrl);
+	void googleAuthWindow.loadURL(authUrl).catch((error) => {
+		log.warn("Google auth initial navigation reported an error", { url: authUrl, error });
+	});
+
+	return { started: true };
 };
 
 // wire up IPC

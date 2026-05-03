@@ -51,7 +51,9 @@ server {
             return 204;
         }
 
-        limit_except GET HEAD { deny all; }
+        if ($request_method !~ ^(GET|HEAD|OPTIONS)$) {
+            return 405;
+        }
 
         proxy_pass http://localhost:6001;
         proxy_http_version 1.1;
@@ -247,7 +249,9 @@ server {
             return 204;
         }
 
-        limit_except GET HEAD { deny all; }
+        if ($request_method !~ ^(GET|HEAD|OPTIONS)$) {
+            return 405;
+        }
 
         proxy_pass http://localhost:6001;
         proxy_http_version 1.1;
