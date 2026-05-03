@@ -12,12 +12,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 from urllib.parse import quote
+import signal
 
 import requests
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-
+MAX_ENCODER_AHEAD_SECONDS = 1.0
+ENCODER_RESUME_AHEAD_SECONDS = 0.35
+PACER_POLL_INTERVAL_SECONDS = 0.05
 APP_TITLE = "HLS Streamer (FFmpeg + VLC)"
 DEFAULT_LOCAL_PORT = 8777
 DEFAULT_RETAIN_SEGMENTS = 5
@@ -494,9 +497,65 @@ class StreamController:
         self.current_segment_min_speed: Optional[float] = None
         self.last_adapted_segment_number: Optional[int] = None
         self.adaptation_exhausted = False
+        self.pacer_thread: Optional[threading.Thread] = None
+        self.remote_wallclock_start = 0.0
+        self.remote_media_start_offset = 0.0
+        self.remote_pacer_paused = False
 
     def log(self, message: str) -> None:
         self.log_queue.put(message)
+
+    def _set_process_paused(self, process: subprocess.Popen, paused: bool) -> None:
+        if process.poll() is not None:
+            return
+
+        if os.name == "nt":
+            # Requires psutil on Windows for clean suspend/resume.
+            # pip install psutil
+            import psutil
+
+            proc = psutil.Process(process.pid)
+            if paused:
+                proc.suspend()
+            else:
+                proc.resume()
+        else:
+            process.send_signal(signal.SIGSTOP if paused else signal.SIGCONT)
+
+    def _encoder_pacer_loop(self) -> None:
+        while not self.stop_event.is_set():
+            time.sleep(PACER_POLL_INTERVAL_SECONDS)
+
+            with self.state_lock:
+                config = self.active_config
+                process = self.ffmpeg_process
+                wallclock_start = self.remote_wallclock_start
+                media_start_offset = self.remote_media_start_offset
+                output_seconds = self.last_remote_output_seconds
+                is_paused = self.remote_pacer_paused
+
+            if not config or not process or process.poll() is not None or wallclock_start <= 0:
+                continue
+
+            wall_elapsed = time.monotonic() - wallclock_start
+            encoded_media_elapsed = media_start_offset + output_seconds
+            ahead_seconds = encoded_media_elapsed - wall_elapsed
+
+            try:
+                if not is_paused and ahead_seconds > MAX_ENCODER_AHEAD_SECONDS:
+                    self._set_process_paused(process, True)
+                    with self.state_lock:
+                        self.remote_pacer_paused = True
+                    self.log(f"Encoder paced: paused at {ahead_seconds:.2f}s ahead of realtime.")
+
+                elif is_paused and ahead_seconds <= ENCODER_RESUME_AHEAD_SECONDS:
+                    self._set_process_paused(process, False)
+                    with self.state_lock:
+                        self.remote_pacer_paused = False
+                    self.log(f"Encoder paced: resumed at {ahead_seconds:.2f}s ahead of realtime.")
+
+            except Exception as exc:
+                self.log(f"Encoder pacer error: {exc}")
 
     def create_session(self, config: StreamConfig) -> SessionInfo:
         url = f"{config.website_base_url.rstrip('/')}/live/api/session"
@@ -728,6 +787,10 @@ class StreamController:
             prefix="remote-ffmpeg",
             on_line=lambda line: self._on_remote_ffmpeg_line(generation, line),
         )
+        with self.state_lock:
+            self.remote_wallclock_start = time.monotonic()
+            self.remote_media_start_offset = restart_offset
+            self.remote_pacer_paused = False
 
         with self.state_lock:
             if self.active_config is config and not self.stop_event.is_set():
@@ -742,6 +805,11 @@ class StreamController:
             return
         self.adaptive_thread = threading.Thread(target=self._adaptive_restart_loop, daemon=True)
         self.adaptive_thread.start()
+    def _start_pacer_thread(self) -> None:
+        if self.pacer_thread and self.pacer_thread.is_alive():
+            return
+        self.pacer_thread = threading.Thread(target=self._encoder_pacer_loop, daemon=True)
+        self.pacer_thread.start()
 
     def _spawn_remote_ffmpeg(self, config: StreamConfig, discontinuity: bool = False) -> subprocess.Popen:
         with self.state_lock:
@@ -758,12 +826,19 @@ class StreamController:
             nvenc_preset=nvenc_preset,
             discontinuity=discontinuity,
         )
-        return self._spawn_logged_process(
+        process = self._spawn_logged_process(
             remote_cmd,
             cwd=str(config.remote_dir),
             prefix="remote-ffmpeg",
             on_line=lambda line: self._on_remote_ffmpeg_line(generation, line),
         )
+
+        with self.state_lock:
+            self.remote_wallclock_start = time.monotonic()
+            self.remote_media_start_offset = self.input_start_offset_seconds
+            self.remote_pacer_paused = False
+
+        return process
 
     def build_stream_video_filter(self, config: StreamConfig) -> Optional[str]:
         filters: List[str] = []
@@ -924,6 +999,7 @@ class StreamController:
         elif config.adaptive_nvenc:
             self.log("Adaptive NVENC is enabled, but the selected video codec is not an NVENC codec.")
 
+        self._start_pacer_thread()
         self.ffmpeg_process = self._spawn_remote_ffmpeg(config)
         self.log("Streaming started")
 
@@ -958,6 +1034,9 @@ class StreamController:
                     shutil.rmtree(path, ignore_errors=True)
                 except Exception:
                     pass
+        if self.pacer_thread and self.pacer_thread.is_alive() and threading.current_thread() is not self.pacer_thread:
+            self.pacer_thread.join(timeout=5)
+        self.pacer_thread = None
 
         self.active_config = None
         self.log("Stopped")

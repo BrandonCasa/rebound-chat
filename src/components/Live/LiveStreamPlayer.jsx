@@ -15,15 +15,6 @@ import LiveStreamInfoTooltip, { formatDuration } from "./LiveStreamInfoTooltip";
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
-const approach = (current, target, maxStep) => {
-	if (!Number.isFinite(current)) return target;
-
-	const delta = target - current;
-	if (Math.abs(delta) <= maxStep) return target;
-
-	return current + Math.sign(delta) * maxStep;
-};
-
 const getSeekableWindow = (video) => {
 	if (!video?.seekable?.length) return null;
 
@@ -37,22 +28,16 @@ const getSeekableWindow = (video) => {
 
 const buildSyncTuning = (targetDuration) => {
 	const segmentDuration = Number(targetDuration) > 0 ? Number(targetDuration) : 2;
-	const latestSegmentSafety = 2;
-	const targetLatency = segmentDuration + latestSegmentSafety;
-	const maxLatency = Math.max(targetLatency + segmentDuration * 3, targetLatency + 6);
-	const minLatency = Math.max(targetLatency - 0.5, latestSegmentSafety);
+
+	// Normal HLS playback should not chase the newest segment directly.
+	// Stay a few segments behind the live edge so the browser has a stable buffer.
+	const targetLatency = Math.max(segmentDuration * 3, 6);
+	const maxLatency = Math.max(targetLatency + segmentDuration * 3, targetLatency + 10);
 
 	return {
 		segmentDuration,
-		latestSegmentSafety,
 		targetLatency,
 		maxLatency,
-		minLatency,
-		minPlaybackRate: 0.5,
-		maxPlaybackRate: 2.0,
-		rateDeadbandSeconds: 0.18,
-		rateCorrectionPerSecond: 0.006,
-		maxRateStep: 0.1,
 	};
 };
 
@@ -65,6 +50,7 @@ function LiveStreamPlayer({ stream, sx }) {
 	const playerRef = useRef(null);
 	const hlsRef = useRef(null);
 	const syncIntervalRef = useRef(null);
+	const hasInitialSyncedRef = useRef(false);
 	const [playerState, setPlayerState] = useState({
 		isPlaying: false,
 		isMuted: false,
@@ -99,56 +85,32 @@ function LiveStreamPlayer({ stream, sx }) {
 
 			const { start, end } = seekableWindow;
 			const availableWindow = Math.max(0, end - start);
-			const effectiveLatency = Math.min(syncTuning.targetLatency, Math.max(syncTuning.minLatency, availableWindow * 0.45));
-
-			const targetTime = clamp(end - effectiveLatency, start, end);
+			const targetLatency = Math.min(syncTuning.targetLatency, Math.max(syncTuning.segmentDuration, availableWindow * 0.5));
 			const currentTime = Number.isFinite(video.currentTime) ? video.currentTime : start;
+			const targetTime = clamp(end - targetLatency, start, end);
 			const latency = Math.max(0, end - currentTime);
-			const targetLatency = Math.max(0, end - targetTime);
-			const latencyError = latency - targetLatency;
 
 			const driftedPastWindow = currentTime < start || currentTime > end;
 			const tooFarBehind = latency > syncTuning.maxLatency;
-			const tooCloseToNewestSegment = latency < syncTuning.minLatency;
 
-			let syncLabel = `Live latency ${formatDuration(latency)}`;
-
-			// Hard correction only when we are outside the safe range or user explicitly syncs.
-			if (force || driftedPastWindow || tooFarBehind || tooCloseToNewestSegment) {
+			// Act like a normal streaming service: avoid constantly nudging playback.
+			// Seek only when the user asks, when playback starts, or when we have fallen badly behind.
+			if (force || driftedPastWindow || tooFarBehind) {
 				video.currentTime = targetTime;
 				video.playbackRate = 1;
 
 				setPlayerValue({
-					latency: targetLatency,
-					syncLabel: `Holding ${formatDuration(syncTuning.latestSegmentSafety)} behind latest segment`,
+					latency: Math.max(0, end - targetTime),
+					syncLabel: `Near live (${formatDuration(Math.max(0, end - targetTime))})`,
 				});
 				return;
 			}
 
-			let desiredPlaybackRate = 1;
-
-			if (!video.paused && !video.seeking) {
-				if (Math.abs(latencyError) > syncTuning.rateDeadbandSeconds) {
-					desiredPlaybackRate = clamp(1 + latencyError * syncTuning.rateCorrectionPerSecond, syncTuning.minPlaybackRate, syncTuning.maxPlaybackRate);
-				}
-
-				const currentPlaybackRate = Number.isFinite(video.playbackRate) ? video.playbackRate : 1;
-				const nextPlaybackRate = approach(currentPlaybackRate, desiredPlaybackRate, syncTuning.maxRateStep);
-
-				video.playbackRate = Number(nextPlaybackRate.toFixed(4));
-
-				if (nextPlaybackRate > 1.003) {
-					syncLabel = "Catching up smoothly";
-				} else if (nextPlaybackRate < 0.997) {
-					syncLabel = "Easing back smoothly";
-				} else {
-					syncLabel = "Near live";
-				}
-			} else {
-				video.playbackRate = 1;
-			}
-
-			setPlayerValue({ latency, syncLabel });
+			video.playbackRate = 1;
+			setPlayerValue({
+				latency,
+				syncLabel: `Live latency ${formatDuration(latency)}`,
+			});
 		},
 		[setPlayerValue, syncTuning]
 	);
@@ -167,6 +129,8 @@ function LiveStreamPlayer({ stream, sx }) {
 			return undefined;
 		}
 
+		hasInitialSyncedRef.current = false;
+
 		setPlayerValue({
 			isPlaying: false,
 			error: "",
@@ -174,11 +138,18 @@ function LiveStreamPlayer({ stream, sx }) {
 			latency: null,
 		});
 
-		const handleLoadedMetadata = () => syncToLive({ force: true });
-		const handleCanPlay = () => syncToLive({ force: video.paused });
+		const syncOnceWhenSeekable = () => {
+			if (hasInitialSyncedRef.current || !getSeekableWindow(video)) return;
+
+			hasInitialSyncedRef.current = true;
+			syncToLive({ force: true });
+		};
+
+		const handleLoadedMetadata = syncOnceWhenSeekable;
+		const handleCanPlay = syncOnceWhenSeekable;
 		const handlePlay = () => {
 			setPlayerValue({ isPlaying: true });
-			syncToLive({ force: true });
+			syncOnceWhenSeekable();
 		};
 		const handlePause = () => {
 			video.playbackRate = 1;
@@ -206,13 +177,13 @@ function LiveStreamPlayer({ stream, sx }) {
 
 		if (Hls.isSupported()) {
 			const hls = new Hls({
+				...buildLiveHlsConfig(() => authTokenRef.current),
 				enableWorker: true,
 				lowLatencyMode: false,
 				backBufferLength: 30,
 				liveSyncDuration: syncTuning.targetLatency,
 				liveMaxLatencyDuration: syncTuning.maxLatency,
-				maxLiveSyncPlaybackRate: 1.05,
-				...buildLiveHlsConfig(() => authTokenRef.current),
+				maxLiveSyncPlaybackRate: 1,
 			});
 
 			hlsRef.current = hls;
@@ -234,8 +205,9 @@ function LiveStreamPlayer({ stream, sx }) {
 				setPlayerValue({ error: "The stream could not be played in this browser." });
 				hls.destroy();
 			});
-			hls.on(Hls.Events.MANIFEST_PARSED, () => syncToLive({ force: true }));
-			hls.on(Hls.Events.LEVEL_LOADED, () => syncToLive({ force: video.paused && !video.currentTime }));
+			hls.on(Hls.Events.MANIFEST_PARSED, syncOnceWhenSeekable);
+			hls.on(Hls.Events.LEVEL_LOADED, syncOnceWhenSeekable);
+			hls.on(Hls.Events.FRAG_BUFFERED, syncOnceWhenSeekable);
 			hls.loadSource(stream.playbackUrl);
 			hls.attachMedia(video);
 		} else if (video.canPlayType("application/vnd.apple.mpegurl")) {
@@ -249,7 +221,7 @@ function LiveStreamPlayer({ stream, sx }) {
 			if (!video.paused && !video.seeking) {
 				syncToLive();
 			}
-		}, 500);
+		}, 2000);
 
 		return () => {
 			window.clearInterval(syncIntervalRef.current);
@@ -280,7 +252,10 @@ function LiveStreamPlayer({ stream, sx }) {
 
 		if (video.paused) {
 			try {
-				syncToLive({ force: true });
+				if (!hasInitialSyncedRef.current) {
+					hasInitialSyncedRef.current = true;
+					syncToLive({ force: true });
+				}
 				await video.play();
 				setPlayerValue({ error: "" });
 			} catch (_err) {
