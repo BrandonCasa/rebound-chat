@@ -41,7 +41,6 @@ jobs:
         uses: actions/setup-node@v6.4.0
         with:
           node-version: 22.x
-          cache: pnpm
 
       - name: Bump version in package.json files
         if: ${{ github.event.inputs.bumpVersion == 'true' }}
