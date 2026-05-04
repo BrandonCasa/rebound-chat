@@ -81,10 +81,10 @@ class ServerRooms {
 
 	async leaveRooms(socket) {
 		try {
-			const [idToName] = await this.getRoomList();
+			const user = await UserModel.findById(socket.user.id);
+			const [idToName] = await this.getRoomList(user);
 			const validRoomIds = new Set(Object.keys(idToName));
 
-			const user = await UserModel.findById(socket.user.id);
 			const userProfile = await user.toProfilePubJSON(null);
 
 			for (const roomId of socket.rooms) {
@@ -143,7 +143,8 @@ class ServerRooms {
 
 		socket.on("join_room", async (roomId) => {
 			try {
-				const [idToName] = await this.getRoomList();
+				const user = await UserModel.findById(socket.user.id);
+				const [idToName] = await this.getRoomList(user);
 				if (!idToName[roomId]) {
 					throw new Error("Room not found by ID.");
 				}
@@ -182,7 +183,8 @@ class ServerRooms {
 
 		socket.on("message_room", async (arg1, arg2, arg3, arg4) => {
 			try {
-				const [idToName] = await this.getRoomList();
+				const sender = await UserModel.findById(socket.user.id);
+				const [idToName] = await this.getRoomList(sender);
 				let roomId, content, mentions, attachments;
 
 				if (Array.isArray(arg1) && arg2 === undefined) {
@@ -198,7 +200,6 @@ class ServerRooms {
 					throw new Error("Room not found by ID.");
 				}
 
-				const sender = await UserModel.findById(socket.user.id);
 				if (!sender) throw new Error("Sender not found.");
 
 				if ((content?.trim?.() ?? "") === "" && attachments?.length < 1) throw new Error("No message content or attachments.");
@@ -234,7 +235,8 @@ class ServerRooms {
 
 		socket.on("edit_message", async (roomId, messageId, content, mentions) => {
 			try {
-				const [idToName] = await this.getRoomList();
+				const user = await UserModel.findById(socket.user.id);
+				const [idToName] = await this.getRoomList(user);
 				if (!idToName[roomId]) {
 					throw new Error("Room not found by ID.");
 				}
@@ -261,7 +263,8 @@ class ServerRooms {
 
 		socket.on("delete_message", async (roomId, messageId) => {
 			try {
-				const [idToName] = await this.getRoomList();
+				const user = await UserModel.findById(socket.user.id);
+				const [idToName] = await this.getRoomList(user);
 				if (!idToName[roomId]) {
 					throw new Error("Room not found by ID.");
 				}
