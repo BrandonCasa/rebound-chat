@@ -168,7 +168,115 @@ The heartbeat currently piggybacks on the upload pass:
 
 Pull it onto its own `setInterval` so the heartbeat keeps the session alive even if upload passes start failing or piling up. The server treats heartbeat as health signal — letting it be coupled to a possibly-failing upload is the wrong default.
 
-### Validation
+## Code organization & implementation notes
+
+Today the uploader is interleaved into `ElectronLiveStreamManager`: directory listing, signature checks, fetch calls, heartbeat, and lifecycle all share the same class. Untangle it into a self-contained subsystem so each piece can be tested in isolation.
+
+```
+public/streaming/uploader/
+  httpClient.js         -- creates and exposes a single keep-alive undici.Agent
+  fileSource.js         -- pure I/O: fileSignature(), readPlaylist(), openSegmentStream()
+  uploadPlanner.js      -- pure: given a directory listing, returns an UploadPlan
+  uploadPass.js         -- runs a single pass: planner → planner output → I/O
+  uploadScheduler.js    -- self-rescheduling timer; exposes start()/stop()
+  heartbeat.js          -- separate setInterval; start()/stop()
+  index.js              -- composes all of the above into a single { start, stop }
+```
+
+**Responsibility boundaries:**
+
+| Module | Knows about | Doesn't know about |
+|---|---|---|
+| `httpClient.js` | undici Agents, dispatchers | Sessions, files, schedules |
+| `fileSource.js` | fs, paths, file signatures | HTTP, sessions |
+| `uploadPlanner.js` | HLS file naming conventions | I/O, HTTP, time |
+| `uploadPass.js` | Planner output, http client, session secret | Scheduling, lifecycle |
+| `uploadScheduler.js` | Time, run-once-at-a-time guarantee | What a pass does |
+| `heartbeat.js` | Session, http client, time | Uploads |
+| `index.js` | All of the above | None of their internals |
+
+The class formerly known as `ElectronLiveStreamManager` calls `uploader.start({ sessionInfo, dir, log, http })` and `uploader.stop()`. It does not write `fetch()` calls anywhere.
+
+**Pure planner signature:**
+
+```js
+/** @typedef {Object} UploadPlan
+ *  @property {string[]} initFiles            -- to upload once
+ *  @property {string[]} segments             -- to upload in parallel
+ *  @property {string[]} playlists            -- to upload after segments, in order
+ */
+
+/** @type {(listing: DirEntry[], state: UploaderState) => UploadPlan} */
+export function planUploadPass(listing, state) { ... }
+```
+
+Planner is pure. Tests pass synthetic listings; assert plan ordering.
+
+**Pass signature** (`uploadPass.js`):
+
+```js
+/** @type {(plan: UploadPlan, ctx: PassContext) => Promise<PassResult>} */
+export async function runUploadPass(plan, { http, session, log, fileSource }) {
+  // phase A: init
+  // phase B: parallel segments (Promise.all with bounded concurrency)
+  // phase C: playlists in order (video.m3u8 then master.m3u8)
+}
+```
+
+Pass takes its dependencies (http, fileSource) as parameters — never imports them directly. That makes it trivially mockable.
+
+**Scheduler signature** (`uploadScheduler.js`):
+
+```js
+export function createScheduler({ runPass, intervalMs, log }) {
+  let stopping = false;
+  let timer = null;
+  const tick = async () => {
+    if (stopping) return;
+    const startedAt = Date.now();
+    try { await runPass(); } catch (err) { log(`pass error: ${err.message}`); }
+    if (stopping) return;
+    const elapsed = Date.now() - startedAt;
+    timer = setTimeout(tick, Math.max(0, intervalMs - elapsed));
+  };
+  return {
+    start: () => { timer = setTimeout(tick, 0); },
+    stop: () => { stopping = true; clearTimeout(timer); },
+  };
+}
+```
+
+The scheduler is a closure factory, not a class. No `this`. Testable with fake timers (Jest/Vitest's `vi.useFakeTimers()`).
+
+**Tests** (`public/streaming/uploader/__tests__/`):
+
+- `uploadPlanner.test.js` — feed synthetic dir entries, assert plan shape.
+- `uploadPass.test.js` — mock `http` and `fileSource`; assert phases run in order, segments run in parallel, playlists upload after segments.
+- `uploadScheduler.test.js` — fake timers; verify slow pass schedules next at 0 ms; fast pass schedules at `intervalMs - elapsed`.
+- `heartbeat.test.js` — fake timers; verify it ticks independently of upload state.
+- `index.test.js` — wire everything together with fakes and verify start/stop is clean.
+
+**Concurrency control** for parallel segment uploads — write a small `pLimit(n)` helper or use `p-limit`. Don't reach for a full async library. The bound is the keep-alive agent's `connections: 4`, so concurrency 3 is safe.
+
+**Logging convention:** every pass logs one line at the end:
+
+```
+[live-stream] uploadPass duration=312ms files=3 bytes=1932401 phaseA=8ms phaseB=290ms phaseC=14ms
+```
+
+That single line gives us everything we need to diagnose performance issues without grepping a log dump. The format is regex-friendly so future telemetry can parse it.
+
+**Migration order:**
+
+1. Land `httpClient.js` and `fileSource.js` first; switch existing uploader to use them. No behavior change.
+2. Land `uploadPlanner.js` (pure); existing uploader uses it but still does serial uploads. No behavior change.
+3. Land `uploadPass.js` with parallel phase B. This is the first behavior change.
+4. Land `uploadScheduler.js` (replaces `setInterval`). This eliminates dropped passes.
+5. Land `heartbeat.js` (separate timer). This is independent and safe.
+
+Each step is a separate PR with its own snapshot/test coverage.
+
+## Validation
 
 - Add an automated test that mocks `fetch` and verifies parallel segment uploads, in-order playlist uploads, and that a slow pass triggers an immediate next pass instead of skipping.
 - Manually: stream while running iperf or a network-saturating download in the background; observe per-pass duration logs and confirm catch-up behavior.

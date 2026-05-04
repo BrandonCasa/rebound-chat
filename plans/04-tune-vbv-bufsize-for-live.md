@@ -71,7 +71,46 @@ Most users will never change it; it just lives next to the other tuning knobs.
 
 For users on capped uplinks (mobile hotspots, etc.), constant bitrate (`-rc cbr`) plus `bufsize = 0.5 × bitrate` is the safest live mode. We don't need to change defaults, but the profile selector from Plan 02 can include a "Stable Uplink" profile that flips to CBR + tight VBV.
 
-### Validation
+## Code organization & implementation notes
+
+This plan rides on top of the encoder split from Plan 01. The bufsize calculation belongs to **each encoder module**, not to a shared layer, because the math is identical but the encoder is the natural owner of its own VBV settings.
+
+```
+public/streaming/encoder/
+  nvenc.js        -- buildArgs(config) computes bufsize internally
+  qsv.js          -- same
+  videotoolbox.js -- same (VideoToolbox honors -bufsize loosely; document)
+  software.js     -- same (libx264/libx265 honor -bufsize strictly)
+```
+
+**The shared utility lives in one place:**
+
+```js
+// public/streaming/encoder/_vbv.js
+/** @type {(bitrate: string, multiplier?: number) => number} */
+export function computeVbvBufsize(bitrate, multiplier = 1.0) {
+  const bps = parseBitrateToBps(bitrate);
+  return Math.round(bps * multiplier);
+}
+```
+
+Each encoder imports `computeVbvBufsize` and calls it. No copy-paste.
+
+**Where the multiplier value comes from:**
+
+- It's a top-level field on `StreamConfig`: `vbvMultiplier: number` (default `1.0`).
+- The constraint engine (Plan 05) bounds it to `[0.25, 4.0]`.
+- Profile system (Plan 02) sets it: `low-latency` → `1.0`, `stable-uplink` → `0.5`, `quality` → `2.0`.
+- The renderer field is purely a number input + helper text.
+
+**Tests:**
+
+- `_vbv.test.js`: pure-function unit tests on `computeVbvBufsize` for known inputs ("8M" → 8000000 at multiplier 1.0).
+- Each encoder snapshot test (from Plan 01) runs with the multiplier at 0.5, 1.0, 2.0 and locks the resulting argv.
+
+**Related profile work** (Step 4) goes into `public/streaming/profiles/stableUplink.js`. Adding it is a one-file change once Plan 02's profile system is in place — no edits to existing profile files.
+
+## Validation
 
 - After the change, compare per-segment sizes over a 60-second stream of motion-heavy gameplay. Standard deviation of segment sizes should drop noticeably.
 - Watch FFmpeg's `bitrate=` output line; it should hover much closer to the configured bitrate.

@@ -115,7 +115,78 @@ If `outputWidth === captureWidth && outputHeight === captureHeight && fps === ca
 
 Some driver/FFmpeg combinations fail to derive CUDA from D3D11. Detect a non-zero exit during the first ~3 seconds of streaming and retry once with the legacy chain, logging the downgrade so we have telemetry.
 
-### Validation
+## Code organization & implementation notes
+
+`buildFfmpegCommand` is currently a ~100-line method on `ElectronLiveStreamManager` with capture, filter, encoder, and output arg-building all interleaved (`public/electron-live-stream.js` lines 584–680). Doing this work in-place would make it worse. Split it first, then add the fast path:
+
+```
+public/streaming/
+  capture/
+    index.js            -- selectBackend({ os, captureBackend, encoder }) → module
+    gfxcapture.js       -- pure: buildSourceFilter(config) → string
+    gfxcaptureCuda.js   -- pure: NEW; D3D11 → CUDA hwmap variant
+    gdigrab.js
+    avfoundation.js
+    x11grab.js
+  encoder/
+    index.js            -- selectEncoder(videoCodec) → module
+    nvenc.js            -- pure: buildArgs(config) → string[]
+    qsv.js
+    videotoolbox.js
+    software.js
+  output/
+    hls.js              -- pure: buildArgs(config) → string[]
+  filters/
+    videoFilter.js      -- pure: chooses CPU SDR-conversion vs CUDA fast path
+  hwcontexts.js         -- pure: buildHwDeviceArgs({ encoder, captureBackend }) → string[]
+  pipeline.js           -- composes the above; no I/O; returns full argv
+```
+
+**Rules every module follows:**
+
+- Each module under `streaming/` exports **only pure functions**. No mutable state, no `this`, no logging. They take a normalized config and return argv pieces.
+- Composition happens in `pipeline.js` and only there. The class formerly known as `ElectronLiveStreamManager` calls `pipeline.buildArgs(config)` and forgets the rest.
+- File size guideline: ≤200 lines per module. The current `electron-live-stream.js` (~1041 lines) becomes ~6–8 small modules plus a thin orchestrator.
+
+**The decision between fast and slow path lives in one place.** Add `public/streaming/filters/videoFilter.js`:
+
+```js
+// The only file that knows about fast vs slow path selection.
+export function selectVideoFilter(config, capabilities) {
+  if (isNvenc(config) && supportsHwmapCudaFromD3D11(capabilities) && !config.convertStreamToSdr) {
+    return buildCudaFastPath(config); // gfxcapture(nv12) → hwmap → optional scale_cuda → optional fps
+  }
+  return buildLegacyFilter(config);   // gfxcapture(bgra) → hwdownload → CPU
+}
+```
+
+The fallback (Step 7) is implemented in `pipeline.js` as a higher-order wrapper that retries with `selectVideoFilter` told to skip the fast path. The retry policy is its own function (`fallbackOnFailure`) — not embedded in the spawn loop.
+
+**Tests** (`public/streaming/__tests__/`):
+
+- Snapshot tests on argv arrays. We do not run FFmpeg in tests; we assert the argv string for known configs is exactly correct. When defaults change, the snapshot diff *is* the review.
+- Fixtures in `public/streaming/__tests__/fixtures/configs.js`: `windowsRtxNvenc1080p60`, `windowsRtxNvenc1440p60HDR`, `macAppleSilicon`, `linuxX11Software`, etc.
+- One fixture per scenario × one snapshot per encoder = the matrix is small and exhaustive.
+
+**Migration order** (each step ships independently and is reversible):
+
+1. Extract `output/hls.js` (lowest risk, no behavior change). Land + lock with snapshots.
+2. Extract per-encoder modules. Argv must match byte-for-byte before merging.
+3. Extract per-capture modules. Same constraint.
+4. Add the new `gfxcaptureCuda.js` and `selectVideoFilter.js` — only now do we add the fast path.
+5. Wire the fallback retry in `pipeline.js`.
+
+**JSDoc** the boundary types in `public/streaming/types.js`:
+
+```js
+/** @typedef {Object} StreamConfig ... */
+/** @typedef {Object} Capabilities ... */
+/** @typedef {(config: StreamConfig) => string[]} ArgBuilder */
+```
+
+These types are shared across encoder/capture/output modules so adding a new encoder is a one-file change with a known signature.
+
+## Validation
 
 - Watch `speed=` in ffmpeg stderr; should stay `≥1.0x` under gaming load
 - Watch GPU and PCIe utilization in `nvidia-smi dmon -s pucvmet -c 30`; PCIe RX should drop substantially

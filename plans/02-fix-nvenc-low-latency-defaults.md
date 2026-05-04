@@ -87,7 +87,69 @@ Persisted settings should keep working. Add a one-time migration: if the user ha
 
 `gopSize: 60` assumes 30 fps × 2-second segments. If the user changes `fps` in the UI, `gopSize` should follow (`fps × hlsTime`) unless explicitly overridden. A mismatched GOP forces the encoder to insert keyframes at non-segment boundaries, which hurts both quality and segmentation.
 
-### Validation
+## Code organization & implementation notes
+
+Profiles are data, not logic. Treat them that way:
+
+```
+public/streaming/profiles/
+  index.js              -- exports STREAMING_PROFILES (Map) + applyProfile()
+  lowLatency.js         -- the values for the gaming default
+  balanced.js
+  quality.js
+  stableUplink.js       -- (added in Plan 04)
+src/lib/streaming/
+  detectProfile.js      -- given current settings, returns matching profile id or "custom"
+src/features/streaming/ui/controls/
+  ProfileSelector.jsx   -- presentational; takes value + onChange + profiles list
+```
+
+**Profile shape** (in `public/streaming/profiles/types.js`, JSDoc):
+
+```js
+/** @typedef {Object} StreamingProfile
+ *  @property {string} id                     -- "low-latency" | "balanced" | ...
+ *  @property {string} label                  -- display name
+ *  @property {string} description            -- one-sentence explanation
+ *  @property {string} latencyHint            -- "~500 ms glass-to-glass"
+ *  @property {Partial<StreamSettings>} values
+ */
+```
+
+Each profile file `export default`s one object. To add a new profile, add a file and register it in `index.js`. No edits to existing profiles needed — open-closed.
+
+**Applying a profile** is `{ ...currentSettings, ...profile.values }` and nothing else. No special-casing per profile. The applier lives in `applyProfile.js` as a one-liner.
+
+**Detecting "custom"** — in the renderer hook `useStreamSettings`, after every settings change:
+
+```js
+const matched = detectProfile(settings);
+// matched.id === "custom" means user has diverged from any preset
+```
+
+`detectProfile.js` walks the profile list, comparing each profile's defined keys against the current settings. The first complete match wins. If none match, `"custom"`. Pure function, trivially testable.
+
+**Migration** (one-time move from old defaults to "low-latency"):
+
+```
+public/streaming/settings/
+  migrate.js            -- versioned step functions + a runner
+  steps/
+    v0_to_v1.js         -- the old-defaults → low-latency migration
+    v1_to_v2.js         -- (future)
+```
+
+Each step is `(settings) => settings` and is deterministic. `migrate.js` runs them in order based on `schemaVersion`. The Plan 02 migration is a single step: if `schemaVersion < 1` and the user's settings exactly match the legacy defaults, swap to `lowLatency.values` and set `nvencProfile: "low-latency"`.
+
+**Tests** (`public/streaming/profiles/__tests__/`):
+
+- Each profile is checked against the constraint engine — a profile cannot define an invalid combo.
+- `detectProfile` round-trip: applying a profile then detecting it must return the same id.
+- Migration: legacy fixture → migrated fixture, snapshot.
+
+**Where the GOP-follows-fps rule (Step 5) lives:** in the renderer's settings reducer (`useStreamSettings`), as a derived field. Whenever `fps` or `hlsTime` changes and the user hasn't explicitly overridden `gopSize`, recompute it. Track an explicit-override flag (`gopSizeOverridden`) in persisted settings so we know whether to recompute. This is **not** in the profile system — profiles set initial values; this rule keeps them coherent over time.
+
+## Validation
 
 - Print the constructed FFmpeg command to a log line and verify the new defaults appear.
 - Stream while gaming with each profile; record glass-to-glass latency using an on-screen timer (phone camera filming both monitor and laptop streaming view).
