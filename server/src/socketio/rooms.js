@@ -42,7 +42,7 @@ class ServerRooms {
 		const rooms = await RoomModel.find({}).select("-messages");
 		for (const room of rooms) {
 			if (room?.name?.startsWith("Hidden Chat ")) continue;
-			if (room.nsfw && !user?.allowNSFW) continue;
+			if (room?.nsfw && !user?.allowNSFW) continue;
 			idToName[room._id] = room.name;
 			idToNSFW[room._id] = room.nsfw;
 			idToRoom[room._id] = room;
