@@ -1,5 +1,5 @@
 import ChevronRightRounded from "@mui/icons-material/ChevronRightRounded";
-import { Toolbar, Box, IconButton, Tooltip } from "@mui/material";
+import { Toolbar, Box, IconButton, Tooltip, alpha } from "@mui/material";
 import { styled, useTheme } from "@mui/material/styles";
 
 const MainBox = styled(Box)(({ theme }) => ({
@@ -34,6 +34,9 @@ function MainContent({ drawerWidth, drawerOpen, iconWidth, setDrawerOpen, childr
 				transition: `left ${drawerOpen ? theme.transitions.duration.leavingScreen : theme.transitions.duration.enteringScreen}ms, width ${
 					drawerOpen ? theme.transitions.duration.leavingScreen : theme.transitions.duration.enteringScreen
 				}ms`,
+				background: (theme) =>
+					`radial-gradient(circle at top left, ${alpha(theme.palette.primary.main, 0.16)}, transparent 32rem),
+									 radial-gradient(circle at top right, ${alpha(theme.palette.info.main, 0.12)}, transparent 28rem)`,
 			}}>
 			<Toolbar
 				variant="dense"

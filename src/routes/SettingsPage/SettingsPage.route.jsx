@@ -234,7 +234,8 @@ function SettingsPage() {
 				display: "flex",
 				...scrollbarStyles,
 			}}>
-			<ItemPaper sx={{ p: 1, backgroundColor: theme.palette.background.paper, flexGrow: isSmUp ? 1 : 0 }}>
+			<ItemPaper
+				sx={{ p: 1, backgroundColor: theme.palette.background.paper, flexGrow: isSmUp ? 1 : 0, backdropFilter: "blur(100px)", backgroundColor: "#ffffff10" }}>
 				<Stack spacing={2} sx={{ display: "flex" }}>
 					<ItemPaper
 						sx={{
@@ -340,7 +341,7 @@ function PreferencesSection({ preferencesState, handlePreferencesChange, handleS
 	const theme = useTheme();
 
 	return (
-		<ItemPaper sx={{ p: 1, backgroundColor: theme.palette.background.paper, flexGrow: 1 }}>
+		<ItemPaper sx={{ p: 1, backgroundColor: theme.palette.background.paper, flexGrow: 1, backdropFilter: "blur(100px)", backgroundColor: "#ffffff10" }}>
 			<Stack spacing={2} sx={{ display: "flex" }}>
 				<ItemPaper
 					sx={{

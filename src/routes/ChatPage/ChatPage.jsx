@@ -1,7 +1,7 @@
 import React from "react";
 import MenuRounded from "@mui/icons-material/MenuRounded";
 import PeopleRounded from "@mui/icons-material/PeopleRounded";
-import { Box, Button, Divider, Paper, Popover, Typography, useTheme } from "@mui/material";
+import { Box, Button, Divider, Paper, Popover, Typography, useTheme, alpha } from "@mui/material";
 
 import useChatPage from "./useChatPage";
 import useInfiniteScrollUpList from "./useInfiniteScroll";
@@ -109,7 +109,11 @@ function ChatPage() {
 					width: "100%",
 					flexGrow: 1,
 					height: "100%",
-				}}>
+					backdropFilter: "blur(100px)",
+					backgroundColor: "#ffffff10",
+				}}
+				variant="outlined"
+				elevation={0}>
 				{/* header */}
 				<Box
 					sx={{
