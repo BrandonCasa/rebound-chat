@@ -14,11 +14,15 @@ import { registerLiveStreamIpc } from "./electron-live-stream.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const ffmpegRoot = isDev ? join(__dirname, "..", "native", "ffmpeg") : join(process.resourcesPath, "ffmpeg");
+const bundledFfmpegRoot = isDev ? join(__dirname, "..", "native", "ffmpeg") : join(process.resourcesPath, "ffmpeg");
+
+const userFfmpegRoot = join(app.getPath("userData"), "ffmpeg");
 
 const resolveFfBinary = (name) => {
 	const filename = process.platform === "win32" ? `${name}.exe` : name;
-	return join(ffmpegRoot, "bin", filename);
+	const userOverride = join(userFfmpegRoot, "bin", filename);
+	if (existsSync(userOverride)) return userOverride;
+	return join(bundledFfmpegRoot, "bin", filename);
 };
 
 const ffmpegBinaryPath = resolveFfBinary("ffmpeg");
@@ -343,14 +347,15 @@ autoUpdater.on("update-downloaded", (info) => {
 
 app.whenReady().then(async () => {
 	if (!existsSync(ffmpegBinaryPath)) {
-		log.warn(`Bundled ffmpeg not found at ${ffmpegBinaryPath}. Run 'pnpm run prepare:ffmpeg' to fetch it.`);
+		log.warn(`ffmpeg binary not found at ${ffmpegBinaryPath}. Place a custom binary at ${join(userFfmpegRoot, "bin")} or run 'pnpm run prepare:ffmpeg'.`);
 	}
 	if (!existsSync(ffprobeBinaryPath)) {
-		log.warn(`Bundled ffprobe not found at ${ffprobeBinaryPath}. Run 'pnpm run prepare:ffmpeg' to fetch it.`);
+		log.warn(`ffprobe binary not found at ${ffprobeBinaryPath}. Place a custom binary at ${join(userFfmpegRoot, "bin")} or run 'pnpm run prepare:ffmpeg'.`);
 	}
 
-	ipcMain.handle("system:get-ffmpeg-path", () => ffmpegBinaryPath);
-	ipcMain.handle("system:get-ffprobe-path", () => ffprobeBinaryPath);
+	ipcMain.handle("system:get-ffmpeg-path", () => resolveFfBinary("ffmpeg"));
+	ipcMain.handle("system:get-ffprobe-path", () => resolveFfBinary("ffprobe"));
+	ipcMain.handle("system:get-ffmpeg-user-dir", () => userFfmpegRoot);
 
 	const mimeByExt = {
 		".js": "application/javascript",
