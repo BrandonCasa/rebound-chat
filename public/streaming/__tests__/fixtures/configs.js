@@ -36,7 +36,7 @@ const baseDefaults = {
 	gopSize: 120,
 	hlsTime: "2",
 	hlsListSize: 6,
-	convertStreamToSdr: false,
+	hdrMode: "off",
 };
 
 const withDefaults = (overrides = {}) => ({ ...baseDefaults, ...overrides });
@@ -49,13 +49,23 @@ const windowsRtxNvencDifferentFps = () =>
 		fps: 30,
 	});
 
-const windowsRtxNvenc1440pHdr = () =>
+const windowsRtxNvenc1440pHdrConvert = () =>
 	withDefaults({
 		outputWidth: 2560,
 		outputHeight: 1440,
 		captureFps: 60,
 		fps: 60,
-		convertStreamToSdr: true,
+		hdrMode: "convert",
+	});
+
+const windowsRtxNvenc1440pHdrPassthrough = () =>
+	withDefaults({
+		videoCodec: "hevc_nvenc",
+		outputWidth: 2560,
+		outputHeight: 1440,
+		captureFps: 60,
+		fps: 60,
+		hdrMode: "passthrough",
 	});
 
 const windowsGdigrabSoftware = () =>
@@ -119,7 +129,8 @@ export {
 	withDefaults,
 	windowsRtxNvenc1080p60,
 	windowsRtxNvencDifferentFps,
-	windowsRtxNvenc1440pHdr,
+	windowsRtxNvenc1440pHdrConvert,
+	windowsRtxNvenc1440pHdrPassthrough,
 	windowsGdigrabSoftware,
 	windowsGfxcaptureSoftware,
 	windowsManualInputArgs,

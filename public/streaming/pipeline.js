@@ -127,8 +127,7 @@ const buildArgs = (config, capabilities = defaultCapabilities()) => {
 	argv.push(...hls.buildArgs(config));
 
 	const onWindows = capabilities.platform === "win32";
-	const isNvencFastPath =
-		onWindows && usingGfxCapture && capabilities.supportsHwmapCudaFromD3D11 && !config.convertStreamToSdr && /_nvenc$/.test(config.videoCodec);
+	const isNvencFastPath = onWindows && usingGfxCapture && capabilities.supportsHwmapCudaFromD3D11 && /_nvenc$/.test(config.videoCodec);
 
 	return {
 		command: config.ffmpegPath,

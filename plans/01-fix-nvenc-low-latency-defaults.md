@@ -11,9 +11,9 @@ The streaming pipeline lives under `public/streaming/`. The modules relevant to 
 | `public/streaming/platform/profiles.js` | `WIN32_X64`, `FALLBACK_PROFILE` — declare `defaults.encoderPreset` |
 | `public/streaming/platform/index.js` | `defaultEncoderPresets()` — reads from `DEFAULT_ENCODER_PRESETS` and surfaces it to the renderer |
 | `public/streaming/encoder/nvenc.js` | `buildArgs(config)` — the argv builder that will emit the corrected flags |
-| `public/streaming/types.js` | `StreamConfig` typedef — the shape `buildArgs` consumes |
+| `public/streaming/types.js` | `StreamConfig` typedef — the shape `buildArgs` consumes. Note: the old `convertStreamToSdr: boolean` field has been replaced by `hdrMode: "off" \| "convert" \| "passthrough"` (see Changelog). Any streaming quality profile value referencing HDR behaviour should use `hdrMode`. |
 | `public/streaming/__tests__/pipeline.test.js` | Snapshot tests — `nvencEncoderTail()` helper must be updated |
-| `public/streaming/__tests__/fixtures/configs.js` | `baseDefaults` — mirrors a normalized `StreamConfig`; must be updated |
+| `public/streaming/__tests__/fixtures/configs.js` | `baseDefaults` — mirrors a normalized `StreamConfig`; must be updated. The old `convertStreamToSdr: false` field is now `hdrMode: "off"`. |
 | `public/streaming/__tests__/platform.test.js` | Asserts `encoderPreset === "p6"` for win32-x64; must be updated |
 
 ## Problem
@@ -82,6 +82,7 @@ nvencTemporalAq: false,     // was true; meaningless without lookahead
 nvencBRefMode: "disabled",  // was "middle"
 nvencBFrames: 0,            // was 3
 nvencLookahead: 0,          // was 16
+// (hdrMode: "off" appears later in the file — already updated, do not add convertStreamToSdr)
 ```
 
 **`public/streaming/platform/profiles.js` — three `encoderPreset` values to update:**
@@ -185,26 +186,29 @@ public/streaming/profiles/
 
 Each profile file `export default`s one object. To add a new profile, add a file and register it in `index.js`. No edits to existing profiles needed.
 
+> **Note:** `StreamConfig.convertStreamToSdr` no longer exists. Any profile that previously would have set it should use `hdrMode: "convert"` (or `"passthrough"`) from `StreamConfig` instead. The "stable-uplink" profile mentioned for Plan 02 does not need to touch `hdrMode`.
+
 **Applying a profile** is `{ ...currentSettings, ...profile.values }` — one line in `applyProfile`. No special-casing per profile.
 
 ## Tests to update
 
 ### `public/streaming/__tests__/fixtures/configs.js`
 
-`baseDefaults` (lines 26–36) mirrors the raw NVENC config. Update to the new defaults:
+`baseDefaults` mirrors the raw NVENC config. Update to the new defaults:
 
 ```js
-encoderPreset: "p4",       // was "p6"
+encoderPreset: "p4",        // was "p6"
 nvencMultipass: "disabled", // was "fullres"
-nvencTemporalAq: false,    // was true
-nvencBRefMode: "disabled", // was "middle"
-nvencBFrames: 0,           // was 3
-nvencLookahead: 0,         // was 16
+nvencTemporalAq: false,     // was true
+nvencBRefMode: "disabled",  // was "middle"
+nvencBFrames: 0,            // was 3
+nvencLookahead: 0,          // was 16
+hdrMode: "off",             // already updated (replaced convertStreamToSdr: false)
 ```
 
 ### `public/streaming/__tests__/pipeline.test.js`
 
-The `nvencEncoderTail()` helper (lines 54–89) is the NVENC argv snapshot. After the change, the expected args become:
+The `nvencEncoderTail()` helper is the NVENC argv snapshot. After the change, the expected args become:
 
 ```js
 const nvencEncoderTail = (preset = "p4") => [

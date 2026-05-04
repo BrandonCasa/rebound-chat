@@ -4,10 +4,12 @@
  *
  * Required for:
  *   - hwmap from D3D11 to CUDA (the fast path)
- *   - scale_cuda / fps on CUDA hwframes
+ *   - scale_cuda / fps / tonemap_cuda on CUDA hwframes
  *
  * Skipped on non-Windows hosts and when the encoder is not NVENC, since
  * the legacy CPU chain doesn't need any hardware device contexts.
+ * Emitted for all hdrMode values ("off", "convert", "passthrough") — the
+ * filter graph decides what to do with the CUDA frames.
  *
  * @typedef {import("./types.js").StreamConfig} StreamConfig
  * @typedef {import("./types.js").Capabilities} Capabilities
@@ -25,8 +27,7 @@ const buildHwDeviceArgs = (config, capabilities) => {
 	const onWindows = capabilities.platform === "win32";
 	if (!onWindows) return [];
 
-	const wantsCudaPath =
-		isNvencCodec(config.videoCodec) && capabilities.supportsHwmapCudaFromD3D11 && !config.convertStreamToSdr && usesGfxCapture(config, capabilities.platform);
+	const wantsCudaPath = isNvencCodec(config.videoCodec) && capabilities.supportsHwmapCudaFromD3D11 && usesGfxCapture(config, capabilities.platform);
 
 	if (!wantsCudaPath) return [];
 

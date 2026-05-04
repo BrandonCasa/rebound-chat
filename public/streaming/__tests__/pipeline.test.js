@@ -22,7 +22,8 @@ import {
 	windowsNvencHevcWithAudio,
 	windowsQsv,
 	windowsRtxNvenc1080p60,
-	windowsRtxNvenc1440pHdr,
+	windowsRtxNvenc1440pHdrConvert,
+	windowsRtxNvenc1440pHdrPassthrough,
 	windowsRtxNvencDifferentFps,
 } from "./fixtures/configs.js";
 
@@ -142,6 +143,57 @@ describe("pipeline.buildArgs — Windows + NVENC fast path", () => {
 	});
 });
 
+describe("pipeline.buildArgs — Windows + NVENC + HDR convert (GPU tonemap_cuda)", () => {
+	it("stays on the fast path and inserts tonemap_cuda with p010 capture", () => {
+		const result = buildArgs(windowsRtxNvenc1440pHdrConvert(), winFastPath);
+		assert.equal(result.usedFastPath, true);
+		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
+		assert.match(filter, /output_fmt=p010/);
+		assert.match(filter, /hwmap=derive_device=cuda/);
+		assert.match(filter, /tonemap_cuda=tonemap=hable:format=nv12/);
+		assert.doesNotMatch(filter, /hwdownload/);
+		assert.doesNotMatch(filter, /zscale/);
+	});
+
+	it("emits BT.709 colour metadata on the encoder args for hdrMode=convert", () => {
+		const result = buildArgs(windowsRtxNvenc1440pHdrConvert(), winFastPath);
+		const args = result.args;
+		assert.equal(args[args.indexOf("-color_primaries") + 1], "bt709");
+		assert.equal(args[args.indexOf("-color_trc") + 1], "bt709");
+		assert.equal(args[args.indexOf("-colorspace") + 1], "bt709");
+	});
+
+	it("falls back to CPU zscale chain when CUDA derivation is unavailable", () => {
+		const result = buildArgs(windowsRtxNvenc1440pHdrConvert(), winLegacy);
+		assert.equal(result.usedFastPath, false);
+		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
+		assert.match(filter, /hwdownload/);
+		assert.match(filter, /tonemap=hable/);
+		assert.doesNotMatch(filter, /hwmap=derive_device=cuda/);
+		assert.doesNotMatch(filter, /tonemap_cuda/);
+	});
+});
+
+describe("pipeline.buildArgs — Windows + NVENC + HDR passthrough", () => {
+	it("stays on the fast path with p010 capture and no tonemap filter", () => {
+		const result = buildArgs(windowsRtxNvenc1440pHdrPassthrough(), winFastPath);
+		assert.equal(result.usedFastPath, true);
+		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
+		assert.match(filter, /output_fmt=p010/);
+		assert.match(filter, /hwmap=derive_device=cuda/);
+		assert.doesNotMatch(filter, /tonemap_cuda/);
+		assert.doesNotMatch(filter, /hwdownload/);
+	});
+
+	it("emits BT.2020/PQ colour metadata on the encoder args for hdrMode=passthrough", () => {
+		const result = buildArgs(windowsRtxNvenc1440pHdrPassthrough(), winFastPath);
+		const args = result.args;
+		assert.equal(args[args.indexOf("-color_primaries") + 1], "bt2020");
+		assert.equal(args[args.indexOf("-color_trc") + 1], "smpte2084");
+		assert.equal(args[args.indexOf("-colorspace") + 1], "bt2020nc");
+	});
+});
+
 describe("pipeline.buildArgs — Windows legacy fallback (CUDA derivation unavailable)", () => {
 	it("emits hwdownload + format=bgra + format=yuv420p when supportsHwmapCudaFromD3D11 is false", () => {
 		const result = buildArgs(windowsRtxNvenc1080p60(), winLegacy);
@@ -155,15 +207,6 @@ describe("pipeline.buildArgs — Windows legacy fallback (CUDA derivation unavai
 			...nvencEncoderTail(),
 			...tail(),
 		]);
-	});
-
-	it("uses the SDR-conversion CPU chain when convertStreamToSdr is set", () => {
-		const result = buildArgs(windowsRtxNvenc1440pHdr(), winFastPath);
-		assert.equal(result.usedFastPath, false);
-		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
-		assert.match(filter, /hwdownload/);
-		assert.match(filter, /tonemap=hable/);
-		assert.doesNotMatch(filter, /hwmap=derive_device=cuda/);
 	});
 
 	it("fallbackOnFailure(capabilities) flips the fast-path bit off", () => {

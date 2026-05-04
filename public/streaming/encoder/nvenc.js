@@ -44,6 +44,22 @@ const buildArgs = (config) => {
 		args.push("-rc-lookahead", String(config.nvencLookahead));
 	}
 
+	if (config.hdrMode === "passthrough") {
+		// Signal HDR10 colour space so the container and players treat this stream
+		// as HDR. gfxcapture captures at full P010 precision; NVENC encodes
+		// the 10-bit frames as-is. HEVC or AV1 is strongly recommended for HDR
+		// passthrough; H.264 does not carry HDR10 metadata in a standardised way.
+		args.push("-color_primaries", "bt2020");
+		args.push("-color_trc", "smpte2084");
+		args.push("-colorspace", "bt2020nc");
+	} else if (config.hdrMode === "convert") {
+		// tonemap_cuda outputs BT.709 NV12. Declare it explicitly so players
+		// don't accidentally try to interpret it as HDR.
+		args.push("-color_primaries", "bt709");
+		args.push("-color_trc", "bt709");
+		args.push("-colorspace", "bt709");
+	}
+
 	return args;
 };
 

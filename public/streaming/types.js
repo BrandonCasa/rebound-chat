@@ -45,7 +45,12 @@
  * @property {number} gopSize
  * @property {string} hlsTime
  * @property {number} hlsListSize
- * @property {boolean} convertStreamToSdr
+ * @property {"off" | "convert" | "passthrough"} hdrMode
+ *   - "off"         — SDR source; current NV12 fast path, no HDR handling.
+ *   - "convert"     — HDR source, tonemap to SDR via tonemap_cuda (GPU) or
+ *                     zscale/tonemap (CPU fallback). Output is SDR BT.709.
+ *   - "passthrough" — HDR source, encode natively in HDR10 (P010 capture +
+ *                     BT.2020/PQ colour metadata). Recommended with HEVC or AV1.
  */
 
 /**

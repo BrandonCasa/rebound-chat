@@ -64,7 +64,7 @@ const buildDefaultSettings = (options = {}) => {
 		gopSize: 60,
 		hlsTime: "2",
 		hlsListSize: 6,
-		convertStreamToSdr: false,
+		hdrMode: "off",
 		openSharePage: true,
 	};
 };

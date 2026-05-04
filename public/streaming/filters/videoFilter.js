@@ -38,10 +38,15 @@ const needsResize = (_config) => false;
 const needsFps = (config) => Boolean(config.fps && config.fps !== config.captureFps);
 
 /**
- * Build the legacy CPU filter chain. Always used when:
+ * Build the legacy CPU filter chain. Used when:
  *  - the encoder is not NVENC, OR
- *  - HDR-to-SDR conversion is requested, OR
  *  - the runtime told us the CUDA hwmap derivation failed.
+ *
+ * When hdrMode is "convert" on this path, a CPU zscale/tonemap chain handles
+ * the HDR→SDR conversion (slower, but correct as a fallback).
+ * When hdrMode is "passthrough" on this path, no colour transform is applied;
+ * the gfxcapture BGRA capture already applies the OS-level SDR conversion, so
+ * the result is SDR rather than true HDR — a graceful-ish degradation.
  *
  * @param {StreamConfig} config
  * @param {Capabilities} capabilities
@@ -57,7 +62,7 @@ const buildLegacyFilter = (config, capabilities) => {
 		filters.push("format=bgra");
 	}
 
-	if (config.convertStreamToSdr) {
+	if (config.hdrMode === "convert") {
 		filters.push("zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p");
 	}
 
@@ -69,7 +74,7 @@ const buildLegacyFilter = (config, capabilities) => {
 		filters.push(`fps=${config.fps}`);
 	}
 
-	if (usingGfxCapture && !config.convertStreamToSdr) {
+	if (usingGfxCapture && config.hdrMode !== "convert") {
 		filters.push("format=yuv420p");
 	}
 
@@ -77,12 +82,21 @@ const buildLegacyFilter = (config, capabilities) => {
 };
 
 /**
- * Build the GPU-resident NVENC fast path:
- *   gfxcapture(nv12) -> hwmap(cuda) -> [scale_cuda] -> [fps] -> nvenc
+ * Build the GPU-resident NVENC fast path.
  *
- * scale_cuda is only inserted when the output resolution differs from the
- * capture resolution. fps is only inserted when the requested fps differs
- * from captureFps. When neither is needed, the chain is just two nodes.
+ * hdrMode "off":
+ *   gfxcapture(nv12) → hwmap(cuda) → [scale_cuda] → [fps] → nvenc
+ *
+ * hdrMode "convert":
+ *   gfxcapture(p010) → hwmap(cuda) → tonemap_cuda(hable→nv12) → [fps] → nvenc
+ *   Everything stays in VRAM; zero CPU video work.
+ *
+ * hdrMode "passthrough":
+ *   gfxcapture(p010) → hwmap(cuda) → [fps] → nvenc
+ *   NVENC encodes 10-bit HDR directly; colour metadata is added by the encoder.
+ *
+ * scale_cuda is kept as a future hook (currently gfxcapture handles resize).
+ * fps is only inserted when the requested fps differs from captureFps.
  *
  * @param {StreamConfig} config
  * @returns {string}
@@ -90,8 +104,16 @@ const buildLegacyFilter = (config, capabilities) => {
 const buildCudaFastPath = (config) => {
 	const filters = [gfxcaptureCuda.buildSourceFilter(config), gfxcaptureCuda.buildHwMapStep()];
 
+	if (config.hdrMode === "convert") {
+		// tonemap_cuda runs on CUDA NPP — no CPU involvement, no PCIe round-trip.
+		// peak=10 → reference peak of 1000 nits (HDR10 standard).
+		// Hable (Uncharted 2) curve is well-suited to high-contrast game content.
+		filters.push("tonemap_cuda=tonemap=hable:format=nv12:peak=10:desat=0");
+	}
+
 	if (needsResize(config)) {
-		filters.push(`scale_cuda=${config.outputWidth}:${config.outputHeight}:format=nv12`);
+		const fmt = config.hdrMode === "passthrough" ? "p010" : "nv12";
+		filters.push(`scale_cuda=${config.outputWidth}:${config.outputHeight}:format=${fmt}`);
 	}
 
 	if (needsFps(config)) {
@@ -104,6 +126,12 @@ const buildCudaFastPath = (config) => {
 /**
  * Selects the fast or slow path. The decision lives only here.
  *
+ * The CUDA fast path is available for all hdrMode values when running on
+ * Windows + gfxcapture + NVENC + CUDA derivation supported:
+ *   "off"         → NV12 fast path (unchanged)
+ *   "convert"     → tonemap_cuda on CUDA, output NV12 (GPU, no CPU hit)
+ *   "passthrough" → P010 CUDA frames fed directly to NVENC
+ *
  * @param {StreamConfig} config
  * @param {Capabilities} capabilities
  * @returns {string | null}
@@ -111,8 +139,7 @@ const buildCudaFastPath = (config) => {
 const selectVideoFilter = (config, capabilities) => {
 	const onWindows = capabilities.platform === "win32";
 	const usingGfxCapture = usesGfxCapture(config, capabilities.platform);
-	const canUseFastPath =
-		onWindows && usingGfxCapture && isNvencCodec(config.videoCodec) && capabilities.supportsHwmapCudaFromD3D11 && !config.convertStreamToSdr;
+	const canUseFastPath = onWindows && usingGfxCapture && isNvencCodec(config.videoCodec) && capabilities.supportsHwmapCudaFromD3D11;
 
 	if (canUseFastPath) {
 		return buildCudaFastPath(config);
