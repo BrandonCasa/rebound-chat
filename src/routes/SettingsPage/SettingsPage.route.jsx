@@ -30,6 +30,7 @@ function SettingsPage() {
 	const loggedInState = useSelector((state) => state.auth.loggedIn);
 	const [initializedPreferences, setInitializedPreferences] = useState(false);
 	const isSmUp = useMediaQuery(theme.breakpoints.up("sm"));
+	const [pendingChange, setPendingChange] = useState(false);
 
 	const [preferencesState, setPreferencesState] = React.useState({
 		allowNSFW: auth?.allowNSFW || false,
@@ -39,16 +40,39 @@ function SettingsPage() {
 	});
 
 	useEffect(() => {
-		if (auth?.loggedIn) {
-			setPreferencesState({
-				allowNSFW: auth.allowNSFW,
-				allowAnyNotifications: auth.allowAnyNotifications,
-				allowPublicChatNotifications: auth.allowPublicChatNotifications,
-				allowPrivateChatNotifications: auth.allowPrivateChatNotifications,
-			});
-			setInitializedPreferences(true);
+		if (!auth?.loggedIn) return;
+		if (initializedPreferences) return;
+
+		setPreferencesState({
+			allowNSFW: auth.allowNSFW,
+			allowAnyNotifications: auth.allowAnyNotifications,
+			allowPublicChatNotifications: auth.allowPublicChatNotifications,
+			allowPrivateChatNotifications: auth.allowPrivateChatNotifications,
+		});
+		setInitializedPreferences(true);
+	}, [auth, loggedInState, preferencesState, initializedPreferences]);
+
+	useEffect(() => {
+		if (!auth?.loggedIn) return;
+		if (!initializedPreferences) return;
+
+		if (
+			(!pendingChange && auth.allowNSFW !== preferencesState.allowNSFW) ||
+			auth.allowAnyNotifications !== preferencesState.allowAnyNotifications ||
+			auth.allowPublicChatNotifications !== preferencesState.allowPublicChatNotifications ||
+			auth.allowPrivateChatNotifications !== preferencesState.allowPrivateChatNotifications
+		) {
+			setPendingChange(true);
+		} else if (
+			pendingChange &&
+			auth.allowNSFW === preferencesState.allowNSFW &&
+			auth.allowAnyNotifications === preferencesState.allowAnyNotifications &&
+			auth.allowPublicChatNotifications === preferencesState.allowPublicChatNotifications &&
+			auth.allowPrivateChatNotifications === preferencesState.allowPrivateChatNotifications
+		) {
+			setPendingChange(false);
 		}
-	}, [auth, loggedInState]);
+	}, [auth, loggedInState, preferencesState, initializedPreferences]);
 
 	// Expose main colors
 	const fields = {
@@ -305,13 +329,14 @@ function SettingsPage() {
 					handlePreferencesChange={handlePreferencesChange}
 					handleSavePreferences={handleSavePreferences}
 					initializedPreferences={initializedPreferences}
+					pendingChange={pendingChange}
 				/>
 			)}
 		</Stack>
 	);
 }
 
-function PreferencesSection({ preferencesState, handlePreferencesChange, handleSavePreferences, initializedPreferences }) {
+function PreferencesSection({ preferencesState, handlePreferencesChange, handleSavePreferences, initializedPreferences, pendingChange }) {
 	const theme = useTheme();
 
 	return (
@@ -388,7 +413,7 @@ function PreferencesSection({ preferencesState, handlePreferencesChange, handleS
 						/>
 					</FormGroup>
 				</FormControl>
-				<Button variant="contained" onClick={handleSavePreferences}>
+				<Button variant="contained" onClick={handleSavePreferences} sx={{ maxWidth: 200 }} disabled={!pendingChange}>
 					Save Preferences
 				</Button>
 			</Stack>
