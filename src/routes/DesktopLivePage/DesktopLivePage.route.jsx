@@ -211,7 +211,11 @@ const Field = ({ label, name, settings, setSettings, type = "text", disabled = f
 		onChange={(event) => {
 			const value = event.target.value;
 			const markCustom = name !== "nvencProfile" && (name.startsWith("nvenc") || name === "encoderPreset");
-			setSettings((current) => ({ ...current, [name]: value, nvencProfile: markCustom ? "custom" : current.nvencProfile }));
+			setSettings((current) => ({
+				...current,
+				[name]: value,
+				...(markCustom ? { nvencProfile: "custom" } : {}),
+			}));
 		}}
 	/>
 );
@@ -225,7 +229,11 @@ const SelectField = ({ label, name, values, settings, setSettings, disabled = fa
 			onChange={(event) => {
 				const value = event.target.value;
 				const markCustom = name !== "nvencProfile" && (name.startsWith("nvenc") || name === "encoderPreset");
-				setSettings((current) => ({ ...current, [name]: value, nvencProfile: markCustom ? "custom" : current.nvencProfile }));
+				setSettings((current) => ({
+					...current,
+					[name]: value,
+					...(markCustom ? { nvencProfile: "custom" } : {}),
+				}));
 			}}>
 			{values.map((value) => (
 				<MenuItem key={value} value={value}>
@@ -245,7 +253,11 @@ const ToggleField = ({ label, name, settings, setSettings, disabled = false }) =
 				onChange={(event) => {
 					const checked = event.target.checked;
 					const markCustom = name !== "nvencProfile" && name.startsWith("nvenc");
-					setSettings((current) => ({ ...current, [name]: checked, nvencProfile: markCustom ? "custom" : current.nvencProfile }));
+					setSettings((current) => ({
+						...current,
+						[name]: checked,
+						...(markCustom ? { nvencProfile: "custom" } : {}),
+					}));
 				}}
 			/>
 		}
@@ -263,8 +275,9 @@ const SettingGrid = ({ children }) => (
 	</Grid>
 );
 
-const SourceTile = ({ source, selected, onSelect }) => {
+const SourceTile = ({ source, thumbnail, selected, onSelect }) => {
 	const theme = useTheme();
+	const subtitle = source.kind === "screen" || source.id?.startsWith("screen:") ? "Screen" : source.appName ? `Window · ${source.appName}` : "Window";
 
 	return (
 		<Paper
@@ -286,23 +299,23 @@ const SourceTile = ({ source, selected, onSelect }) => {
 				bgcolor: selected ? alpha(theme.palette.primary.main, 0.12) : "background.paper",
 			}}>
 			<Box
-				component="img"
-				src={source.thumbnail}
-				alt=""
 				sx={{
-					display: "block",
+					display: "flex",
+					alignItems: "center",
+					justifyContent: "center",
 					width: "100%",
 					aspectRatio: "16 / 9",
-					objectFit: "cover",
 					bgcolor: "background.default",
-				}}
-			/>
+					overflow: "hidden",
+				}}>
+				{thumbnail ? <Box component="img" src={thumbnail} alt="" sx={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <CircularProgress size={20} />}
+			</Box>
 			<Stack spacing={0.5} sx={{ p: 1 }}>
 				<Typography variant="body2" noWrap>
 					{source.name}
 				</Typography>
 				<Typography variant="caption" color="text.secondary" noWrap>
-					{source.id.startsWith("screen:") ? "Screen" : "Window"}
+					{subtitle}
 				</Typography>
 			</Stack>
 		</Paper>
@@ -321,8 +334,10 @@ function DesktopLivePage() {
 	const [streamState, setStreamState] = useState({ status: "idle", sessionInfo: null });
 	const [sessionInfo, setSessionInfo] = useState(null);
 	const [capabilities, setCapabilities] = useState(null);
+	const [thumbnails, setThumbnails] = useState({});
 	const electronLive = window.electronAPI?.liveStream;
-	const isElectron = Boolean(electronLive);
+	const electronSources = window.electronAPI?.sources;
+	const isElectron = Boolean(electronLive && electronSources);
 	const videoCodecOptions = capabilities?.videoCodecs?.length ? capabilities.videoCodecs : FALLBACK_VIDEO_CODEC_OPTIONS;
 	const audioCodecOptions = capabilities?.audioCodecs?.length ? capabilities.audioCodecs : FALLBACK_AUDIO_CODEC_OPTIONS;
 	const encoderPresetCatalog =
@@ -337,11 +352,11 @@ function DesktopLivePage() {
 	const selectedSource = useMemo(() => sources.find((source) => source.id === selectedSourceId) || null, [selectedSourceId, sources]);
 
 	const loadSources = useCallback(async () => {
-		if (!electronLive) return;
+		if (!electronSources) return;
 		setLoadingSources(true);
 		setError("");
 		try {
-			const nextSources = await electronLive.getSources({ types: ["screen", "window"], thumbnailWidth: 320, thumbnailHeight: 180 });
+			const nextSources = await electronSources.list({ types: ["screen", "window"] });
 			setSources(nextSources);
 			setSelectedSourceId((current) => (current && nextSources.some((source) => source.id === current) ? current : nextSources[0]?.id || ""));
 		} catch (err) {
@@ -349,7 +364,7 @@ function DesktopLivePage() {
 		} finally {
 			setLoadingSources(false);
 		}
-	}, [electronLive]);
+	}, [electronSources]);
 
 	useEffect(() => {
 		if (!electronLive) return undefined;
@@ -379,6 +394,56 @@ function DesktopLivePage() {
 	useEffect(() => {
 		loadSources();
 	}, [loadSources]);
+
+	useEffect(() => {
+		if (!electronSources) return undefined;
+		const off = electronSources.onThumbnail((event) => {
+			if (!event?.sourceId || !event.dataUrl) return;
+			setThumbnails((current) => ({ ...current, [event.sourceId]: event.dataUrl }));
+		});
+		return () => {
+			off?.();
+		};
+	}, [electronSources]);
+
+	useEffect(() => {
+		if (!electronSources || !sources.length) return undefined;
+		let cancelled = false;
+		let subscriptionId = null;
+
+		electronSources
+			.watch(sources, { width: 480, height: 270, intervalMs: 5000 })
+			.then((id) => {
+				if (cancelled && id) {
+					void electronSources.unwatch(id);
+					return;
+				}
+				subscriptionId = id;
+			})
+			.catch((err) => setError(err.message || "Unable to subscribe to thumbnails."));
+
+		electronSources
+			.getCached(sources.map((source) => source.id))
+			.then((cached) => {
+				if (cancelled || !Array.isArray(cached)) return;
+				if (!cached.length) return;
+				setThumbnails((current) => {
+					const next = { ...current };
+					for (const event of cached) {
+						if (event?.sourceId && event.dataUrl) next[event.sourceId] = event.dataUrl;
+					}
+					return next;
+				});
+			})
+			.catch(() => {
+				// Cache lookup is best-effort; ignore.
+			});
+
+		return () => {
+			cancelled = true;
+			if (subscriptionId) void electronSources.unwatch(subscriptionId);
+		};
+	}, [electronSources, sources]);
 
 	useEffect(() => {
 		if (!electronLive?.getCapabilities) return undefined;
@@ -546,7 +611,13 @@ function DesktopLivePage() {
 										gap: 1.5,
 									}}>
 									{sources.map((source) => (
-										<SourceTile key={source.key || source.id} source={source} selected={source.id === selectedSourceId} onSelect={setSelectedSourceId} />
+										<SourceTile
+											key={source.id}
+											source={source}
+											thumbnail={thumbnails[source.id]}
+											selected={source.id === selectedSourceId}
+											onSelect={setSelectedSourceId}
+										/>
 									))}
 								</Box>
 							</Stack>

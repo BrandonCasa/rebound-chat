@@ -19,7 +19,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		getFfmpegUserDir: () => ipcRenderer.invoke("system:get-ffmpeg-user-dir"),
 	},
 	liveStream: {
-		getSources: (options) => ipcRenderer.invoke("live-stream:get-sources", options),
 		getState: () => ipcRenderer.invoke("live-stream:get-state"),
 		getCapabilities: () => ipcRenderer.invoke("live-stream:get-capabilities"),
 		start: (config) => ipcRenderer.invoke("live-stream:start", config),
@@ -39,6 +38,23 @@ contextBridge.exposeInMainWorld("electronAPI", {
 			const listener = (_event, payload) => cb(payload);
 			ipcRenderer.on("live-stream-session", listener);
 			return () => ipcRenderer.removeListener("live-stream-session", listener);
+		},
+	},
+	sources: {
+		list: (options) => ipcRenderer.invoke("sources:list", options),
+		getCached: (sourceIds) => ipcRenderer.invoke("sources:cached", sourceIds),
+		watch: (sources, options) => ipcRenderer.invoke("sources:watch", { sources, options }),
+		unwatch: (subscriptionId) => ipcRenderer.invoke("sources:unwatch", subscriptionId),
+		captureOnce: (source, options) => ipcRenderer.invoke("sources:capture-once", { source, options }),
+		onThumbnail: (cb) => {
+			const listener = (_event, payload) => cb(payload);
+			ipcRenderer.on("sources:thumbnail", listener);
+			return () => ipcRenderer.removeListener("sources:thumbnail", listener);
+		},
+		onError: (cb) => {
+			const listener = (_event, payload) => cb(payload);
+			ipcRenderer.on("sources:error", listener);
+			return () => ipcRenderer.removeListener("sources:error", listener);
 		},
 	},
 

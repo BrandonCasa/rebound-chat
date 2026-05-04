@@ -1,5 +1,4 @@
 import { spawn } from "child_process";
-import { createHash } from "crypto";
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join, relative } from "path";
@@ -50,18 +49,9 @@ const raiseForStatus = async (response) => {
 	throw err;
 };
 
-const serializeSource = (source) => ({
-	id: source.id,
-	name: source.name,
-	displayId: source.display_id || "",
-	thumbnail: source.thumbnail?.toDataURL?.() || "",
-	appIcon: source.appIcon?.toDataURL?.() || "",
-});
-
 class ElectronLiveStreamManager {
-	constructor({ app, desktopCapturer, shell, sendToRenderer, logger }) {
+	constructor({ app, shell, sendToRenderer, logger }) {
 		this.app = app;
-		this.desktopCapturer = desktopCapturer;
 		this.shell = shell;
 		this.sendToRenderer = sendToRenderer;
 		this.logger = logger;
@@ -124,21 +114,6 @@ class ElectronLiveStreamManager {
 		};
 		this.logger?.info?.(`[live-stream] ${message}`);
 		this.sendToRenderer("live-stream-log", payload);
-	}
-
-	async getDesktopSources(options = {}) {
-		const requestedTypes = Array.isArray(options.types) && options.types.length ? options.types : ["screen", "window"];
-		const types = requestedTypes.filter((type) => type === "screen" || type === "window");
-		const sources = await this.desktopCapturer.getSources({
-			types: types.length ? types : ["screen", "window"],
-			fetchWindowIcons: true,
-			thumbnailSize: {
-				width: Number.parseInt(options.thumbnailWidth, 10) || 320,
-				height: Number.parseInt(options.thumbnailHeight, 10) || 180,
-			},
-		});
-
-		return sources.map(serializeSource);
 	}
 
 	normalizeConfig(rawConfig = {}) {
@@ -617,23 +592,12 @@ class ElectronLiveStreamManager {
 	}
 }
 
-const hashSource = (source) => createHash("sha1").update(`${source.id}:${source.name}`).digest("hex");
-
-const registerLiveStreamIpc = ({ ipcMain, app, desktopCapturer, shell, sendToRenderer, logger }) => {
+const registerLiveStreamIpc = ({ ipcMain, app, shell, sendToRenderer, logger }) => {
 	const manager = new ElectronLiveStreamManager({
 		app,
-		desktopCapturer,
 		shell,
 		sendToRenderer,
 		logger,
-	});
-
-	ipcMain.handle("live-stream:get-sources", async (_event, options) => {
-		const sources = await manager.getDesktopSources(options);
-		return sources.map((source) => ({
-			...source,
-			key: hashSource(source),
-		}));
 	});
 
 	ipcMain.handle("live-stream:get-state", () => manager.getState());

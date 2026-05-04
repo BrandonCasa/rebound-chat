@@ -4,12 +4,14 @@ import { fileURLToPath } from "url";
 import { dirname, extname, join } from "path";
 import { existsSync } from "fs";
 import { readFile } from "fs/promises";
-import { app, BrowserWindow, desktopCapturer, ipcMain, protocol, shell } from "electron";
+import { tmpdir } from "os";
+import { app, BrowserWindow, ipcMain, protocol, shell } from "electron";
 import log from "electron-log";
 import updater from "electron-updater";
 const { autoUpdater } = updater;
 import isDev from "electron-is-dev";
 import { registerLiveStreamIpc } from "./electron-live-stream.js";
+import { SourceService, registerSourceServiceIpc } from "./sources/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -125,10 +127,27 @@ function allowUpdateAction(actionName) {
 	return true;
 }
 
+const broadcastToRenderers = (channel, payload) => {
+	for (const win of BrowserWindow.getAllWindows()) {
+		if (!win.isDestroyed()) {
+			win.webContents.send(channel, payload);
+		}
+	}
+};
+
+const sourceService = new SourceService({
+	ffmpegPath: ffmpegBinaryPath,
+	cacheDir: join(tmpdir(), `rebound-thumbnails-${process.pid}`),
+	platform: process.platform,
+	onLog: (message) => log.info(`[sources] ${message}`),
+	onError: (err, sourceId) => log.error(`[sources] ${sourceId || ""} ${err?.message || err}`),
+});
+
+let sourceIpcDispose = null;
+
 registerLiveStreamIpc({
 	ipcMain,
 	app,
-	desktopCapturer,
 	shell,
 	sendToRenderer: sendStatus,
 	logger: log,
@@ -353,6 +372,18 @@ app.whenReady().then(async () => {
 		log.warn(`ffprobe binary not found at ${ffprobeBinaryPath}. Place a custom binary at ${join(userFfmpegRoot, "bin")} or run 'pnpm run prepare:ffmpeg'.`);
 	}
 
+	try {
+		await sourceService.start();
+		const registration = registerSourceServiceIpc({
+			ipcMain,
+			service: sourceService,
+			broadcast: broadcastToRenderers,
+		});
+		sourceIpcDispose = registration.dispose;
+	} catch (err) {
+		log.error("Failed to start SourceService", err);
+	}
+
 	ipcMain.handle("system:get-ffmpeg-path", () => resolveFfBinary("ffmpeg"));
 	ipcMain.handle("system:get-ffprobe-path", () => resolveFfBinary("ffprobe"));
 	ipcMain.handle("system:get-ffmpeg-user-dir", () => userFfmpegRoot);
@@ -402,6 +433,28 @@ app.whenReady().then(async () => {
 	});
 
 	await createWindow();
+});
+
+app.on("before-quit", () => {
+	if (sourceIpcDispose) {
+		try {
+			sourceIpcDispose();
+		} catch (err) {
+			log.warn("Failed to dispose source IPC handlers", err);
+		}
+		sourceIpcDispose = null;
+	}
+});
+
+app.on("will-quit", async (event) => {
+	if (!sourceService.started || sourceService.stopped) return;
+	event.preventDefault();
+	try {
+		await sourceService.stop();
+	} catch (err) {
+		log.warn("Failed to stop SourceService cleanly", err);
+	}
+	app.quit();
 });
 
 app.on("window-all-closed", () => {
