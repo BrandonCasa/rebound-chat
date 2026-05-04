@@ -148,17 +148,13 @@ const App = () => {
 	}, [authState.loggedIn, authState.authToken, dispatch]);
 
 	useEffect(() => {
-		async function fetchFfmpegPath() {
-			let ffmpegPath = undefined;
-
-			ffmpegPath = await window.electronAPI.system.getFfmpegPath();
-			ffmpegPath = ffmpegPath.replace("app.asar", "app.asar.unpacked");
-			ffmpegPath = ffmpegPath.replace("app.asar.unpacked.unpacked", "app.asar.unpacked");
-
+		async function fetchFfBinaries() {
+			const [ffmpegPath, ffprobePath] = await Promise.all([window.electronAPI.system.getFfmpegPath(), window.electronAPI.system.getFfprobePath()]);
 			window.ffmpegPath = ffmpegPath;
+			window.ffprobePath = ffprobePath;
 		}
-		if (window.isElectron && !window.ffmpegPath) {
-			fetchFfmpegPath();
+		if (window.isElectron && (!window.ffmpegPath || !window.ffprobePath)) {
+			fetchFfBinaries();
 		}
 	}, []);
 

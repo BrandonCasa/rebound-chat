@@ -2,6 +2,7 @@
 
 import { fileURLToPath } from "url";
 import { dirname, extname, join } from "path";
+import { existsSync } from "fs";
 import { readFile } from "fs/promises";
 import { app, BrowserWindow, desktopCapturer, ipcMain, protocol, shell } from "electron";
 import log from "electron-log";
@@ -9,10 +10,19 @@ import updater from "electron-updater";
 const { autoUpdater } = updater;
 import isDev from "electron-is-dev";
 import { registerLiveStreamIpc } from "./electron-live-stream.js";
-import ffmpeg from "@ffmpeg-installer/ffmpeg";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+const ffmpegRoot = isDev ? join(__dirname, "..", "native", "ffmpeg") : join(process.resourcesPath, "ffmpeg");
+
+const resolveFfBinary = (name) => {
+	const filename = process.platform === "win32" ? `${name}.exe` : name;
+	return join(ffmpegRoot, "bin", filename);
+};
+
+const ffmpegBinaryPath = resolveFfBinary("ffmpeg");
+const ffprobeBinaryPath = resolveFfBinary("ffprobe");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -332,7 +342,15 @@ autoUpdater.on("update-downloaded", (info) => {
 });
 
 app.whenReady().then(async () => {
-	ipcMain.handle("system:get-ffmpeg-path", () => ffmpeg.path);
+	if (!existsSync(ffmpegBinaryPath)) {
+		log.warn(`Bundled ffmpeg not found at ${ffmpegBinaryPath}. Run 'pnpm run prepare:ffmpeg' to fetch it.`);
+	}
+	if (!existsSync(ffprobeBinaryPath)) {
+		log.warn(`Bundled ffprobe not found at ${ffprobeBinaryPath}. Run 'pnpm run prepare:ffmpeg' to fetch it.`);
+	}
+
+	ipcMain.handle("system:get-ffmpeg-path", () => ffmpegBinaryPath);
+	ipcMain.handle("system:get-ffprobe-path", () => ffprobeBinaryPath);
 
 	const mimeByExt = {
 		".js": "application/javascript",

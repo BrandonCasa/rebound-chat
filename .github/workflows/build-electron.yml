@@ -1,28 +1,30 @@
 name: Build and Dist
 
+run-name: Electron dist — ${{ github.ref_name }}${{ inputs.bumpVersion && ' · bump' || '' }}
+
 on:
   workflow_dispatch:
     inputs:
       bumpVersion:
-        description: "Whether to bump the version in package.json files"
-        required: false
-        default: "false"
+        description: Patch-bump the root and server package.json, commit, and push before building
+        type: boolean
+        default: false
       build_windows_11:
-        description: "Build for Windows 11 (set to 'true' to enable)"
-        required: false
-        default: "false"
+        description: Windows — NSIS installer (x64)
+        type: boolean
+        default: true
       build_macos_arm:
-        description: "Build for macOS ARM (set to 'true' to enable)"
-        required: false
-        default: "false"
+        description: macOS — Apple silicon (arm64)
+        type: boolean
+        default: true
       build_macos_intel:
-        description: "Build for macOS Intel (set to 'true' to enable)"
-        required: false
-        default: "false"
+        description: macOS — Intel (x64)
+        type: boolean
+        default: false
       build_linux:
-        description: "Build for Linux (set to 'true' to enable)"
-        required: false
-        default: "false"
+        description: Linux — AppImage (x64)
+        type: boolean
+        default: true
 
 jobs:
   version:
@@ -43,7 +45,7 @@ jobs:
           node-version: 22.x
 
       - name: Bump version in package.json files
-        if: ${{ github.event.inputs.bumpVersion == 'true' }}
+        if: ${{ inputs.bumpVersion }}
         run: |
           echo "Bumping version in package.json"
           pnpm version patch --no-git-tag-version
@@ -64,22 +66,28 @@ jobs:
       - name: Generate matrix
         id: set-matrix
         run: |
-          # Initialize an empty JSON structure for the matrix
+          if [ "${{ inputs.build_windows_11 }}" != "true" ] \
+            && [ "${{ inputs.build_macos_intel }}" != "true" ] \
+            && [ "${{ inputs.build_macos_arm }}" != "true" ] \
+            && [ "${{ inputs.build_linux }}" != "true" ]; then
+            echo "::error title=No targets selected::Choose at least one platform. All checkboxes were left off."
+            exit 1
+          fi
+
           MATRIX="{\"include\": []}"
           echo "Initial matrix: $MATRIX"
 
-          # Conditionally add platforms based on workflow inputs
-          if [ "${{ github.event.inputs.build_windows_11 }}" = "true" ]; then
-            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "windows-latest", "builderFlag": "--win", "archFlag": "", "platform": "Windows 11"}]')
+          if [ "${{ inputs.build_windows_11 }}" = "true" ]; then
+            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "windows-latest", "builderFlag": "--win", "archFlag": "", "platform": "Windows 11", "ffmpegArch": ""}]')
           fi
-          if [ "${{ github.event.inputs.build_macos_intel }}" = "true" ]; then
-            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "macos-latest", "builderFlag": "--mac", "archFlag": "--x64", "platform": "macOS Intel"}]')
+          if [ "${{ inputs.build_macos_intel }}" = "true" ]; then
+            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "macos-latest", "builderFlag": "--mac", "archFlag": "--x64", "platform": "macOS Intel", "ffmpegArch": "x64"}]')
           fi
-          if [ "${{ github.event.inputs.build_macos_arm }}" = "true" ]; then
-            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "macos-latest", "builderFlag": "--mac", "archFlag": "--arm64", "platform": "macOS ARM"}]')
+          if [ "${{ inputs.build_macos_arm }}" = "true" ]; then
+            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "macos-latest", "builderFlag": "--mac", "archFlag": "--arm64", "platform": "macOS ARM", "ffmpegArch": "arm64"}]')
           fi
-          if [ "${{ github.event.inputs.build_linux }}" = "true" ]; then
-            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "ubuntu-latest", "builderFlag": "--linux", "archFlag": "", "platform": "Linux"}]')
+          if [ "${{ inputs.build_linux }}" = "true" ]; then
+            MATRIX=$(echo "$MATRIX" | jq '.include += [{"os": "ubuntu-latest", "builderFlag": "--linux", "archFlag": "", "platform": "Linux", "ffmpegArch": ""}]')
           fi
           echo "Final matrix: $MATRIX"
           # Output the matrix JSON for use by other jobs using multiline syntax
@@ -94,9 +102,16 @@ jobs:
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     env:
       GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      FFMPEG_ARCH: ${{ matrix.ffmpegArch }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6.0.2
+
+      - name: Cache bundled FFmpeg
+        uses: actions/cache@v5.0.5
+        with:
+          path: native/ffmpeg
+          key: ffmpeg-${{ matrix.platform }}-${{ hashFiles('projectscripts/fetch-ffmpeg.js') }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6.0.5

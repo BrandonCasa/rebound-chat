@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	},
 	system: {
 		getFfmpegPath: () => ipcRenderer.invoke("system:get-ffmpeg-path"),
+		getFfprobePath: () => ipcRenderer.invoke("system:get-ffprobe-path"),
 	},
 	liveStream: {
 		getSources: (options) => ipcRenderer.invoke("live-stream:get-sources", options),

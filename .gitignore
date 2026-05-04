@@ -30,3 +30,6 @@ dist/
 app/
 node-compile-cache/
 streaming_tool/venv/**/*
+
+# bundled FFmpeg/FFprobe binaries (populated by projectscripts/fetch-ffmpeg.js)
+/native/

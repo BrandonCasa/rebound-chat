@@ -1,5 +1,6 @@
 export const getLiveBase = () => {
-	if (globalThis.IN_ELECTRON_ENV) return "https://rebound.nexus";
+	if (!process?.env?.NODE_ENV || process?.env?.NODE_ENV === "development" && globalThis?.IN_ELECTRON_ENV) return "http://localhost:6001";
+	if (process?.env?.NODE_ENV === "production" && globalThis?.IN_ELECTRON_ENV) return "https://rebound.nexus";
 	return "";
 };
 
