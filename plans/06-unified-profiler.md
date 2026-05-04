@@ -1,8 +1,8 @@
-# Plan 06: Unified profiler with a local dashboard, Chrome trace export, and minimal-intrusion instrumentation
+# Plan 06: Unified observability with OpenTelemetry + Jaeger across renderer, main, and server (plus on-demand CPU/heap profiles)
 
 ## Problem
 
-The codebase has three distinct JavaScript execution contexts — none of them are profileable today without ad-hoc, manual work:
+The codebase has three distinct JavaScript execution contexts and none of them are profileable today without ad-hoc, manual work:
 
 1. **The Electron renderer** (`src/`, Vite-served React app). Can be poked with Chrome DevTools' Performance tab, but only through the renderer's own DevTools window, and the data does not connect to anything else in the system.
 2. **The Electron main process** (`public/electron.js`, `public/electron-live-stream.js`, `public/streaming/*`). This is where the streaming pipeline orchestrator lives — IPC handlers, FFmpeg subprocess spawn/manage, HLS upload loop, session bookkeeping. Today it has no profiling at all. The closest thing is `console.log` and `electron-log`.
@@ -13,17 +13,17 @@ When something gets slow — a stream upload pass takes 600 ms instead of 200 ms
 We need a profiler that:
 
 - **Spans all three execution contexts** (renderer, main, server) on a single timeline.
-- **Hooks in for free in dev** — running `pnpm run profile` should be the entire setup. No Docker, no cloud account, no separate viewer install.
-- **Has manual control surfaces** — start/stop CPU profile, take heap snapshot, start/stop a named trace recording, all from a single dashboard.
-- **Has minimal manual code intrusion** — by default, HTTP requests, IPC calls, and FFmpeg lifecycle events show up automatically. Sprinkling `trace("buildHls", () => …)` adds detail in one line.
+- **Hooks in for free in dev** — running `pnpm run profile` should be the entire setup.
+- **Has manual control surfaces** — start/stop CPU profile, take heap snapshot, plus arbitrary span recording from any line of code in any process.
+- **Has minimal manual code intrusion** — by default, HTTP requests, Express routes, Mongoose queries, Socket.IO, fetch, IPC calls, and FFmpeg lifecycle events show up automatically. Sprinkling `tracer.startActiveSpan("buildHls", fn)` adds detail in one line.
 - **Costs nothing when off.** Production builds and normal `pnpm run electron-dev` should not pay a cycle for any of it.
-- **Outputs the standard format** so we can throw a flame chart at any colleague (or at `https://ui.perfetto.dev`) without explaining a custom file format.
+- **Uses an industry-standard format and viewer** so we can throw a flame chart at any colleague (or at any cloud APM later) without explaining a custom file format.
 
 ## Why this should be fixed
 
 - Plan 01 ("eliminate GPU → CPU round trip"), Plan 03 ("parallel streaming uploads"), Plan 04 ("tune VBV bufsize") all hinge on numbers we cannot currently measure. Without profiling, "did it actually get faster?" is a vibe check.
 - Plan 05 talks about a Live Status panel and stream health widget — both are downstream consumers of structured timing data that we are not collecting.
-- The streaming hot path involves four hops (renderer click → IPC → FFmpeg spawn → HLS upload → server validate → storage), and any one of them can be the culprit when latency rises. A profiler that shows all four on one timeline is the only way to localize the culprit reliably.
+- The streaming hot path involves four hops (renderer click → IPC → FFmpeg spawn → HLS upload → server validate → storage), and any one of them can be the culprit when latency rises. Distributed tracing — a renderer span as the root, a main-process IPC span as its child, a server-side HTTP span as its grandchild, all in one waterfall — is the only correct way to localize the culprit.
 - Heap usage during long streams is unmonitored. Memory leaks today are noticed when the user complains.
 - A new contributor cannot answer "what is the slow part of the app?" without instrumenting from scratch every time.
 
@@ -31,426 +31,531 @@ We need a profiler that:
 
 After this plan ships:
 
-- `pnpm run profile` does the entire setup: starts the server with `--inspect`, starts the renderer's Vite dev server, starts Electron with `--inspect`, launches a small **Profiler Hub** at `http://127.0.0.1:9876`, and opens that page in the default browser.
-- The dashboard shows three connected sources (`main`, `server`, `renderer`) with green status dots.
-- A live event stream shows HTTP requests, Electron IPC calls, and FFmpeg lifecycle events as they happen, with durations.
-- Buttons on the dashboard let the user:
-  - **Start trace** / **Stop trace** — record a window of trace events (Chrome Trace Event Format) and download a `trace.json` openable at `https://ui.perfetto.dev` or `chrome://tracing` (or by drag-and-drop into Chrome DevTools' Performance tab).
-  - **Open in Perfetto** — one click that opens the latest trace in Perfetto via its postMessage-based loader, no manual file-drop required.
-  - **CPU profile main / server (Ns)** — record a V8 CPU profile for N seconds; download as `.cpuprofile` (drag into Chrome DevTools for a flame chart).
-  - **Heap snapshot main / server** — capture a `.heapsnapshot`; opens in Chrome DevTools' Memory tab.
-- "Hot spans" panel summarizes the top N spans by total time and call count over the last 30 s, refreshed live.
-- Inside any JS file across the codebase, the developer can write:
+- `pnpm run profile` does the entire setup: starts a local **Jaeger** backend (single Docker container, or a fallback to the all-in-one binary), starts the Vite renderer, the Electron main process, and the backend server, all with OpenTelemetry tracing enabled (env: `OTEL_TRACES_EXPORTER=otlp`, `OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318`). Then opens `http://127.0.0.1:16686` (Jaeger UI) in the default browser.
+- The Jaeger UI shows three services: `rebound-renderer`, `rebound-main`, `rebound-server`. Searches by service, operation, tag, duration. Drilling into any trace shows a timeline waterfall across all three.
+- A click in the renderer that fires `live-stream:start` over IPC and triggers a server `POST /live/api/session` shows up as **one trace with one root span**, with child spans across all three processes. Trace context propagates via W3C `traceparent` (HTTP) and via a small custom IPC propagator we add.
+- Auto-instrumentations cover, with no per-handler edits:
+  - Express routes (operation = `<METHOD> <route>`, status, duration, size)
+  - Outbound HTTP/fetch (operation = `<METHOD> <host><path>`)
+  - Mongoose queries (collection, op, duration)
+  - Socket.IO frames
+  - DNS lookups
+  - File I/O (opt-in, off by default — too noisy on by default)
+- **Custom-but-thin** instrumentations (the things OTel does not ship out of the box):
+  - **Electron IPC** — every `ipcMain.handle/on` call becomes a span; trace context flows from renderer to main.
+  - **FFmpeg subprocess** — one long-lived span per FFmpeg run, with stderr-parsed `frame/fps/speed/dropped/time` attributes, plus child events for per-segment writes.
+  - **React** — `<Profiler>` integration emits commit/render spans for top-level routes.
+- A developer can write, anywhere in any of the three contexts:
   ```js
-  import { trace, traceAsync, startSpan, mark, metric } from "tools/profiler/core/trace.js";
+  import { trace } from "@opentelemetry/api";
+  const tracer = trace.getTracer("rebound");
 
-  const result = trace("computeFoo", () => doExpensiveWork());
-  const data = await traceAsync("uploadSegment", () => uploader.put(seg));
-  const span = startSpan("renderFrame", { fps: 60 });
-  // ...
-  span.end({ droppedFrames: 0 });
-  mark("ffmpeg.first-segment");
-  metric("upload.bytes", buffer.length);
+  tracer.startActiveSpan("uploadSegment", async (span) => {
+    span.setAttribute("size", buf.length);
+    try {
+      const result = await uploader.put(seg);
+      span.setAttribute("status", result.status);
+      return result;
+    } finally {
+      span.end();
+    }
+  });
   ```
-- All of those calls compile to a no-op early return when `process.env.PROFILE !== "1"` (Node) and when `import.meta.env.VITE_PROFILE !== "1"` (renderer). Verified by a benchmark in CI: a million `trace()` calls with profiling off complete in <50 ms.
-- HTTP requests through Express, IPC handlers in Electron, and the FFmpeg subprocess emit structured events automatically with no per-handler edits.
+  ...and that span shows up in Jaeger under the `rebound-main` service, parented to whatever span was active when it started.
+- All of the above is **off by default**. When `OTEL_TRACES_EXPORTER` is unset (or set to `none`), the OTel SDK installs a no-op tracer; auto-instrumentations install but never emit; the cost is one allocation at startup and ~tens of nanoseconds per `startActiveSpan` call (well within "free for the developer"). `pnpm run electron-dev` does not start Jaeger and does not enable tracing.
+- A separate orthogonal pair of commands captures **on-demand CPU profiles and heap snapshots** via Node's built-in inspector — these are the standard `.cpuprofile` and `.heapsnapshot` files that drag-and-drop into Chrome DevTools (Performance tab and Memory tab respectively):
+  - `pnpm profile:cpu --target=main --duration=5` → writes `dev/profiles/main-2026-05-04T20-13-47.cpuprofile`
+  - `pnpm profile:heap --target=server` → writes `dev/profiles/server-…heapsnapshot`
 
 ## How to fix
 
-This plan is broken into 7 phases. Phases A–C are the foundation (zero functional change, zero overhead when off). Phases D–F wire it into the three contexts. Phase G is the dev UX glue.
+This plan is broken into 7 phases. A is the local Jaeger backend; B–D add tracing in each context; E is custom span emitters for what OTel doesn't auto-cover; F is the on-demand CPU/heap commands (orthogonal to OTel); G is the dev-UX glue that ties it all behind `pnpm run profile`.
 
 ---
 
-### Phase A — Tracing core: `trace()`, `startSpan()`, `mark()`, `metric()`
+### Phase A — Local Jaeger backend (the "profiler website")
 
-A single, tiny, dependency-free module that the rest of the system stands on.
+Jaeger is the canonical open-source distributed tracing UI: CNCF graduated, Apache 2.0, used at scale at Uber, Microsoft, Cloudflare, etc. **Jaeger v2** is built on top of the OpenTelemetry Collector, so it speaks OTLP natively (no separate collector deployment, no Jaeger-format conversion).
 
-**A1. Public API.** `tools/profiler/core/trace.js` exports five functions:
+**A1. Choose the run mode.** Two modes, picked at runtime:
 
-```js
-trace(name, fn, attrs?)            // sync; returns fn's return value; emits a complete span
-traceAsync(name, fn, attrs?)       // async; same, awaits fn
-startSpan(name, attrs?) → handle   // returns an opaque handle
-endSpan(handle, attrs?)            // ends a previously-started span
-mark(name, attrs?)                 // instantaneous event (Chrome trace 'i' phase)
-metric(name, value, attrs?)        // counter (Chrome trace 'C' phase)
+- **Docker mode (preferred when available):** `docker run --rm -d --name rebound-jaeger -p 16686:16686 -p 4317:4317 -p 4318:4318 jaegertracing/jaeger:2.0.0` — single container exposing the UI on 16686, OTLP/gRPC on 4317, OTLP/HTTP on 4318. Storage is in-memory by default, perfect for dev.
+- **Binary fallback (no Docker required):** Jaeger ships a single static binary (`jaeger-2.x.x-{darwin,linux,windows}-{amd64,arm64}`) on its GitHub releases page. The orchestrator (Phase G) downloads it once into `dev/bin/jaeger` (gitignored), caches it, and runs it directly with the equivalent flags.
+
+The orchestrator probes `docker ps` and falls back to the binary if Docker is not available. Either way, the developer never touches it.
+
+**A2. CORS and ports.** The renderer is a browser context and posts OTLP/HTTP from `http://localhost:3000` to `http://127.0.0.1:4318/v1/traces`. Jaeger v2's bundled collector accepts OTLP/HTTP and is configured with permissive CORS for localhost origins via env vars baked into our run command:
+
+```
+COLLECTOR_OTLP_HTTP_CORS_ALLOWED_ORIGINS=http://localhost:3000,app://-
+COLLECTOR_OTLP_HTTP_CORS_ALLOWED_HEADERS=*
 ```
 
-Plus a debugging helper `getActiveSpans()` returning the set of currently-open spans for the current process.
+(Exact env var names will be locked in during implementation; they may move between Jaeger versions. The orchestrator pins to a specific Jaeger version so this is a one-time check.)
 
-**A2. The PROFILE-off fast path.** The very first line of every API function reads a module-local `enabled` boolean:
+**A3. UI.** Jaeger UI at `http://127.0.0.1:16686` provides:
 
-```js
-let enabled = false;
-export function trace(name, fn, attrs) {
-  if (!enabled) return fn();
-  // … instrumented path …
-}
-```
+- Search by service, operation, tag, duration, time range.
+- Trace timeline view: waterfall of nested spans with attributes, events, logs.
+- Service dependency graph — auto-derived from cross-service spans, gives the "renderer → main → server" picture for free.
+- Trace comparison view — diff two traces span-by-span (e.g. before/after a Plan 04 change).
 
-`enabled` is set once at module load time from `process.env.PROFILE === "1"` (Node) or `import.meta.env.VITE_PROFILE === "1"` (renderer; Vite inlines this at build time). The branch predictor handles the cold path; an `if`-check costs ≤ 1 ns. We will benchmark this in CI as a regression guard (Phase A6).
+**A4. Lifecycle.** The Jaeger backend is a single process owned by the orchestrator (Phase G). It starts when `pnpm run profile` starts and stops on Ctrl-C. Trace data is in-memory, so it dies with the process — fine for dev.
 
-**A3. Event format.** Spans are buffered as Chrome Trace Event Format records:
+---
+
+### Phase B — OpenTelemetry SDK in the Node processes (server + Electron main)
+
+Both the server and the Electron main process are Node runtimes. They use the same SDK (`@opentelemetry/sdk-node`) and the same auto-instrumentation pack (`@opentelemetry/auto-instrumentations-node`).
+
+**B1. Dependencies.** Added to root `package.json`:
 
 ```jsonc
 {
-  "name": "uploadSegment",
-  "ph": "X",            // complete event
-  "ts": 1700000000000,  // microseconds
-  "dur": 187000,        // microseconds
-  "pid": 12345,         // process id
-  "tid": 1,             // thread id (we use 1 for main loop, 2+ for workers)
-  "cat": "ipc",         // category (the module that emitted it)
-  "args": { "size": 8192 }
+  "dependencies": {
+    "@opentelemetry/api": "^1.x",
+    "@opentelemetry/sdk-node": "^0.x",
+    "@opentelemetry/auto-instrumentations-node": "^0.x",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.x",
+    "@opentelemetry/resources": "^1.x",
+    "@opentelemetry/semantic-conventions": "^1.x"
+  }
 }
 ```
 
-Chrome Trace Event Format is the de-facto standard: Perfetto, `chrome://tracing`, Speedscope, the Node `--cpu-prof` output, and Chrome DevTools all read it natively. Picking it means we never have to write a viewer.
+(Exact versions pinned during implementation; we use `^` because the OTel API is stable but the SDK is still 0.x for individual packages.)
 
-**A4. Buffering.** A ring buffer (`tools/profiler/core/buffer.js`) holds the last N events (default 50,000) per process. Drains happen on:
+**B2. Bootstrap modules.** Two near-identical files:
 
-- Periodic flush every 250 ms when transport is connected.
-- Explicit flush on `endTrace()` from the hub.
-- Backpressure: when the buffer is 80% full, drain immediately.
-- Process exit: best-effort sync flush (a JSONL file in `userData`/profiler-fallback/).
+- `tools/profiler/otel/main.bootstrap.js` — bootstrap for the Electron main process (service.name = `rebound-main`).
+- `tools/profiler/otel/server.bootstrap.js` — bootstrap for the backend server (service.name = `rebound-server`).
 
-**A5. Time source.** All processes use `process.hrtime.bigint()` (Node) or `performance.now()` (renderer) plus a once-per-second wall clock pinging from the hub to align skew across processes. The hub's wall clock is the master; client timestamps are reported as `(localHrtime - hrtimeAtConnect) + (wallAtConnect)`.
+Both build on a shared helper:
 
-**A6. Benchmark.** `tools/profiler/__tests__/perf.bench.js` runs in CI:
+```js
+// tools/profiler/otel/bootstrapNode.js
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
+import { Resource } from "@opentelemetry/resources";
+import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
+import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
 
-- 1 million `trace("noop", () => 1)` calls with PROFILE off → must complete in < 50 ms (≤ 50 ns/call).
-- 1 million calls with PROFILE on (drained to /dev/null sink) → must complete in < 1 s (≤ 1 µs/call). This is informational, not a hard gate.
+export function startOtel({ serviceName, instanceId = String(process.pid) }) {
+  if (process.env.OTEL_TRACES_EXPORTER === "none" || !process.env.OTEL_TRACES_EXPORTER) {
+    // Off by default.
+    return null;
+  }
 
-A2's "enabled = false" early return is what makes the off-case essentially free.
+  const sdk = new NodeSDK({
+    resource: new Resource({
+      [SemanticResourceAttributes.SERVICE_NAME]: serviceName,
+      [SemanticResourceAttributes.SERVICE_INSTANCE_ID]: instanceId,
+      [SemanticResourceAttributes.DEPLOYMENT_ENVIRONMENT]: "development",
+    }),
+    traceExporter: new OTLPTraceExporter({
+      url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT
+        ? `${process.env.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces`
+        : "http://127.0.0.1:4318/v1/traces",
+    }),
+    instrumentations: [getNodeAutoInstrumentations({
+      "@opentelemetry/instrumentation-fs": { enabled: false }, // too noisy by default
+    })],
+  });
+
+  sdk.start();
+  process.once("SIGTERM", () => sdk.shutdown().catch(() => {}));
+  process.once("SIGINT",  () => sdk.shutdown().catch(() => {}));
+  return sdk;
+}
+```
+
+Then `main.bootstrap.js` is one line:
+
+```js
+import { startOtel } from "./bootstrapNode.js";
+startOtel({ serviceName: "rebound-main" });
+```
+
+**B3. Critical: load order.** OTel auto-instrumentation works by patching modules **at require/import time**. The bootstrap must run before any other module is loaded. We achieve this by:
+
+- For the server, prepending `--import=./tools/profiler/otel/server.bootstrap.js` (Node ≥ 20.6) or `--require=./tools/profiler/otel/server.bootstrap.cjs` to the `pnpm profile:server` command. Note `server/src/app.js` continues to be the application entrypoint; the bootstrap is a separate side-effect module loaded via the flag.
+- For Electron main, the same flag passed to the Electron Node binary: `electron --import=./tools/profiler/otel/main.bootstrap.js .`
+
+Both flags are only used in the profiling scripts. `pnpm run electron-dev` does not pass them, so the SDK never initializes and the auto-instrumentations never patch anything. **Zero overhead when off.**
+
+**B4. Off-by-default semantics.** Three layers of off-switch:
+
+1. The bootstrap itself early-returns when `OTEL_TRACES_EXPORTER` is unset — so even if it accidentally gets imported, nothing starts.
+2. `pnpm run electron-dev` (and `pnpm run dev` in `server/`) does not pass `--import=…bootstrap.js`, so the bootstrap is never even imported.
+3. Production builds (`pnpm run dist`) have no path that imports the bootstrap.
+
+**B5. Auto-instrumentation coverage.** `@opentelemetry/auto-instrumentations-node` includes (at the time of writing): http, https, net, dns, fs (we disable), express, koa, fastify, hapi, mongoose, mongodb, redis, mysql, pg, ioredis, socket.io, grpc, kafkajs, undici (covers Node fetch). What we get for free:
+
+- **Server:** every Express route → span; every Mongoose query → child span; every Socket.IO frame → span.
+- **Main:** every Node `fetch()` (the upload loop in Plan 03 cares about this) → span; outgoing HTTP requests → span.
+
+Anything not in that list (Electron IPC, FFmpeg lifecycle, React renders) we cover in Phase E.
+
+**B6. Sampler.** Default sampler is `AlwaysOnSampler` in dev — we want every trace. In a future production-observability plan, switch to `ParentBasedSampler({ root: TraceIdRatioBasedSampler(0.01) })`.
 
 ---
 
-### Phase B — V8 Inspector wrapper: CPU profiles + heap snapshots
+### Phase C — OpenTelemetry SDK in the renderer
 
-The two non-renderer contexts (main, server) are Node processes; Node ships a built-in `node:inspector` module that exposes the V8 Inspector Protocol. We don't need `0x`, Clinic.js, or `--cpu-prof`; the Inspector API is fully programmatic and gives us start/stop CPU profiling and heap snapshots.
+The renderer is a browser context. OpenTelemetry has a separate SDK for browsers: `@opentelemetry/sdk-trace-web`.
 
-**B1. Public API.** `tools/profiler/core/inspector.js` exports:
+**C1. Dependencies.** Added to root `package.json`:
 
-```js
-startCpuProfile(name)   → Promise<sessionId>
-stopCpuProfile(sessionId) → Promise<{ profile: V8CpuProfile }>
-takeHeapSnapshot()       → AsyncIterable<string>   // chunked
+```jsonc
+{
+  "dependencies": {
+    "@opentelemetry/sdk-trace-web": "^1.x",
+    "@opentelemetry/context-zone": "^1.x",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.x",
+    "@opentelemetry/instrumentation": "^0.x",
+    "@opentelemetry/instrumentation-fetch": "^0.x",
+    "@opentelemetry/instrumentation-xml-http-request": "^0.x",
+    "@opentelemetry/instrumentation-document-load": "^0.x",
+    "@opentelemetry/instrumentation-user-interaction": "^0.x"
+  }
+}
 ```
 
-Internally, each function lazily creates a `new inspector.Session()`, connects, posts `Profiler.start`/`stop` and `HeapProfiler.takeHeapSnapshot`, and disconnects.
+**C2. Bootstrap.** `tools/profiler/otel/renderer.bootstrap.js`:
 
-**B2. CPU profile endpoint.** When the hub asks for a 5-second profile of `main`:
+```js
+import { WebTracerProvider } from "@opentelemetry/sdk-trace-web";
+import { ZoneContextManager } from "@opentelemetry/context-zone";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { Resource } from "@opentelemetry/resources";
+import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
+import { registerInstrumentations } from "@opentelemetry/instrumentation";
+import { FetchInstrumentation } from "@opentelemetry/instrumentation-fetch";
+import { XMLHttpRequestInstrumentation } from "@opentelemetry/instrumentation-xml-http-request";
+import { DocumentLoadInstrumentation } from "@opentelemetry/instrumentation-document-load";
+import { UserInteractionInstrumentation } from "@opentelemetry/instrumentation-user-interaction";
 
-1. Hub → main IPC: `cpu/start { duration: 5000 }`
-2. Main calls `startCpuProfile()`.
-3. After 5 s (or on early `stop`), main calls `stopCpuProfile()` → `{ profile }`.
-4. Main returns the JSON object back to the hub.
-5. Hub serves it as `application/octet-stream` filename `main-2026-05-04T20-13-47.cpuprofile`.
+if (import.meta.env.VITE_OTEL_ENABLED === "1") {
+  const provider = new WebTracerProvider({
+    resource: new Resource({
+      [SemanticResourceAttributes.SERVICE_NAME]: "rebound-renderer",
+      [SemanticResourceAttributes.DEPLOYMENT_ENVIRONMENT]: "development",
+    }),
+    spanProcessors: [
+      new BatchSpanProcessor(new OTLPTraceExporter({
+        url: import.meta.env.VITE_OTEL_EXPORTER_OTLP_ENDPOINT
+          ? `${import.meta.env.VITE_OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces`
+          : "http://127.0.0.1:4318/v1/traces",
+      })),
+    ],
+  });
 
-**B3. Heap snapshot endpoint.** Same pattern, streamed (heap snapshots can be 100s of MB):
+  provider.register({ contextManager: new ZoneContextManager() });
 
-1. Hub → main: `heap/snapshot`
-2. Main starts `HeapProfiler.takeHeapSnapshot` and pipes the chunked output back.
-3. Hub returns it as `application/octet-stream` filename `main-2026-05-04T20-13-47.heapsnapshot`.
+  registerInstrumentations({
+    instrumentations: [
+      new DocumentLoadInstrumentation(),
+      new UserInteractionInstrumentation({ eventNames: ["click", "submit"] }),
+      new XMLHttpRequestInstrumentation({
+        propagateTraceHeaderCorsUrls: [/^https?:\/\/(127\.0\.0\.1|localhost):/],
+      }),
+      new FetchInstrumentation({
+        propagateTraceHeaderCorsUrls: [/^https?:\/\/(127\.0\.0\.1|localhost):/],
+      }),
+    ],
+  });
+}
+```
 
-Both formats open natively in Chrome DevTools (Performance tab for `.cpuprofile`, Memory tab for `.heapsnapshot`).
+**C3. Vite plugin / build-time gate.** A small Vite plugin (`tools/profiler/otel/vite-plugin.js`):
 
-**B4. The `--inspect` flag is *not* required.** `node:inspector` works in-process whether or not the inspector port is open. We do not need to expose `--inspect=9229` for our CPU/heap recording. We *will* still launch with `--inspect` in `pnpm run profile` so the developer can also use Chrome DevTools' "Open dedicated DevTools for Node" workflow if they want — but the dashboard works without it.
+- Reads `process.env.VITE_OTEL_ENABLED` from the build environment.
+- When `=1`: injects `import "tools/profiler/otel/renderer.bootstrap.js";` into `src/index.jsx` virtually, before anything else in the bundle.
+- When unset: the plugin is a no-op; the OTel renderer SDK is **not bundled at all**, so production bundles do not pay any size cost. Verifiable by inspecting the production `build/` output.
+
+The plugin is only added in `vite.config.js` when `process.env.VITE_OTEL_ENABLED === "1"`.
+
+**C4. What we get for free.**
+
+- `documentLoad` — a top-level span per page load with timing breakdown (DNS, TCP, TLS, request, response, DOMContentLoaded, load).
+- `userInteraction` — every click and form submit is a span; subsequent fetches/XHRs spawned by that interaction become children, so we get end-to-end traces rooted at user actions.
+- `fetch` and `xmlHttpRequest` — every API call from the renderer is a span. The `propagateTraceHeaderCorsUrls` setting injects `traceparent` headers on calls to localhost, which the server-side auto-instrumentation reads, so a click → fetch → server-side handler shows as one trace.
+
+**C5. What is not covered (covered in Phase E).** React renders, Electron IPC calls. We add those as one-line wrappers.
 
 ---
 
-### Phase C — Hub: dashboard server, aggregator, transports
+### Phase D — Distributed trace context across HTTP, IPC, and FFmpeg
 
-The hub is the single piece of running infrastructure. One Express server, one HTML page, one WebSocket endpoint, one Server-Sent Events endpoint. No third-party SDKs.
+This is the glue that makes a click in the renderer light up a span tree across all three services in Jaeger.
 
-**C1. Layout.**
+**D1. HTTP propagation (free).** The renderer's `FetchInstrumentation` (Phase C) injects W3C `traceparent` headers on outgoing fetches. The server's `HttpInstrumentation` (Phase B, transitive) extracts the header and treats the new server span as a child of the renderer's span. Renderer↔Server propagation: zero work.
 
-```
-tools/profiler/hub/
-  server.js            -- Express on 127.0.0.1:9876 (configurable)
-  sources.js           -- registry of connected sources (main, server, renderer)
-  aggregator.js        -- merges trace events from sources, sorts by aligned ts
-  routes/
-    cpu.js             -- POST /cpu/:source/start, /cpu/:source/stop
-    heap.js            -- POST /heap/:source
-    trace.js           -- POST /trace/start, /trace/stop, GET /trace/dump
-    sources.js         -- GET /sources (list connected)
-  dashboard/
-    index.html
-    app.js             -- vanilla ES modules; no React, no build step
-    style.css
-    perfetto.js        -- "open in Perfetto" via window.open + postMessage
-```
+**D2. Electron IPC propagation (custom, ~50 lines).** OpenTelemetry has no built-in instrumentation for `ipcRenderer`/`ipcMain`. We add `tools/profiler/otel/instrumentation/ipc.js`:
 
-**C2. Wire protocol.** Each source connects to the hub over WebSocket at `ws://127.0.0.1:9876/sink/:sourceName` and:
+```js
+// renderer side: wraps ipcRenderer.invoke
+import { context, propagation, trace } from "@opentelemetry/api";
 
-1. Sends a `hello` message with `{ pid, role: "main"|"server"|"renderer", hrtime0, wall0, version }`.
-2. Streams batches of trace events as `{ type: "events", events: [...] }`.
-3. Receives commands from the hub: `{ type: "cpu/start", duration }`, `{ type: "trace/start" }`, etc.
-4. Replies with `{ type: "cpu/result", payload }` and so on.
+export function instrumentIpcRenderer(ipcRenderer) {
+  const original = ipcRenderer.invoke.bind(ipcRenderer);
+  const tracer = trace.getTracer("rebound-ipc");
+  ipcRenderer.invoke = (channel, ...args) => {
+    return tracer.startActiveSpan(`ipc.invoke ${channel}`, async (span) => {
+      const carrier = {};
+      propagation.inject(context.active(), carrier);
+      try {
+        return await original(channel, { __otel: carrier, payload: args });
+      } finally {
+        span.end();
+      }
+    });
+  };
+}
 
-The protocol shape lives in `tools/profiler/shared/protocol.js` and is imported by both the hub server and the source clients. Same idea as Plan 05 Phase F's `shared/streaming/protocol.js`: one type definition, both sides import.
-
-**C3. Aggregator.** `tools/profiler/hub/aggregator.js` keeps a per-source rolling window (last 30 s by default) of merged events. For the live dashboard view, it pushes deltas via SSE (`/events`). For the trace download, it returns a single Chrome-trace-format JSON file (`{ "traceEvents": [ ... ], "displayTimeUnit": "ms" }`).
-
-**C4. Dashboard.** Vanilla HTML + ES modules, no bundler. Loads at `http://127.0.0.1:9876/`. Layout:
-
-```
-┌─ Rebound Profiler ─────────────────────────────────────┐
-│ Sources: ● main  ● server  ● renderer (3 connected)    │
-├─ Trace recording ──────────────────────────────────────┤
-│ [Start] [Stop & download] [Open in Perfetto]           │
-│ Recording: 00:00:14   42 events                        │
-├─ One-shot captures ────────────────────────────────────┤
-│ CPU profile ▼ main   Duration: [5 s ▾]   [Record]     │
-│ Heap snapshot ▼ main                     [Capture]    │
-├─ Live event stream (last 200) ─────────────────────────┤
-│ 12:01:33.110 server HTTP   POST /live/.../session  42ms│
-│ 12:01:33.116 main   IPC    live-stream:start       18ms│
-│ 12:01:33.140 main   FFMPEG spawn                  pid= │
-│ 12:01:34.220 main   FFMPEG segment-000001.m4s   ready  │
-│ 12:01:34.500 server HTTP   POST /live/.../upload  201ms│
-│ 12:01:34.500 main   FETCH  uploadSegment          198ms│
-├─ Hot spans (last 30 s) ────────────────────────────────┤
-│ uploadSegment           37%  42 calls  x̄ 187ms        │
-│ buildFfmpegCommand       5%   3 calls  x̄  12ms        │
-│ csrfTokenMiddleware      4%  92 calls  x̄   1ms        │
-│ … (top 10) …                                            │
-└─────────────────────────────────────────────────────────┘
+// main side: wraps ipcMain.handle / ipcMain.on / ipcMain.once
+export function instrumentIpcMain(ipcMain) {
+  const tracer = trace.getTracer("rebound-ipc");
+  for (const method of ["handle", "on", "once"]) {
+    const original = ipcMain[method].bind(ipcMain);
+    ipcMain[method] = (channel, listener) => {
+      return original(channel, async (event, payload) => {
+        const carrier = payload?.__otel || {};
+        const incomingCtx = propagation.extract(context.active(), carrier);
+        return context.with(incomingCtx, () => {
+          return tracer.startActiveSpan(`ipc.${method} ${channel}`, async (span) => {
+            try {
+              return await listener(event, ...(payload?.payload || []));
+            } finally {
+              span.end();
+            }
+          });
+        });
+      });
+    };
+  }
+}
 ```
 
-The "Open in Perfetto" button uses Perfetto's documented postMessage trace loader: open `https://ui.perfetto.dev`, wait for it to post `PING`, reply with `OPEN_TRACE` carrying the trace JSON. No backend cooperation needed; works offline-of-cloud.
+The wire format change (`{ __otel, payload }` instead of just `payload`) is hidden behind the wrapper on both sides. Application code never sees it. The wrappers are no-ops when `OTEL_TRACES_EXPORTER === "none"` (or absent) — they fall back to the un-wrapped `invoke`/`handle` behavior so that the IPC argument shape is unchanged when tracing is off.
 
-**C5. Security.** The hub binds to `127.0.0.1` only. It refuses connections from non-loopback sources. It is only started when `PROFILE=1` is set; production builds never spawn it. There is no auth — loopback-only is the auth.
+**D3. Verification.** With Phase D wired up, this trace should appear in Jaeger when the user clicks "Start streaming":
+
+```
+rebound-renderer  user.click handle-start-stream            120 ms
+└─ rebound-renderer  ipc.invoke live-stream:start            118 ms
+   └─ rebound-main      ipc.handle live-stream:start         115 ms
+      ├─ rebound-main      fetch POST /live/api/session       42 ms
+      │  └─ rebound-server  POST /live/api/session             40 ms
+      │     ├─ rebound-server  mongoose StreamSession.create   12 ms
+      │     └─ rebound-server  mongoose StreamSession.save      6 ms
+      └─ rebound-main      ffmpeg.process                    72 ms (ongoing)
+```
+
+That trace, in Jaeger, viewable at one URL, with one click — is the entire point of this plan.
 
 ---
 
-### Phase D — Default instrumentations (the "minimal manual code" promise)
+### Phase E — Custom span emitters (FFmpeg, React, the things OTel does not auto-instrument)
 
-These are the modules that make profiling free for the common cases. The user adds `import "tools/profiler/instrument/<name>.js"` once at the top of the entry file (or registers via the bootstrap in Phase G); no further per-handler edits.
+This is the same shape as Plan 06's old "instrumentations" phase, but speaking OpenTelemetry's API instead of a custom one. The total is ~200 lines.
 
-**D1. Express middleware.** `tools/profiler/instrument/express.js` exports `profilerExpress()` which returns a middleware that:
+**E1. FFmpeg subprocess instrumentation.** `tools/profiler/otel/instrumentation/ffmpeg.js` exports `wrapSpawn(spawn)`. It returns a `spawn`-shaped function that:
 
-- On request: opens a span `http.<method>.<route>` with attrs `{ method, path, ip, userAgent }`.
-- On `res.finish` / `res.close`: closes the span with `{ status, bytes: parseInt(res.get('Content-Length')) }`.
-- Uses `req.route?.path` if available (after route matching) so spans are aggregable.
-- Special-cases the `/live/upload` and `/live/segment` paths to also emit a `metric("live.upload.bytes", contentLength)`.
+- Detects `command.endsWith("ffmpeg")` (or `ffmpeg.exe`) and treats it specially.
+- Opens a long-lived span `ffmpeg.process` with attributes `{ "ffmpeg.args": args.join(" "), "ffmpeg.pid": child.pid }`.
+- Subscribes to stderr, parses FFmpeg's status lines (`frame=… fps=… time=… speed=…`) and sets attributes / span events:
+  - Per status line: `span.addEvent("status", { fps, speed, dropped, frame, time })`.
+  - On any stderr line containing `Opening ‘…’ for writing` (per-segment): `span.addEvent("segment.write", { filename })`.
+- Watches the process's working directory for new segment files (matches Plan 05's HLS output shape) and emits `segment.ready` events.
+- On exit, sets `{ "ffmpeg.exit_code", "ffmpeg.signal" }` and ends the span.
 
-Hook is one line in `server/src/app.js`:
+Use site, `public/electron-live-stream.js`:
 
 ```js
-this.app.use(profilerExpress());
+import { spawn as rawSpawn } from "child_process";
+import { wrapSpawn } from "../tools/profiler/otel/instrumentation/ffmpeg.js";
+const spawn = wrapSpawn(rawSpawn);    // identity when OTel disabled
 ```
 
-placed early so it captures middleware time too.
+**E2. React Profiler bridge.** `tools/profiler/otel/instrumentation/reactProfiler.jsx` exports `<ProfileScope id="…">`, a thin wrapper around React's `<Profiler>`:
 
-**D2. Electron IPC wrapper.** `tools/profiler/instrument/ipc.js` exports `wrapIpcMain(ipcMain)`. It replaces `ipcMain.handle` and `ipcMain.on`/`ipcMain.once` so every registered handler is wrapped:
+```jsx
+import { Profiler } from "react";
+import { trace } from "@opentelemetry/api";
+
+const tracer = trace.getTracer("rebound-react");
+
+export function ProfileScope({ id, children }) {
+  if (import.meta.env.VITE_OTEL_ENABLED !== "1") return children;
+  return (
+    <Profiler id={id} onRender={(profileId, phase, actualDuration) => {
+      const span = tracer.startSpan(`react.${profileId}.${phase}`, {
+        startTime: performance.now() - actualDuration,
+      });
+      span.setAttribute("react.actualDuration", actualDuration);
+      span.end();
+    }}>
+      {children}
+    </Profiler>
+  );
+}
+```
+
+Used in `src/App.jsx` to wrap top-level routes. Optional, not required.
+
+**E3. Process-level metrics (RSS, heap, event-loop lag).** OTel's `@opentelemetry/host-metrics` ships system metrics (CPU, memory) but doesn't include event-loop lag. We add a tiny module `tools/profiler/otel/instrumentation/runtimeMetrics.js` that uses `perf_hooks.monitorEventLoopDelay` + `process.memoryUsage()` and emits them as **span events** on a 1 Hz heartbeat span (`runtime.heartbeat`) per process.
+
+Alternative considered: emit as OTel **metrics** (the OTel Metrics API). Decision: stick with span events for now because Jaeger displays them inline in the trace timeline. A future plan can graduate these to first-class metrics with Prometheus + Grafana.
+
+**E4. Manual API.** No new API: developers use the official OTel API directly. One-line examples:
 
 ```js
-ipcMain.handle("live-stream:start", originalHandler)
-// becomes equivalent to:
-ipcMain.handle("live-stream:start", async (event, ...args) => {
-  return traceAsync(`ipc.live-stream:start`, () => originalHandler(event, ...args));
+import { trace } from "@opentelemetry/api";
+const tracer = trace.getTracer("rebound-streaming");
+
+// Wrap a sync function
+const result = tracer.startActiveSpan("computeFoo", (span) => {
+  try { return doExpensiveWork(); } finally { span.end(); }
 });
+
+// Wrap an async function
+const data = await tracer.startActiveSpan("uploadSegment", async (span) => {
+  span.setAttribute("size", buf.length);
+  try { return await uploader.put(seg); } finally { span.end(); }
+});
+
+// Manual control
+const span = tracer.startSpan("renderFrame", { attributes: { fps: 60 } });
+// ... work ...
+span.setAttribute("droppedFrames", 0);
+span.end();
 ```
 
-Single hook in `public/electron.js`:
+This is the standard OTel API — every OTel tutorial on the internet is also documentation for our codebase.
+
+**E5. A tiny convenience helper (optional).** For folks who hate the `try/finally` boilerplate, `tools/profiler/otel/util.js` exports `withSpan(name, fn, attrs?)` and `withSpanAsync(name, fn, attrs?)`:
 
 ```js
-import { wrapIpcMain } from "../tools/profiler/instrument/ipc.js";
-wrapIpcMain(ipcMain);   // before any handlers register
-```
-
-This wrapper is idempotent (re-wrapping is a no-op) and degenerates to the identity when PROFILE is off.
-
-**D3. FFmpeg subprocess instrumentation.** `tools/profiler/instrument/ffmpeg.js` exports `wrapSpawn(spawn)`. It returns a `spawn`-shaped function that:
-
-- Detects `command.endsWith("ffmpeg")` (or `"ffmpeg.exe"`) and treats it specially.
-- Opens a long-running span `ffmpeg.process` with `{ pid, args }`.
-- Subscribes to stderr, parses FFmpeg's status lines (`frame=… fps=… time=… speed=…`) and emits one `metric("ffmpeg.fps", n)`, `metric("ffmpeg.speed", n)`, `metric("ffmpeg.dropped", n)` per status line.
-- Watches for new segment files in the configured working dir (matches Plan 05's HLS output) and emits `mark("ffmpeg.segment", { filename })` per new file.
-- On exit, closes the span with `{ code, signal, durationMs }`.
-
-The wrapper is applied at the call site in `public/electron-live-stream.js`:
-
-```js
-import { spawn as rawSpawn } from "child_process";
-import { wrapSpawn } from "../tools/profiler/instrument/ffmpeg.js";
-const spawn = wrapSpawn(rawSpawn);
-```
-
-Once again, identity-mapped when PROFILE is off (one boolean check at module load).
-
-**D4. fetch instrumentation (opt-in).** `tools/profiler/instrument/fetch.js` exports `wrapFetch()`. Replaces `globalThis.fetch` with a wrapped version that opens a span `fetch.<host>.<path>` per call. Opt-in because monkeypatching globals is invasive; we'll opt-in for the upload loop in `public/electron-live-stream.js` (Plan 03 cares about this) but leave the renderer alone unless the developer adds `wrapFetch()` themselves.
-
-**D5. Process metrics.** `tools/profiler/instrument/process.js` runs a 1 Hz timer that emits:
-
-- `metric("rss.bytes", process.memoryUsage().rss)`
-- `metric("heap.used.bytes", process.memoryUsage().heapUsed)`
-- `metric("event-loop.lag.ms", monitorEventLoopDelay().mean / 1e6)` (Node `perf_hooks.monitorEventLoopDelay`)
-- `metric("cpu.user.us", process.cpuUsage().user)` (delta-tracked)
-
-These appear in Perfetto as a counter strip across the timeline — extremely useful for spotting GC pauses or event-loop blocks.
-
----
-
-### Phase E — Renderer client: PerformanceObserver + React Profiler bridge
-
-The renderer needs the same `trace()` API plus one feature the others don't: a bridge from the browser's built-in `PerformanceObserver` and React's `<Profiler>` API into our trace stream.
-
-**E1. Connection.** `tools/profiler/renderer/client.js` opens a WebSocket to the hub at `ws://127.0.0.1:9876/sink/renderer`, performs the `hello` handshake, and starts pumping events. Reconnects with backoff. When PROFILE flag is off, the entire module is a no-op (early return after import).
-
-**E2. PerformanceObserver bridge.** `tools/profiler/renderer/perfObserver.js` registers observers for:
-
-- `entryTypes: ["navigation"]` — page load timeline (LCP, FCP, TTI etc.)
-- `entryTypes: ["paint"]` — first-paint, first-contentful-paint
-- `entryTypes: ["measure"]` — `performance.measure(name, options)` calls anywhere in the renderer
-- `entryTypes: ["longtask"]` — main-thread tasks > 50 ms
-- `entryTypes: ["resource"]` — XHR/fetch/asset loads
-
-Each entry becomes a span in the trace stream with `cat: "browser"`. This means anyone who already calls `performance.mark()`/`performance.measure()` in the renderer gets profiling for free.
-
-**E3. React Profiler integration.** `tools/profiler/renderer/reactProfiler.jsx` exports `<ProfileScope id="…">`, a wrapper around React's `<Profiler>` that converts `onRender` callbacks into spans `react.<id>.<phase>`. Recommended placement: wrap each top-level route component in `App.jsx`. Optional, not required.
-
-**E4. window.__profile.** When PROFILE is on, the client exposes `window.__profile = { trace, traceAsync, startSpan, mark, metric }`. This means a developer poking around the renderer's DevTools can type:
-
-```js
-__profile.startSpan("manual-investigation");
-// ... interact with the UI ...
-__profile.endSpan(handle);
-```
-
-and have it show up in the trace.
-
-**E5. Vite plugin.** `tools/profiler/vite-plugin.js` reads `process.env.PROFILE` and:
-
-- Defines `__PROFILE__` as a build-time constant so `if (!__PROFILE__) return;` tree-shakes away.
-- Auto-injects `import "/profiler/client.js";` into the entry HTML when on.
-
-The plugin is added to `vite.config.js` only when in dev mode; production builds never see it.
-
----
-
-### Phase F — Wire-up: where the imports land
-
-This phase is small but essential. Everything else is plumbing; this phase actually *connects* it.
-
-**F1. Server (`server/src/app.js`).** At the very top, after the `import` block:
-
-```js
-import "../../tools/profiler/core/bootstrap.js";   // sets up trace transport
-import { profilerExpress } from "../../tools/profiler/instrument/express.js";
-import { profilerProcess } from "../../tools/profiler/instrument/process.js";
-profilerProcess.start();
-```
-
-In `_initMiddleware`, before any other `app.use`:
-
-```js
-this.app.use(profilerExpress());
-```
-
-**F2. Electron main (`public/electron.js`).** After the `import` block:
-
-```js
-import "../tools/profiler/core/bootstrap.js";
-import { wrapIpcMain } from "../tools/profiler/instrument/ipc.js";
-import { profilerProcess } from "../tools/profiler/instrument/process.js";
-
-wrapIpcMain(ipcMain);
-profilerProcess.start();
-```
-
-**F3. Streaming module (`public/electron-live-stream.js`).** Replace the bare `spawn` import:
-
-```js
-import { spawn as rawSpawn } from "child_process";
-import { wrapSpawn } from "../tools/profiler/instrument/ffmpeg.js";
-const spawn = wrapSpawn(rawSpawn);
-```
-
-Optionally, sprinkle named spans at the architectural seams the other plans care about:
-
-- `traceAsync("uploadSegment", () => …)` around the per-segment upload (Plan 03).
-- `trace("buildFfmpegCommand", () => buildPipelineArgs(config, capabilities))` (Plan 01 cares about this).
-- `mark("session.created", { sessionId })` after `createSession` resolves.
-
-**F4. Renderer (`src/index.jsx`).** First import:
-
-```js
-import "./profiler/client.js";   // no-op when VITE_PROFILE !== "1"
-```
-
-In `vite.config.js`, conditionally add the plugin:
-
-```js
-import profilerPlugin from "./tools/profiler/vite-plugin.js";
-
-plugins: [react(), ...(process.env.PROFILE === "1" ? [profilerPlugin()] : [])],
-```
-
-**F5. Bootstrap (`tools/profiler/core/bootstrap.js`).** This file is the one that decides whether the rest of the system is on:
-
-```js
-const enabled = process.env.PROFILE === "1";
-if (enabled) {
-  // open WS to hub, install transport, set core/trace.js's enabled = true
-} else {
-  // do absolutely nothing
+export function withSpan(name, fn, attrs) {
+  return tracer.startActiveSpan(name, attrs ? { attributes: attrs } : {}, (span) => {
+    try { return fn(span); }
+    catch (e) { span.recordException(e); span.setStatus({ code: 2 }); throw e; }
+    finally { span.end(); }
+  });
 }
-export const profilerEnabled = enabled;
 ```
 
-Importing it is a no-op when off. Importing it when on is what wires everything to the hub.
+Pure ergonomics; the OTel API is the source of truth.
 
 ---
 
-### Phase G — Dev UX: npm scripts, launcher, hub orchestration
+### Phase F — On-demand CPU profiles and heap snapshots (orthogonal to OTel)
 
-This is what the user actually types.
+OpenTelemetry doesn't do CPU/heap profiles — those are a different layer of observability (sampling profilers vs structured event tracing). For local dev, Node's built-in `node:inspector` module covers this perfectly with no extra deps.
+
+**F1. The wrapper.** `tools/profiler/inspector/cpu.js` and `tools/profiler/inspector/heap.js` are thin:
+
+```js
+import inspector from "node:inspector";
+import { promises as fs } from "fs";
+
+export async function recordCpuProfile({ durationMs, outFile }) {
+  const session = new inspector.Session();
+  session.connect();
+  await new Promise((r) => session.post("Profiler.enable", r));
+  await new Promise((r) => session.post("Profiler.start", r));
+  await new Promise((r) => setTimeout(r, durationMs));
+  const { profile } = await new Promise((r, j) =>
+    session.post("Profiler.stop", (e, p) => (e ? j(e) : r(p)))
+  );
+  session.disconnect();
+  await fs.writeFile(outFile, JSON.stringify(profile));
+}
+
+export async function recordHeapSnapshot({ outFile }) {
+  const session = new inspector.Session();
+  session.connect();
+  const chunks = [];
+  session.on("HeapProfiler.addHeapSnapshotChunk", (m) => chunks.push(m.params.chunk));
+  await new Promise((r, j) => session.post("HeapProfiler.takeHeapSnapshot",
+    { reportProgress: false }, (e) => (e ? j(e) : r())));
+  session.disconnect();
+  await fs.writeFile(outFile, chunks.join(""));
+}
+```
+
+**F2. CLI commands.** `tools/profiler/inspector/cli.js`, invoked via `pnpm`:
+
+- `pnpm profile:cpu --target=main --duration=5` — sends a request to a small **debug HTTP endpoint** that the bootstrap registered on port 9876 in the chosen process; that endpoint runs `recordCpuProfile()` and writes the file. The CLI prints the path and offers to `open` it (drag-into-DevTools).
+- `pnpm profile:heap --target=server` — same shape.
+
+The debug endpoint is **only registered when `OTEL_TRACES_EXPORTER` is set**, i.e. when running under `pnpm run profile`. It binds to 127.0.0.1 only and has no auth (loopback-only is the auth, same posture as Plan 06's hub).
+
+**F3. Targets.** `--target=main|server|main-streaming-worker`. The orchestrator (Phase G) tells the CLI what port each target's debug endpoint is on (we use 9876 for main, 9877 for server, leaving room for renderer-side via DevTools protocol if we ever want it).
+
+**F4. File destination.** All output files go to `dev/profiles/<service>-<ISO timestamp>.<ext>`, gitignored. Naming convention enables shell glob workflows like `open dev/profiles/main-*.cpuprofile`.
+
+**F5. Why not OTel for this?** OTel does have an experimental Profiles signal, but it's not stable and Jaeger doesn't render it. CPU/heap profiles are a fundamentally different visualization (flame graphs of stack samples) than spans (interval trees of named operations). Chrome DevTools renders both file formats natively and is the standard tool. Don't reinvent.
+
+---
+
+### Phase G — Dev UX: `pnpm run profile` orchestrator
+
+This is what the developer actually types.
 
 **G1. NPM scripts.** Added to root `package.json`:
 
 ```jsonc
 {
   "scripts": {
-    "profile": "node tools/profiler/bin/launch.js",
-    "profile:server": "PROFILE=1 PROFILE_SCOPE=server pnpm --filter rebound-server dev",
-    "profile:renderer": "PROFILE=1 vite"
+    "profile":          "node tools/profiler/bin/launch.js",
+    "profile:server":   "node tools/profiler/bin/launch.js --only=server",
+    "profile:renderer": "node tools/profiler/bin/launch.js --only=renderer",
+    "profile:cpu":      "node tools/profiler/inspector/cli.js cpu",
+    "profile:heap":     "node tools/profiler/inspector/cli.js heap"
   }
 }
 ```
 
-`pnpm run profile` is the headline command and orchestrates everything; the others exist for narrower investigations.
+**G2. The orchestrator.** `tools/profiler/bin/launch.js`:
 
-**G2. The orchestrator.** `tools/profiler/bin/launch.js` does, in order:
+1. Detect Docker: `docker ps` (timeout 1 s). If available → start Jaeger via `docker run -d --rm --name rebound-jaeger -p 16686:16686 -p 4317:4317 -p 4318:4318 jaegertracing/jaeger:<pinned-version>`. If not → download (or use cached) Jaeger binary in `dev/bin/jaeger` and run it.
+3. Wait for `http://127.0.0.1:16686/` to respond 200 (poll, 5 s timeout).
+4. Set environment for child processes:
+   ```
+   OTEL_TRACES_EXPORTER=otlp
+   OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
+   OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+   VITE_OTEL_ENABLED=1
+   VITE_OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
+   ```
+5. Start `concurrently` with three children (mirrors `electron-dev`):
+   - `cross-env BROWSER=none pnpm run start` (Vite renderer; Vite plugin reads `VITE_OTEL_ENABLED` and bundles the renderer bootstrap)
+   - `cd server && node --import=../tools/profiler/otel/server.bootstrap.js ./src/app.js` (server with bootstrap pre-imported)
+   - `wait-on http://localhost:3000 && electron --import=./tools/profiler/otel/main.bootstrap.js .` (Electron with bootstrap pre-imported)
+6. Once at least one HTTP request reaches the OTel endpoint (or after a 3 s grace period), open `http://127.0.0.1:16686/` in the default browser using a tiny cross-platform `open`/`start`/`xdg-open` dispatch.
+7. Forward stdout/stderr from children with prefixes (`[main]`, `[server]`, `[renderer]`, `[jaeger]`).
+8. On Ctrl-C: stop children, then stop Jaeger (`docker stop rebound-jaeger` or kill the binary), then exit.
 
-1. Set `PROFILE=1` on the child env.
-2. Start the **profiler hub** (Phase C) on `127.0.0.1:9876`.
-3. Start `concurrently` with these processes (mirrors `electron-dev`'s structure):
-   - `cross-env BROWSER=none PROFILE=1 pnpm run start` (Vite renderer)
-   - `cd server && PROFILE=1 NODE_ENV=development node --inspect=9230 ./src/app.js` (server with inspector exposed)
-   - `wait-on http://localhost:3000 && PROFILE=1 electron --inspect=9229 .` (Electron with inspector exposed)
-4. Wait until at least the hub is up.
-5. Open the default browser to `http://127.0.0.1:9876/` via `open`/`xdg-open`/`start` (cross-platform).
-6. Forward stdout/stderr from the children with prefixes (`[main]`, `[server]`, `[renderer]`).
-7. On Ctrl-C, terminate children and the hub gracefully.
+**G3. Why not just edit `electron-dev`?** The `electron-dev` script is the developer's everyday command. It must not start Jaeger by default and must not pay the OTel SDK boot cost. `pnpm run profile` is the explicit on-switch — same as how Plan 06's earlier draft used a `PROFILE=1` env var.
 
-Why a custom orchestrator instead of just adding it to `electron-dev`? Because `electron-dev` is the developer's main way of running the app and it should not pay the cost (or boot the hub) by default. `pnpm run profile` is the explicit on-switch.
+**G4. `--only=` modes.** Useful for narrower investigations:
 
-**G3. The hub binary.** `tools/profiler/bin/hub.js` is the standalone hub server entrypoint, used by tests and by `launch.js`. Optional flags: `--port=9876`, `--no-open` (skip browser), `--quiet` (no stdout logging from the hub itself).
+- `--only=server` — start only Jaeger + server (no renderer, no Electron). Handy for hitting the API with `curl` and seeing the trace.
+- `--only=renderer` — start only Jaeger + Vite renderer. Useful for browser-only render-perf work (same as opening Vite normally, plus tracing).
 
-**G4. Browser auto-launch.** When `pnpm run profile` runs, it opens the dashboard. Pass `--no-open` (forwarded from launch.js) to suppress.
+**G5. The browser auto-launch.** A tiny dispatch (no `open` package — too many deps):
 
-**G5. The "Open in Perfetto" button.** When clicked, the dashboard:
-
-1. Fetches the current trace as a JSON blob from `/trace/dump`.
-2. `window.open("https://ui.perfetto.dev")` returns a handle.
-3. Listens for a `PING` postMessage from Perfetto (Perfetto's documented loader handshake).
-4. Replies with `{ perfetto: { buffer: <ArrayBuffer>, title: "Rebound profile <date>" } }`.
-5. Perfetto loads the trace; user sees a flame chart with all three sources interleaved.
-
-Same handshake works for arbitrary trace files; this is Perfetto's official way of accepting traces from third parties.
+```js
+function openBrowser(url) {
+  const cmd = process.platform === "darwin" ? "open"
+            : process.platform === "win32"  ? "start"
+            : "xdg-open";
+  spawn(cmd, [url], { detached: true, stdio: "ignore" }).unref();
+}
+```
 
 ---
 
@@ -460,179 +565,128 @@ Same handshake works for arbitrary trace files; this is Perfetto's official way 
 
 ```
 tools/profiler/                                  (new top-level directory)
-  package.json                                   -- internal workspace pkg, no published name
+  package.json                                   -- internal workspace pkg
   README.md                                      -- "what is this & how do I use it"
 
-  shared/
-    protocol.js                                  -- WS message types + PROTOCOL_VERSION
+  otel/
+    bootstrapNode.js                             -- shared OTel SDK setup for Node procs
+    main.bootstrap.js                            -- service.name = rebound-main
+    server.bootstrap.js                          -- service.name = rebound-server
+    renderer.bootstrap.js                        -- WebTracerProvider + browser instrs
+    vite-plugin.js                               -- conditional inject of renderer bootstrap
+    util.js                                      -- withSpan / withSpanAsync helpers
+    instrumentation/
+      ipc.js                                     -- instrumentIpcMain / instrumentIpcRenderer
+      ffmpeg.js                                  -- wrapSpawn(spawn)
+      reactProfiler.jsx                          -- <ProfileScope>
+      runtimeMetrics.js                          -- 1 Hz RSS / heap / loop lag
 
-  core/
-    trace.js                                     -- trace/traceAsync/startSpan/endSpan/mark/metric
-    traceFormat.js                               -- Chrome Trace Event helpers (B/E/X/i/C events)
-    buffer.js                                    -- bounded ring buffer with backpressure
-    inspector.js                                 -- node:inspector wrapper (CPU profile + heap)
-    transport/
-      ws.js                                      -- WebSocket client to hub
-      file.js                                    -- fallback JSONL writer (used on hub-down/exit)
-    bootstrap.js                                 -- entrypoint; reads PROFILE; sets enabled=true; opens transport
-
-  instrument/
-    express.js                                   -- profilerExpress() middleware
-    ipc.js                                       -- wrapIpcMain(ipcMain)
-    ffmpeg.js                                    -- wrapSpawn(spawn); detects ffmpeg by binary name
-    fetch.js                                     -- wrapFetch() opt-in monkeypatch
-    process.js                                   -- profilerProcess.start() — RSS/heap/loop-lag metrics
-
-  renderer/
-    client.js                                    -- WS connection + window.__profile + import side-effect
-    perfObserver.js                              -- PerformanceObserver bridge
-    reactProfiler.jsx                            -- <ProfileScope> component
-  vite-plugin.js                                 -- Vite plugin (define __PROFILE__, inject client)
-
-  hub/
-    server.js                                    -- Express on 127.0.0.1:9876
-    sources.js                                   -- WS source registry
-    aggregator.js                                -- merge + sort + 30s window
-    routes/
-      cpu.js
-      heap.js
-      trace.js
-      sources.js
-    dashboard/
-      index.html
-      app.js                                     -- vanilla ES module, no build
-      style.css
-      perfetto.js                                -- postMessage handshake
+  inspector/
+    cpu.js                                       -- recordCpuProfile()
+    heap.js                                      -- recordHeapSnapshot()
+    cli.js                                       -- pnpm profile:cpu / profile:heap entry
+    debugServer.js                               -- 127.0.0.1:9876/9877 endpoints in main/server
 
   bin/
     launch.js                                    -- the `pnpm run profile` orchestrator
-    hub.js                                       -- standalone hub entrypoint
+    jaeger.js                                    -- start/stop helpers (docker + binary fallback)
 
   __tests__/
-    trace.test.js                                -- unit tests for the trace API
-    traceFormat.test.js                          -- format conformance tests
-    buffer.test.js                               -- ring buffer + backpressure
-    instrumentExpress.test.js                    -- supertest + assert spans emitted
-    instrumentIpc.test.js                        -- fake ipcMain + assert wrap idempotent
-    instrumentFfmpeg.test.js                     -- fake child_process + parses status lines
-    aggregator.test.js                           -- merge/sort + skew alignment
-    perf.bench.js                                -- the off-cost regression guard (Phase A6)
+    bootstrapNode.test.js                        -- start/stop, off-by-default
+    instrumentationIpc.test.js                   -- propagate context through fake ipc
+    instrumentationFfmpeg.test.js                -- replay stderr fixtures, assert events
+    util.test.js                                 -- withSpan happy path + exception path
     fixtures/
       ffmpeg-stderr.txt                          -- canned FFmpeg output
-      cpu-profile-tiny.cpuprofile                -- sanity round-trip
 ```
 
 ### Cross-process boundaries
 
-There are exactly **three** boundaries; everything else is internal:
+There are three boundaries; everything else is internal:
 
-1. **Source ↔ Hub (WebSocket).** Message shapes live in `tools/profiler/shared/protocol.js` with `PROTOCOL_VERSION` exchanged on connect. Each source — main, server, renderer — speaks the same protocol. This mirrors Plan 05 Phase F's design: one shared types file, both sides import.
-
-2. **Hub ↔ Browser dashboard (HTTP + SSE).** Live event stream is SSE (`text/event-stream`), simpler than WS for one-way push. Control endpoints (CPU profile start, heap snapshot, trace start/stop) are plain `POST` JSON.
-
-3. **Dashboard ↔ Perfetto (postMessage).** Documented Perfetto loader handshake. No code we own runs in Perfetto — we just send it the bytes.
+1. **Tracing client ↔ Jaeger collector (OTLP/HTTP, port 4318).** Standard OpenTelemetry wire format; we don't own this protocol, OTel does.
+2. **CLI ↔ in-process debug server (127.0.0.1:9876/9877, JSON over HTTP).** Tiny custom protocol for CPU profile / heap snapshot capture. Lives in `tools/profiler/inspector/`. One JSON shape per command. Loopback-only.
+3. **Renderer ↔ Main IPC, with `__otel` envelope (Phase D2).** Wrappers on both sides hide the envelope from application code. Wire format change is one PR, both sides updated.
 
 ### Architectural rules
 
-- **Trace API is pure.** `core/trace.js` does not know about transports. It calls `transport.emit(event)`; the transport is injected by `bootstrap.js`. This keeps `trace.js` testable without IPC fakes.
-- **Bootstrap is the only side-effect importer.** Every other file in `tools/profiler/` is pure or only registers handlers when explicitly called. Importing `core/trace.js` does not start a connection; importing `core/bootstrap.js` does.
-- **Instrumentation modules are no-op-when-off.** Each one checks `profilerEnabled` at load and returns identity functions when off. `wrapSpawn(spawn) === spawn` when off. `profilerExpress()` returns `(req, res, next) => next()` when off.
-- **Hub is a separate process.** Don't run the hub inside Electron main; that ties the dashboard's lifetime to the app's, and the developer might want the dashboard to survive a renderer crash. The hub is a standalone Node process started by the orchestrator.
-- **No third-party tracing SDKs.** Specifically: not OpenTelemetry. OTel is great for distributed multi-service production tracing but is heavy, opinionated about exporters, and pulls in 30+ packages. We need ~500 lines of glue around `node:inspector` and Chrome Trace Format.
+- **OTel SDK is loaded once per process via `--import` flag.** Application code never imports the SDK directly. It imports `@opentelemetry/api` (the API package, which is decoupled from any SDK and is a no-op when no SDK is registered).
+- **Auto-instrumentation > custom instrumentation.** If OTel ships an instrumentation for a thing, we use it. We only write custom code for IPC, FFmpeg, and React.
+- **Custom wrappers degrade to identity when OTel is off.** `wrapSpawn(spawn)` returns `spawn` itself when `OTEL_TRACES_EXPORTER` is unset. `instrumentIpcMain(ipcMain)` is a no-op. The result: zero behavioral change when off.
+- **Service names are fixed.** `rebound-main`, `rebound-server`, `rebound-renderer`. Used everywhere. Defined in `tools/profiler/otel/serviceNames.js` so renames are one-line.
+- **Inspector commands and OTel are independent.** `pnpm profile:cpu` works whether or not OTel is enabled (it talks to its own debug server, not OTel). They just happen to both come up under `pnpm run profile` because both are dev-only.
 
-### Type discipline (JSDoc)
+### Type discipline
 
-Per the project convention (Plan 05 §"Type discipline"), define typedefs in `tools/profiler/shared/types.js`:
+Per the project convention, define typedefs in `tools/profiler/otel/types.js`:
 
 ```js
-/** @typedef {Object} TraceEvent
- *  @property {string} name
- *  @property {"B"|"E"|"X"|"i"|"C"} ph
- *  @property {number} ts            // microseconds since epoch (aligned)
- *  @property {number=} dur          // microseconds, only for ph: "X"
- *  @property {number} pid
- *  @property {number} tid
- *  @property {string=} cat
- *  @property {Object=} args
+/** @typedef {Object} BootstrapOptions
+ *  @property {string} serviceName
+ *  @property {string=} instanceId
  */
-/** @typedef {Object} HelloMessage
- *  @property {"hello"} type
- *  @property {"main"|"server"|"renderer"} role
- *  @property {number} pid
- *  @property {number} hrtime0
- *  @property {number} wall0
- *  @property {string} version
- */
-/** @typedef {Object} Source
- *  @property {string} role
- *  @property {number} pid
- *  @property {WebSocket} socket
- *  @property {number} skewUs        // wall - hrtime alignment correction
- *  @property {string} status        // "connected"|"disconnected"
+/** @typedef {Object} IpcOtelEnvelope
+ *  @property {Object} __otel
+ *  @property {Array<unknown>} payload
  */
 ```
 
 ### Naming and module conventions
 
-- Files in `kebab-case.js`, exports in `camelCase`. Test files in `__tests__/` with mirrored structure.
-- One top-level concept per file. The trace API is one file because the functions form one cohesive surface; the transport, format, and buffer are separate.
-- No barrel re-exports. Every import names the file it is reading from. Renames are explicit.
-- Imports ordered: stdlib → third-party → `shared/` → `tools/profiler/` → relative.
+- Files in `kebab-case.js`, exports in `camelCase`. JSX components in `PascalCase`.
+- Test files in `__tests__/` with mirrored structure.
+- `tools/profiler/otel/` deliberately segregated from `tools/profiler/inspector/` because the two are independent observability layers (tracing vs profiling).
+- No barrel re-exports.
+- Imports ordered: stdlib → `@opentelemetry/*` → other third-party → `tools/profiler/` → relative.
 
 ### Testing strategy
 
-- **`core/trace.js`** — unit tests for: API shape, attribute merging, span pairing, error inside `fn` still ends span, async error propagation. No fakes — drains into a synchronous in-memory transport.
-- **`core/inspector.js`** — round-trip test: start a CPU profile, run busy work, stop, assert the returned profile parses as Chrome's CPU profile JSON.
-- **`instrument/express.js`** — supertest harness; fire 100 requests through a tiny app; assert one span per request with correct `name`, `dur`, `args`.
-- **`instrument/ipc.js`** — fake `ipcMain` with `handle` + `on`; register handlers; invoke; assert spans emitted; assert wrap idempotency (wrapping twice is a no-op).
-- **`instrument/ffmpeg.js`** — replay `fixtures/ffmpeg-stderr.txt` through a fake child; assert correct sequence of `metric` and `mark` events.
-- **`hub/aggregator.js`** — pump in events from three fake sources with different skew; assert the merged stream is monotonically ordered.
-- **`perf.bench.js`** — the off-cost benchmark. Runs in CI, fails if a `trace()` call with PROFILE off costs more than 50 ns.
+- **Bootstrap modules** — call `startOtel({ serviceName: "test" })` with `OTEL_TRACES_EXPORTER=otlp` pointing at an in-memory exporter (`InMemorySpanExporter` from `@opentelemetry/sdk-trace-base`). Generate a span. Assert it's exported with the expected service name and attributes.
+- **IPC wrapper** — fake `ipcMain` and fake `ipcRenderer`. Wrap both. Invoke a channel with an active span on the renderer side. Assert the main-side handler runs with the same trace ID.
+- **FFmpeg wrapper** — fake `child_process.spawn`. Pipe `fixtures/ffmpeg-stderr.txt` through stderr. Assert correct sequence of `addEvent` calls with parsed `fps`/`speed`/etc.
+- **CPU profile** — call `recordCpuProfile({ durationMs: 200, outFile: tmp })`. Assert file exists, parses as JSON, has `nodes` array. Smoke test only — we don't need to validate V8's profile correctness.
+- **Off-by-default** — boot without `OTEL_TRACES_EXPORTER` set. Generate 1000 spans through the API. Assert no network traffic, no exporter activity. Use Node's network mocking or a manual sink.
 
-Where Plan 05 separates pure modules (constraints, argv builders) from IO modules (process spawn, file write), the same applies here: `core/`, `hub/aggregator.js`, and the format helpers are pure; transports and the hub server are IO. The pure layer carries the test load.
+### Why this plan and not a pure custom one
 
-### Per-phase notes
+- **Auto-instrumentation coverage.** The `auto-instrumentations-node` pack covers Express, HTTP, Mongoose, Socket.IO, fetch, and DNS out of the box. Hand-rolling those is what made Plan 06's old draft 1500 lines. With OTel, that's `getNodeAutoInstrumentations()`.
+- **Trace context propagation.** W3C `traceparent` propagation across HTTP is a solved problem that OTel handles. Hand-rolling this for renderer ↔ server (which involves both browser and Node parsing the same header format) is enough work to be worth offloading.
+- **The viewer is free.** Jaeger UI is the de facto distributed tracing UI. Searches, waterfalls, comparisons, dependency graphs. A custom dashboard is a maintenance liability; Jaeger is maintained by people whose full-time job is making distributed tracing UIs.
+- **Transferable skills.** OTel + Jaeger is the same stack used at Microsoft, Uber, Cloudflare, Shopify, etc. Anyone who joins the team and has worked with distributed systems before knows it. A custom format is a tax on every new contributor.
+- **Future-proofing.** OTLP is a vendor-neutral protocol. The same instrumented codebase can later send to Tempo, Honeycomb, Datadog, New Relic, Lightstep, or back to a custom collector — by changing one URL, no code changes. A custom format locks us in.
 
-**Phase A** is the smallest behaviourally and the most important architecturally — get the API right, get the off-cost right, and the rest follows. Resist the temptation to make the API richer than the five functions listed. We will regret every extra knob.
+The trade-offs we accept:
 
-**Phase B** uses Node's built-in inspector module — no native deps, no external binaries. The CPU profile JSON it returns is the V8 protocol format, which Chrome DevTools loads natively.
-
-**Phase C** is the most code by line count but the least clever. It's an Express app that takes WS connections in and emits SSE out. The dashboard is plain HTML and ES modules; resist the temptation to bring in React/Vite/build tooling for it, because then the profiler depends on the thing being profiled.
-
-**Phase D** is where the "minimal manual code" promise is fulfilled. If after this phase a developer can't hit `pnpm run profile`, click the app once, and see HTTP + IPC + FFmpeg events on a timeline without writing a single trace call, the phase is incomplete.
-
-**Phase E** is small but tricky because the renderer is the only context where build-time constants matter. The Vite plugin is what makes `if (!__PROFILE__) return;` actually compile away.
-
-**Phase F** is the one-line-per-file wire-up. Each touch point must be reviewed against "does this file behave differently when PROFILE is off?" The answer must be: no. Side effects are limited to: importing bootstrap, calling wrap functions, registering middleware. All identity-mapped when off.
-
-**Phase G** is dev UX. The orchestrator is the user-facing surface; the launcher must be 100% reliable on macOS, Windows, and Linux. Use `open`/`start`/`xdg-open` via a tiny dispatch (no `open` package — too many deps).
+- **Off-cost is ~tens of nanoseconds, not ~one nanosecond.** OTel's `tracer.startActiveSpan` (with no SDK installed, just the API) does an allocation + a context lookup. Empirically ~50–200 ns per call when no SDK is registered. Acceptable for our hot paths (FFmpeg-stage timings, request handlers); the only thing this rules out is per-frame instrumentation in tight render loops, which we don't have in JS anyway (FFmpeg owns that).
+- **One Docker container for the dev loop (or one binary fallback).** Plan-06-old needed zero infrastructure. This plan needs Jaeger running. Mitigated by: (a) the orchestrator handles it, (b) the binary fallback works without Docker, (c) Jaeger's footprint at idle is ~30 MB RAM.
 
 ---
 
 ## Migration & rollout
 
-- **Phase A and B can ship together.** Pure plumbing, no functional change anywhere else. Adds a new top-level directory and one small bench in CI.
-- **Phase C ships alone.** Standalone hub binary, dashboard. Verifiable in isolation via the bin script.
-- **Phase D ships alongside Phase F's hookup for that instrumentation only.** I.e., when we add the Express middleware module, the same PR adds one line to `server/src/app.js`.
-- **Phase E ships alone.** The renderer-side Vite plugin and client.
-- **Phase G ships last.** The orchestrator is dependent on Phases C/F being live.
+- **Phase A (Jaeger backend) ships first.** Pure infrastructure: a script and a pinned Jaeger image. No code changes anywhere else.
+- **Phase B (Node bootstraps) ships next.** Adds OTel deps, two bootstrap files, no wire-up yet. Importable but not loaded by any production path. Verifiable by running `pnpm run profile:server` and seeing server traces in Jaeger.
+- **Phase C (renderer bootstrap and Vite plugin) ships next.** Same shape: importable but not loaded by default. Verifiable by running `pnpm run profile:renderer` and clicking around — `documentLoad` and `userInteraction` traces appear.
+- **Phase D (HTTP and IPC propagation) ships next.** HTTP propagation is free with B+C. IPC propagation is the one custom piece. After this phase, end-to-end traces (renderer click → server response) work.
+- **Phase E (FFmpeg + React + runtime metrics) ships piecewise.** Independent of the others; each can land in its own PR.
+- **Phase F (CPU/heap profiles) ships independently.** No dependency on OTel.
+- **Phase G (`pnpm run profile` orchestrator) ships last.** Ties it all together for the developer.
 
-The plan is **off by default**. It introduces no runtime behavior change to any existing code path when `PROFILE=1` is not set. We can land the entire stack incrementally with no risk to the production app.
+The plan is **off by default at every step**. Through every phase, `pnpm run electron-dev` and `pnpm run dist` are unaffected — no OTel SDK is loaded, no Jaeger is started, and no code path behaves differently from today.
 
 ---
 
 ## Validation
 
-- **Phase A (off-cost):** `node --test tools/profiler/__tests__/perf.bench.js` — 1M `trace()` calls with PROFILE off in <50 ms.
-- **Phase A (on-correctness):** spans are paired (every B has its matching E within the same process); `args` round-trip correctly; nested spans nest; an exception inside the wrapped function still closes the span and re-throws.
-- **Phase B:** record a 5-second CPU profile of a busy Node process; `JSON.parse(file)` succeeds and contains a `nodes` array compatible with Chrome DevTools.
-- **Phase C:** open `http://127.0.0.1:9876/` with no sources connected — dashboard loads, shows "0 sources connected", controls are disabled. Connect a fake source via WS — dashboard shows it within 200 ms.
-- **Phase D — Express:** run server with PROFILE=1, hit `GET /api/csrf` 100 times, then download a trace. The trace contains 100 spans named `http.GET./api/csrf` with sane durations.
-- **Phase D — IPC:** in main, register a `live-stream:get-state` handler; call it 50 times; the trace shows 50 spans named `ipc.live-stream:get-state`.
-- **Phase D — FFmpeg:** run a 30-second stream; the trace shows one long `ffmpeg.process` span and a stream of `ffmpeg.fps`/`ffmpeg.dropped` counter samples.
-- **Phase D — process:** the trace shows 1 Hz `rss.bytes`, `heap.used.bytes`, and `event-loop.lag.ms` series for at least 30 seconds.
-- **Phase E:** open the renderer's DevTools, type `__profile.startSpan("manual")`, do something, type `__profile.endSpan(handle)`. The span shows up in the dashboard's live stream.
-- **Phase E:** load the app while recording a trace; the dashboard's hot-spans panel shows `react.App.mount` and similar React render spans.
-- **Phase F:** boot the app with `pnpm run electron-dev` (NOT profile), verify that the Express middleware, IPC wrapper, and FFmpeg wrapper add zero spans and produce no stderr output. Compare against a baseline run captured before the plan: no measurable difference (within 1%) in time-to-first-render or end-to-end stream start latency.
-- **Phase G:** `pnpm run profile` on macOS, Windows, and Linux opens the dashboard automatically; `Ctrl-C` cleans up all child processes (no orphan Electron, no orphan FFmpeg, no orphan Vite, no listening ports left over).
-- **End-to-end:** record a 60-second trace covering a full stream session. Open it in Perfetto via the "Open in Perfetto" button. Visually verify that `http.POST./live/api/.../session` (server), `ipc.live-stream:start` (main), and `ffmpeg.process` (main) all appear on the same timeline with consistent timestamps (skew < 5 ms after alignment).
+- **Phase A:** `pnpm run profile` (or `tools/profiler/bin/jaeger.js start`) brings Jaeger up; `curl http://127.0.0.1:16686/` returns 200 within 5 s on a warm cache.
+- **Phase B:** Run server with `OTEL_TRACES_EXPORTER=otlp`. Hit `GET /api/csrf` 100 times. Jaeger's search for service `rebound-server` shows 100 traces, each with one Express span (and one Mongoose span for any queries). Each span has `http.method`, `http.route`, `http.status_code`, `http.response_content_length`.
+- **Phase B (off-cost):** Boot the server and Electron main without `OTEL_TRACES_EXPORTER`. The OTel SDK does not initialize — verifiable by absence of `instrumentation` log lines and absence of TCP traffic to 4318. Steady-state RSS is within 1% of pre-plan baseline.
+- **Phase C:** Open the renderer with `VITE_OTEL_ENABLED=1`. Jaeger shows a `documentLoad` trace per page load and a `user.click` span per click.
+- **Phase D — HTTP propagation:** Click an action that triggers a fetch. The Jaeger trace shows one root in `rebound-renderer` with a child span in `rebound-server` (same trace ID).
+- **Phase D — IPC propagation:** Click "Start streaming". Trace shows the chain renderer → main → server (described in Phase D3).
+- **Phase E — FFmpeg:** Stream for 30 seconds. Jaeger shows one `ffmpeg.process` span with N `status` events (one per second from the FFmpeg status line) and one `segment.write` event per segment. Span attributes include the resolved FFmpeg argv.
+- **Phase E — runtime metrics:** A `runtime.heartbeat` span appears for each process at 1 Hz, with `rss.bytes`, `heap.used.bytes`, `event_loop.lag.ms` events.
+- **Phase F — CPU profile:** `pnpm profile:cpu --target=main --duration=5` while the user is doing something visible. The resulting `.cpuprofile` opens in Chrome DevTools' Performance tab and shows a flame graph with stack frames from the relevant module.
+- **Phase F — heap snapshot:** `pnpm profile:heap --target=server` produces a `.heapsnapshot` openable in Chrome DevTools' Memory tab. Object counts roughly match what we expect (e.g. one `Express` constructor instance, N `StreamSession` documents).
+- **Phase G — orchestrator:** `pnpm run profile` on macOS, Windows, and Linux opens Jaeger at `http://127.0.0.1:16686` automatically; `Ctrl-C` cleans up all child processes (no orphan Electron, no orphan FFmpeg, no orphan Vite, no orphan Jaeger container).
+- **End-to-end:** Run `pnpm run profile`. Click "Start streaming". After 30 seconds, click "Stop streaming". Open Jaeger, find the trace rooted at the start click. Verify it contains spans from `rebound-renderer`, `rebound-main`, and `rebound-server`, with consistent timestamps and parent-child relationships.
