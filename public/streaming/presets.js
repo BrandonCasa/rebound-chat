@@ -11,6 +11,19 @@ const LIBAOM_AV1_PRESETS = Array.from({ length: 9 }, (_value, index) => String(i
 const LIBVPX_VP9_PRESETS = Array.from({ length: 9 }, (_value, index) => String(index));
 const QSV_PRESETS = ["veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"];
 const VIDEOTOOLBOX_PRESETS = ["realtime"];
+// AMF: -quality option values (speed is lowest quality, quality is highest).
+const AMF_PRESETS = ["speed", "balanced", "quality"];
+// VAAPI has no software-controlled preset; expose a single sentinel so
+// normalizeEncoderPreset never has to special-case it.
+const VAAPI_PRESETS = ["default"];
+// rav1e: -speed 0 (best quality) … 10 (fastest).
+const RAV1E_PRESETS = Array.from({ length: 11 }, (_value, index) => String(index));
+// vvenc: -preset values (none = VVenC internal default).
+const VVENC_PRESETS = ["superfast", "faster", "fast", "medium", "slow", "none"];
+// openh264 has no meaningful encoder preset.
+const OPENH264_PRESETS = ["default"];
+// kvazaar: -preset 0 (fastest) … 9 (slowest).
+const KVAZAAR_PRESETS = Array.from({ length: 10 }, (_value, index) => String(index));
 
 const NVENC_PRESET_ALIASES = {
 	slowest: "p7",
@@ -28,20 +41,32 @@ const NVENC_PRESET_ALIASES = {
 
 const ENCODER_PRESETS = {
 	nvenc: NVENC_PRESET_LADDER,
+	amf: AMF_PRESETS,
+	vaapi: VAAPI_PRESETS,
 	software: SOFTWARE_PRESETS,
 	svt_av1: SVT_AV1_PRESETS,
 	libaom_av1: LIBAOM_AV1_PRESETS,
 	libvpx_vp9: LIBVPX_VP9_PRESETS,
+	rav1e: RAV1E_PRESETS,
+	vvenc: VVENC_PRESETS,
+	openh264: OPENH264_PRESETS,
+	kvazaar: KVAZAAR_PRESETS,
 	qsv: QSV_PRESETS,
 	videotoolbox: VIDEOTOOLBOX_PRESETS,
 };
 
 const DEFAULT_ENCODER_PRESETS = {
 	nvenc: "p6",
+	amf: "quality",
+	vaapi: "default",
 	software: "medium",
 	svt_av1: "8",
 	libaom_av1: "6",
 	libvpx_vp9: "5",
+	rav1e: "6",
+	vvenc: "fast",
+	openh264: "default",
+	kvazaar: "4",
 	qsv: "medium",
 	videotoolbox: "realtime",
 };
@@ -73,6 +98,9 @@ const normalizeEncoderPreset = (videoCodec, value) => {
 
 	const allowed = ENCODER_PRESETS[family];
 	const fallback = DEFAULT_ENCODER_PRESETS[family];
+	if (!allowed) {
+		throw new Error(`No preset list registered for encoder family "${family}".`);
+	}
 	return normalizeChoice(value, allowed, fallback, `${videoCodec} preset`);
 };
 
@@ -84,6 +112,12 @@ export {
 	LIBVPX_VP9_PRESETS,
 	QSV_PRESETS,
 	VIDEOTOOLBOX_PRESETS,
+	AMF_PRESETS,
+	VAAPI_PRESETS,
+	RAV1E_PRESETS,
+	VVENC_PRESETS,
+	OPENH264_PRESETS,
+	KVAZAAR_PRESETS,
 	NVENC_PRESET_ALIASES,
 	ENCODER_PRESETS,
 	DEFAULT_ENCODER_PRESETS,
