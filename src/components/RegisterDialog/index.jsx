@@ -19,8 +19,6 @@ const RegisterDialog = () => {
 		handleToLogin,
 	} = useRegisterDialog();
 
-	// Rest of your component's logic goes here...
-
 	return (
 		<Dialog open={registerDialogState} onClose={handleDialogClose}>
 			<Box

@@ -29,9 +29,18 @@ export const fetchUserProfile = createAsyncThunk("userApi/fetchUserProfile", asy
 
 export const modifyProfile = createAsyncThunk("userApi/modifyProfile", async ({ formData, authToken }, { rejectWithValue }) => {
 	const base = getApiBase();
+
 	try {
-		const { data } = await axios.put(`${base}/users/modify`, formData, await buildCsrfApiConfig(authToken));
+		const config = await buildCsrfApiConfig(authToken);
+
+		// let Axios/browser set the boundary automatically.
+		delete config.headers?.["Content-Type"];
+		delete config.headers?.["content-type"];
+
+		const { data } = await axios.put(`${base}/users/modify`, formData, config);
+
 		const u = data.user;
+
 		return {
 			id: u.id,
 			profile: {

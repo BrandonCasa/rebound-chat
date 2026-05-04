@@ -8,9 +8,9 @@ import serverWatchers from "../socketio/watchers.js";
 
 const hashRefreshToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
 const normalizeFingerprintValue = (value) => {
-        if (!value) return null;
-        const trimmed = String(value).trim().toLowerCase();
-        return trimmed || null;
+	if (!value) return null;
+	const trimmed = String(value).trim().toLowerCase();
+	return trimmed || null;
 };
 
 const REFRESH_TOKEN_LIFETIME_DAYS = 60;
@@ -33,6 +33,10 @@ const UserSchema = new Schema(
 			match: [/\S+@\S+\.\S+/, "is invalid"],
 			index: true,
 		},
+		allowNSFW: { type: Boolean, default: false },
+		allowAnyNotifications: { type: Boolean, default: true },
+		allowPublicChatNotifications: { type: Boolean, default: true },
+		allowPrivateChatNotifications: { type: Boolean, default: true },
 		googleId: { type: String, unique: true, sparse: true },
 
 		bannerUrl: { type: String, default: "" },
@@ -57,21 +61,21 @@ const UserSchema = new Schema(
 		passwordChangedAt: {
 			type: Date,
 		},
-                refreshTokens: [
-                        {
-                                tokenHash: { type: String, required: true },
-                                expiresAt: { type: Date, required: true },
-                                userAgent: { type: String },
-                                userAgentParsed: { type: String },
-                                userAgentDeviceType: { type: String },
-                                deviceName: { type: String },
-                                ipAddress: { type: String },
-                                location: { type: String },
-                                lastUsed: { type: Date },
-                        },
-                ],
-        },
-        { timestamps: true }
+		refreshTokens: [
+			{
+				tokenHash: { type: String, required: true },
+				expiresAt: { type: Date, required: true },
+				userAgent: { type: String },
+				userAgentParsed: { type: String },
+				userAgentDeviceType: { type: String },
+				deviceName: { type: String },
+				ipAddress: { type: String },
+				location: { type: String },
+				lastUsed: { type: Date },
+			},
+		],
+	},
+	{ timestamps: true }
 );
 
 UserSchema.plugin(mongooseUniqueValidator, { message: "is already taken" });
@@ -111,76 +115,71 @@ UserSchema.methods.generateAccessToken = function () {
 };
 
 UserSchema.methods.generateRefreshToken = async function (descriptor = {}, existingTokenHash = null) {
-        const payload = {
-                id: this._id,
-                tokenVersion: this.tokenVersion,
-        };
+	const payload = {
+		id: this._id,
+		tokenVersion: this.tokenVersion,
+	};
 
 	const token = jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET, {
 		expiresIn: `${REFRESH_TOKEN_LIFETIME_DAYS}d`,
 	});
 
-        this.pruneExpiredRefreshTokens();
+	this.pruneExpiredRefreshTokens();
 
-        const descriptorFingerprint = {
-                userAgent: normalizeFingerprintValue(descriptor.userAgentParsed || descriptor.userAgent),
-                device: normalizeFingerprintValue(descriptor.deviceName),
-                ip: normalizeFingerprintValue(descriptor.ipAddress),
-        };
+	const descriptorFingerprint = {
+		userAgent: normalizeFingerprintValue(descriptor.userAgentParsed || descriptor.userAgent),
+		device: normalizeFingerprintValue(descriptor.deviceName),
+		ip: normalizeFingerprintValue(descriptor.ipAddress),
+	};
 
-        let targetIndex = existingTokenHash
-                ? this.refreshTokens.findIndex((t) => t.tokenHash === existingTokenHash)
-                : null;
+	let targetIndex = existingTokenHash ? this.refreshTokens.findIndex((t) => t.tokenHash === existingTokenHash) : null;
 
-        if (targetIndex === null || targetIndex < 0 || targetIndex >= this.refreshTokens.length) {
-                targetIndex = this.refreshTokens.findIndex((t) => {
-                        const tokenFingerprint = {
-                                userAgent: normalizeFingerprintValue(t.userAgentParsed || t.userAgent),
-                                device: normalizeFingerprintValue(t.deviceName),
-                                ip: normalizeFingerprintValue(t.ipAddress),
-                        };
+	if (targetIndex === null || targetIndex < 0 || targetIndex >= this.refreshTokens.length) {
+		targetIndex = this.refreshTokens.findIndex((t) => {
+			const tokenFingerprint = {
+				userAgent: normalizeFingerprintValue(t.userAgentParsed || t.userAgent),
+				device: normalizeFingerprintValue(t.deviceName),
+				ip: normalizeFingerprintValue(t.ipAddress),
+			};
 
-                        return (
-                                descriptorFingerprint.userAgent &&
-                                descriptorFingerprint.device &&
-                                tokenFingerprint.userAgent === descriptorFingerprint.userAgent &&
-                                tokenFingerprint.device === descriptorFingerprint.device &&
-                                (!descriptorFingerprint.ip || tokenFingerprint.ip === descriptorFingerprint.ip)
-                        );
-                });
-        }
+			return (
+				descriptorFingerprint.userAgent &&
+				descriptorFingerprint.device &&
+				tokenFingerprint.userAgent === descriptorFingerprint.userAgent &&
+				tokenFingerprint.device === descriptorFingerprint.device &&
+				(!descriptorFingerprint.ip || tokenFingerprint.ip === descriptorFingerprint.ip)
+			);
+		});
+	}
 
-        const expiresAt = new Date(Date.now() + REFRESH_TOKEN_LIFETIME_DAYS * 24 * 60 * 60 * 1000);
-        const lastUsed = new Date();
+	const expiresAt = new Date(Date.now() + REFRESH_TOKEN_LIFETIME_DAYS * 24 * 60 * 60 * 1000);
+	const lastUsed = new Date();
 
-        const tokenHash = hashRefreshToken(token);
-        const { userAgent, userAgentParsed, userAgentDeviceType, deviceName, ipAddress, location } = descriptor;
-        const existingId =
-                targetIndex != null && targetIndex >= 0 && targetIndex < this.refreshTokens.length
-                        ? this.refreshTokens[targetIndex]._id
-                        : null;
+	const tokenHash = hashRefreshToken(token);
+	const { userAgent, userAgentParsed, userAgentDeviceType, deviceName, ipAddress, location } = descriptor;
+	const existingId = targetIndex != null && targetIndex >= 0 && targetIndex < this.refreshTokens.length ? this.refreshTokens[targetIndex]._id : null;
 
-        const tokenRecord = {
-                ...(existingId ? { _id: existingId } : {}),
-                tokenHash,
-                expiresAt,
-                userAgent: userAgent || "Unknown",
-                userAgentParsed: userAgentParsed || userAgent || "Unknown",
-                userAgentDeviceType: userAgentDeviceType || "desktop",
-                deviceName: deviceName || userAgentParsed || userAgent || "Unknown device",
-                ipAddress: ipAddress || "Unknown",
-                location: location || ipAddress || "Unknown",
-                lastUsed,
-        };
+	const tokenRecord = {
+		...(existingId ? { _id: existingId } : {}),
+		tokenHash,
+		expiresAt,
+		userAgent: userAgent || "Unknown",
+		userAgentParsed: userAgentParsed || userAgent || "Unknown",
+		userAgentDeviceType: userAgentDeviceType || "desktop",
+		deviceName: deviceName || userAgentParsed || userAgent || "Unknown device",
+		ipAddress: ipAddress || "Unknown",
+		location: location || ipAddress || "Unknown",
+		lastUsed,
+	};
 
-        if (targetIndex === null || targetIndex < 0 || targetIndex >= this.refreshTokens.length) {
-                this.refreshTokens.push(tokenRecord);
-        } else {
-                this.refreshTokens[targetIndex] = tokenRecord;
-        }
-        await this.save();
+	if (targetIndex === null || targetIndex < 0 || targetIndex >= this.refreshTokens.length) {
+		this.refreshTokens.push(tokenRecord);
+	} else {
+		this.refreshTokens[targetIndex] = tokenRecord;
+	}
+	await this.save();
 
-        return token;
+	return token;
 };
 
 UserSchema.methods.revokeRefreshToken = async function (rawToken) {
@@ -201,6 +200,10 @@ UserSchema.methods.toAuthJSON = function (accessToken) {
 		id: this._id,
 		username: this.username,
 		email: this.email,
+		allowNSFW: this.allowNSFW,
+		allowAnyNotifications: this.allowAnyNotifications,
+		allowPublicChatNotifications: this.allowPublicChatNotifications,
+		allowPrivateChatNotifications: this.allowPrivateChatNotifications,
 		displayName: this.displayName,
 		bio: this.bio,
 		bannerUrl: this.bannerUrl,
@@ -231,6 +234,10 @@ UserSchema.methods.toProfilePrivJSON = async function (requestingUser, session =
 		id: this._id,
 		username: this.username,
 		email: this.email,
+		allowNSFW: this.allowNSFW,
+		allowAnyNotifications: this.allowAnyNotifications,
+		allowPublicChatNotifications: this.allowPublicChatNotifications,
+		allowPrivateChatNotifications: this.allowPrivateChatNotifications,
 		displayName: this.displayName,
 		bio: this.bio,
 		bannerUrl: this.bannerUrl,

@@ -45,6 +45,10 @@ const resetAuthFields = (state) => {
 	state.createdAt = null;
 	state.bannerUrl = null;
 	state.avatarUrl = null;
+	state.allowNSFW = false;
+	state.allowAnyNotifications = true;
+	state.allowPublicChatNotifications = true;
+	state.allowPrivateChatNotifications = true;
 };
 
 const applyLoggedOutState = (state, disableAutoLogin = false) => {
@@ -81,6 +85,10 @@ const initialState = {
 	avatarUrl: null,
 	passwordChanging: false,
 	passwordChangeError: null,
+	allowNSFW: false,
+	allowAnyNotifications: true,
+	allowPublicChatNotifications: true,
+	allowPrivateChatNotifications: true,
 };
 
 export const verifyUser = createAsyncThunk("auth/verifyUser", async (token, { getState, rejectWithValue }) => {
@@ -101,6 +109,10 @@ export const verifyUser = createAsyncThunk("auth/verifyUser", async (token, { ge
 			bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
 			avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
 			createdAt: u.createdAt,
+			allowNSFW: u.allowNSFW,
+			allowAnyNotifications: u.allowAnyNotifications ?? true,
+			allowPublicChatNotifications: u.allowPublicChatNotifications ?? true,
+			allowPrivateChatNotifications: u.allowPrivateChatNotifications ?? true,
 		};
 	} catch (err) {
 		return rejectWithValue(err.response?.data || err.message);
@@ -160,6 +172,10 @@ export const loginUser = createAsyncThunk("auth/loginUser", async ({ email, pass
 			bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
 			avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
 			createdAt: u.createdAt,
+			allowNSFW: u.allowNSFW,
+			allowAnyNotifications: u.allowAnyNotifications ?? true,
+			allowPublicChatNotifications: u.allowPublicChatNotifications ?? true,
+			allowPrivateChatNotifications: u.allowPrivateChatNotifications ?? true,
 		};
 	} catch (err) {
 		return rejectWithValue(err.response?.data || err.message);
@@ -227,6 +243,10 @@ export const registerUser = createAsyncThunk("auth/registerUser", async ({ usern
 			bannerUrl: profileMediaUrl(u.bannerUrl, "banner.webp"),
 			avatarUrl: profileMediaUrl(u.avatarUrl, "defaultpfp.webp"),
 			createdAt: u.createdAt,
+			allowNSFW: u.allowNSFW,
+			allowAnyNotifications: u.allowAnyNotifications ?? true,
+			allowPublicChatNotifications: u.allowPublicChatNotifications ?? true,
+			allowPrivateChatNotifications: u.allowPrivateChatNotifications ?? true,
 		};
 	} catch (err) {
 		return rejectWithValue(err.response?.data || err.message);
@@ -286,6 +306,18 @@ const authSlice = createSlice({
 			if ("avatarUrl" in action.payload) {
 				state.avatarUrl = action.payload.avatarUrl;
 			}
+			if ("allowNSFW" in action.payload) {
+				state.allowNSFW = action.payload.allowNSFW;
+			}
+			if ("allowAnyNotifications" in action.payload) {
+				state.allowAnyNotifications = action.payload.allowAnyNotifications;
+			}
+			if ("allowPublicChatNotifications" in action.payload) {
+				state.allowPublicChatNotifications = action.payload.allowPublicChatNotifications;
+			}
+			if ("allowPrivateChatNotifications" in action.payload) {
+				state.allowPrivateChatNotifications = action.payload.allowPrivateChatNotifications;
+			}
 		},
 		setLoggingIn: (state, action) => {
 			state.loggingIn = action.payload.loggingIn;
@@ -311,6 +343,13 @@ const authSlice = createSlice({
 				state.bannerUrl = action.payload.bannerUrl;
 				state.avatarUrl = action.payload.avatarUrl;
 				state.createdAt = action.payload.createdAt;
+				state.allowNSFW = action.payload.allowNSFW;
+				state.allowAnyNotifications = action.payload.allowAnyNotifications;
+				state.allowPublicChatNotifications = action.payload.allowPublicChatNotifications;
+				state.allowPrivateChatNotifications = action.payload.allowPrivateChatNotifications;
+				setAuthSessionPresent(true);
+				setAutoLoginBlocked(false);
+				return;
 			})
 			.addCase(verifyUser.rejected, (state) => {
 				applyLoggedOutState(state);
@@ -334,6 +373,7 @@ const authSlice = createSlice({
 				state.loggingIn = false;
 				state.initialized = true;
 				state.skipAutoLogin = false;
+				setAuthSessionPresent(true);
 				setAutoLoginBlocked(false);
 			})
 			.addCase(bootstrapAuth.rejected, (state) => {
@@ -347,6 +387,7 @@ const authSlice = createSlice({
 				state.loggingIn = false;
 				state.loggedIn = true;
 				state.skipAutoLogin = false;
+				setAuthSessionPresent(true);
 				setAutoLoginBlocked(false);
 				state.initialized = true;
 				state.authToken = action.payload.authToken;
@@ -358,6 +399,10 @@ const authSlice = createSlice({
 				state.bannerUrl = action.payload.bannerUrl;
 				state.avatarUrl = action.payload.avatarUrl;
 				state.createdAt = action.payload.createdAt;
+				state.allowNSFW = action.payload.allowNSFW;
+				state.allowAnyNotifications = action.payload.allowAnyNotifications;
+				state.allowPublicChatNotifications = action.payload.allowPublicChatNotifications;
+				state.allowPrivateChatNotifications = action.payload.allowPrivateChatNotifications;
 			})
 			.addCase(registerUser.rejected, (state) => {
 				state.loggingIn = false;
@@ -371,6 +416,7 @@ const authSlice = createSlice({
 				state.loggingIn = false;
 				state.loggedIn = true;
 				state.skipAutoLogin = false;
+				setAuthSessionPresent(true);
 				setAutoLoginBlocked(false);
 				state.initialized = true;
 				state.authToken = action.payload.authToken;
@@ -382,6 +428,10 @@ const authSlice = createSlice({
 				state.bannerUrl = action.payload.bannerUrl;
 				state.avatarUrl = action.payload.avatarUrl;
 				state.createdAt = action.payload.createdAt;
+				state.allowNSFW = action.payload.allowNSFW;
+				state.allowAnyNotifications = action.payload.allowAnyNotifications;
+				state.allowPublicChatNotifications = action.payload.allowPublicChatNotifications;
+				state.allowPrivateChatNotifications = action.payload.allowPrivateChatNotifications;
 			})
 			.addCase(loginUser.rejected, (state) => {
 				state.loggingIn = false;

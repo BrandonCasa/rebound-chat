@@ -456,9 +456,13 @@ router.put(
 					throw err;
 				}
 
-				const { displayName, bio } = req.body;
+				const { displayName, bio, allowNSFW, allowAnyNotifications, allowPublicChatNotifications, allowPrivateChatNotifications } = req.body;
 				if (displayName != null) user.displayName = displayName;
 				if (bio != null) user.bio = bio;
+				if (allowNSFW != null) user.allowNSFW = allowNSFW;
+				if (allowAnyNotifications != null) user.allowAnyNotifications = allowAnyNotifications;
+				if (allowPublicChatNotifications != null) user.allowPublicChatNotifications = allowPublicChatNotifications;
+				if (allowPrivateChatNotifications != null) user.allowPrivateChatNotifications = allowPrivateChatNotifications;
 
 				const bannerFile = req.files?.banner?.[0];
 				const avatarFile = req.files?.avatar?.[0];
