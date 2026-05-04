@@ -191,3 +191,4 @@ These types are shared across encoder/capture/output modules so adding a new enc
 - Watch `speed=` in ffmpeg stderr; should stay `≥1.0x` under gaming load
 - Watch GPU and PCIe utilization in `nvidia-smi dmon -s pucvmet -c 30`; PCIe RX should drop substantially
 - Verify the produced `init.mp4` and segments still play in browser HLS players (no color/format regression)
+- If validation is not possible due to permissions, move on without validating, or validate by reading the code itself.
