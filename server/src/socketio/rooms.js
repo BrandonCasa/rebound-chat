@@ -35,16 +35,19 @@ async function fetchRecentMessages(roomDoc, limit = MESSAGE_LIMIT) {
 }
 
 class ServerRooms {
-	async getRoomList() {
+	async getRoomList(user) {
 		const idToName = {};
 		const idToRoom = {};
+		const idToNSFW = {};
 		const rooms = await RoomModel.find({}).select("-messages");
 		for (const room of rooms) {
 			if (room?.name?.startsWith("Hidden Chat ")) continue;
+			if (room.nsfw && !user?.allowNSFW) continue;
 			idToName[room._id] = room.name;
+			idToNSFW[room._id] = room.nsfw;
 			idToRoom[room._id] = room;
 		}
-		return [idToName, idToRoom];
+		return [idToName, idToRoom, idToNSFW];
 	}
 
 	async listenerCleanup(socket) {
@@ -104,7 +107,8 @@ class ServerRooms {
 	startListeners(socket) {
 		socket.on("list_rooms", async () => {
 			try {
-				let [idToName, idToRoom] = await this.getRoomList();
+				const user = await UserModel.findById(socket.user.id);
+				let [idToName, idToRoom, idToNSFW] = await this.getRoomList(user);
 
 				if (Object.keys(idToName).length === 0) {
 					const r1 = new RoomModel({
@@ -117,10 +121,10 @@ class ServerRooms {
 					});
 					await r1.save();
 					await r2.save();
-					[idToName, idToRoom] = await this.getRoomList();
+					[idToName, idToRoom, idToNSFW] = await this.getRoomList(user);
 				}
 
-				socket.emit("room_list", [idToName, idToRoom]);
+				socket.emit("room_list", [idToName, idToRoom, idToNSFW]);
 			} catch (err) {
 				logger.error("Error listing rooms:", err);
 			}

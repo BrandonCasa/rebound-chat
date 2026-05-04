@@ -7,6 +7,7 @@ const RoomSchema = new mongoose.Schema(
 		group: { type: Schema.Types.ObjectId, ref: "RoomGroup" },
 		settings: [{ type: Schema.Types.ObjectId, ref: "Setting" }],
 		messages: [{ type: Schema.Types.ObjectId, ref: "Message" }],
+		nsfw: { type: Boolean, default: false },
 	},
 	{ timestamps: true }
 );
