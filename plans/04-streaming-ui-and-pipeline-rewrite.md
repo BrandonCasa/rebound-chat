@@ -279,7 +279,133 @@ Add `public/streaming/audio/filterGraph.js` that builds the `amix` filter from N
 { "type": "ack", "applied": true, "actualSettings": { ... }, "clampedBy": "user-initial-ceiling" }
 ```
 
-**F2. Viewer side.** Use `navigator.mediaCapabilities.decodingInfo` for codec support. Report `downlinkMbit`, `maxResolution`, `supportedCodecs` on connect and on HLS.js level-drop events.
+**F2. Viewer side — automatic capability probe.**
+
+Add `src/features/player/viewerProbe.js`. On page load it runs a synchronous and async probe and returns a `ViewerCapabilities` object. Results are reported to the server immediately on WebSocket connect and re-reported whenever the network or bandwidth estimate changes materially.
+
+**F2a. Codec probe — three-tier approach.**
+
+Run all three tiers and merge; later tiers fill in richer signal but are not required.
+
+*Tier 1 — `MediaSource.isTypeSupported` (synchronous, broadest browser coverage)*
+
+```js
+const isSupported = (mime) =>
+  typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported(mime);
+
+const CODEC_PROBES = {
+  h264_baseline: 'video/mp4; codecs="avc1.42E01E"',          // H.264 Constrained Baseline 3.0
+  h264_main:     'video/mp4; codecs="avc1.4D401F"',           // H.264 Main 3.1
+  h264_high:     'video/mp4; codecs="avc1.640028"',           // H.264 High 4.0
+  hevc_main:     'video/mp4; codecs="hev1.1.6.L93.B0"',       // HEVC Main L3.1
+  hevc_main10:   'video/mp4; codecs="hev1.2.4.L120.B0"',      // HEVC Main10 (HDR)
+  av1:           'video/mp4; codecs="av01.0.08M.08"',          // AV1 Main
+  vp9:           'video/webm; codecs="vp9"',
+  aac_lc:        'audio/mp4; codecs="mp4a.40.2"',
+  opus:          'audio/webm; codecs="opus"',
+};
+
+// Result: Record<keyof CODEC_PROBES, boolean>
+const tier1 = Object.fromEntries(
+  Object.entries(CODEC_PROBES).map(([k, mime]) => [k, isSupported(mime)])
+);
+```
+
+*Tier 2 — `navigator.mediaCapabilities.decodingInfo` (async, returns `smooth` + `powerEfficient`)*
+
+For each `true` result from Tier 1, run a `decodingInfo` call with a representative sample config (1280×720, 30fps, 4 Mbit/s) to see if hardware-accelerated decode is available. Store `{ supported, smooth, powerEfficient }` per codec. If the API is unavailable, skip and fall back to Tier 1 booleans.
+
+*Tier 3 — `HTMLVideoElement.canPlayType` (legacy fallback)*
+
+Used only if `MediaSource` is undefined (very old browsers). Returns `""`, `"maybe"`, or `"probably"`.
+
+**F2b. Network probe.**
+
+```js
+const probeNetwork = () => {
+  const conn = navigator.connection ?? navigator.mozConnection ?? navigator.webkitConnection;
+  return {
+    downlinkMbit:    conn?.downlink    ?? null,   // Mbit/s, not always accurate
+    effectiveType:   conn?.effectiveType ?? null, // '4g'|'3g'|'2g'|'slow-2g'
+    rttMs:           conn?.rtt         ?? null,
+    saveData:        conn?.saveData    ?? false,
+  };
+};
+```
+
+After HLS.js initializes, subscribe to its `FRAG_LOADED` and `LEVEL_SWITCHED` events and read `hls.bandwidthEstimate` (bits/s). Convert to Mbit/s and add as `hlsBandwidthEstimateMbit`; this is more reliable than `navigator.connection.downlink` because it is measured on the actual stream segments.
+
+**F2c. Display probe.**
+
+```js
+const probeDisplay = () => ({
+  viewportWidth:    window.innerWidth,
+  viewportHeight:   window.innerHeight,
+  screenWidth:      window.screen.width,
+  screenHeight:     window.screen.height,
+  devicePixelRatio: window.devicePixelRatio ?? 1,
+});
+```
+
+**F2d. `ViewerCapabilities` typedef.** Add to `shared/streaming/types.js`:
+
+```js
+/** @typedef {Object} CodecProbeResult
+ *  @property {boolean} supported
+ *  @property {boolean|null} smooth          -- null if mediaCapabilities unavailable
+ *  @property {boolean|null} powerEfficient
+ */
+
+/** @typedef {Object} ViewerCapabilities
+ *  @property {{ h264_baseline: CodecProbeResult, h264_main: CodecProbeResult,
+ *               h264_high: CodecProbeResult, hevc_main: CodecProbeResult,
+ *               hevc_main10: CodecProbeResult, av1: CodecProbeResult,
+ *               vp9: CodecProbeResult, aac_lc: CodecProbeResult,
+ *               opus: CodecProbeResult }} codecs
+ *  @property {string[]} supportedCodecFamilies   -- ["h264","hevc","av1","vp9"] — derived
+ *  @property {{ downlinkMbit: number|null, effectiveType: string|null,
+ *               rttMs: number|null, saveData: boolean,
+ *               hlsBandwidthEstimateMbit: number|null }} network
+ *  @property {{ viewportWidth: number, viewportHeight: number,
+ *               screenWidth: number, screenHeight: number,
+ *               devicePixelRatio: number }} display
+ *  @property {string} userAgent
+ *  @property {number} probedAt   -- Date.now()
+ */
+```
+
+`supportedCodecFamilies` is derived: `"h264"` if any h264 tier is supported, `"hevc"` if `hevc_main` is supported, etc. This is the field the server uses in `intersection(viewer.supportedCodecs)`.
+
+**F2e. Reporting and re-probing.**
+
+- On WebSocket connect: run full probe (tiers 1 + 2 + network + display) and send `viewer-capabilities` message (see protocol below).
+- On `navigator.connection` `change` event: re-run network probe. Send update only if `downlinkMbit` or `effectiveType` changed.
+- On HLS.js `FRAG_LOADED` every 10 segments (not every fragment): refresh `hlsBandwidthEstimateMbit` and send update if it changed by >15%.
+- On HLS.js `LEVEL_SWITCHED` (viewer's player dropped to a lower HLS level): always send an update immediately with `triggeredBy: "hls_level_drop"`.
+
+**F2f. Protocol update.** Replace the `viewer-summary` message with a richer shape in `shared/streaming/protocol.js`:
+
+```jsonc
+// viewer → server  (replaces implicit connection signal)
+{
+  "type": "viewer-capabilities",
+  "viewerId": "<uuid>",
+  "supportedCodecFamilies": ["h264", "hevc"],
+  "codecs": { "h264_high": { "supported": true, "smooth": true, "powerEfficient": true }, ... },
+  "network": { "downlinkMbit": 18.5, "effectiveType": "4g", "rttMs": 12, "saveData": false, "hlsBandwidthEstimateMbit": null },
+  "display": { "viewportWidth": 1920, "viewportHeight": 1080, "devicePixelRatio": 1 },
+  "probedAt": 1714900000000,
+  "triggeredBy": "connect" | "network_change" | "hls_bandwidth" | "hls_level_drop"
+}
+
+// server → streamer  (unchanged shape, now computed from richer viewer data)
+{ "type": "viewer-summary", "viewerCount": 12, "minDownlinkMbit": 4.5,
+  "supportedCodecs": ["h264"], "maxResolution": { "w": 1920, "h": 1080 } }
+```
+
+The server's `viewerStore.js` stores one `ViewerCapabilities` per viewer and recomputes the `viewer-summary` derived fields on every update.
+
+**F2g. File location.** Add `src/features/player/viewerProbe.js` to the renderer file layout (§ Code organization). Export one async function `probeViewerCapabilities(): Promise<ViewerCapabilities>` and one function `deriveCodecFamilies(codecs): string[]`.
 
 **F3. Server side.** Maintain per-session viewer state in `server/src/live/control/viewerStore.js`. Recompute recommendation on any viewer change:
 
@@ -327,6 +453,9 @@ Server applies the same clamp before sending. Belt and suspenders.
 ### Top-level layout
 
 ```
+src/features/player/
+  viewerProbe.js                            -- auto-detects viewer codecs + network (Phase F2)
+
 src/features/streaming/                     -- renderer (React)
   ui/
     StreamingPage.jsx                       -- thin shell that composes panels
@@ -449,7 +578,7 @@ Exactly **three** boundaries:
 
 ### Type discipline
 
-Move `public/streaming/types.js` to `shared/streaming/types.js` as the first step of this plan, updating all relative imports in `public/streaming/`. Add `DetectedCapabilities`, `AudioSource`, `ConstraintResult`, `ViewerSummary`, `RecommendedSettings`, and `StreamingProfile` (from Plan 01) to the same file.
+Move `public/streaming/types.js` to `shared/streaming/types.js` as the first step of this plan, updating all relative imports in `public/streaming/`. Add `DetectedCapabilities`, `AudioSource`, `ConstraintResult`, `ViewerSummary`, `RecommendedSettings`, `StreamingProfile` (from Plan 01), `CodecProbeResult`, and `ViewerCapabilities` (Phase F2d) to the same file.
 
 Configure `jsconfig.json` with `checkJs: true` so types are enforced on save.
 
@@ -478,7 +607,10 @@ Configure `jsconfig.json` with `checkJs: true` so types are enforced on save.
 - **Phase D:** stream a local 1080p60 mp4 for 10 minutes; verify the produced HLS plays correctly and segment cadence matches `hls_time`.
 - **Phase E:** capture mic + desktop + game-include in three concurrent sources; verify levels are correct, no double-audio, mute works in real time.
 - **Phase F:**
-  - Stream at 8 Mbit; open the player on a throttled network (Chrome devtools) at 2 Mbit; observe the streamer respawn at ≤2 Mbit within ~3–5 seconds.
+  - `viewerProbe.js` unit test: mock `MediaSource.isTypeSupported`, `mediaCapabilities.decodingInfo`, and `navigator.connection`; assert `ViewerCapabilities` shape and `supportedCodecFamilies` derivation are correct across browsers that support none, some, or all of the three tiers.
+  - Verify `viewer-capabilities` message is sent on WebSocket connect; open the player in a browser that does not support HEVC and confirm `supportedCodecFamilies` omits `"hevc"`.
+  - Throttle the player's network via Chrome devtools (2 Mbit); wait for 10 HLS segments; confirm `hlsBandwidthEstimateMbit` in the message is within range of the throttle setting.
+  - Stream at 8 Mbit; open the player on a throttled network at 2 Mbit; observe the streamer respawn at ≤2 Mbit within ~3–5 seconds.
   - Open a second viewer at 1 Mbit; observe a further drop.
   - Close both viewers; observe the streamer does NOT raise above the initial ceiling.
   - Manually set a value above the initial ceiling; UI rejects it.
