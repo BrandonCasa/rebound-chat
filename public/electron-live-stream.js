@@ -17,7 +17,8 @@ import {
 import { parseOptionalPositiveInt, parsePositiveFloat, parsePositiveInt } from "./streaming/numbers.js";
 import { splitCommandLine } from "./streaming/strings.js";
 import { normalizeAudioCodec } from "./streaming/audio.js";
-import { CAPTURE_BACKEND_OPTIONS, DEFAULT_SETTINGS } from "./streaming/defaults.js";
+import { DEFAULT_SETTINGS } from "./streaming/defaults.js";
+import { availableEncoderPresets, currentPlatformProfile, defaultEncoderPresets } from "./streaming/platform/index.js";
 import { buildArgs as buildPipelineArgs, defaultCapabilities, fallbackOnFailure } from "./streaming/pipeline.js";
 
 const UPLOAD_POLL_INTERVAL_MS = 750;
@@ -89,6 +90,27 @@ class ElectronLiveStreamManager {
 		};
 	}
 
+	/**
+	 * Catalog of what this host's bundled FFmpeg can do. Used by the renderer
+	 * to populate dropdowns honestly. Reads through the platform profile, so
+	 * tweaks land here automatically when the profile changes.
+	 */
+	getCapabilities() {
+		const profile = currentPlatformProfile();
+		return {
+			profileId: profile.id,
+			profileDescription: profile.description,
+			platform: process.platform,
+			arch: process.arch,
+			videoCodecs: [...profile.videoCodecs],
+			audioCodecs: [...profile.audioCodecs],
+			captureBackends: [...profile.captureBackends],
+			defaults: { ...profile.defaults },
+			encoderPresets: availableEncoderPresets(profile),
+			defaultEncoderPresets: defaultEncoderPresets(profile),
+		};
+	}
+
 	setState(status, extra = {}) {
 		this.status = status;
 		if ("error" in extra) this.error = extra.error || "";
@@ -125,8 +147,13 @@ class ElectronLiveStreamManager {
 			...rawConfig,
 		};
 
+		const profile = currentPlatformProfile();
+
 		const videoCodec = lower(config.videoCodec);
 		codecFamily(videoCodec);
+		if (!profile.videoCodecs.includes(videoCodec)) {
+			throw new Error(`Video codec "${videoCodec}" is not available in this build (${profile.id}). Available: ${profile.videoCodecs.join(", ")}.`);
+		}
 		const encoderPreset = normalizeEncoderPreset(videoCodec, config.encoderPreset);
 		const outputWidth = parseOptionalPositiveInt(config.outputWidth, "Width");
 		const outputHeight = parseOptionalPositiveInt(config.outputHeight, "Height");
@@ -153,7 +180,7 @@ class ElectronLiveStreamManager {
 			retainSegmentCount: parsePositiveInt(config.retainSegmentCount, "Retain segments"),
 			ffmpegPath: String(config.ffmpegPath || "ffmpeg").trim(),
 			source: config.source || null,
-			captureBackend: normalizeChoice(config.captureBackend, CAPTURE_BACKEND_OPTIONS, DEFAULT_SETTINGS.captureBackend, "Capture backend"),
+			captureBackend: normalizeChoice(config.captureBackend, profile.captureBackends, profile.defaults.captureBackend, "Capture backend"),
 			captureFps,
 			manualInputArgs,
 			audioInputArgs,
@@ -610,6 +637,7 @@ const registerLiveStreamIpc = ({ ipcMain, app, desktopCapturer, shell, sendToRen
 	});
 
 	ipcMain.handle("live-stream:get-state", () => manager.getState());
+	ipcMain.handle("live-stream:get-capabilities", () => manager.getCapabilities());
 	ipcMain.handle("live-stream:start", (_event, config) => manager.start(config));
 	ipcMain.handle("live-stream:stop", () => manager.stop());
 	ipcMain.handle("live-stream:open-url", (_event, url) => {

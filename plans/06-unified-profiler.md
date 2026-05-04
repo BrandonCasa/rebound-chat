@@ -66,6 +66,14 @@ After this plan ships:
 - A separate orthogonal pair of commands captures **on-demand CPU profiles and heap snapshots** via Node's built-in inspector — these are the standard `.cpuprofile` and `.heapsnapshot` files that drag-and-drop into Chrome DevTools (Performance tab and Memory tab respectively):
   - `pnpm profile:cpu --target=main --duration=5` → writes `dev/profiles/main-2026-05-04T20-13-47.cpuprofile`
   - `pnpm profile:heap --target=server` → writes `dev/profiles/server-…heapsnapshot`
+- For the GPU side of the streaming pipeline (the encoder, capture, and PCIe traffic that Plans 01–04 care about) a third orthogonal command captures **per-vendor GPU profiles** that automatically pick the right tool per platform and architecture:
+  - `pnpm profile:gpu` — auto-detects NVIDIA / Intel / AMD / Apple, polls live counters into the OTel trace at 1 Hz (encoder engine %, VRAM, PCIe traffic, power, temp, clocks), and optionally wraps FFmpeg under the vendor's deep profiler:
+    - **NVIDIA (Windows + Linux x86_64):** Nsight Systems (`.nsys-rep`); live counters via `nvidia-smi` / `nvidia-smi dmon` for PCIe RX/TX
+    - **Intel (Linux):** `intel_gpu_top -J` live + Intel VTune `gpu-hotspots` deep capture
+    - **Intel / AMD (Windows):** Microsoft PresentMon (cross-vendor frame timing + encoder engine %) plus VTune (Intel) or RGP (AMD)
+    - **AMD (Linux):** `rocm-smi --json` (with `radeontop` fallback); RGP deep capture when AMD Developer Mode driver is enabled
+    - **Apple Silicon (macOS arm64):** `powermetrics --samplers gpu_power` + `ioreg -c AppleAVD` for VideoToolbox queue depth; Instruments / Metal System Trace via `xctrace record --template "Metal System Trace"` for deep capture
+  - All vendor counters land as span events on the same `ffmpeg.process` OTel span, so the developer sees CPU-side and GPU-side data on a single Jaeger trace timeline. Vendor-specific deep-capture artifacts open in their respective vendor GUIs (Nsight Systems, VTune, RGP, Instruments).
 
 ## How to fix
 
@@ -514,7 +522,8 @@ This is what the developer actually types.
     "profile:server":   "node tools/profiler/bin/launch.js --only=server",
     "profile:renderer": "node tools/profiler/bin/launch.js --only=renderer",
     "profile:cpu":      "node tools/profiler/inspector/cli.js cpu",
-    "profile:heap":     "node tools/profiler/inspector/cli.js heap"
+    "profile:heap":     "node tools/profiler/inspector/cli.js heap",
+    "profile:gpu":      "node tools/profiler/gpu/cli.js"
   }
 }
 ```
@@ -559,6 +568,223 @@ function openBrowser(url) {
 
 ---
 
+### Phase H — GPU profiling for the streaming pipeline (per-vendor, per-platform)
+
+OpenTelemetry tracks CPU-side work — Node spans, HTTP, IPC, FFmpeg lifecycle. The actual encoder runs on the GPU (NVENC, QSV, AMF, VideoToolbox), and so does most of Plan 01's hot path (`gfxcapture` D3D11 surface → `hwmap` → CUDA → NVENC). To answer the questions Plans 01–04 ask — "did the GPU→CPU readback go away?", "is NVENC saturated or starving?", "what's the per-frame encoder latency?" — we need GPU-side observability, and that comes from vendor SDKs and OS-level tools, not OTel.
+
+This phase adds two layers of GPU profiling:
+
+- **Live GPU counters** during a stream, polled at 1 Hz, attached as span events to the active `ffmpeg.process` OTel span (so they appear inline in Jaeger next to the FFmpeg events from Phase E).
+- **Deep capture** — a vendor-specific `pnpm profile:gpu --vendor=…` command that wraps the FFmpeg invocation under the right vendor profiler (Nsight Systems, VTune, RGP, Instruments) and produces a vendor-native trace file, opened in the vendor's GUI.
+
+**H1. Vendor + platform detection.** Reuses Plan 05 Phase A's capability probe (`public/streaming/capabilities/gpuDetect/`). The probe already returns `{ os, arch, gpu: { vendor: "nvidia"|"intel"|"amd"|"apple", model, driver } }`. The GPU profiler reads from this; if the probe hasn't run, it runs synchronously on first invocation.
+
+The full support matrix:
+
+| OS / Arch | NVIDIA | Intel | AMD | Apple |
+|---|---|---|---|---|
+| Windows x86_64 | ✅ NVML + Nsight Systems + GPUView | ✅ PresentMon + VTune + GPA | ✅ PresentMon + RGP + μProf | n/a |
+| Windows arm64 | ⚠ NVML if driver present | ⚠ Adreno via PresentMon | n/a | n/a |
+| Linux x86_64 | ✅ NVML (`nvidia-smi`) + Nsight Systems | ✅ `intel_gpu_top` + VTune | ✅ `rocm-smi`/`radeontop` + RGP | n/a |
+| Linux arm64 | ⚠ `tegrastats` (Jetson) | ⚠ same as x86_64 | ⚠ same as x86_64 | n/a |
+| macOS arm64 (Apple Silicon) | n/a (no NV drivers) | n/a | n/a | ✅ Instruments + `powermetrics` + `ioreg` |
+| macOS x86_64 (legacy) | n/a | ⚠ `powermetrics` | ⚠ `powermetrics` (eGPU) | n/a |
+
+`✅` = full live-counters + deep-capture. `⚠` = best-effort, live counters only. `n/a` = vendor not present on that OS.
+
+**H2. Live GPU counter polling.** A dedicated module `tools/profiler/gpu/poller.js` runs in the Electron main process whenever an FFmpeg child is alive. It polls at 1 Hz and emits one OTel span event per sample (`gpu.sample`) on the active `ffmpeg.process` span (Phase E1). Each vendor has its own poller backend; the dispatcher picks one based on H1's detection.
+
+Common attributes on every `gpu.sample` event:
+
+```
+gpu.vendor          "nvidia" | "intel" | "amd" | "apple"
+gpu.model           "NVIDIA GeForce RTX 4090"
+gpu.utilization     0..100  (graphics engine % busy)
+gpu.encoder.utilization   0..100  (encoder/NVENC/QSV/AMF/Media engine %)
+gpu.memory.used.bytes
+gpu.memory.total.bytes
+gpu.power.watts            (where exposed)
+gpu.temperature.c          (where exposed)
+gpu.clock.graphics.mhz
+gpu.clock.memory.mhz
+pcie.rx.bytes_per_sec      (where exposed; Plan 01 cares about this number going to ~0)
+pcie.tx.bytes_per_sec
+```
+
+This means: **in Jaeger, opening the trace from a 60-second stream shows the FFmpeg span with 60 evenly-spaced gpu.sample events**, each carrying a snapshot of GPU state. The "did Plan 01's GPU→CPU readback elimination work?" check becomes: scrub through the events and confirm `pcie.rx.bytes_per_sec` collapses from ~475 MB/s to near zero.
+
+**H3. NVIDIA — Windows + Linux (x86_64).**
+
+*H3a. Live counters (NVML).* Two implementation choices:
+
+- **Option A: NVML via N-API binding.** Use `nvidia-smi` shell-out (already on every machine with the NVIDIA driver):
+  ```
+  nvidia-smi --query-gpu=utilization.gpu,utilization.encoder,memory.used,memory.total,power.draw,temperature.gpu,clocks.gr,clocks.mem,pcie.link.gen.gpucurrent,pcie.link.width.current --format=csv,noheader,nounits -lms 1000
+  ```
+  Streaming CSV every 1000 ms; one process for the duration of the stream; we parse line-by-line into span events. Zero deps. **Picked as default** because the NVML N-API bindings are not maintained for current Node versions and cross-platform binary distribution is painful.
+- **Option B: NVML via `node-nvml` if/when a maintained binding exists.** Lower latency than the CLI, more counters available (per-process VRAM, encoder session count, `nvmlDeviceGetEncoderStats`).
+
+For PCIe traffic specifically, NVML exposes `nvmlDeviceGetPcieThroughput()` which returns `PCIE_RX_BYTES`/`PCIE_TX_BYTES` over a sliding window. `nvidia-smi` does not directly expose this; we use `nvidia-smi dmon -s u -c 1` (which prints `pcie_rx_kb_s pcie_tx_kb_s`). The poller runs both `nvidia-smi --query-gpu=…` and `nvidia-smi dmon -s u` and merges their outputs.
+
+*H3b. Per-FFmpeg-process NVENC stats.* FFmpeg with `-loglevel verbose` prints NVENC encoder stats to stderr (encoder name, capabilities, init params); with `-stats` and `-vstats /tmp/vstats.csv` it prints per-frame timing. The FFmpeg wrapper from Phase E1 already parses stderr; we extend it to recognize NVENC-specific lines (`[h264_nvenc @ 0x…]` patterns) and surface them as span attributes on the `ffmpeg.process` span.
+
+*H3c. Deep capture: Nsight Systems.*
+
+`pnpm profile:gpu --vendor=nvidia --duration=30` runs the full streaming pipeline once, wrapped under Nsight Systems' CLI:
+
+```
+nsys profile \
+  --output dev/profiles/nvidia-<timestamp>.nsys-rep \
+  --trace=cuda,nvtx,osrt,opengl,d3d11 \
+  --duration=30 \
+  --delay=2 \
+  --sample=cpu \
+  ffmpeg <full pipeline argv from buildFfmpegCommand>
+```
+
+What this captures:
+
+- **CUDA API timeline** — every `cuMemAlloc`, `cuLaunchKernel`, `cuMemcpy*`. Confirms whether `hwmap=derive_device=cuda:mode=read` is actually mapping (zero-copy) versus copying (PCIe traffic).
+- **D3D11 timeline** — `gfxcapture`'s D3D11 calls, including `IDXGIOutputDuplication::AcquireNextFrame` cadence (this answers "are we hitting the capture FPS or capture-bound?").
+- **NVENC timeline** — encoder submit/complete pairs. Per-frame encoder latency. If frames are queueing up, you see it here.
+- **OS scheduler / system traces** — context switches, CPU frequency, IRQ activity. Confirms the FFmpeg threads aren't being preempted under load.
+
+Output: one `.nsys-rep` file. Opens in Nsight Systems GUI (`nsys-ui` or the standalone Nsight Systems desktop app). The CLI step requires Nsight Systems installed (free download from NVIDIA, ~1 GB). The orchestrator probes for it (`nsys --version`) and prints install instructions if missing — does not auto-download (license-gated).
+
+*H3d. NVTX annotations.* A small native-free addition: the FFmpeg wrapper in Phase E1 uses NVTX ranges via the Nsight CLI's `--nvtx-domain-include` to inject named ranges into the timeline. We don't link against NVTX in our code; instead, we emit named events in our OTel spans and configure Nsight to import an OTLP→NVTX range bridge (post-process step: a Python script using `nsys` SDK that reads our OTLP export and writes NVTX ranges into the same `.nsys-rep` file). This is optional; the basic capture without it is already useful.
+
+**H4. Intel — Windows + Linux + macOS.**
+
+*H4a. Live counters (Linux: `intel_gpu_top`).*
+
+```
+intel_gpu_top -J -s 1000
+```
+
+Streams JSON every second containing per-engine utilization (Render/3D, Blitter, **Video** (the QSV engine), VideoEnhance), frequency, power. We parse into the same `gpu.sample` event shape. `intel-gpu-tools` package, available everywhere.
+
+*H4b. Live counters (Windows: PresentMon + WMI).* `intel_gpu_top` does not exist on Windows. We use **Microsoft PresentMon** (cross-vendor):
+
+```
+PresentMon-x64.exe -output_stdout -no_csv -metrics gpu_busy,gpu_video_busy,gpu_frame_time,frame_time
+```
+
+PresentMon's `gpu_video_busy` is the encoder-engine utilization on Intel; combined with WMI (`Get-CimInstance Win32_VideoController`) for static info, we have what we need. PresentMon is shipped as a small `.exe` we download once into `dev/bin/PresentMon-x64.exe` (gitignored, license-permissive — Microsoft, MIT-licensed).
+
+*H4c. Live counters (macOS x86_64 with Intel iGPU).* `powermetrics --samplers gpu_power -i 1000` (root required). On older Intel Macs.
+
+*H4d. Per-FFmpeg-process QSV stats.* Same as NVIDIA — FFmpeg's `[h264_qsv @ 0x…]` log lines parsed by the Phase E1 wrapper.
+
+*H4e. Deep capture (Linux + Windows): Intel VTune Profiler.*
+
+```
+vtune -collect gpu-hotspots \
+  -result-dir dev/profiles/intel-<timestamp>.vtune \
+  -- ffmpeg <argv>
+```
+
+VTune's `gpu-hotspots` analysis captures EU (execution unit) occupancy, memory traffic, sampler busy, and kernel timeline. Output opens in VTune GUI. VTune is free for all use as of 2024+.
+
+*H4f. Deep capture (Windows alternate): Intel GPA.* For per-frame analysis (most relevant when we want to see if the encoder is starving). Same install-then-run posture as Nsight; orchestrator probes for it.
+
+*H4g. Deep capture cross-vendor (Windows): PresentMon CSV + GPUView.* PresentMon's CSV mode produces per-frame timestamps for the entire pipeline (Sim → CPU → GPU → Present → Display). For our use case (encoder pipeline), the relevant columns are `MsBetweenAppStart`, `MsBetweenPresents`, `MsInPresentAPI`, `MsGPUActive`. We generate this CSV alongside the OTel traces.
+
+**H5. AMD — Windows + Linux.**
+
+*H5a. Live counters (Linux: `rocm-smi` for ROCm-capable, `radeontop` for everyone).* ROCm's coverage of consumer Radeon is incomplete; we fall back gracefully:
+
+- Try `rocm-smi --json --showuse --showtemp --showpower --showmemuse --showclocks -P`. If it errors → `radeontop -d -` (pipe text output, parse).
+- For PCIe: `rocm-smi --showpcie` is unreliable on consumer parts. We accept "unknown" here.
+
+*H5b. Live counters (Windows): PresentMon.* Same approach as Intel/Windows in H4b. `gpu_video_busy` is AMD's VCN/UVD encoder engine utilization.
+
+*H5c. Per-FFmpeg-process AMF stats.* FFmpeg's AMF encoders (`h264_amf`, `hevc_amf`) print stats to stderr on `-loglevel verbose`. Same parser path as NVENC/QSV.
+
+*H5d. Deep capture: Radeon GPU Profiler (RGP).*
+
+RGP requires the **AMD Developer Mode** driver setting toggled on (registry key on Windows; kernel module on Linux). The orchestrator can't toggle that automatically — it requires admin privilege and a one-time setup. Our `pnpm profile:gpu --vendor=amd` instead:
+
+1. Probes for RGP install (`%RADEON_DEVELOPER_PATH%` on Windows, `~/RGP/` on Linux).
+2. Probes for Developer Mode driver flag.
+3. If both present: launches `RadeonDeveloperPanel.exe` (or `RadeonDeveloperPanel` on Linux) with auto-capture configured for the FFmpeg PID, runs the stream, captures.
+4. If either missing: prints clear setup instructions and falls back to live counters only.
+
+Output: `.rgp` file. Opens in Radeon GPU Profiler GUI. Limited use without Developer Mode — most users never get to deep-capture territory on AMD; the live counters from H5a/b are the practical ceiling.
+
+**H6. Apple — macOS arm64 (Apple Silicon).**
+
+*H6a. Live counters: `powermetrics` + `ioreg`.* `powermetrics --samplers gpu_power -i 1000` requires root, but for dev that's acceptable (the orchestrator prompts once with `sudo`).  Output:
+
+```
+GPU HW active frequency: 1296 MHz
+GPU HW active residency: 67.21%
+GPU SW requested state: P1=0% P2=0% P3=8% P4=92%
+GPU idle residency: 32.79%
+GPU Power: 8421 mW
+```
+
+We parse the HW-active residency as `gpu.utilization`, the GPU Power as `gpu.power.watts`. There is no separate "encoder engine utilization" counter on Apple Silicon — the Media Engine is opaque from `powermetrics`. We get its activity indirectly via `ioreg`:
+
+```
+ioreg -r -d 1 -w 0 -c IOAccelerator   # global GPU command queue depth
+ioreg -r -d 1 -w 0 -c AppleAVD         # VideoToolbox decoder/encoder driver
+```
+
+`AppleAVD` exposes per-channel queue depth; we sample it for `videotoolbox.encoder.queue_depth`.
+
+*H6b. Per-FFmpeg-process VideoToolbox stats.* FFmpeg's `[h264_videotoolbox @ 0x…]` log lines parsed by Phase E1.
+
+*H6c. Deep capture: Instruments / Metal System Trace via `xctrace`.*
+
+`xctrace` is the CLI for Xcode's Instruments. The "Metal System Trace" template captures GPU command buffer activity, including the AVE (Apple Video Engine) when VideoToolbox encodes via Metal:
+
+```
+xctrace record \
+  --template "Metal System Trace" \
+  --output dev/profiles/apple-<timestamp>.trace \
+  --launch -- /opt/homebrew/bin/ffmpeg <argv>
+```
+
+Output: `.trace` bundle directory. Opens in Instruments.app (`open dev/profiles/apple-….trace`). Shows GPU command buffer encode/submit/complete timeline alongside CPU activity.
+
+`xctrace` is bundled with Xcode (or the Command Line Tools, which is a smaller install). The orchestrator probes for `xctrace --version` and prints `xcode-select --install` instructions if missing.
+
+*H6d. `os_signpost` integration (optional, future).* macOS's signposts show up natively in Instruments. We don't link against `os_signpost` in JS, so this is out of scope for this plan; flagged for a future plan that adds a small native helper.
+
+**H7. PresentMon as cross-vendor truth on Windows.** Worth its own callout: PresentMon is the only tool that gives **frame-pacing across all three vendors on Windows** with a uniform CSV schema. For "is the streamed video smooth or hitching?" questions, we always run PresentMon alongside the vendor-specific tool. The orchestrator on Windows always starts PresentMon when `pnpm profile:gpu` runs; the CSV sits next to the vendor profile.
+
+**H8. FFmpeg verbose stats parsing.**
+
+In every vendor case, we set FFmpeg's logging to `-loglevel verbose -stats -vstats_file dev/profiles/ffmpeg-vstats-<timestamp>.csv`. The `vstats` CSV gives per-frame:
+
+```
+frame=N fps=F.F q=Q size=B time=T bitrate=B speed=S
+```
+
+The Phase E1 FFmpeg wrapper parses this into a 1 Hz aggregated event on the `ffmpeg.process` span and also writes the raw CSV to `dev/profiles/`. Useful for plotting outside the trace if needed.
+
+**H9. The `pnpm profile:gpu` orchestrator.** Added in `tools/profiler/gpu/cli.js`:
+
+```
+pnpm profile:gpu                               # full streaming run, auto-detect vendor, all defaults
+pnpm profile:gpu --vendor=nvidia               # force vendor (even if multiple GPUs present)
+pnpm profile:gpu --vendor=nvidia --no-deep     # live counters only, no Nsight wrap
+pnpm profile:gpu --duration=30                 # cap duration
+pnpm profile:gpu --target-fps=60 --resolution=1920x1080  # synthetic test source instead of capture
+```
+
+Behavior:
+
+1. Calls Plan 05 Phase A's capability probe; resolves the vendor (or honors `--vendor`).
+2. Picks the appropriate poller backend (H3a/H4a/H5a/H6a) based on vendor + OS.
+3. Spawns FFmpeg with the active StreamConfig (or a synthetic source if `--target-fps`/`--resolution` set, useful for repeatable benchmarks). FFmpeg's argv passed through Phase E1's wrapper, so all OTel + GPU events go into the same Jaeger trace.
+4. If `--no-deep` is not set: also spawns the vendor's deep-capture tool wrapping the FFmpeg PID (or relaunches FFmpeg under the deep-capture tool's process group, depending on the tool).
+5. On exit: prints the file paths of all artifacts (`.nsys-rep` / `.vtune` / `.rgp` / `.trace`, plus the `vstats` CSV, plus the Jaeger trace ID), and offers to `open` them.
+
+**H10. CI (best-effort).** Headless GPU profiling in CI is fragile (no display, no consumer drivers in cloud runners). We do not gate any tests on GPU profile output. We do add one smoke test per vendor that runs only when the corresponding vendor's CLI is detected on the runner — runs a 5-second synthetic stream and asserts that at least 3 `gpu.sample` events appeared on the `ffmpeg.process` span. Skipped silently on runners without the vendor.
+
+---
+
 ## Code organization & implementation notes
 
 ### Top-level layout
@@ -587,6 +813,25 @@ tools/profiler/                                  (new top-level directory)
     cli.js                                       -- pnpm profile:cpu / profile:heap entry
     debugServer.js                               -- 127.0.0.1:9876/9877 endpoints in main/server
 
+  gpu/
+    poller.js                                    -- live GPU counter dispatcher (auto-picks vendor)
+    cli.js                                       -- pnpm profile:gpu entry
+    backends/
+      nvml.js                                    -- nvidia-smi shell-out + CSV parser
+      intelGpuTop.js                             -- intel_gpu_top -J streaming parser
+      rocmSmi.js                                 -- rocm-smi --json polling
+      radeontop.js                               -- radeontop fallback for non-ROCm AMD
+      presentmon.js                              -- Windows cross-vendor PresentMon CSV parser
+      powermetrics.js                            -- macOS powermetrics --samplers gpu_power
+      ioreg.js                                   -- macOS ioreg AppleAVD queue-depth sampler
+    deepCapture/
+      nsight.js                                  -- nsys profile wrapper (NVIDIA)
+      vtune.js                                   -- vtune -collect gpu-hotspots wrapper (Intel)
+      rgp.js                                     -- Radeon GPU Profiler launcher + dev-mode probe
+      xctrace.js                                 -- xctrace record --template "Metal System Trace"
+    ffmpegStats.js                               -- vstats CSV + verbose-log parser (NVENC/QSV/AMF/VT)
+    detect.js                                    -- thin wrapper over Plan 05's capability probe
+
   bin/
     launch.js                                    -- the `pnpm run profile` orchestrator
     jaeger.js                                    -- start/stop helpers (docker + binary fallback)
@@ -596,17 +841,35 @@ tools/profiler/                                  (new top-level directory)
     instrumentationIpc.test.js                   -- propagate context through fake ipc
     instrumentationFfmpeg.test.js                -- replay stderr fixtures, assert events
     util.test.js                                 -- withSpan happy path + exception path
+    nvmlParser.test.js                           -- nvidia-smi CSV → events
+    intelGpuTopParser.test.js                    -- intel_gpu_top -J → events
+    rocmSmiParser.test.js                        -- rocm-smi JSON → events
+    presentMonParser.test.js                     -- PresentMon CSV → events
+    powermetricsParser.test.js                   -- powermetrics text → events
+    ffmpegStats.test.js                          -- vstats CSV + nvenc/qsv/amf/vt log parsing
     fixtures/
-      ffmpeg-stderr.txt                          -- canned FFmpeg output
+      ffmpeg-stderr.txt                          -- canned FFmpeg output (generic)
+      ffmpeg-stderr-nvenc.txt                    -- canned NVENC verbose log
+      ffmpeg-stderr-qsv.txt                      -- canned QSV verbose log
+      ffmpeg-stderr-amf.txt                      -- canned AMF verbose log
+      ffmpeg-stderr-videotoolbox.txt             -- canned VideoToolbox verbose log
+      ffmpeg-vstats.csv                          -- canned vstats CSV
+      nvidia-smi-query.csv                       -- canned nvidia-smi --query-gpu output
+      nvidia-smi-dmon.txt                        -- canned dmon -s u output
+      intel-gpu-top.json                         -- canned intel_gpu_top -J output
+      rocm-smi.json                              -- canned rocm-smi --json output
+      presentmon.csv                             -- canned PresentMon CSV
+      powermetrics.txt                           -- canned powermetrics samplers gpu_power output
 ```
 
 ### Cross-process boundaries
 
-There are three boundaries; everything else is internal:
+There are four boundaries; everything else is internal:
 
 1. **Tracing client ↔ Jaeger collector (OTLP/HTTP, port 4318).** Standard OpenTelemetry wire format; we don't own this protocol, OTel does.
 2. **CLI ↔ in-process debug server (127.0.0.1:9876/9877, JSON over HTTP).** Tiny custom protocol for CPU profile / heap snapshot capture. Lives in `tools/profiler/inspector/`. One JSON shape per command. Loopback-only.
 3. **Renderer ↔ Main IPC, with `__otel` envelope (Phase D2).** Wrappers on both sides hide the envelope from application code. Wire format change is one PR, both sides updated.
+4. **GPU poller ↔ vendor CLI (stdio of `nvidia-smi` / `intel_gpu_top` / `rocm-smi` / `PresentMon` / `powermetrics`).** Each backend in `tools/profiler/gpu/backends/` parses one specific vendor CLI's output format. Each parser is a pure function `(text) => GpuSample` and is independently testable against canned fixtures.
 
 ### Architectural rules
 
@@ -671,6 +934,16 @@ The trade-offs we accept:
 - **Phase E (FFmpeg + React + runtime metrics) ships piecewise.** Independent of the others; each can land in its own PR.
 - **Phase F (CPU/heap profiles) ships independently.** No dependency on OTel.
 - **Phase G (`pnpm run profile` orchestrator) ships last.** Ties it all together for the developer.
+- **Phase H (GPU profiling) ships piecewise per vendor and per platform**, in this order:
+  1. Live counters: NVIDIA Linux/Windows (nvidia-smi) — most users have this; one PR.
+  2. Live counters: Intel Linux (`intel_gpu_top`) and Apple (`powermetrics`) — independent PRs.
+  3. Live counters: AMD Linux (`rocm-smi` + `radeontop` fallback).
+  4. Live counters: Windows cross-vendor via PresentMon (covers Intel/AMD/NVIDIA on Windows).
+  5. FFmpeg vendor-specific stats parsing (NVENC/QSV/AMF/VideoToolbox) — one shared PR; pure parser, no platform conditionals.
+  6. Deep capture wrappers — one PR per vendor (Nsight, VTune, RGP, xctrace).
+  7. `pnpm profile:gpu` orchestrator — last, after all backends exist.
+
+  Phase H lands progressively. Each step ships value: even just (1) lets us validate Plan 01's GPU→CPU readback elimination on the most common hardware (Windows + RTX). The deep-capture wrappers are gravy — most investigations are answered by live counters.
 
 The plan is **off by default at every step**. Through every phase, `pnpm run electron-dev` and `pnpm run dist` are unaffected — no OTel SDK is loaded, no Jaeger is started, and no code path behaves differently from today.
 
@@ -690,3 +963,12 @@ The plan is **off by default at every step**. Through every phase, `pnpm run ele
 - **Phase F — heap snapshot:** `pnpm profile:heap --target=server` produces a `.heapsnapshot` openable in Chrome DevTools' Memory tab. Object counts roughly match what we expect (e.g. one `Express` constructor instance, N `StreamSession` documents).
 - **Phase G — orchestrator:** `pnpm run profile` on macOS, Windows, and Linux opens Jaeger at `http://127.0.0.1:16686` automatically; `Ctrl-C` cleans up all child processes (no orphan Electron, no orphan FFmpeg, no orphan Vite, no orphan Jaeger container).
 - **End-to-end:** Run `pnpm run profile`. Click "Start streaming". After 30 seconds, click "Stop streaming". Open Jaeger, find the trace rooted at the start click. Verify it contains spans from `rebound-renderer`, `rebound-main`, and `rebound-server`, with consistent timestamps and parent-child relationships.
+- **Phase H — live counters (NVIDIA Linux/Windows):** Stream for 30 seconds on a machine with an NVIDIA GPU. Open the Jaeger trace; the `ffmpeg.process` span shows ≥ 25 `gpu.sample` events with non-zero `gpu.encoder.utilization`. After Plan 01 lands, verify `pcie.rx.bytes_per_sec` is ≤ 50 MB/s during steady state (vs ~475 MB/s pre-Plan-01).
+- **Phase H — live counters (Intel Linux):** Same as above on Intel hardware; `gpu.sample` events show non-zero `Video` engine utilization (the QSV engine).
+- **Phase H — live counters (AMD Linux):** Same as above on AMD hardware via `rocm-smi`; falls back to `radeontop` text parser when ROCm is not installed (verified via a fixture-driven unit test).
+- **Phase H — live counters (Windows cross-vendor):** Run on Windows + any GPU; PresentMon CSV produces ≥ 25 samples and the parser converts them to `gpu.sample` events with non-zero `gpu_video_busy`.
+- **Phase H — live counters (Apple Silicon):** `powermetrics` requires sudo; the orchestrator prompts once. Stream for 30 seconds; events show non-zero `gpu.utilization` and a non-zero `videotoolbox.encoder.queue_depth` derived from `ioreg -c AppleAVD`.
+- **Phase H — FFmpeg stats parsing:** Replay each canned vendor log fixture through the parser and assert correct attribute extraction for `[h264_nvenc]`, `[h264_qsv]`, `[h264_amf]`, `[h264_videotoolbox]`. Pure unit tests, no GPU required.
+- **Phase H — deep capture (NVIDIA):** On a machine with Nsight Systems installed, `pnpm profile:gpu --vendor=nvidia --duration=10` produces a `.nsys-rep` file that opens in `nsys-ui`. The capture timeline includes a CUDA section with `cuMemcpy*` calls visible (or absent — Plan 01's success criterion).
+- **Phase H — deep capture (Apple):** `pnpm profile:gpu --duration=10` on Apple Silicon produces a `.trace` bundle that opens in Instruments.app and shows the Metal command queue activity for the FFmpeg process.
+- **Phase H — graceful degradation:** Run `pnpm profile:gpu` on a machine where the vendor's deep-capture tool is not installed. The orchestrator falls back to live counters only and prints a one-paragraph install hint for the missing tool. No crash, no hang.

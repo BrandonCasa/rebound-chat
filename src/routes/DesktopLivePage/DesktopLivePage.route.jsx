@@ -36,7 +36,11 @@ import { getLiveBase } from "../../helpers/live";
 import { setDialogOpened } from "../../slices/dialogSlice";
 import { scrollbarStyles } from "../scrollbarStyles";
 
-const VIDEO_CODEC_OPTIONS = [
+// Fallback dropdown lists, used when the platform profile catalog is not yet
+// loaded over IPC (or when running outside Electron). Once
+// `electronLive.getCapabilities()` resolves, the effective lists come from the
+// active platform profile in `public/streaming/platform/profiles.js`.
+const FALLBACK_VIDEO_CODEC_OPTIONS = [
 	"av1_nvenc",
 	"hevc_nvenc",
 	"h264_nvenc",
@@ -47,19 +51,17 @@ const VIDEO_CODEC_OPTIONS = [
 	"libsvtav1",
 	"libaom-av1",
 	"libvpx-vp9",
-	"libx265",
-	"libx264",
 	"hevc_videotoolbox",
 	"h264_videotoolbox",
 ];
-const AUDIO_CODEC_OPTIONS = ["aac", "libmp3lame"];
+const FALLBACK_AUDIO_CODEC_OPTIONS = ["aac"];
 const NVENC_PROFILE_OPTIONS = ["quality_live", "balanced_live", "fast_live", "low_latency", "ultra_low_latency", "custom"];
 const NVENC_PRESET_LADDER = ["p7", "p6", "p5", "p4", "p3", "p2", "p1"];
 const NVENC_TUNE_OPTIONS = ["hq", "ll", "ull", "lossless"];
 const NVENC_MULTIPASS_OPTIONS = ["disabled", "qres", "fullres"];
 const NVENC_RC_OPTIONS = ["vbr", "cbr", "constqp"];
 const NVENC_B_REF_MODE_OPTIONS = ["disabled", "each", "middle"];
-const ENCODER_PRESETS = {
+const FALLBACK_ENCODER_PRESETS = {
 	nvenc: NVENC_PRESET_LADDER,
 	software: ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo"],
 	svt_av1: Array.from({ length: 13 }, (_value, index) => String(index)),
@@ -68,7 +70,7 @@ const ENCODER_PRESETS = {
 	qsv: ["veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"],
 	videotoolbox: ["realtime"],
 };
-const DEFAULT_ENCODER_PRESETS = {
+const FALLBACK_DEFAULT_ENCODER_PRESETS = {
 	nvenc: "p6",
 	software: "medium",
 	svt_av1: "8",
@@ -318,10 +320,19 @@ function DesktopLivePage() {
 	const [logs, setLogs] = useState([]);
 	const [streamState, setStreamState] = useState({ status: "idle", sessionInfo: null });
 	const [sessionInfo, setSessionInfo] = useState(null);
+	const [capabilities, setCapabilities] = useState(null);
 	const electronLive = window.electronAPI?.liveStream;
 	const isElectron = Boolean(electronLive);
+	const videoCodecOptions = capabilities?.videoCodecs?.length ? capabilities.videoCodecs : FALLBACK_VIDEO_CODEC_OPTIONS;
+	const audioCodecOptions = capabilities?.audioCodecs?.length ? capabilities.audioCodecs : FALLBACK_AUDIO_CODEC_OPTIONS;
+	const encoderPresetCatalog =
+		capabilities?.encoderPresets && Object.keys(capabilities.encoderPresets).length ? capabilities.encoderPresets : FALLBACK_ENCODER_PRESETS;
+	const defaultEncoderPresetCatalog =
+		capabilities?.defaultEncoderPresets && Object.keys(capabilities.defaultEncoderPresets).length
+			? capabilities.defaultEncoderPresets
+			: FALLBACK_DEFAULT_ENCODER_PRESETS;
 	const family = codecFamily(settings.videoCodec);
-	const encoderPresetOptions = ENCODER_PRESETS[family] || ENCODER_PRESETS.nvenc;
+	const encoderPresetOptions = encoderPresetCatalog[family] || Object.values(encoderPresetCatalog)[0] || [];
 	const isBusy = ["starting", "streaming", "stopping"].includes(streamState.status);
 	const selectedSource = useMemo(() => sources.find((source) => source.id === selectedSourceId) || null, [selectedSourceId, sources]);
 
@@ -370,17 +381,49 @@ function DesktopLivePage() {
 	}, [loadSources]);
 
 	useEffect(() => {
+		if (!electronLive?.getCapabilities) return undefined;
+		let cancelled = false;
+		electronLive
+			.getCapabilities()
+			.then((caps) => {
+				if (!cancelled) setCapabilities(caps);
+			})
+			.catch(() => {
+				// Older preload or no capabilities support; the fallback lists keep the UI usable.
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [electronLive]);
+
+	// Snap settings into bounds whenever the host's capability catalog changes.
+	useEffect(() => {
+		if (!capabilities) return;
+		setSettings((current) => {
+			const patch = {};
+			if (capabilities.videoCodecs?.length && !capabilities.videoCodecs.includes(current.videoCodec)) {
+				patch.videoCodec = capabilities.defaults?.videoCodec || capabilities.videoCodecs[0];
+			}
+			if (capabilities.audioCodecs?.length && !capabilities.audioCodecs.includes(current.audioCodec)) {
+				patch.audioCodec = capabilities.defaults?.audioCodec || capabilities.audioCodecs[0];
+			}
+			return Object.keys(patch).length ? { ...current, ...patch } : current;
+		});
+	}, [capabilities]);
+
+	useEffect(() => {
 		const profile = NVENC_PROFILE_DEFAULTS[settings.nvencProfile];
 		if (!profile) return;
 		setSettings((current) => ({ ...current, ...profile }));
 	}, [settings.nvencProfile]);
 
 	useEffect(() => {
-		const options = ENCODER_PRESETS[family] || ENCODER_PRESETS.nvenc;
+		const options = encoderPresetCatalog[family] || Object.values(encoderPresetCatalog)[0] || [];
+		if (!options.length) return;
 		if (!options.includes(settings.encoderPreset)) {
-			setSettings((current) => ({ ...current, encoderPreset: DEFAULT_ENCODER_PRESETS[family] || options[0] }));
+			setSettings((current) => ({ ...current, encoderPreset: defaultEncoderPresetCatalog[family] || options[0] }));
 		}
-	}, [family, settings.encoderPreset]);
+	}, [family, settings.encoderPreset, encoderPresetCatalog, defaultEncoderPresetCatalog]);
 
 	const handleLogin = () => {
 		dispatch(
@@ -550,7 +593,7 @@ function DesktopLivePage() {
 									<SelectField
 										label="Video codec"
 										name="videoCodec"
-										values={VIDEO_CODEC_OPTIONS}
+										values={videoCodecOptions}
 										settings={settings}
 										setSettings={setSettings}
 										disabled={isBusy}
@@ -558,7 +601,7 @@ function DesktopLivePage() {
 									<SelectField
 										label="Audio codec"
 										name="audioCodec"
-										values={AUDIO_CODEC_OPTIONS}
+										values={audioCodecOptions}
 										settings={settings}
 										setSettings={setSettings}
 										disabled={isBusy}

@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	liveStream: {
 		getSources: (options) => ipcRenderer.invoke("live-stream:get-sources", options),
 		getState: () => ipcRenderer.invoke("live-stream:get-state"),
+		getCapabilities: () => ipcRenderer.invoke("live-stream:get-capabilities"),
 		start: (config) => ipcRenderer.invoke("live-stream:start", config),
 		stop: () => ipcRenderer.invoke("live-stream:stop"),
 		openUrl: (url) => ipcRenderer.invoke("live-stream:open-url", url),
