@@ -7,18 +7,18 @@ import rateLimit from "express-rate-limit";
 const router = Router();
 
 const downloadLimiter = rateLimit({
-        windowMs: 60 * 1000,
-        max: 50,
-        standardHeaders: true,
-        legacyHeaders: false,
-        message: { error: "Too many download requests, please try again later." },
+	windowMs: 60 * 1000,
+	max: 500,
+	standardHeaders: true,
+	legacyHeaders: false,
+	message: { error: "Too many download requests, please try again later." },
 });
 
 router.get("/content/:filename", downloadLimiter, async (req, res) => {
-        const bucket = databaseServer.gridfsBucket;
-        if (!bucket) {
-                return res.status(503).send("File store not ready");
-        }
+	const bucket = databaseServer.gridfsBucket;
+	if (!bucket) {
+		return res.status(503).send("File store not ready");
+	}
 
 	const { filename } = req.params;
 	const clean = path.basename(filename);

@@ -38,7 +38,7 @@ const authLimiter = rateLimit({
 const requireAuthContext = (context) => createAuthContextMiddleware(context, logger);
 const modifyLimiter = rateLimit({
 	windowMs: 30 * 60 * 1000,
-	max: 50,
+	max: 200,
 	standardHeaders: true,
 	legacyHeaders: false,
 	message: { error: "Too many modification attempts, please try again later." },
