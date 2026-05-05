@@ -81,4 +81,15 @@ const buildArgs = (items) => {
 	return argv;
 };
 
-export { buildArgs, DEFAULT_SCALE };
+/**
+ * AVFoundation surfaces input-open failures at process start, not as
+ * mid-graph filter errors, so we don't have a per-source stderr signature
+ * to attribute against. Returning an empty array lets the pool fall back
+ * to its global circuit breaker on this platform.
+ *
+ * @param {BuilderItem[]} items
+ * @returns {{ argv: string[], identifyFailures: (line: string) => string[] }}
+ */
+const buildPlan = (items) => ({ argv: buildArgs(items), identifyFailures: () => [] });
+
+export { buildArgs, buildPlan, DEFAULT_SCALE };

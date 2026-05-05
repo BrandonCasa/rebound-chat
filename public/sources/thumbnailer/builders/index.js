@@ -22,7 +22,7 @@ const BUILDERS = {
 
 /**
  * @param {NodeJS.Platform} [platform]
- * @returns {{ buildArgs: (items: BuilderItem[]) => string[] }}
+ * @returns {{ buildArgs: (items: BuilderItem[]) => string[], buildPlan: (items: BuilderItem[]) => { argv: string[], identifyFailures: (line: string) => string[] } }}
  */
 const selectThumbnailBuilder = (platform = process.platform) => {
 	const builder = BUILDERS[platform];

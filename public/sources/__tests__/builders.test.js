@@ -101,6 +101,92 @@ describe("windows.buildArgs", () => {
 	});
 });
 
+describe("windows.buildPlan", () => {
+	it("returns argv equal to buildArgs and exposes an identifyFailures helper", () => {
+		const items = [screenItem({}, "C:/tmp/screen.png"), windowItem({}, "C:/tmp/window.png")];
+		const plan = windows.buildPlan(items);
+		assert.deepEqual(plan.argv, windows.buildArgs(items));
+		assert.equal(typeof plan.identifyFailures, "function");
+	});
+
+	it("blames the source whose gfxcapture filter id is referenced in a setup-time error line", () => {
+		const items = [
+			screenItem({ sourceId: "screen:0", source: { id: "screen:0", kind: "screen", name: "Primary Display (0)" } }, "C:/tmp/screen.png"),
+			windowItem({ sourceId: "window:abc", source: { id: "window:abc", kind: "window", name: "Notepad" } }, "C:/tmp/notepad.png"),
+			windowItem({ sourceId: "window:def", source: { id: "window:def", kind: "window", name: "RzMonitor" } }, "C:/tmp/rz.png"),
+		];
+		const plan = windows.buildPlan(items);
+		// Filter ids: screen:0 -> 0, window:abc -> 6, window:def -> 12.
+		const blameLine = "[Parsed_gfxcapture_12 @ 0x1234] Failed to find capture source";
+		assert.deepEqual(plan.identifyFailures(blameLine), ["window:def"]);
+	});
+
+	it("returns no blame for log lines that don't match the capture-failure signatures", () => {
+		const plan = windows.buildPlan([screenItem()]);
+		assert.deepEqual(plan.identifyFailures("[Parsed_gfxcapture_0] frame=42 fps=2"), []);
+		assert.deepEqual(plan.identifyFailures("[fc#0] Some other warning"), []);
+	});
+
+	it("ignores Parsed_gfxcapture ids that don't map to a known source", () => {
+		const plan = windows.buildPlan([screenItem()]);
+		// Only filter id 0 is mapped (1 source); id 99 must not be blamed.
+		assert.deepEqual(plan.identifyFailures("[Parsed_gfxcapture_99] Failed to find capture source"), []);
+	});
+
+	it("does not partial-match Parsed_gfxcapture_3 against Parsed_gfxcapture_30", () => {
+		const items = [
+			screenItem({ source: { id: "screen:0", kind: "screen", name: "Primary" } }, "C:/tmp/screen.png"),
+			windowItem({ source: { id: "window:abc", kind: "window", name: "Notepad" } }, "C:/tmp/notepad.png"),
+		];
+		const plan = windows.buildPlan(items);
+		// Only ids 0 and 6 are mapped; 30 must not partial-match either.
+		assert.deepEqual(plan.identifyFailures("[Parsed_gfxcapture_30] Failed to setup graphics capture"), []);
+	});
+});
+
+describe("windows.buildProbePlan", () => {
+	it("emits a single-source one-shot argv with -frames:v 1 and no -update flag", () => {
+		const item = windowItem({}, "C:/tmp/probe.png");
+		const plan = windows.buildProbePlan(item);
+		assert.equal(typeof plan.identifyFailures, "function");
+		assert.notEqual(plan.argv.indexOf("-frames:v"), -1);
+		assert.equal(plan.argv[plan.argv.indexOf("-frames:v") + 1], "1");
+		assert.equal(plan.argv.includes("-update"), false, "probe must not use -update streaming output");
+		assert.equal(plan.argv.includes("-atomic_writing"), false);
+		assert.equal(plan.argv[plan.argv.length - 1], "C:/tmp/probe.png");
+		const filter = plan.argv[plan.argv.indexOf("-filter_complex") + 1];
+		assert.equal(filter.split(";").length, 1, "probe must contain exactly one filter chain");
+	});
+
+	it("blames the probed source when it sees a gfxcapture init failure", () => {
+		const plan = windows.buildProbePlan(windowItem({ sourceId: "window:bad" }, "C:/tmp/probe.png"));
+		// Single-source probe means filter id 0 maps to the probed source.
+		assert.deepEqual(plan.identifyFailures("[Parsed_gfxcapture_0 @ 0x1] Failed to find capture source"), ["window:bad"]);
+		assert.deepEqual(plan.identifyFailures("[Parsed_gfxcapture_99 @ 0x1] Failed to find capture source"), []);
+		assert.deepEqual(plan.identifyFailures("[Parsed_gfxcapture_0 @ 0x1] frame=1 fps=2"), []);
+	});
+
+	it("throws when called without a complete item", () => {
+		assert.throws(() => windows.buildProbePlan(null));
+		assert.throws(() => windows.buildProbePlan({ request: undefined, outputPath: "C:/tmp/x.png" }));
+		assert.throws(() => windows.buildProbePlan({ request: windowItem().request }));
+	});
+});
+
+describe("darwin.buildPlan / linux.buildPlan", () => {
+	it("returns argv plus a no-op identifyFailures on darwin", () => {
+		const plan = darwin.buildPlan([screenItem({}, "/tmp/a.png")]);
+		assert.deepEqual(plan.argv, darwin.buildArgs([screenItem({}, "/tmp/a.png")]));
+		assert.deepEqual(plan.identifyFailures("any line"), []);
+	});
+
+	it("returns argv plus a no-op identifyFailures on linux", () => {
+		const plan = linux.buildPlan([screenItem({}, "/tmp/a.png")]);
+		assert.deepEqual(plan.argv, linux.buildArgs([screenItem({}, "/tmp/a.png")]));
+		assert.deepEqual(plan.identifyFailures("any line"), []);
+	});
+});
+
 describe("darwin.buildArgs", () => {
 	it("emits one avfoundation input per item with matching scale filters", () => {
 		const args = darwin.buildArgs([screenItem({}, "/tmp/a.png"), screenItem({ source: { id: "screen:1", kind: "screen", name: "Display 1" } }, "/tmp/b.png")]);

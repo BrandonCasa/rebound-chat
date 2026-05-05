@@ -14,17 +14,46 @@
  * sanitized filenames. Each emit re-reads the PNG and forwards a
  * `data:image/png;base64,...` payload to the listener.
  *
- * Crash recovery: if ffmpeg exits unexpectedly we wait `restartDelayMs`
- * and respawn with the current set. Repeated rapid failures fan out to
- * `onError` (once per source) so the manager can disable watches instead
- * of looping forever.
+ * Crash recovery uses a two-tier circuit breaker:
+ *
+ *   1. **Per-source quarantine.** ffmpeg's `filter_complex` is
+ *      all-or-nothing: a single misbehaving source (e.g. a system-tray
+ *      helper window without a capture surface) kills the entire graph
+ *      at config time and would otherwise poison every other thumbnail.
+ *      The pool watches stderr for builder-attributed failures, marks
+ *      the offending source as quarantined with exponential backoff, and
+ *      respawns ffmpeg without it. Each quarantine fires `onError` once
+ *      so the renderer can degrade gracefully (e.g. show a placeholder).
+ *      Healthy sources continue updating throughout.
+ *
+ *   2. **Global pool brake.** Truly unattributable exits (binary
+ *      missing, OOM, etc.) still count toward `MAX_CONSECUTIVE_FAILURES`;
+ *      after enough of them in `FAILURE_WINDOW_MS` the pool disposes
+ *      itself rather than spinning. This is the original safety net.
+ *
+ * Quarantined sources stay in `entries` so they're retried automatically
+ * once their backoff expires (half-open). Repeated failures grow the
+ * backoff up to `QUARANTINE_MAX_MS`. Removing a source from the
+ * watched set clears any quarantine state for it.
+ *
+ * To avoid disturbing healthy thumbnails, recovery is gated by an
+ * out-of-band **probe**: when a quarantine expires the pool spawns a
+ * one-shot single-source ffmpeg (via `builder.buildProbePlan`) targeting
+ * just the offender. The main pool keeps streaming all the healthy
+ * sources during the probe. Only on probe success does the pool force a
+ * main respawn that re-includes the recovered source — so the cost of
+ * "is the bad window alive yet?" is paid by a 2nd ffmpeg, not by
+ * tearing down the N-1 working captures every backoff window. Builders
+ * without `buildProbePlan` fall back to the original behaviour
+ * (respawn the main pool to retry).
  *
  * @typedef {import("../types.js").ThumbnailEvent} ThumbnailEvent
  * @typedef {import("../types.js").ThumbnailRequest} ThumbnailRequest
  * @typedef {import("../types.js").ThumbnailListener} ThumbnailListener
+ * @typedef {{ argv: string[], identifyFailures: (line: string) => string[] }} BuilderPlan
  */
 
-import { spawn } from "node:child_process";
+import { spawn as defaultSpawn } from "node:child_process";
 import { rm, readFile, mkdir, stat } from "node:fs/promises";
 import { watch } from "node:fs";
 import { join } from "node:path";
@@ -36,6 +65,9 @@ const READ_DEBOUNCE_MS = 200;
 const RESPAWN_DEBOUNCE_MS = 150;
 const MAX_CONSECUTIVE_FAILURES = 5;
 const FAILURE_WINDOW_MS = 30_000;
+const QUARANTINE_BASE_MS = 5_000;
+const QUARANTINE_MAX_MS = 5 * 60_000;
+const QUARANTINE_BACKOFF_FACTOR = 2;
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -68,6 +100,21 @@ const sanitizeFilename = (value) =>
 		.replace(/[^a-zA-Z0-9._-]+/g, "_")
 		.slice(0, 96);
 
+/**
+ * @param {BuilderPlan | { argv: string[] } | string[]} planOrArgs
+ * @returns {BuilderPlan}
+ */
+const normalizePlan = (planOrArgs) => {
+	if (Array.isArray(planOrArgs)) return { argv: planOrArgs, identifyFailures: () => [] };
+	if (planOrArgs && Array.isArray(planOrArgs.argv)) {
+		return {
+			argv: planOrArgs.argv,
+			identifyFailures: typeof planOrArgs.identifyFailures === "function" ? planOrArgs.identifyFailures : () => [],
+		};
+	}
+	throw new TypeError("SnapshotPool builder must return either an argv array or a { argv, identifyFailures } plan.");
+};
+
 class SnapshotPool {
 	/**
 	 * @param {Object} options
@@ -78,8 +125,10 @@ class SnapshotPool {
 	 * @param {(message: string) => void} [options.onLog]
 	 * @param {(error: Error, sourceId?: string) => void} [options.onError]
 	 * @param {number} [options.restartDelayMs=1000]
+	 * @param {typeof defaultSpawn} [options.spawn] Injectable for tests.
+	 * @param {{ buildPlan?: Function, buildArgs?: Function }} [options.builder] Injectable for tests; defaults to the platform builder.
 	 */
-	constructor({ cacheDir, ffmpegPath, platform = process.platform, onThumbnail, onLog, onError, restartDelayMs = 1000 }) {
+	constructor({ cacheDir, ffmpegPath, platform = process.platform, onThumbnail, onLog, onError, restartDelayMs = 1000, spawn = defaultSpawn, builder }) {
 		if (!cacheDir) throw new TypeError("SnapshotPool requires a cache directory.");
 		if (!ffmpegPath) throw new TypeError("SnapshotPool requires an ffmpeg path.");
 		if (typeof onThumbnail !== "function") throw new TypeError("SnapshotPool requires an onThumbnail listener.");
@@ -91,21 +140,48 @@ class SnapshotPool {
 		this.onLog = onLog || (() => {});
 		this.onError = onError || (() => {});
 		this.restartDelayMs = restartDelayMs;
+		this.spawn = spawn;
+		this.builder = builder || selectThumbnailBuilder(platform);
 
 		/** @type {Map<string, { request: ThumbnailRequest, outputPath: string, lastEmittedAt: number, readTimer: NodeJS.Timeout | null }>} */
 		this.entries = new Map();
 		/** @type {Map<string, string>} sanitized filename → sourceId for fast watcher dispatch. */
 		this.filenameIndex = new Map();
+		/**
+		 * Sources whose last spawn participation failed at filter-graph
+		 * config time. They're excluded from respawn until `until`, then
+		 * automatically retried (half-open). Repeated failures grow the
+		 * backoff up to `QUARANTINE_MAX_MS`.
+		 *
+		 * @type {Map<string, { until: number, attempts: number, reason: string }>}
+		 */
+		this.quarantine = new Map();
+		/** @type {Set<string>} blamed sources for the in-flight ffmpeg child. */
+		this.currentSpawnBlame = new Set();
+		/** @type {BuilderPlan | null} plan that produced the in-flight ffmpeg child. */
+		this.currentSpawnPlan = null;
+		/** @type {Set<string>} sources included in the in-flight ffmpeg child. */
+		this.currentSpawnSourceIds = new Set();
 
 		/** @type {import("node:child_process").ChildProcess | null} */
 		this.child = null;
 		/** @type {import("node:fs").FSWatcher | null} */
 		this.watcher = null;
 		this.respawnTimer = null;
+		this.quarantineRetryTimer = null;
 		this.starting = false;
 		this.disposed = false;
 		this.failureTimestamps = [];
 		this.stderrBuffer = "";
+
+		/**
+		 * In-flight quarantine probe (if any). Probes are intentionally
+		 * serialised — at most one source is probed at a time — to keep
+		 * the recovery path cheap and predictable.
+		 *
+		 * @type {{ child: import("node:child_process").ChildProcess, sourceId: string, plan: BuilderPlan, blamed: Set<string>, stderrBuffer: string, outputPath: string, exited: boolean } | null}
+		 */
+		this.probe = null;
 	}
 
 	/**
@@ -142,11 +218,18 @@ class SnapshotPool {
 			if (!next.has(sourceId)) {
 				if (entry.readTimer) clearTimeout(entry.readTimer);
 				removed.push(entry.outputPath);
+				this.quarantine.delete(sourceId);
 			}
 		}
 
 		this.entries = next;
 		this.filenameIndex = nextFilenames;
+
+		// If the source currently being probed is no longer watched,
+		// abort the probe so we don't spawn a respawn for a stale id.
+		if (this.probe && !this.entries.has(this.probe.sourceId)) {
+			void this.killProbe();
+		}
 
 		void Promise.all(removed.map((path) => rm(path, { force: true }).catch(() => {})));
 
@@ -178,6 +261,232 @@ class SnapshotPool {
 		}, RESPAWN_DEBOUNCE_MS);
 	}
 
+	/**
+	 * Build the list of items eligible for the next spawn by filtering out
+	 * any source whose quarantine hasn't expired yet.
+	 *
+	 * @returns {Array<{ request: ThumbnailRequest, outputPath: string, sourceId: string }>}
+	 */
+	activeItems() {
+		const now = Date.now();
+		const items = [];
+		for (const [sourceId, entry] of this.entries) {
+			const q = this.quarantine.get(sourceId);
+			if (q && q.until > now) continue;
+			items.push({ request: entry.request, outputPath: entry.outputPath, sourceId });
+		}
+		return items;
+	}
+
+	scheduleQuarantineRetry() {
+		if (this.disposed) return;
+		if (this.quarantineRetryTimer) {
+			clearTimeout(this.quarantineRetryTimer);
+			this.quarantineRetryTimer = null;
+		}
+		if (this.quarantine.size === 0) return;
+		const now = Date.now();
+		let nextAt = Infinity;
+		for (const q of this.quarantine.values()) {
+			if (q.until < nextAt) nextAt = q.until;
+		}
+		const delay = Math.max(0, nextAt - now) + 50;
+		this.quarantineRetryTimer = setTimeout(() => {
+			this.quarantineRetryTimer = null;
+			void this.runQuarantineRetry();
+		}, delay);
+	}
+
+	/**
+	 * Pick the next quarantined source whose backoff has expired and
+	 * either probe it (if the builder supports it) or fall back to a
+	 * full respawn (legacy path for builders that can't probe in
+	 * isolation).
+	 */
+	async runQuarantineRetry() {
+		if (this.disposed) return;
+		if (this.probe) return; // Probe in flight; new one will be scheduled on its exit.
+		if (this.entries.size === 0) return;
+
+		const now = Date.now();
+		let candidateId = null;
+		let candidateEntry = null;
+		for (const [sourceId, q] of this.quarantine) {
+			if (q.until > now) continue;
+			const entry = this.entries.get(sourceId);
+			if (!entry) {
+				this.quarantine.delete(sourceId);
+				continue;
+			}
+			candidateId = sourceId;
+			candidateEntry = entry;
+			break;
+		}
+
+		if (!candidateId) {
+			this.scheduleQuarantineRetry();
+			return;
+		}
+
+		// Builders without a probe path keep the old all-or-nothing
+		// retry behaviour: respawn the main pool with the candidate
+		// re-included and let the existing blame plumbing re-quarantine
+		// it on failure.
+		if (typeof this.builder.buildProbePlan !== "function") {
+			this.scheduleRespawn();
+			return;
+		}
+
+		await this.startProbe(candidateId, candidateEntry);
+	}
+
+	/**
+	 * @param {string} sourceId
+	 * @param {{ request: ThumbnailRequest, outputPath: string }} entry
+	 */
+	async startProbe(sourceId, entry) {
+		if (this.disposed || this.probe) return;
+
+		let plan;
+		try {
+			plan = normalizePlan(this.builder.buildProbePlan({ request: entry.request, outputPath: `${entry.outputPath}.probe` }));
+		} catch (err) {
+			this.onError(err instanceof Error ? err : new Error(String(err)), sourceId);
+			this.scheduleQuarantineRetry();
+			return;
+		}
+
+		try {
+			await mkdir(this.cacheDir, { recursive: true });
+		} catch (err) {
+			this.onLog(`Probe mkdir failed for ${sourceId}: ${err.message}`);
+			this.scheduleQuarantineRetry();
+			return;
+		}
+
+		this.onLog(`Probing quarantined source ${sourceId}: ${this.ffmpegPath} ${plan.argv.join(" ")}`);
+
+		let child;
+		try {
+			child = this.spawn(this.ffmpegPath, plan.argv, {
+				windowsHide: true,
+				stdio: ["ignore", "ignore", "pipe"],
+			});
+		} catch (err) {
+			this.onError(err instanceof Error ? err : new Error(String(err)), sourceId);
+			this.quarantineSources([sourceId]);
+			this.scheduleQuarantineRetry();
+			return;
+		}
+
+		const probe = {
+			child,
+			sourceId,
+			plan,
+			blamed: new Set(),
+			stderrBuffer: "",
+			outputPath: `${entry.outputPath}.probe`,
+			exited: false,
+		};
+		this.probe = probe;
+		this.attachProbeLifecycle(probe);
+	}
+
+	/**
+	 * @param {{ child: import("node:child_process").ChildProcess, sourceId: string, plan: BuilderPlan, blamed: Set<string>, stderrBuffer: string, outputPath: string, exited: boolean }} probe
+	 */
+	attachProbeLifecycle(probe) {
+		probe.child.stderr?.on("data", (chunk) => {
+			probe.stderrBuffer += chunk.toString();
+			if (probe.stderrBuffer.length > 4096) {
+				probe.stderrBuffer = probe.stderrBuffer.slice(-4096);
+			}
+			const lines = probe.stderrBuffer.split(/\r?\n/);
+			probe.stderrBuffer = lines.pop() || "";
+			for (const line of lines) {
+				const trimmed = line.trim();
+				if (!trimmed) continue;
+				this.onLog(`ffmpeg[probe ${probe.sourceId}]: ${trimmed}`);
+				const blamed = probe.plan.identifyFailures(trimmed);
+				for (const id of blamed) {
+					if (id === probe.sourceId) probe.blamed.add(id);
+				}
+			}
+		});
+
+		probe.child.once("error", (err) => {
+			this.onError(err, probe.sourceId);
+			void this.handleProbeExit(probe, null, null);
+		});
+
+		probe.child.once("exit", (code, signal) => {
+			void this.handleProbeExit(probe, code, signal);
+		});
+	}
+
+	/**
+	 * @param {{ child: import("node:child_process").ChildProcess, sourceId: string, plan: BuilderPlan, blamed: Set<string>, stderrBuffer: string, outputPath: string, exited: boolean }} probe
+	 * @param {number | null} code
+	 * @param {NodeJS.Signals | null} signal
+	 */
+	async handleProbeExit(probe, code, signal) {
+		if (probe.exited) return;
+		probe.exited = true;
+		if (this.probe === probe) this.probe = null;
+
+		// Best-effort cleanup of the probe scratch file regardless of outcome.
+		void rm(probe.outputPath, { force: true }).catch(() => {});
+
+		if (this.disposed) return;
+		if (!this.entries.has(probe.sourceId)) {
+			// Source removed mid-probe; nothing else to do.
+			return;
+		}
+
+		this.onLog(`ffmpeg[probe ${probe.sourceId}] exited code=${code ?? "null"} signal=${signal ?? "none"}`);
+
+		const succeeded = code === 0 && !signal && probe.blamed.size === 0;
+
+		if (succeeded) {
+			this.quarantine.delete(probe.sourceId);
+			this.onLog(`Quarantine probe succeeded for ${probe.sourceId}; rejoining pool.`);
+			this.scheduleRespawn();
+			return;
+		}
+
+		this.quarantineSources([probe.sourceId]);
+		this.scheduleQuarantineRetry();
+	}
+
+	async killProbe() {
+		const probe = this.probe;
+		if (!probe) return;
+		this.probe = null;
+		const child = probe.child;
+		if (!child || child.killed || probe.exited) return;
+		await new Promise((resolve) => {
+			const timeout = setTimeout(() => {
+				try {
+					child.kill("SIGKILL");
+				} catch (_err) {
+					// Already dead.
+				}
+				resolve();
+			}, 1000);
+			child.once("exit", () => {
+				clearTimeout(timeout);
+				resolve();
+			});
+			try {
+				child.kill("SIGTERM");
+			} catch (_err) {
+				clearTimeout(timeout);
+				resolve();
+			}
+		});
+		void rm(probe.outputPath, { force: true }).catch(() => {});
+	}
+
 	async respawn() {
 		if (this.disposed) return;
 		if (this.starting) {
@@ -194,16 +503,26 @@ class SnapshotPool {
 				return;
 			}
 
+			const items = this.activeItems();
+			if (items.length === 0) {
+				this.onLog(`Snapshot pool has no active sources (all ${this.entries.size} quarantined); waiting for retry window.`);
+				this.scheduleQuarantineRetry();
+				return;
+			}
+
 			await mkdir(this.cacheDir, { recursive: true });
 			this.attachWatcher();
 
-			const items = Array.from(this.entries.values()).map((entry) => ({ request: entry.request, outputPath: entry.outputPath }));
-			const builder = selectThumbnailBuilder(this.platform);
-			const args = builder.buildArgs(items);
+			const builderItems = items.map(({ request, outputPath }) => ({ request, outputPath }));
+			const plan = normalizePlan(typeof this.builder.buildPlan === "function" ? this.builder.buildPlan(builderItems) : this.builder.buildArgs(builderItems));
 
-			this.onLog(`Spawning ffmpeg snapshot pool (${items.length} source${items.length === 1 ? "" : "s"}): ${this.ffmpegPath} ${args.join(" ")}`);
+			this.currentSpawnPlan = plan;
+			this.currentSpawnBlame = new Set();
+			this.currentSpawnSourceIds = new Set(items.map((item) => item.sourceId));
 
-			const child = spawn(this.ffmpegPath, args, {
+			this.onLog(`Spawning ffmpeg snapshot pool (${items.length} source${items.length === 1 ? "" : "s"}): ${this.ffmpegPath} ${plan.argv.join(" ")}`);
+
+			const child = this.spawn(this.ffmpegPath, plan.argv, {
 				windowsHide: true,
 				stdio: ["ignore", "ignore", "pipe"],
 			});
@@ -231,7 +550,9 @@ class SnapshotPool {
 			this.stderrBuffer = lines.pop() || "";
 			for (const line of lines) {
 				const trimmed = line.trim();
-				if (trimmed) this.onLog(`ffmpeg[pool]: ${trimmed}`);
+				if (!trimmed) continue;
+				this.onLog(`ffmpeg[pool]: ${trimmed}`);
+				this.recordBlameFromLine(trimmed);
 			}
 		});
 
@@ -243,6 +564,20 @@ class SnapshotPool {
 		child.once("exit", (code, signal) => {
 			void this.handleExit(child, code, signal);
 		});
+	}
+
+	/**
+	 * @param {string} line
+	 */
+	recordBlameFromLine(line) {
+		const plan = this.currentSpawnPlan;
+		if (!plan) return;
+		const blamed = plan.identifyFailures(line);
+		for (const sourceId of blamed) {
+			if (this.currentSpawnSourceIds.has(sourceId)) {
+				this.currentSpawnBlame.add(sourceId);
+			}
+		}
 	}
 
 	/**
@@ -336,6 +671,23 @@ class SnapshotPool {
 	}
 
 	/**
+	 * @param {string[]} sourceIds
+	 */
+	quarantineSources(sourceIds) {
+		const now = Date.now();
+		const reason = "ffmpeg gfxcapture failed to attach to source";
+		for (const sourceId of sourceIds) {
+			if (!this.entries.has(sourceId)) continue;
+			const previous = this.quarantine.get(sourceId);
+			const attempts = (previous?.attempts || 0) + 1;
+			const backoff = Math.min(QUARANTINE_BASE_MS * QUARANTINE_BACKOFF_FACTOR ** (attempts - 1), QUARANTINE_MAX_MS);
+			this.quarantine.set(sourceId, { until: now + backoff, attempts, reason });
+			this.onLog(`Quarantined source ${sourceId} for ${backoff}ms (attempt ${attempts}): ${reason}`);
+			this.onError(new Error(`Snapshot capture for ${sourceId} failed (${reason}); retrying in ${backoff}ms.`), sourceId);
+		}
+	}
+
+	/**
 	 * @param {import("node:child_process").ChildProcess} child
 	 * @param {number | null} code
 	 * @param {NodeJS.Signals | null} signal
@@ -344,14 +696,38 @@ class SnapshotPool {
 		if (this.child !== child) return;
 		this.child = null;
 
+		const blamed = Array.from(this.currentSpawnBlame);
+		this.currentSpawnPlan = null;
+		this.currentSpawnBlame = new Set();
+		this.currentSpawnSourceIds = new Set();
+
 		if (this.disposed) return;
 		if (this.entries.size === 0) return;
+
+		this.onLog(`ffmpeg[pool] exited code=${code ?? "null"} signal=${signal ?? "none"}`);
+
+		const exitedSuccessfully = code === 0 && !signal;
+
+		// Fault-isolated path: the builder pinned the failure on specific
+		// sources, so quarantine them and respawn without burning a slot
+		// on the global circuit breaker.
+		if (!exitedSuccessfully && blamed.length > 0) {
+			this.quarantineSources(blamed);
+			this.scheduleQuarantineRetry();
+			await sleep(this.restartDelayMs);
+			if (!this.disposed && this.entries.size > 0) this.scheduleRespawn();
+			return;
+		}
+
+		if (exitedSuccessfully) {
+			await sleep(this.restartDelayMs);
+			if (!this.disposed && this.entries.size > 0) this.scheduleRespawn();
+			return;
+		}
 
 		const now = Date.now();
 		this.failureTimestamps.push(now);
 		this.failureTimestamps = this.failureTimestamps.filter((ts) => now - ts < FAILURE_WINDOW_MS);
-
-		this.onLog(`ffmpeg[pool] exited code=${code ?? "null"} signal=${signal ?? "none"}`);
 
 		if (this.failureTimestamps.length >= MAX_CONSECUTIVE_FAILURES) {
 			const message = `Snapshot ffmpeg pool failed ${this.failureTimestamps.length} times in ${FAILURE_WINDOW_MS}ms; pausing.`;
@@ -401,6 +777,10 @@ class SnapshotPool {
 			clearTimeout(this.respawnTimer);
 			this.respawnTimer = null;
 		}
+		if (this.quarantineRetryTimer) {
+			clearTimeout(this.quarantineRetryTimer);
+			this.quarantineRetryTimer = null;
+		}
 		for (const entry of this.entries.values()) {
 			if (entry.readTimer) clearTimeout(entry.readTimer);
 		}
@@ -408,11 +788,12 @@ class SnapshotPool {
 		const cleanupPaths = Array.from(this.entries.values()).map((entry) => entry.outputPath);
 		this.entries.clear();
 		this.filenameIndex.clear();
+		this.quarantine.clear();
 
-		await this.killChild();
+		await Promise.all([this.killChild(), this.killProbe()]);
 		this.detachWatcher();
 		await Promise.all(cleanupPaths.map((path) => rm(path, { force: true }).catch(() => {})));
 	}
 }
 
-export { SnapshotPool, parsePngDimensions };
+export { SnapshotPool, parsePngDimensions, QUARANTINE_BASE_MS, QUARANTINE_MAX_MS, MAX_CONSECUTIVE_FAILURES };

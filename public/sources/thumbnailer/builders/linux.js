@@ -95,4 +95,15 @@ const buildArgs = (items) => {
 	return argv;
 };
 
-export { buildArgs, DEFAULT_SCALE };
+/**
+ * x11grab failures show up as input-open errors before the filter graph
+ * runs, so we don't have a stable per-source stderr signature to attribute
+ * against. Returning an empty array lets the pool fall back to its global
+ * circuit breaker on this platform.
+ *
+ * @param {BuilderItem[]} items
+ * @returns {{ argv: string[], identifyFailures: (line: string) => string[] }}
+ */
+const buildPlan = (items) => ({ argv: buildArgs(items), identifyFailures: () => [] });
+
+export { buildArgs, buildPlan, DEFAULT_SCALE };
