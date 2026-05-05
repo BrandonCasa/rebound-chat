@@ -84,11 +84,18 @@ const buildAudioCodecArgs = (config) => {
 /**
  * Compose the full argv (without the binary path).
  *
+ * `respawn` is supplied by the streamer manager when relaunching FFmpeg
+ * mid-stream (server-driven adaptation, manual restart, etc.). It
+ * forwards `discontStart` + `startNumber` to the HLS muxer so the
+ * resulting playlist continues from the previous generation's media
+ * sequence with an `#EXT-X-DISCONTINUITY` tag at the join.
+ *
  * @param {StreamConfig} config
  * @param {Capabilities} [capabilities]
+ * @param {{ respawn?: { discontStart?: boolean, startNumber?: number } }} [options]
  * @returns {{ command: string, args: string[] }}
  */
-const buildArgs = (config, capabilities = defaultCapabilities()) => {
+const buildArgs = (config, capabilities = defaultCapabilities(), options = {}) => {
 	const argv = ["-y"];
 	const usingGfxCapture = usesGfxCapture(config, capabilities.platform);
 
@@ -127,10 +134,10 @@ const buildArgs = (config, capabilities = defaultCapabilities()) => {
 
 	argv.push(...buildCfrOutputArgs(config));
 
-	argv.push(...hls.buildArgs(config));
+	argv.push(...hls.buildArgs(config, options.respawn || {}));
 
 	return {
-		command: config.ffmpegPath || (typeof window !== "undefined" && window.ffmpegPath) || "ffmpeg.exe",
+		command: config.ffmpegPath,
 		args: argv,
 	};
 };

@@ -134,6 +134,28 @@ export function createUploader({
 		async flush() {
 			await runPass();
 		},
+		invalidateInit() {
+			// Force the next pass to re-upload `init.mp4` and re-evaluate the
+			// fallback master playlist. Used by the manager after an FFmpeg
+			// respawn so the new generation's init segment + master variant
+			// row reach the server even though the filename did not change.
+			//
+			// `lastUploaded` is keyed by absolute file path; we walk it
+			// rather than guess at the join. fileSignature would normally
+			// catch the mtime change anyway, but the planner short-circuits
+			// init.mp4 when `initUploaded` is true so we still need this
+			// flag reset.
+			initUploaded = false;
+			fallbackMasterEnsured = false;
+			for (const key of [...lastUploaded.keys()]) {
+				if (typeof key !== "string") continue;
+				if (key.endsWith("init.mp4") || key.endsWith("master.m3u8") || key.endsWith("video.m3u8")) {
+					lastUploaded.delete(key);
+				}
+			}
+			cachedListing = [];
+			lastListingAt = 0;
+		},
 		stop() {
 			scheduler?.stop();
 			scheduler = null;

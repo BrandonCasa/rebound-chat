@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		resetSettings: () => ipcRenderer.invoke("settings:reset"),
 		start: (config) => ipcRenderer.invoke("live-stream:start", config),
 		stop: () => ipcRenderer.invoke("live-stream:stop"),
+		setAutoAdapt: (enabled) => ipcRenderer.invoke("live-stream:set-auto-adapt", enabled),
 		openUrl: (url) => ipcRenderer.invoke("live-stream:open-url", url),
 		onLog: (cb) => {
 			const listener = (_event, payload) => cb(payload);
@@ -43,6 +44,26 @@ contextBridge.exposeInMainWorld("electronAPI", {
 			const listener = (_event, payload) => cb(payload);
 			ipcRenderer.on("live-stream-session", listener);
 			return () => ipcRenderer.removeListener("live-stream-session", listener);
+		},
+		onViewerSummary: (cb) => {
+			const listener = (_event, payload) => cb(payload);
+			ipcRenderer.on("live-stream-viewer-summary", listener);
+			return () => ipcRenderer.removeListener("live-stream-viewer-summary", listener);
+		},
+		onRecommendation: (cb) => {
+			const listener = (_event, payload) => cb(payload);
+			ipcRenderer.on("live-stream-recommendation", listener);
+			return () => ipcRenderer.removeListener("live-stream-recommendation", listener);
+		},
+		onAdaptation: (cb) => {
+			const listener = (_event, payload) => cb(payload);
+			ipcRenderer.on("live-stream-adaptation", listener);
+			return () => ipcRenderer.removeListener("live-stream-adaptation", listener);
+		},
+		onControlConnected: (cb) => {
+			const listener = (_event, payload) => cb(payload);
+			ipcRenderer.on("live-stream-control-connected", listener);
+			return () => ipcRenderer.removeListener("live-stream-control-connected", listener);
 		},
 	},
 	sources: {

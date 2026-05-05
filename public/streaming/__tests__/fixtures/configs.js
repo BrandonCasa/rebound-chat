@@ -7,10 +7,8 @@
  * what it differs on.
  */
 
-const ffmpegPathDefault = () => (typeof window !== "undefined" && window?.ffmpegPath) || "ffmpeg.exe";
-
 const baseDefaults = {
-	ffmpegPath: ffmpegPathDefault(),
+	ffmpegPath: "ffmpeg.exe",
 	source: { id: "screen:0", name: "Display 1" },
 	captureBackend: "gfxcapture",
 	captureFps: 60,

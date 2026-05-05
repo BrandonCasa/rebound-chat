@@ -2,6 +2,7 @@ import { Server } from "socket.io";
 import "dotenv/config";
 
 import logger from "../logger.js";
+import { createLiveControlNamespace } from "../live/control/socket.js";
 import serverRooms from "./rooms.js";
 import serverDMs from "./dms.js";
 import serverWatchers from "./watchers.js";
@@ -11,6 +12,7 @@ import { parseCookieHeader, validateAccessToken } from "../utils/auth.js";
 class SocketBackend {
 	constructor() {
 		this.io = null;
+		this.liveControl = null;
 	}
 
 	start(port = 6002) {
@@ -22,6 +24,8 @@ class SocketBackend {
 		this.io.use(this._authenticate.bind(this));
 
 		this.io.on("connection", this._onConnection.bind(this));
+
+		this.liveControl = createLiveControlNamespace({ io: this.io });
 
 		this.io.listen(port);
 		logger.info(`Socket.IO listening on port ${port}`);

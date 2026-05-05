@@ -1,65 +1,121 @@
-# Plan 04: Streaming UI rewrite, capability-aware settings, audio redesign, and server-driven adaptation
+# Plan 04: Streaming UI rewrite, capability-aware settings, audio redesign, server-driven adaptation, mobile viewer experience, and Picture-in-Picture
 
-## Update (2026-05-04)
+> **Scope reminder:** _Streaming **from** a phone is explicitly **not** a planned feature._
+> Mobile work in this plan is exclusively about **watching** streams on a phone (and, for the broadcaster, persistent feedback when navigating between desktop pages).
 
-- The streaming pipeline split is already present (`public/streaming/pipeline.js`, encoder modules, profiles, defaults, and tests), so this plan should avoid redoing that work.
-- Plan 03 extraction (`public/streaming/uploader/`) is not landed yet, so anything that assumes a fully isolated uploader should be treated as "after Plan 03 step 6".
-- `public/streaming/types.js` already carries key fields from Plans 01-02 (`vbvMultiplier`, profile-oriented settings), so Phase C can consume current types first and postpone type relocation to `shared/` until both renderer and main actually need cross-process imports.
+---
 
-### Updated execution priorities
+## Status snapshot (2026-05-04, late evening)
 
-1. Ship Phase A (capability probe) + Phase B (settings persistence) first as non-UI-risk infrastructure.
-2. Do a minimal Phase C pass that introduces auto-optimized vs advanced controls in the existing route before full component extraction.
-3. Land Phase D (file source mode) early because it is isolated and high user value.
-4. Gate Phase E (Windows per-process audio helper) behind a feature flag and ship desktop/mic mixer baseline first.
-5. Start Phase F (server-driven adaptation) only after Plan 03 scheduler + pass logging is live so adaptation decisions have reliable timing signal.
+This section is the source of truth for "what's already in the repo vs. what this plan still owes." Keep it current as phases land.
+
+> **Update 2026-05-05:** Both `captureFps` and the output `fps` now default to **60** (`public/streaming/defaults.js`, `src/routes/DesktopLivePage/DesktopLivePage.route.jsx`, `public/streaming/autoOptimize.js`). The streamer UI no longer exposes `Capture FPS` and `Output FPS` as separate fields — there is one **Frame rate (FPS)** input in the Output panel that writes both values in lock-step. The two-field shape is preserved end-to-end in the pipeline (`effectiveCaptureFps()`, `pipeline.buildArgs`, the gfxcapture filter graph) so that source-vs-encoder rate can still diverge in code paths that need it (e.g. `sourceMode === "file"`, future per-source overrides, `RECORDING_FPS_CEILING_RATIO` headroom). See Phase C item **C7** for the long-term constraint-engine treatment.
+
+| Phase | Title                                           | Status                                | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----- | ----------------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0** | Code-quality refactor & file split              | **Not started**                       | Largest blockers: `DesktopLivePage.route.jsx` ~1024 lines, `public/electron-live-stream.js` ~775 lines, `LiveStreamPlayer.jsx` ~538 lines.                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **A** | System capability probe                         | **Partial — monolithic**              | `public/streaming/capabilities/probe.js` (~161 lines) does FFmpeg `-hwaccels`/`-encoders`/`-filters`, Win32 GPU via PowerShell, and consumes `screen.getAllDisplays()`. **Missing:** the planned split (`ffmpegCheck.js`, `gpuDetect/{win32,darwin,linux}.js`, `audioDevices.js`, `displays.js`); the `useCapabilities` hook in the renderer; and the canonical `capabilities:get` IPC name (current names are `live-stream:get-capabilities` / `live-stream:get-detected-capabilities` / `live-stream:reprobe-capabilities`). `DetectedCapabilities` typedef exists in `shared/streaming/types.js`. |
+| **B** | Settings persistence                            | **Mostly done**                       | `public/streaming/settings/{store.js,schema.js,migrate.js}` and `public/streaming/autoOptimize.js` exist; `settings:load` / `settings:save` / `settings:reset` IPC are wired. **Missing:** the `useStreamSettings` renderer hook (today the page debounces saves directly), and a "reset to auto-optimized" confirmation dialog.                                                                                                                                                                                                                                                                     |
+| **C** | Settings UI rewrite + constraint engine         | **Not started**                       | The single 1024-line `DesktopLivePage.route.jsx` still exposes every raw FFmpeg knob with no constraint engine. `src/lib/streaming/constraints/`, `src/lib/streaming/detectProfile.js`, and the `ui/panels/` siblings of `LiveStatusPanel.jsx` do not exist.                                                                                                                                                                                                                                                                                                                                         |
+| **D** | Video file streaming as a source mode           | **Backend done; UI exposure missing** | `public/streaming/capture/file.js` is implemented and wired through `capture/index.js`; `captureBackend === "file"` is documented in `public/streaming/types.js`. **Missing:** the renderer Source picker UI that lets a user pick a file, and the loop / play-once toggle.                                                                                                                                                                                                                                                                                                                          |
+| **E** | Audio capture redesign                          | **Not started**                       | `public/streaming/audio.js` is just codec normalization (~18 lines). No `audio/` subtree, no filter graph, no mixer UI, no native loopback helper.                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **F** | Server-driven adaptive control                  | **Substantially done**                | All protocol/types modules, `/live-control` Socket.IO namespace, viewer probe + reporting hook, streamer-side adapter / initial-ceiling / segment cursor / socket client, server-side viewer store + recommender + control session, and `EXT-X-DISCONTINUITY` respawn flow are in place. **Remaining:** viewer-facing surface (the hook return value is not yet consumed in `LiveStreamPlayer`), graceful UX when adaptation respawns, and integration tests across both processes.                                                                                                                  |
+| **G** | Telemetry & logging                             | **Light — streamer-side only**        | `LiveStatusPanel.jsx` shows viewer count, recommendation history, and connection state. **Missing:** a viewer-side health widget, stop-time per-session log dump, and the optional opt-in diagnostics toggle.                                                                                                                                                                                                                                                                                                                                                                                        |
+| **H** | Mobile viewer experience                        | **Not started**                       | `LiveStreamPlayer.jsx` only branches on `theme.breakpoints.down("sm")` for `alwaysShowControls`; it has no orientation-aware layout, no touch gesture model, no native-HLS path for iOS Safari, and no chrome to tuck the seek bar / metadata cleanly into a phone viewport.                                                                                                                                                                                                                                                                                                                         |
+| **I** | Picture-in-Picture & ambient streaming presence | **Not started**                       | No PiP code exists in the repo. `LiveStreamPlayer` is mounted per-route, so navigating away tears the player down; broadcasters get no app-bar indicator that they are still streaming.                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **J** | Theme & MUI presentation polish                 | **Not started**                       | `src/helpers/darkTheme.js` defines a base dark theme with two component overrides (`MuiInputBase`, `MuiDrawer`). No streaming-specific tokens, no card/chip flair, no surface palette for "live" indicators, no consistent typography scale for streaming chrome.                                                                                                                                                                                                                                                                                                                                    |
+
+> **Three new phases (0, H, I, J)** were added to this plan on 2026-05-04 (late evening). They reflect the user's directives: (1) prioritize splitting up large files and lifting code quality across all phases; (2) make watching enjoyable on phones (without supporting _streaming_ from phones); (3) keep the player visible (PiP) when the viewer navigates away and keep the broadcast visible to the streamer when they do the same; (4) lean into MUI's custom-theming API for tasteful flair while staying inside MUI conventions.
+
+---
+
+## Updated execution priorities
+
+The order below is the _recommended_ sequence; items at the same depth can ship in parallel when staffing allows.
+
+1. **Phase 0** — split the three monoliths (`DesktopLivePage`, `electron-live-stream.js`, `LiveStreamPlayer`) before adding new surface area. Every subsequent phase compounds the cost of leaving them alone.
+2. **Phase A polish** — split `capabilities/probe.js` into the planned subtree, add `useCapabilities`, and standardize IPC names. Cheap; unblocks Phase C constraints.
+3. **Phase B finish** — add `useStreamSettings`, the reset-to-auto-optimized dialog, and migrate `DesktopLivePage` to consume the hook (becomes a clean substrate for Phase C).
+4. **Phase D UI exposure** — Source-picker radio + file picker. The backend is done; this is days of UI work.
+5. **Phase C** — settings UI rewrite with constraint engine. Lands behind a feature flag until parity with current page is proven.
+6. **Phase H** — mobile viewer experience. Touches `LiveStreamPlayer` extensively; coordinate with Phase 0's split of that file.
+7. **Phase I** — Picture-in-Picture + ambient streaming presence. Depends on a Redux slice introduced in Phase 0 (`liveSessionSlice`) so player and broadcaster state survives route changes.
+8. **Phase F polish** — surface viewer-side adaptation telemetry inside the new mobile-first player chrome; add the integration test suite.
+9. **Phase J** — theme & presentation polish. Best done as a sweep after Phases C/H/I land so we're styling the final component set, not a moving target.
+10. **Phase E** — audio redesign. Largest standalone effort; gated behind a feature flag and the Windows native helper's CI build infra.
+11. **Phase G** — telemetry & logging. Ships piecemeal alongside other phases; the viewer-side health widget piggybacks on Phase H.
+
+---
 
 ## Status of prerequisites
 
-- **Plan 01** (NVENC defaults + quality profile system): Must be complete. The `public/streaming/profiles/` system and updated `defaults.js` are inputs to Phase C's auto-optimize and constraint engine.
-- **Plan 02** (VBV bufsize): Must be complete. The `vbvMultiplier` field in `StreamConfig` and `defaults.js` must exist before Phase C exposes the advanced VBV knob.
-- **Plan 03** (parallel uploads): Must be complete. `public/streaming/uploader/` must be extracted and self-contained before this plan wires it into the new manager.
+- **Plan 01** (NVENC defaults + quality profile system): **complete.** The `public/streaming/profiles/` system and `defaults.js` are inputs to Phase C's auto-optimize and constraint engine.
+- **Plan 02** (VBV bufsize): **complete.** `vbvMultiplier` exists in `StreamConfig` and `defaults.js`.
+- **Plan 03** (parallel uploads): **complete.** `public/streaming/uploader/` is extracted and self-contained.
 
 The streaming pipeline module split (`public/streaming/capture/`, `encoder/`, `output/hls.js`, `filters/videoFilter.js`, `pipeline.js`, `platform/profiles.js`, `presets.js`, `types.js`, `defaults.js`) is already in place.
 
+---
+
 ## Problem
 
-The current streaming experience has a single tall page (`src/routes/DesktopLivePage/DesktopLivePage.route.jsx`) that exposes raw FFmpeg-adjacent controls (codec, preset, B-frames, lookahead, multipass, NVENC tune, AQ knobs, etc.) without:
+The current streaming experience has **two different shapes** of pain:
+
+### Broadcaster pain
+
+A single tall page (`src/routes/DesktopLivePage/DesktopLivePage.route.jsx`, ~1024 lines) exposes raw FFmpeg-adjacent controls (codec, preset, B-frames, lookahead, multipass, NVENC tune, AQ knobs, etc.) without:
 
 1. **Knowledge of what the user's system can actually do.** The UI lets a user pick `hevc_nvenc` on a laptop without an NVIDIA GPU, or `videotoolbox` on Windows, or pick combinations like `tune=ull + multipass=fullres + lookahead=16` that quietly contradict each other. Validation is a flat list of `throw new Error(...)` calls in `normalizeConfig`; the UI itself has no concept of constraints.
+2. **No "just make it work" path.** A new user is presented with ~30 settings, all defaulted to whatever was hardcoded years ago.
+3. **No video file streaming surface.** The pipeline now supports `captureBackend === 'file'` end-to-end, but there is no UI to point it at a local `.mp4`.
+4. **Audio is an afterthought.** A single text field for `audioInputArgs` accepts arbitrary FFmpeg input arguments. Users cannot mix mic + desktop + per-app audio without writing FFmpeg flags by hand.
+5. **No persistent presence.** The moment the broadcaster navigates to `/chat` or `/servers`, every live-stream IPC subscription on `DesktopLivePage` unmounts and they lose all visibility into the stream they're still pushing out.
 
-2. **No persistence.** Settings are held in component state. Restart Electron and they're gone.
+### Viewer pain
 
-3. **No "just make it work" path.** A new user is presented with ~30 settings, all defaulted to whatever was hardcoded years ago.
+The viewer side has its own set of pain points that are _not_ solved by anything that exists today:
 
-4. **No video file streaming.** The pipeline assumes desktop/window capture; users cannot point it at a local `.mp4` to broadcast.
+6. **`LiveStreamPlayer.jsx` is desktop-shaped.** It uses one breakpoint (`theme.breakpoints.down("sm")`) to pin its controls visible, but the layout, hit targets, gesture model, error states, and chrome all assume a wide cursor-driven viewport. iOS Safari's native HLS path is not even attempted; HLS.js is unconditional.
+7. **No Picture-in-Picture.** When the viewer leaves `/live` to look at a friend's profile, the stream is gone. There is no `requestPictureInPicture()` integration and no Document-PiP fallback, so the player is route-locked.
+8. **Adaptation telemetry is not surfaced to viewers.** `useLiveControlClient` exposes `viewerSummary`, `recommendation`, and `ack`, but `LiveStreamPlayer` does not destructure them. Viewers get no indication when the stream just dropped quality on their behalf.
+9. **The visual language is unfinished.** `darkTheme.js` defines two component overrides total. The streaming surfaces inherit MUI's defaults wholesale, so viewer chrome and broadcaster chrome look like a generic admin panel rather than a product.
 
-5. **Audio is an afterthought.** A single text field for `audioInputArgs` accepts arbitrary FFmpeg input arguments. Users cannot:
-   - Mix microphone + desktop audio without writing FFmpeg flags by hand
-   - Capture audio from one app (the game) only
-   - Capture everything *except* one app (mute Discord but keep the game and Spotify)
-   - Adjust per-source levels
+### System pain
 
-6. **Server has no say in the stream's parameters.** Today the streamer sets it once at start. There is no channel from the server back to the streamer to say "your viewers can only handle h264 at 4 Mbit."
+10. **Three monolithic files own most of the streaming product.** Any change to `DesktopLivePage.route.jsx` (1024 lines), `public/electron-live-stream.js` (775 lines), or `LiveStreamPlayer.jsx` (538 lines) ships with high risk and slow review. The plan's `≤200 lines per file` and `manager ≤300 lines` rules are aspirational, not enforced.
+11. **State for an in-flight stream lives on the page that started it.** Both broadcaster and viewer state is owned by route components, so neither survives navigation. This is the root cause of #5 and #7.
+
+---
 
 ## Why this should be fixed
 
 - New users get scared by the current settings page and either pick blindly or churn.
 - "Settings combos that crash FFmpeg" is a constant support pattern.
-- Without persistence, every restart costs the user a re-configuration session.
-- File-source streaming is a high-value, low-effort feature that broadens the product.
+- File-source streaming is a high-value, low-effort feature that broadens the product — the backend is already done, only UI is missing.
 - Per-app audio control is a genuine differentiator.
 - Server-driven adaptation is the only architecturally correct way to handle a viewer base with mixed devices.
+- Mobile is the dominant viewing surface for live content; not catering for it leaves engagement on the table.
+- Without PiP and broadcaster presence, viewers and streamers are forced into a single-page-app ghetto inside a multi-page-app shell.
+- Three monolithic files are a tax on every future change in this product area.
+
+---
 
 ## Expected result
 
 - A settings UI organized into a **simple "Auto-optimized" path** (default) and an **advanced manual path** (collapsed by default).
 - The UI **cannot let the user pick an invalid combo.** Disabled-by-constraint options are visibly disabled with a tooltip explaining why.
-- Settings persist across app restarts. A "Reset to defaults" button is one click away.
+- Settings persist across app restarts via a single `useStreamSettings` hook. A "Reset to defaults" button is one click away and shows a confirmation dialog.
 - A **Source picker** with three modes: **Screen / Window / Video file**.
 - An **Audio mixer** UI showing every detected audio source with per-source mute, level, and an "exclude this app" toggle.
 - A **Live status panel** during streaming showing viewer count, current parameters, what changed since stream start, and why.
 - The streamer's actual stream parameters can be **lowered automatically** in response to viewer constraints. They never exceed what the user originally selected.
+- **Watching on a phone is enjoyable.** The player adapts to portrait / landscape, uses touch-friendly controls, falls back to native HLS on iOS Safari, and surfaces adaptation events ("dropped to 720p because your network slowed") in plain language.
+- **Picture-in-Picture works** on every platform that supports it: standard PiP via `HTMLVideoElement.requestPictureInPicture()`, Document-PiP fallback (Chromium 116+ / Electron) for arbitrary chrome, and a tasteful "minimized player" portal for browsers that support neither.
+- **Broadcasters always know they are streaming.** A persistent app-bar pill ("● Live — 23 viewers — 4.2 Mbit/s") is visible on every page while a stream is active and is clickable to return to the broadcast page.
+- **Files stay small.** The three monolith files are split into focused modules averaging ≤200 lines, with the live-stream manager kept ≤300 lines.
+- **Visual polish without breaking MUI.** Custom theming (extra palette tokens, component variants, typography role for "stream metadata") lives in `darkTheme.js` and per-feature `sx` props use theme tokens, never raw hex.
+
+---
 
 ## How to fix
 
@@ -67,73 +123,170 @@ This is a multi-phase project. Phases are ordered so each one ships value on its
 
 ---
 
-### Phase A — System capability probe (foundation for everything else)
+### Phase 0 — Code-quality refactor & file split
 
-Before redesigning the UI, the app needs to know what the user's machine can do. Note: this probe is also the foundation for Plan 05 Phase H (GPU profiling). The two plans share the same probe output.
+This phase has **higher priority than every other phase** because every other phase compounds the cost of not doing it.
 
-**A1. Add a `capabilities.js` module in the Electron main process.** On app start (and on demand from a "Re-probe" button), it runs:
+**0.1. Split `DesktopLivePage.route.jsx` (~1024 lines).** Target shape:
 
-- `os.platform()`, `os.arch()`, `os.cpus()`, `os.totalmem()`
-- `ffmpeg -hide_banner -hwaccels` → parse out `cuda`, `d3d11va`, `qsv`, `videotoolbox`, etc.
-- `ffmpeg -hide_banner -encoders` → parse the list, intersect with our supported codec list
-- `ffmpeg -hide_banner -filters` → check for `gfxcapture`, `scale_cuda`, `hwmap`, `amix`, `amerge`
-- On Windows: query the GPU via PowerShell `Get-CimInstance Win32_VideoController`
-- On Windows: enumerate display modes per monitor
-- Display device enumeration via Electron's `screen.getAllDisplays()`
-- Audio device enumeration (Phase E uses this)
-
-The probe writes its result to `app.getPath('userData')/capabilities.json` so the renderer can read it synchronously on UI mount.
-
-**A2. Define a typed capability shape.** The renderer consumes one well-defined object. Add to `public/streaming/types.js`:
-
-```js
-/** @typedef {Object} DetectedCapabilities
- *  @property {NodeJS.Platform} os
- *  @property {string} arch
- *  @property {{ vendor: string, model: string, driver: string }} gpu
- *  @property {{ nvenc: { h264: boolean, hevc: boolean, av1: boolean }, qsv: {...}, amf: {...}, videotoolbox: {...} }} encoders
- *  @property {string[]} captureBackends
- *  @property {Object[]} audioDevices
- *  @property {Object[]} displays
- */
+```
+src/routes/DesktopLivePage/
+  DesktopLivePage.route.jsx          -- ≤120 lines: Redux wiring + Suspense + composition
+  sections/
+    SourceSection.jsx                -- screen / window / file picker (Phase D + C)
+    OutputSection.jsx                -- resolution / fps / bitrate / codec
+    AdvancedSection.jsx              -- collapsed expert controls
+    AudioSection.jsx                 -- placeholder until Phase E lands
+    LiveStatusSection.jsx            -- thin wrapper around LiveStatusPanel
+  hooks/
+    useDesktopBroadcastState.js      -- composes electron-live IPC subscriptions
+    useStreamLifecycle.js            -- start/stop, status transitions
+  copy/
+    fallbackCatalogs.js              -- the giant FALLBACK_* arrays at the top of the file today
 ```
 
-Note: `public/streaming/types.js` currently defines `Capabilities` (the lightweight runtime fast-path flag). The new `DetectedCapabilities` is richer and produced by the probe. During this plan, move `public/streaming/types.js` to `shared/streaming/types.js` so it can be imported by both renderer and main process without duplication. The `StreamingProfile` typedef from Plan 01 also moves here.
+The `FALLBACK_VIDEO_CODEC_OPTIONS`, `NVENC_PROFILE_OPTIONS`, `NVENC_PROFILE_DEFAULTS`, etc. constants from the top of the current file move verbatim into `copy/fallbackCatalogs.js`.
 
-**A3. Expose probe via IPC.** Add `ipcMain.handle('capabilities:get', ...)` and `'capabilities:reprobe'`. The renderer wraps these in a hook (`useCapabilities`).
+**0.2. Split `public/electron-live-stream.js` (~775 lines).** Target shape:
+
+```
+public/streaming/
+  manager/
+    ElectronLiveStreamManager.js     -- ≤300 lines: lifecycle orchestration
+    adaptationLoop.js                -- handleRecommendation + applyRecommendation glue
+    serverControlBridge.js           -- _wireServerControlEvents extracted
+    respawn.js                       -- discontinuity respawn helper
+  ipc/
+    register.js                      -- registerLiveStreamIpc, single entrypoint
+    handlers/
+      session.js                     -- start/stop/state
+      capabilities.js                -- get-capabilities / get-detected-capabilities / reprobe
+      settings.js                    -- load / save / reset
+      adaptation.js                  -- set-auto-adapt
+```
+
+Today `public/electron-live-stream.js` mixes manager, bridge, IPC registration, and ad-hoc helpers. The `manager/` and `ipc/` subdirectories are non-negotiable for this refactor.
+
+**0.3. Split `src/components/Live/LiveStreamPlayer.jsx` (~538 lines).** Target shape:
+
+```
+src/features/player/
+  LiveStreamPlayer.jsx               -- ≤180 lines: composition + refs
+  hooks/
+    useHlsPlayback.js                -- hls.js attach/detach, FRAG_LOADED, LEVEL_SWITCHED
+    useLatencySync.js                -- buildSyncTuning + syncToLive interval
+    usePlayerState.js                -- isPlaying / isMuted / volume reducer
+    useFullscreen.js                 -- requestFullscreen + exit handlers
+    useNativeHls.js                  -- iOS Safari native HLS branch (Phase H)
+  controls/
+    PlayPauseButton.jsx
+    VolumeControl.jsx
+    LiveSyncButton.jsx
+    FullscreenButton.jsx
+    PictureInPictureButton.jsx       -- (Phase I)
+    StreamMetaPill.jsx               -- viewer count, codec, latency
+  overlays/
+    LoadingOverlay.jsx
+    ErrorOverlay.jsx
+    BufferingIndicator.jsx
+    AdaptationToast.jsx              -- "dropped to 720p" notice (Phase F polish)
+```
+
+`LiveStreamPlayer.jsx` becomes the _composition_ surface; everything else is a hook or presentational component.
+
+**0.4. Introduce `liveSessionSlice` in Redux.** Currently broadcaster state (running/idle, current settings, viewer count, recommendation history, auto-adapt toggle) lives entirely in `DesktopLivePage` local React state. Move the **observable** parts (running flag, current sessionId, viewer count, current `videoBitrate` / `outputWidth` / `outputHeight`, codec, `autoAdaptEnabled`, last recommendation reason) into a Redux slice keyed by role:
+
+```js
+// src/slices/liveSessionSlice.js
+{
+  broadcaster: {
+    status: "idle" | "starting" | "live" | "stopping" | "error",
+    sessionId: string | null,
+    startedAt: number | null,
+    settings: { videoBitrate, outputWidth, outputHeight, fps, videoCodec },
+    initialCeiling: { ... } | null,
+    viewerSummary: ViewerSummary | null,
+    autoAdaptEnabled: boolean,
+    lastRecommendation: { reason, appliedAt, settings } | null,
+    error: string | null,
+  },
+  viewer: {
+    activeStream: { sessionId, publicToken, label } | null,
+    pip: { mode: "off" | "native" | "document" | "portal", since: number | null },
+    minimized: boolean,
+  }
+}
+```
+
+This slice is the substrate for Phase I (PiP & broadcaster presence) and is the single subscription point for the persistent app-bar pill.
+
+**0.5. Lint / file-size CI gate.** Add a check that fails CI when any file in `public/streaming/`, `src/features/streaming/`, `src/features/player/`, `src/lib/streaming/`, or `server/src/live/` exceeds 300 lines, with an explicit allow-list (manager files at 300, route shells at 200). The thresholds match the architectural rules in the _Code organization_ section of this plan; tighten the thresholds case-by-case rather than carrying exemptions long term.
+
+**0.6. Tests stay green.** This phase changes structure, not behavior. The 113 streaming + 53 server tests must continue to pass; add a smoke test per split file proving its public exports resolve.
+
+---
+
+### Phase A — System capability probe (foundation for everything else)
+
+**Status: partial — monolithic.** The probe runs and produces a `DetectedCapabilities`-shaped object today, but the planned subtree split, the `useCapabilities` hook, and the canonical IPC name do not exist.
+
+Note: this probe is also the foundation for Plan 05 Phase H (GPU profiling). The two plans share the same probe output.
+
+**A1. Split the existing `public/streaming/capabilities/probe.js`** into the planned subtree:
+
+```
+public/streaming/capabilities/
+  probe.js              -- top-level orchestrator: composes the helpers, owns the cache
+  ffmpegCheck.js        -- parses `-hwaccels`, `-encoders`, `-filters`
+  gpuDetect/
+    index.js            -- dispatches by platform
+    win32.js            -- Get-CimInstance Win32_VideoController (lifted from probe.js today)
+    darwin.js           -- system_profiler SPDisplaysDataType
+    linux.js            -- lspci / glxinfo
+  audioDevices.js       -- DirectShow / AVFoundation / PulseAudio enumeration
+  displays.js           -- consumes screen.getAllDisplays() + Win32 EDID query when available
+```
+
+**A2. Audit `DetectedCapabilities`.** The typedef already lives in `shared/streaming/types.js`. Verify every field a constraint or auto-optimizer needs is present, including `audioDevices: Array<{ id, kind, label, isDefault }>` and `displays: Array<{ id, bounds, scaleFactor, refreshRateHz, isPrimary }>`.
+
+**A3. Standardize IPC.** Today there are three names: `live-stream:get-capabilities` (platform profile catalog), `live-stream:get-detected-capabilities` (probe snapshot), and `live-stream:reprobe-capabilities`. Add the canonical aliases `capabilities:get` and `capabilities:reprobe` (keep the existing names for one release with a deprecation log line) so the rest of this plan can write against the simpler name.
+
+**A4. Add `useCapabilities()` hook.** Wraps the IPC, caches the snapshot in module scope (the probe is expensive), and re-resolves on `capabilities:reprobe`. Returns `{ capabilities, refresh, isProbing, error }`.
+
+**A5. The probe writes its result to `app.getPath('userData')/capabilities.json`** so the renderer can read it synchronously on UI mount and the file can be inspected for support purposes.
 
 ---
 
 ### Phase B — Settings persistence and "Clear saved settings"
 
-**B1. Storage location.** `app.getPath('userData')/stream-settings.json`. Atomic writes (write to `.tmp` then `rename`) so a crash mid-write doesn't corrupt.
+**Status: mostly done.** `store.js`, `schema.js`, `migrate.js`, `autoOptimize.js`, and `settings:load` / `settings:save` / `settings:reset` IPC are all in place.
 
-**B2. Versioned schema.** First field of every settings file is `schemaVersion: 1`. Future migrations live in `migrateSettings(raw)` and bump the version.
+**Remaining work:**
 
-**B3. Migration step from pre-persistence defaults.** When the settings file does not exist (first launch with this plan installed), run the auto-optimizer (Phase C3) to produce the initial settings for this machine. There is no manual migration from old defaults because there was no persistence before this plan.
+**B1. `useStreamSettings()` hook.** Returns `[settings, updateSettings, resetSettings]`. `updateSettings` debounces saves to once per second to avoid disk thrash. `resetSettings()` writes the auto-optimized defaults and shows a `<Dialog>` confirming the destructive action. Today's `DesktopLivePage` open-codes this; the hook centralizes it.
 
-**B4. Two IPC handlers.** `settings:load` and `settings:save`. Save throttled to once per second to avoid disk thrash on rapid form changes.
+**B2. Two-tier defaults.** Verify "Defaults" means the auto-optimized values for _this machine_, not a hardcoded constant. So `Reset` doesn't drop a Windows + RTX user back into a generic config — it re-runs the optimizer using the latest `DetectedCapabilities`.
 
-**B5. Renderer hook.** `useStreamSettings()` returns `[settings, updateSettings, resetSettings]`. `resetSettings()` writes the auto-optimized defaults and shows a confirmation dialog.
-
-**B6. Two-tier defaults.** "Defaults" means the auto-optimized values for *this machine*, not a hardcoded constant. So `Reset` doesn't drop a Windows + RTX user back into a generic config — it re-runs the optimizer.
+**B3. Confirmation copy.** Reset dialog must list, in plain language, what's about to change. ("This will switch to the default profile for your NVIDIA RTX 4070, set bitrate to 8 Mbit/s, …")
 
 **File layout:**
 
 ```
-public/streaming/settings/
-  store.js          -- atomic write to userData/stream-settings.json
-  schema.js         -- JSDoc types + schemaVersion constant
-  migrate.js        -- versioned step runner
+public/streaming/settings/    -- already in place
+  store.js
+  schema.js
+  migrate.js
   steps/
-    v0_to_v1.js     -- (if needed in future)
+    v0_to_v1.js               -- (if needed in future)
+src/features/streaming/hooks/
+  useStreamSettings.js        -- new
 ```
 
 ---
 
 ### Phase C — Settings UI rewrite with constraint engine and auto-optimize
 
-This phase replaces `DesktopLivePage.route.jsx` and the settings sections of `SettingsPage.route.jsx`.
+**Status: not started.** This phase replaces the body of `DesktopLivePage.route.jsx` (after Phase 0 has split it into sections) and the streaming-related sections of `SettingsPage.route.jsx`.
 
 **C1. Page layout.**
 
@@ -145,11 +298,12 @@ This phase replaces `DesktopLivePage.route.jsx` and the settings sections of `Se
 │ [Phase E content]                               │
 ├─ Output ───────────────────────────────────────┤
 │ [Auto-optimize]  [Custom ▾]                     │
-│  → Resolution, FPS, bitrate, codec, latency     │
+│  → Resolution, Frame rate (single), bitrate,    │
+│    codec, latency                               │
 ├─ Advanced (collapsed) ─────────────────────────┤
 │  → preset, lookahead, B-frames, AQ, VBV, ...    │
 ├─ Live status (only visible while streaming) ───┤
-│ [Phase F content]                               │
+│ [LiveStatusPanel]                               │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -165,68 +319,50 @@ This phase replaces `DesktopLivePage.route.jsx` and the settings sections of `Se
 
 The engine returns a `Map<fieldName, ConstraintResult[]>`. The form layer reads it to disable hard-invalid options, show cautions, and provide "Fix automatically" affordances.
 
-**C3. Auto-optimize function.**
+**C3. Auto-optimize function.** `public/streaming/autoOptimize.js` already exists — consume it from the renderer (move it to `src/lib/streaming/autoOptimize.js` if it pulls in renderer-only deps, otherwise wrap it via IPC). It uses the quality profile system from Plan 01 to apply the appropriate profile per the algorithm in the original plan body.
 
-`autoOptimize(capabilities)` is a pure function that produces a `StreamSettings` object given the system capabilities. It uses the quality profile system from Plan 01 to apply the appropriate profile:
-
-```
-if has NVIDIA RTX 20+:
-  videoCodec = "h264_nvenc"
-  apply "low-latency" profile (from Plan 02)
-  vbvMultiplier = 1.0
-elif has Intel Arc / iGPU with QSV:
-  videoCodec = "h264_qsv"
-  encoderPreset = "veryfast"
-elif macOS Apple Silicon:
-  videoCodec = "h264_videotoolbox"
-elif fallback:
-  videoCodec = "libopenh264"
-  encoderPreset = "default"
-
-resolution = min(primary display res, 1920x1080)
-fps        = min(primary display refresh, 60)
-bitrate    = pick by resolution: 1080p60=8M, 1080p30=6M, 720p60=5M, 720p30=3M
-captureBackend = "gfxcapture" if Win+RTX else "gdigrab" if Win else native
-audioInputs = [primary mic, default desktop loopback]
-hlsTime    = 2; gopSize = fps * hlsTime
-```
-
-**C4. Profile selector and detectProfile.**
-
-The `detectProfile.js` logic deferred from Plan 01 lives here. After every settings change in `useStreamSettings`, run `detectProfile(settings)` — walks the quality profile list from Plan 02, returns the first complete match or `"custom"`. Used to display the active profile name in the selector and to know whether to offer "Apply Low Latency" affordances.
+**C4. Profile selector and `detectProfile`.** `detectProfile.js` lives in `src/lib/streaming/`. After every settings change in `useStreamSettings`, run `detectProfile(settings)` — walks the quality profile list from Plan 02, returns the first complete match or `"custom"`. Used to display the active profile name in the selector and to know whether to offer "Apply Low Latency" affordances.
 
 `ProfileSelector.jsx` in `src/features/streaming/ui/controls/` is the presentational component. Takes `value` + `onChange` + `profiles` list.
 
-**C5. Field-by-field tooltips.** Every advanced field has a one-sentence explanation. Latency-sensitive fields marked with a clock icon.
+**C5. Field-by-field tooltips.** Every advanced field has a one-sentence explanation. Latency-sensitive fields marked with a clock icon. The wording matters: never use "FFmpeg" or codec letters in the user-facing copy; if the explanation requires that, hide it behind a "Why?" link.
+
+**C6. Feature flag.** Ships behind `settings.featureFlags.newStreamingPage` for one release while the old page remains the default. Default-on after one release of dogfooding.
+
+**C7. Frame rate as a single user-facing control.** The user only sees one numeric **Frame rate (FPS)** input in the Output panel. It writes both `settings.fps` _and_ `settings.captureFps` to the same value, and the constraint engine derives the dependent `gopSize` (`fps × hlsTime`) at write time so the two-field GOP rule from C2 is honored automatically. The two-field shape is **preserved in the backend** because:
+
+- `public/streaming/numbers.js#effectiveCaptureFps()` still caps the source's emission rate at `ceil(fps × RECORDING_FPS_CEILING_RATIO)` so a misconfigured `captureFps` (e.g. one persisted from a much older settings file) cannot push the encoder past the configured target rate.
+- `public/streaming/filters/videoFilter.js` only inserts the `fps=<n>` filter when `config.fps` is set, and `pipeline.js` writes `-fps_mode cfr -r <fps || captureFps>` so the source-vs-encoder rate distinction is still meaningful in pipeline tests (`pipeline.test.js` exercises both equal-rate and `captureFps !== fps` paths).
+- `sourceMode === "file"` overrides this: file capture inherits its rate from the file itself, so the constraint engine disables the FPS field when the user picks a video file source (matching the Phase D "disable irrelevant settings in file mode" rule).
+- Future audio/video per-source overrides (e.g. capturing a 30 fps webcam alongside a 60 fps screen) keep the door open to surface a separate "source rate" advanced control without reshaping the pipeline.
+
+The default value is **60** for both fields. `autoOptimize` clamps the value to `min(displayFrequency, 60)` and writes the same number to `fps` and `captureFps` so an auto-optimized profile never produces an asymmetric pair.
 
 ---
 
 ### Phase D — Video file streaming as a source mode
 
-**D1. Source picker.** Add the third radio (`Video file`) to the source picker. Selecting it shows a file picker with filters for `.mp4`, `.mkv`, `.mov`, `.webm`, `.ts`.
+**Status: backend done, UI exposure missing.** `public/streaming/capture/file.js` is implemented and `captureBackend === "file"` is wired through `capture/index.js`.
 
-**D2. Probe the file with ffprobe.** Validate it has a video stream, capture native width/height/fps/codec/audio.
+**Remaining work:**
 
-**D3. New input branch.** Add `public/streaming/capture/file.js` (new file, not part of Plan 01's split):
+**D1. Source picker.** Add the third radio (`Video file`) to the source picker in `SourceSection.jsx` (Phase 0). Selecting it shows a file picker with filters for `.mp4`, `.mkv`, `.mov`, `.webm`, `.ts`. The picker uses Electron's `dialog.showOpenDialog` via IPC; the renderer never touches the filesystem directly.
 
-```js
-/** @type {(source: { filePath: string, loop: boolean }) => string[]} */
-export function buildArgs({ filePath, loop }) {
-  return ["-re", ...(loop ? ["-stream_loop", "-1"] : []), "-i", filePath];
-}
-```
+**D2. Probe the file with `ffprobe`** before accepting it. Validate it has a video stream; capture native width/height/fps/codec/audio. Display a small preview card with this metadata so the user knows what they're about to broadcast.
 
-`pipeline.js` recognizes the `captureBackend === 'file'` branch and skips standard capture-backend args entirely.
+**D3. Loop / play once.** A toggle. Default: loop forever (this matches the most common "rebroadcast a clip" use case).
 
-**D4. Loop / play once.** For v1: loop forever or play once.
+**D4. Disable irrelevant settings in file mode.** No frame-rate input (the file's native rate wins — see C7), no draw mouse, no monitor index. The constraint engine handles this automatically (file mode forces those fields disabled).
 
-**D5. Disable irrelevant settings in file mode.** No capture FPS, no draw mouse, no monitor index. Constraint engine handles this automatically (file mode forces those fields disabled).
+**D5. Plan-validated test.** Stream a local 1080p60 mp4 for 10 minutes; verify the produced HLS plays correctly and segment cadence matches `hls_time`.
 
 ---
 
 ### Phase E — Audio capture redesign
 
-**E1. Define the audio model.** Add to `shared/streaming/types.js`:
+**Status: not started.**
+
+**E1. Define the audio model.** `AudioSource` typedef already lives in `shared/streaming/types.js`:
 
 ```js
 /** @typedef {Object} AudioSource
@@ -241,11 +377,10 @@ export function buildArgs({ filePath, loop }) {
  */
 ```
 
-**E2. Native helper for per-process loopback (Windows-specific).**
-
-Windows 10 build 19041+ exposes process-loopback via `IAudioClient` activation parameters. FFmpeg does not wrap this. Ship a small native exe (Rust or C++) that reads PCM from a process-loopback session and writes raw PCM to stdout. FFmpeg ingests it via `-f s16le -ar 48000 -ac 2 -i pipe:0`. The exe is invoked once per `process_include`/`process_exclude` source.
+**E2. Native helper for per-process loopback (Windows-specific).** Windows 10 build 19041+ exposes process-loopback via `IAudioClient` activation parameters. FFmpeg does not wrap this. Ship a small native exe (Rust or C++) that reads PCM from a process-loopback session and writes raw PCM to stdout. FFmpeg ingests it via `-f s16le -ar 48000 -ac 2 -i pipe:0`. The exe is invoked once per `process_include`/`process_exclude` source.
 
 The helper exposes a small JSON-RPC interface over stdin:
+
 - `list-audio-sessions` → returns `{ pid, exeName, displayName, isAudible }[]`
 - `capture --pid=<pid> --mode=include|exclude` → starts streaming PCM to stdout
 
@@ -267,6 +402,7 @@ Add `public/streaming/audio/filterGraph.js` that builds the `amix` filter from N
 **E4. Audio mixer UI.** One row per detected source. Add-source button. Per-row: enable/disable, gain slider, level meter (from FFmpeg's `astats` or the helper). Double-audio warning when sources overlap.
 
 **E5. Constraints.**
+
 - `process_include` and `process_exclude` are mutually exclusive for the same target.
 - `desktop` + `process_exclude` for app X = "mute one app" (correct).
 - `desktop` + `process_include` for app X = double-audio (constraint warning).
@@ -277,169 +413,23 @@ Add `public/streaming/audio/filterGraph.js` that builds the `amix` filter from N
 
 ### Phase F — Server-driven adaptive control
 
-**F1. Define the protocol.** Add `shared/streaming/protocol.js` with a `PROTOCOL_VERSION` constant. A new WebSocket channel per session: `/live/api/{sessionId}/control` (server → streamer push). Messages:
+**Status: substantially done.**
 
-```jsonc
-// server → streamer
-{ "type": "viewer-summary", "viewerCount": 12, "minDownlinkMbit": 4.5,
-  "supportedCodecs": ["h264"], "maxResolution": { "w": 1920, "h": 1080 } }
+**Done:** `shared/streaming/protocol.js` (162 lines, `PROTOCOL_VERSION = 1`), `shared/streaming/types.js` (185 lines), `src/features/player/viewerProbe.js` (308 lines), `src/features/player/useLiveControlClient.js` (196 lines), `src/features/streaming/ui/panels/LiveStatusPanel.jsx` (273 lines), `server/src/live/control/{viewerStore.js (168), recommender.js (221), controlSession.js (196), socket.js (255)}`, `public/streaming/server-control/{adapter.js (115), initialCeiling.js (31), segmentCursor.js (88), socket.js (193)}`. The `EXT-X-DISCONTINUITY` respawn flow lives in `output/hls.js` and the `pipeline.buildArgs` chain. `ElectronLiveStreamManager` records the initial ceiling, listens to `viewer-summary` / `recommended-settings`, runs `applyRecommendation`, optionally respawns FFmpeg, and acks with the actual settings + `clampedBy` (`user-initial-ceiling | user-disabled | respawn-failed | no-change`). Auto-adapt toggle is a real IPC handler (`live-stream:set-auto-adapt`). 28 tests across `public/streaming/__tests__/server-control/` and `server/test/live/control/` pass.
 
-// server → streamer
-{ "type": "recommended-settings", "videoBitrate": 4000000, "videoCodec": "h264_nvenc",
-  "outputWidth": 1280, "outputHeight": 720, "fps": 30,
-  "reason": "lowest viewer downlink 4.5 Mbit/s, 2 viewers can only decode h264" }
+**Remaining work:**
 
-// streamer → server
-{ "type": "ack", "applied": true, "actualSettings": { ... }, "clampedBy": "user-initial-ceiling" }
-```
+**F-α. Surface viewer-side adaptation telemetry.** `useLiveControlClient` returns `{ viewerSummary, recommendation, ack, connected }` but `LiveStreamPlayer` does not destructure them. Add an `AdaptationToast` overlay (lives in `src/features/player/overlays/`) that shows brief, plain-English messages on `LEVEL_SWITCHED` events: _"Quality dropped to 720p — your network slowed."_ / _"Quality restored to 1080p."_ The toast follows the surface palette defined in Phase J.
 
-**F2. Viewer side — automatic capability probe.**
+**F-β. Respawn UX.** When the server-driven respawn happens, the viewer may see a 1-3 second buffering blip. Today this is uncovered. Wire the `BufferingIndicator` overlay to the `LEVEL_SWITCHED` + buffer-empty event combination so the user sees a friendly _"Reconnecting…"_ instead of a frozen frame.
 
-Add `src/features/player/viewerProbe.js`. On page load it runs a synchronous and async probe and returns a `ViewerCapabilities` object. Results are reported to the server immediately on WebSocket connect and re-reported whenever the network or bandwidth estimate changes materially.
+**F-γ. Streamer-side panel polish.** `LiveStatusPanel.jsx` already shows recommendation history; add a compact mobile-equivalent (Phase H) for a future "phone broadcaster" use case (scope: read-only, since broadcasting _from_ a phone is out of scope for this plan).
 
-**F2a. Codec probe — three-tier approach.**
+**F-δ. Integration tests.** End-to-end harness that spins up a real `/live-control` namespace, an in-memory viewer probe, and a fake `ElectronLiveStreamManager` to exercise: (1) initial connect, (2) viewer joins, (3) viewer's `hlsBandwidthEstimateMbit` drops, (4) recommendation pushed, (5) respawn ACK. Today the unit tests cover the modules in isolation.
 
-Run all three tiers and merge; later tiers fill in richer signal but are not required.
+**F-ε. Document the protocol.** Add `shared/streaming/PROTOCOL.md` with the message catalog, the throttling rules (every 10 segments / >15% change / `LEVEL_SWITCHED` immediate), and the "lower-only" guarantee. Both renderers and the server import from `protocol.js`; the markdown is the human-readable spec.
 
-*Tier 1 — `MediaSource.isTypeSupported` (synchronous, broadest browser coverage)*
-
-```js
-const isSupported = (mime) =>
-  typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported(mime);
-
-const CODEC_PROBES = {
-  h264_baseline: 'video/mp4; codecs="avc1.42E01E"',          // H.264 Constrained Baseline 3.0
-  h264_main:     'video/mp4; codecs="avc1.4D401F"',           // H.264 Main 3.1
-  h264_high:     'video/mp4; codecs="avc1.640028"',           // H.264 High 4.0
-  hevc_main:     'video/mp4; codecs="hev1.1.6.L93.B0"',       // HEVC Main L3.1
-  hevc_main10:   'video/mp4; codecs="hev1.2.4.L120.B0"',      // HEVC Main10 (HDR)
-  av1:           'video/mp4; codecs="av01.0.08M.08"',          // AV1 Main
-  vp9:           'video/webm; codecs="vp9"',
-  aac_lc:        'audio/mp4; codecs="mp4a.40.2"',
-  opus:          'audio/webm; codecs="opus"',
-};
-
-// Result: Record<keyof CODEC_PROBES, boolean>
-const tier1 = Object.fromEntries(
-  Object.entries(CODEC_PROBES).map(([k, mime]) => [k, isSupported(mime)])
-);
-```
-
-*Tier 2 — `navigator.mediaCapabilities.decodingInfo` (async, returns `smooth` + `powerEfficient`)*
-
-For each `true` result from Tier 1, run a `decodingInfo` call with a representative sample config (1280×720, 30fps, 4 Mbit/s) to see if hardware-accelerated decode is available. Store `{ supported, smooth, powerEfficient }` per codec. If the API is unavailable, skip and fall back to Tier 1 booleans.
-
-*Tier 3 — `HTMLVideoElement.canPlayType` (legacy fallback)*
-
-Used only if `MediaSource` is undefined (very old browsers). Returns `""`, `"maybe"`, or `"probably"`.
-
-**F2b. Network probe.**
-
-```js
-const probeNetwork = () => {
-  const conn = navigator.connection ?? navigator.mozConnection ?? navigator.webkitConnection;
-  return {
-    downlinkMbit:    conn?.downlink    ?? null,   // Mbit/s, not always accurate
-    effectiveType:   conn?.effectiveType ?? null, // '4g'|'3g'|'2g'|'slow-2g'
-    rttMs:           conn?.rtt         ?? null,
-    saveData:        conn?.saveData    ?? false,
-  };
-};
-```
-
-After HLS.js initializes, subscribe to its `FRAG_LOADED` and `LEVEL_SWITCHED` events and read `hls.bandwidthEstimate` (bits/s). Convert to Mbit/s and add as `hlsBandwidthEstimateMbit`; this is more reliable than `navigator.connection.downlink` because it is measured on the actual stream segments.
-
-**F2c. Display probe.**
-
-```js
-const probeDisplay = () => ({
-  viewportWidth:    window.innerWidth,
-  viewportHeight:   window.innerHeight,
-  screenWidth:      window.screen.width,
-  screenHeight:     window.screen.height,
-  devicePixelRatio: window.devicePixelRatio ?? 1,
-});
-```
-
-**F2d. `ViewerCapabilities` typedef.** Add to `shared/streaming/types.js`:
-
-```js
-/** @typedef {Object} CodecProbeResult
- *  @property {boolean} supported
- *  @property {boolean|null} smooth          -- null if mediaCapabilities unavailable
- *  @property {boolean|null} powerEfficient
- */
-
-/** @typedef {Object} ViewerCapabilities
- *  @property {{ h264_baseline: CodecProbeResult, h264_main: CodecProbeResult,
- *               h264_high: CodecProbeResult, hevc_main: CodecProbeResult,
- *               hevc_main10: CodecProbeResult, av1: CodecProbeResult,
- *               vp9: CodecProbeResult, aac_lc: CodecProbeResult,
- *               opus: CodecProbeResult }} codecs
- *  @property {string[]} supportedCodecFamilies   -- ["h264","hevc","av1","vp9"] — derived
- *  @property {{ downlinkMbit: number|null, effectiveType: string|null,
- *               rttMs: number|null, saveData: boolean,
- *               hlsBandwidthEstimateMbit: number|null }} network
- *  @property {{ viewportWidth: number, viewportHeight: number,
- *               screenWidth: number, screenHeight: number,
- *               devicePixelRatio: number }} display
- *  @property {string} userAgent
- *  @property {number} probedAt   -- Date.now()
- */
-```
-
-`supportedCodecFamilies` is derived: `"h264"` if any h264 tier is supported, `"hevc"` if `hevc_main` is supported, etc. This is the field the server uses in `intersection(viewer.supportedCodecs)`.
-
-**F2e. Reporting and re-probing.**
-
-- On WebSocket connect: run full probe (tiers 1 + 2 + network + display) and send `viewer-capabilities` message (see protocol below).
-- On `navigator.connection` `change` event: re-run network probe. Send update only if `downlinkMbit` or `effectiveType` changed.
-- On HLS.js `FRAG_LOADED` every 10 segments (not every fragment): refresh `hlsBandwidthEstimateMbit` and send update if it changed by >15%.
-- On HLS.js `LEVEL_SWITCHED` (viewer's player dropped to a lower HLS level): always send an update immediately with `triggeredBy: "hls_level_drop"`.
-
-**F2f. Protocol update.** Replace the `viewer-summary` message with a richer shape in `shared/streaming/protocol.js`:
-
-```jsonc
-// viewer → server  (replaces implicit connection signal)
-{
-  "type": "viewer-capabilities",
-  "viewerId": "<uuid>",
-  "supportedCodecFamilies": ["h264", "hevc"],
-  "codecs": { "h264_high": { "supported": true, "smooth": true, "powerEfficient": true }, ... },
-  "network": { "downlinkMbit": 18.5, "effectiveType": "4g", "rttMs": 12, "saveData": false, "hlsBandwidthEstimateMbit": null },
-  "display": { "viewportWidth": 1920, "viewportHeight": 1080, "devicePixelRatio": 1 },
-  "probedAt": 1714900000000,
-  "triggeredBy": "connect" | "network_change" | "hls_bandwidth" | "hls_level_drop"
-}
-
-// server → streamer  (unchanged shape, now computed from richer viewer data)
-{ "type": "viewer-summary", "viewerCount": 12, "minDownlinkMbit": 4.5,
-  "supportedCodecs": ["h264"], "maxResolution": { "w": 1920, "h": 1080 } }
-```
-
-The server's `viewerStore.js` stores one `ViewerCapabilities` per viewer and recomputes the `viewer-summary` derived fields on every update.
-
-**F2g. File location.** Add `src/features/player/viewerProbe.js` to the renderer file layout (§ Code organization). Export one async function `probeViewerCapabilities(): Promise<ViewerCapabilities>` and one function `deriveCodecFamilies(codecs): string[]`.
-
-**F3. Server side.** Maintain per-session viewer state in `server/src/live/control/viewerStore.js`. Recompute recommendation on any viewer change:
-
-```
-minDownlink = min(viewer.downlinkMbit) * 0.7   // safety margin
-codecs      = intersection(viewer.supportedCodecs)
-maxRes      = max(viewport)
-recommendedBitrate = clamp(minDownlink * 0.8, 500k, initialBitrate)
-```
-
-Push `recommended-settings` only when the recommendation differs by >10% or codec changes.
-
-**F4. Streamer side: applying recommendations.** On `recommended-settings`:
-1. Compute clamped settings: `final[k] = min(current[k], recommended[k])` for numeric fields.
-2. If `final` differs meaningfully, respawn FFmpeg with `EXT-X-DISCONTINUITY` in the playlist. Track `next_segment_start_number` across the respawn.
-3. Send `ack`.
-
-**F5. UI.** A "Live status" panel visible only while streaming, showing viewer count, constraints, current parameters, initial ceiling, and a [Disable auto-adaptation] toggle.
-
-**F6. The "lower-only" guarantee.** Enforced in `adapter.js` (`public/streaming/server-control/adapter.js`):
+The "lower-only" guarantee is enforced in `public/streaming/server-control/adapter.js`:
 
 ```js
 export function applyRecommendation(current, recommendation, ceiling) {
@@ -448,58 +438,261 @@ export function applyRecommendation(current, recommendation, ceiling) {
 }
 ```
 
-Server applies the same clamp before sending. Belt and suspenders.
+Server applies the same clamp in `recommender.js` before sending. Belt and suspenders.
 
 ---
 
 ### Phase G — Telemetry and logging
 
-**G1.** Per-session log dump on stop: settings used, viewer count over time, codec/bitrate changes, FFmpeg restarts, upload pass durations (from Plan 03).
+**Status: light — streamer-side only.** `LiveStatusPanel` covers most of the streamer-side observability.
 
-**G2.** Optional opt-in "send anonymous diagnostics to Rebound" toggle.
+**Remaining work:**
+
+**G1.** Per-session log dump on stop: settings used, viewer count over time, codec/bitrate changes, FFmpeg restarts, upload pass durations (from Plan 03). Written to `app.getPath('userData')/sessions/<sessionId>.json`.
+
+**G2.** Optional opt-in "send anonymous diagnostics to Rebound" toggle. Lives in the Settings page, not the stream page.
 
 **G3.** A `Stream health` mini-widget during streaming that surfaces FFmpeg's `speed=` value, last upload pass duration (from Plan 03's per-pass log), and dropped-frames count. Three colored states (good/warn/bad) with thresholds.
+
+**G4. Viewer-side health widget.** A discrete chip in the player chrome (Phase H mobile layout aware) showing current latency to live edge, current HLS level, and the most recent adaptation event. Tappable to expand; collapsed by default.
+
+---
+
+### Phase H — Mobile viewer experience
+
+**Status: not started.** \*Streaming **from** a phone is **explicitly out of scope.\*** This phase is **only** about viewing.
+
+**H1. Layout strategy.**
+`LiveStreamPlayer` switches between three layouts:
+
+| Form factor      | Trigger                                                                   | Behavior                                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Desktop          | `theme.breakpoints.up("md")`                                              | Today's layout: hover-hidden chrome, mouse-driven seek/volume sliders, side-by-side metadata.                                                                  |
+| Mobile portrait  | `theme.breakpoints.down("md")` + `window.innerHeight > window.innerWidth` | 16:9 video pinned to top, metadata + adaptation toast stacked beneath, controls always visible, double-tap-to-seek-10s gesture, single-tap-to-toggle-controls. |
+| Mobile landscape | `theme.breakpoints.down("md")` + `window.innerWidth ≥ window.innerHeight` | Full-bleed immersive: video fills viewport, controls overlay with auto-hide, status bar hidden via `screen.orientation` lock prompt.                           |
+
+Use a `usePlayerLayout()` hook (lives in `src/features/player/hooks/`) that consumes `useMediaQuery` and `window.matchMedia('(orientation: portrait)')`.
+
+**H2. Native HLS branch for iOS Safari.** HLS.js is not supported on iOS Safari — it relies on the native HLS path (`<video src="...">`). Add `useNativeHls()` (Phase 0 split) that detects `Hls.isSupported() === false && video.canPlayType('application/vnd.apple.mpegurl')` and uses native playback, while still wiring up `useLiveControlClient` (the viewer probe still works without HLS.js, it just loses the `hlsBandwidthEstimateMbit` field — protocol already documents this as `null` when unavailable).
+
+**H3. Touch gesture model.**
+
+- Single tap: toggle chrome visibility.
+- Double tap left half: seek -10s. Double tap right half: seek +10s.
+- Long press on the video area: surface a quick action sheet (Picture-in-Picture, Share link, Copy stream URL, Report).
+- Vertical drag on the right half: volume. Vertical drag on the left half: brightness _(only visible while playing)_.
+- Pinch-out: enter fullscreen.
+
+All gestures land via a `useTouchGestures()` hook so they can be tested in isolation.
+
+**H4. Touch-friendly hit targets.** Minimum 44×44 dp per Apple HIG / 48×48 dp per Material. Today's `IconButton` defaults to 40dp — bump to `size="large"` (48dp) on mobile via `theme.components.MuiIconButton.variants` (Phase J registers the variant).
+
+**H5. Chrome composition.**
+
+- Top: thin gradient with stream title, host avatar, viewer count chip, close-X (returns to `/live`).
+- Bottom: large play/pause, scrub bar (seek to live edge button when behind), volume sheet (tap → modal slider), more menu (PiP / share / quality / report).
+- Side: nothing (preserve immersive feel).
+
+**H6. Content-aware text scaling.** The `<Typography variant="streamMeta">` token (Phase J) sizes itself relative to viewport on mobile so labels remain legible in landscape.
+
+**H7. Network savings.** `navigator.connection.saveData === true` ⇒ default to lowest available HLS level on initial play; show a "Data saver on — quality limited" chip the user can dismiss/override.
+
+**H8. Wake lock.** Acquire `navigator.wakeLock?.request('screen')` while playing on mobile so the screen does not auto-dim mid-stream. Release on pause / page hide. Treat absence of the API as a no-op.
+
+**H9. Validation matrix.**
+
+| Device    | Browser          | Required outcome                                                                         |
+| --------- | ---------------- | ---------------------------------------------------------------------------------------- |
+| iPhone 13 | Safari (latest)  | Native HLS plays; controls usable; landscape immersive; PiP works (system-level on iOS). |
+| iPhone 13 | Chrome iOS       | Same as Safari (Chrome iOS is a Safari shell).                                           |
+| Pixel 7   | Chrome (latest)  | HLS.js plays; gestures work; PiP works (native + Document-PiP).                          |
+| Pixel 7   | Firefox (latest) | HLS.js plays; gestures work; standard PiP works.                                         |
+| iPad      | Safari           | Treated as desktop layout (`md` breakpoint).                                             |
+
+---
+
+### Phase I — Picture-in-Picture & ambient streaming presence
+
+**Status: not started.** No PiP code exists in the repo.
+
+**Goal:** the viewer keeps watching while navigating; the broadcaster keeps seeing they're live while navigating.
+
+**I1. PiP strategy ladder (viewer side).**
+
+```
+1. requestPictureInPicture()           -- HTMLVideoElement Picture-in-Picture API
+                                          (Chrome desktop, Edge, Safari, Chrome Android)
+2. documentPictureInPicture            -- Document Picture-in-Picture API (Chromium 116+,
+                                          Electron). Lets us render arbitrary chrome
+                                          in the floating window — adaptation toast,
+                                          viewer count, controls — not just the video.
+3. Portal fallback                     -- a small floating <Card> rendered into a
+                                          React Portal at the document root. Draggable.
+                                          Used when neither API is available
+                                          (older browsers).
+```
+
+The `usePictureInPicture()` hook owns the strategy ladder and exposes `{ mode, enter, exit, supports }`. State persists in `liveSessionSlice.viewer.pip`.
+
+**I2. PiP trigger flow.**
+
+- Manual: PiP button in player chrome (`controls/PictureInPictureButton.jsx`).
+- Automatic on navigate-away: when `liveSessionSlice.viewer.activeStream` is set and the route changes off `/live/*`, dispatch `enter()` if `mode !== 'off'` and the user has opted in (settings flag, default off for first release; tunable to default on once we trust the UX).
+- Exit: closes the PiP window; navigating back to `/live/<sessionId>` restores in-page playback automatically.
+
+**I3. Document-PiP layout.** When using Document-PiP, render the floating window with:
+
+```
+┌───────────────────────────┐
+│ <video> (16:9 letterboxed)│
+├───────────────────────────┤
+│ [Stream title]   [● 23]   │
+│ [⏯] [🔊] [↗ open]        │
+└───────────────────────────┘
+```
+
+The `[↗ open]` button calls `window.opener.location.assign("/live/<sessionId>")` and closes the PiP window — the user is back to the full player without losing playback continuity.
+
+**I4. Ambient streaming presence (broadcaster side).**
+
+A persistent pill in the app bar, rendered by `<LiveBroadcastBadge />` mounted inside `CustomAppBar`. Subscribes to `liveSessionSlice.broadcaster`. Visible whenever `broadcaster.status === "live"` regardless of the current route. Shape:
+
+```
+┌─────────────────────────────────────────────────┐
+│ ● Live  •  23 viewers  •  4.2 Mbit/s  •  42:11 │
+└─────────────────────────────────────────────────┘
+```
+
+Tooltip on hover explains the elements. Click ⇒ `navigate("/live/broadcast")`. Long-press / right-click ⇒ context menu with "Stop stream" and "Open live status".
+
+**I5. Ambient viewer presence.** Mirror surface for viewers — a smaller pill `< Watching: <stream title>>` that appears in the app bar when `liveSessionSlice.viewer.activeStream` is set and PiP is in `off` mode (i.e. the viewer is on a non-`/live` route but PiP couldn't be entered). Click to return to the player route; the player remounts to the same `sessionId` and seeks to live.
+
+**I6. State ownership.** All "is the user broadcasting / watching right now?" state lives in `liveSessionSlice` (Phase 0). The badge components are pure subscribers. This is the single source of truth — never let a route component own this state again.
+
+**I7. Validation.**
+
+- Start a broadcast on `/live/broadcast`, navigate to `/chat`, verify badge appears, click badge, return to broadcast page, badge stays consistent.
+- Start watching on `/live/streams`, click a stream, navigate to `/profile`, verify PiP enters automatically (once opt-in is on) or the viewer pill appears in fallback mode.
+- Test the four PiP tiers across the validation matrix (Phase H9).
+
+---
+
+### Phase J — Theme & MUI presentation polish
+
+**Status: not started.** `darkTheme.js` defines two component overrides; everything else is MUI default.
+
+**J1. Extend the palette with streaming-specific tokens.** Edit `src/helpers/darkTheme.js`:
+
+```js
+palette: {
+  // ...existing tokens...
+  live: {
+    main: "#ff3b30",         // pulsing live indicator dot
+    dim:  alpha("#ff3b30", 0.4),
+    glow: "0 0 12px rgba(255,59,48,0.45)",
+  },
+  stream: {
+    surface:     "#1f1f1f",  // player chrome background
+    surfaceHi:   "#2a2a2a",  // PiP / floating cards
+    overlay:     alpha("#000", 0.55),
+    metaText:    "#bcbcbc",
+    accent:      "#21f3dc",  // existing info color, re-exported under stream
+  },
+  viewerCount: {
+    main: "#0099f5",
+  },
+}
+```
+
+All streaming surfaces consume `theme.palette.live.*` / `theme.palette.stream.*`; never raw hex.
+
+**J2. Custom typography role.** Add `streamMeta` and `liveTimer` typography variants in `theme.typography`. Used by `<StreamMetaPill>`, `<LiveBroadcastBadge>`, `<AdaptationToast>` for consistent sizing.
+
+**J3. Component overrides** (extend `theme.components`):
+
+- `MuiIconButton`: `size="large"` defaults to `padding: 12px` to hit the 48dp target on mobile (Phase H4).
+- `MuiChip`: a `live` variant with red-glow border-pulse animation.
+- `MuiPaper`: `streaming` variant that consumes `palette.stream.surface` and applies a subtle inner shadow.
+- `MuiTooltip`: monospace constraint-message variant for the constraint engine (Phase C).
+
+**J4. Animation tokens.** A `theme.transitions.streaming` namespace with named durations (`pip-enter: 220ms`, `chrome-fade: 160ms`, `live-pulse: 1600ms`). All streaming animations cite a token; never hardcode a duration.
+
+**J5. Density-aware spacing.** The existing `darkTheme.js` already toggles `spacingMultiplier` between desktop (8) and mobile (4) — verify all new streaming components use `theme.spacing(n)` so they ride this toggle correctly.
+
+**J6. Reduced motion.** `prefers-reduced-motion` is honored: the live pulse becomes a static dot, `AdaptationToast` fades-only (no slide-up), PiP transition becomes instant.
+
+**J7. Audit pass.** After Phases C/H/I land, sweep `src/features/streaming/` and `src/features/player/` for `sx={{ color: "#xxx" }}` / `sx={{ background: "#xxx" }}` and replace with theme tokens. CI lint rule (Phase 0.5) gets an additional check banning hex literals in `sx` for those two directories.
 
 ---
 
 ## Code organization & implementation notes
 
-### Top-level layout
+### Top-level layout (target shape after this plan)
 
 ```
-src/features/player/
-  viewerProbe.js                            -- auto-detects viewer codecs + network (Phase F2)
+src/features/player/                          -- (renderer) viewer player
+  LiveStreamPlayer.jsx                        -- composition shell, ≤180 lines
+  viewerProbe.js                              -- already in place (308 lines)
+  useLiveControlClient.js                     -- already in place (196 lines)
+  hooks/
+    useHlsPlayback.js                         -- (Phase 0)
+    useNativeHls.js                           -- (Phase H)
+    useLatencySync.js                         -- (Phase 0)
+    usePlayerState.js                         -- (Phase 0)
+    useFullscreen.js                          -- (Phase 0)
+    usePlayerLayout.js                        -- (Phase H)
+    useTouchGestures.js                       -- (Phase H)
+    usePictureInPicture.js                    -- (Phase I)
+    useWakeLock.js                            -- (Phase H)
+  controls/
+    PlayPauseButton.jsx
+    VolumeControl.jsx
+    LiveSyncButton.jsx
+    FullscreenButton.jsx
+    PictureInPictureButton.jsx                -- (Phase I)
+    StreamMetaPill.jsx
+  overlays/
+    LoadingOverlay.jsx
+    ErrorOverlay.jsx
+    BufferingIndicator.jsx
+    AdaptationToast.jsx                       -- (Phase F-α)
+  pip/
+    DocumentPipPortal.jsx                     -- (Phase I, Document-PiP container)
+    FallbackFloatingCard.jsx                  -- (Phase I, portal fallback)
 
-src/features/streaming/                     -- renderer (React)
+src/features/streaming/                       -- (renderer) broadcaster UI
   ui/
-    StreamingPage.jsx                       -- thin shell that composes panels
+    StreamingPage.jsx                         -- thin shell that composes panels (Phase C)
     panels/
-      SourcePanel.jsx
-      AudioMixer.jsx
-      OutputPanel.jsx
-      AdvancedPanel.jsx
-      LiveStatusPanel.jsx
+      SourcePanel.jsx                         -- (Phase D + C)
+      AudioMixer.jsx                          -- (Phase E)
+      OutputPanel.jsx                         -- (Phase C)
+      AdvancedPanel.jsx                       -- (Phase C)
+      LiveStatusPanel.jsx                     -- already in place (273 lines)
     controls/
-      FieldWithConstraint.jsx               -- input + constraint badge + tooltip
+      FieldWithConstraint.jsx                 -- input + constraint badge + tooltip
       ProfileSelector.jsx
       ResolutionPicker.jsx
       BitratePicker.jsx
       CodecPicker.jsx
+    badges/
+      LiveBroadcastBadge.jsx                  -- (Phase I)
+      ViewerPresenceBadge.jsx                 -- (Phase I)
     hooks/
-      useStreamSettings.js                  -- wraps settings IPC; exposes [s, set, reset]
-      useCapabilities.js                    -- wraps capability IPC
-      useLiveControl.js                     -- subscribes to server control channel
-      useStreamLifecycle.js                 -- start/stop, status
-      useConstraints.js                     -- runs constraint engine on (settings, capabilities)
+      useStreamSettings.js                    -- (Phase B)
+      useCapabilities.js                      -- (Phase A)
+      useLiveControl.js                       -- subscribes to server control channel
+      useStreamLifecycle.js                   -- start/stop, status (Phase 0)
+      useConstraints.js                       -- runs constraint engine on (settings, capabilities)
     formatters/
-      bitrate.js, resolution.js, latency.js -- pure display helpers
+      bitrate.js, resolution.js, latency.js   -- pure display helpers
   state/
-    settingsReducer.js                      -- pure reducer; no IPC
-    derivedFields.js                        -- gopSize-follows-fps, etc.
+    settingsReducer.js                        -- pure reducer; no IPC
+    derivedFields.js                          -- gopSize-follows-fps, etc.
   __tests__/
 
-src/lib/streaming/                          -- shared business logic (renderer only)
-  constraints/
+src/lib/streaming/                            -- shared business logic (renderer only)
+  constraints/                                -- (Phase C)
     index.js
     videoCodec.js
     nvenc.js
@@ -507,37 +700,39 @@ src/lib/streaming/                          -- shared business logic (renderer o
     resolution.js
     bitrate.js
     initialCeiling.js
-  detectProfile.js
-  autoOptimize.js                           -- pure: (DetectedCapabilities) => StreamSettings
+  detectProfile.js                            -- (Phase C)
+  autoOptimize.js                             -- (Phase C; potentially imports public/streaming/autoOptimize.js)
   validators.js
 
-shared/streaming/                           -- types shared between renderer AND main
-  types.js                                  -- move here from public/streaming/types.js
-  protocol.js                               -- WebSocket message types + PROTOCOL_VERSION
+src/slices/
+  liveSessionSlice.js                         -- (Phase 0) broadcaster + viewer presence
 
-public/streaming/                           -- main process (Electron)
+shared/streaming/                             -- already in place
+  types.js                                    -- 185 lines
+  protocol.js                                 -- 162 lines
+  PROTOCOL.md                                 -- (Phase F-ε) human-readable spec
+
+public/streaming/                             -- main process (Electron)
   capabilities/
-    probe.js                                -- top-level orchestrator
-    ffmpegCheck.js
-    gpuDetect/
-      index.js                              -- dispatches by platform
-      win32.js                              -- Get-CimInstance Win32_VideoController
-      darwin.js                             -- system_profiler
-      linux.js                              -- lspci
-    audioDevices.js
-    displays.js
-  settings/                                 -- (Phase B)
+    probe.js                                  -- already in place (~161 lines, monolithic)
+    ffmpegCheck.js                            -- (Phase A1, extract)
+    gpuDetect/                                -- (Phase A1, extract)
+      index.js
+      win32.js
+      darwin.js
+      linux.js
+    audioDevices.js                           -- (Phase A1, extract)
+    displays.js                               -- (Phase A1, extract)
+  settings/                                   -- already in place
     store.js
     schema.js
     migrate.js
     steps/
-  capture/                                  -- (already in place)
-    gfxcapture.js, gfxcaptureCuda.js, gdigrab.js, avfoundation.js, x11grab.js
-    file.js                                 -- new: video file source mode (Phase D)
-  encoder/                                  -- (already in place)
-    nvenc.js, qsv.js, videotoolbox.js, software.js, amf.js, vaapi.js
-    _vbv.js                                 -- (Plan 02, complete)
-  audio/                                    -- new (Phase E)
+  capture/                                    -- already in place (incl. file.js)
+    gfxcapture.js, gdigrab.js, avfoundation.js, x11grab.js, file.js, index.js
+  encoder/                                    -- already in place
+    nvenc.js, qsv.js, videotoolbox.js, software.js, amf.js, vaapi.js, _vbv.js, index.js
+  audio/                                      -- new (Phase E)
     sources/
       microphone.js
       desktopLoopback.js
@@ -546,24 +741,25 @@ public/streaming/                           -- main process (Electron)
       fileAudio.js
     filterGraph.js
     levelMeter.js
-  output/                                   -- (already in place)
-    hls.js
-  uploader/                                 -- (Plan 03, complete)
-  server-control/                           -- new (Phase F)
-    socket.js
+  output/                                     -- already in place (hls.js)
+  uploader/                                   -- already in place
+  server-control/                             -- already in place
+    socket.js, adapter.js, initialCeiling.js, segmentCursor.js
+  pipeline.js                                 -- already in place
+  manager/                                    -- (Phase 0.2 split of electron-live-stream.js)
+    ElectronLiveStreamManager.js              -- ≤300 lines
+    adaptationLoop.js
+    serverControlBridge.js
+    respawn.js
+  ipc/                                        -- (Phase 0.2 split)
+    register.js
     handlers/
-      viewerSummary.js
-      recommendedSettings.js
-    adapter.js
-    initialCeiling.js
-  pipeline.js                               -- (already in place; extended in Phase D)
-  process.js                                -- spawn/lifecycle/respawn-with-discontinuity
-  manager.js                                -- replaces ElectronLiveStreamManager (≤300 lines)
-  ipc.js                                    -- all live-stream:* IPC handlers
+      session.js, capabilities.js, settings.js, adaptation.js
+  autoOptimize.js                             -- already in place
 
 native-helpers/
-  windows-process-loopback/
-    src/                                    -- Rust or C++
+  windows-process-loopback/                   -- (Phase E)
+    src/                                      -- Rust or C++
     Cargo.toml | CMakeLists.txt
     README.md
 ```
@@ -572,60 +768,93 @@ native-helpers/
 
 Exactly **three** boundaries:
 
-1. **Renderer ↔ Main (IPC)** — all channels namespaced under `live-stream:*`, in `public/streaming/ipc.js`. Components never call `window.electronAPI` directly — only hooks do.
+1. **Renderer ↔ Main (IPC)** — all channels namespaced under `live-stream:*` and `capabilities:*` (Phase A3) and `settings:*`, registered exclusively from `public/streaming/ipc/register.js`. Components never call `window.electronAPI` directly — only hooks do.
 2. **Main ↔ Native helper (stdin/stdout)** — line-delimited JSON on stdin, raw PCM on stdout. Protocol documented in `native-helpers/windows-process-loopback/README.md` with a version constant; mismatched versions fail loudly.
-3. **Streamer ↔ Server (WebSocket)** — message shapes in `shared/streaming/protocol.js` with `PROTOCOL_VERSION`. Both sides import from the same file.
+3. **Streamer ↔ Server (Socket.IO)** — message shapes in `shared/streaming/protocol.js` with `PROTOCOL_VERSION`, the `/live-control` namespace mounted by `server/src/live/control/socket.js`, both viewers and streamers connect via the typed envelopes. Both sides import from the same file.
 
-### Architectural rules
+### Architectural rules (enforced via Phase 0.5 lint gate)
 
 **Renderer:**
+
 - Hooks own IPC. Components import hooks only. `ipcRenderer` in a component is a bug.
 - Reducers are pure. Persistence is a side effect in `useStreamSettings`'s `useEffect`, not the reducer.
 - Constraints are pure. Each file in `src/lib/streaming/constraints/` exports `(settings, capabilities) => ConstraintResult[]`. Adding a constraint = new file + one-line registration.
 - No business logic in JSX.
+- No raw hex in `sx` for `src/features/streaming/` and `src/features/player/`. Use `theme.palette.*` tokens.
 
 **Main process:**
+
 - Pure argv builders in `capture/`, `encoder/`, `output/`, `audio/filterGraph.js`. They take config and return string arrays. No spawning, logging, or disk I/O.
-- Side effects isolated: spawn in `process.js`, file I/O in `uploader/fileSource.js` and `settings/store.js`, network I/O in `uploader/httpClient.js` and `server-control/socket.js`.
+- Side effects isolated: spawn in `manager/`, file I/O in `uploader/fileSource.js` and `settings/store.js`, network I/O in `uploader/httpClient.js` and `server-control/socket.js`.
 - Manager is thin: ≤300 lines, orchestrates subsystems, does not build argv.
-- ≤200 lines per file.
+- ≤200 lines per file (≤300 for designated orchestrator files: `manager/ElectronLiveStreamManager.js`, `pipeline.js`, the route shells).
+
+**Server:**
+
+- Control modules in `server/src/live/control/` are independent of the existing `service.js` / `runtime.js` / `playlist.js` so the namespace can evolve without churning the HLS upload path.
 
 ### Type discipline
 
-Move `public/streaming/types.js` to `shared/streaming/types.js` as the first step of this plan, updating all relative imports in `public/streaming/`. Add `DetectedCapabilities`, `AudioSource`, `ConstraintResult`, `ViewerSummary`, `RecommendedSettings`, `StreamingProfile` (from Plan 01), `CodecProbeResult`, and `ViewerCapabilities` (Phase F2d) to the same file.
-
-Configure `jsconfig.json` with `checkJs: true` so types are enforced on save.
+`shared/streaming/types.js` is the canonical home for cross-process JSDoc typedefs (already in place). Configure `jsconfig.json` with `checkJs: true` so types are enforced on save. Add the missing `BroadcasterPresence` and `ViewerPresence` typedefs (Phase 0/I) to the same file.
 
 ### Testing strategy
 
-- **Pure modules** (constraints, argv builders, planners, adapters) — unit tests, snapshot tests for argv.
-- **Pure renderer state** (reducers, derived fields, formatters) — unit tests.
-- **Hooks** — React Testing Library + fake IPC.
+- **Pure modules** (constraints, argv builders, planners, adapters, autoOptimize) — unit tests, snapshot tests for argv.
+- **Pure renderer state** (reducers, derived fields, formatters, presence slice) — unit tests.
+- **Hooks** — React Testing Library + fake IPC + fake Socket.IO. `useHlsPlayback`, `useLiveControlClient`, `usePictureInPicture`, `useTouchGestures`, `useStreamSettings`, `useCapabilities` all carry tests.
 - **IPC handlers** — call directly with synthetic args.
-- **Integration** — one harness per phase that wires real modules with fake I/O.
+- **Integration** — one harness per phase that wires real modules with fake I/O. Phase F-δ adds the cross-process integration suite.
 - **Native helper** — its own test suite in `native-helpers/windows-process-loopback/` plus CI smoke test on Windows runners.
+- **Mobile UI** — Playwright with the validation matrix devices (Phase H9), running headless on CI; manual smoke pass per release on a real iPhone and Pixel.
+
+---
 
 ## Migration & rollout
 
-- Phase A and B ship together; they're invisible plumbing.
-- Phase C ships behind a feature flag for one release so we can A/B against the existing UI. Default it on after one release of dogfooding.
-- Phase D is small and ships with C or alone.
-- Phase E ships alone. The native helper needs CI build infrastructure; budget the time for that.
-- Phase F depends on the WebSocket/control protocol being well-specified before either side starts. Write the message shapes in `shared/streaming/protocol.js` first, then implement both sides.
-- Phase G ships piecemeal alongside any other phase.
+- **Phase 0** ships first. It is the long pole; budget two iterations.
+- **Phase A polish + Phase B finish** ship together as invisible plumbing once Phase 0 lands.
+- **Phase D UI** ships standalone — backend already done.
+- **Phase C** ships behind `featureFlags.newStreamingPage` for one release so we can A/B against the existing UI. Default it on after one release of dogfooding.
+- **Phase H + Phase I** ship together: PiP only matters once the player has a clean composition surface and a Redux presence slice; the mobile work uses both.
+- **Phase F polish** ships alongside Phase H (the adaptation toast lives in the new mobile-friendly chrome).
+- **Phase J** ships as a sweep after Phases C/H/I — styling the final component set, not a moving target.
+- **Phase E** ships alone. The native helper needs CI build infrastructure; budget the time for that.
+- **Phase G** ships piecemeal alongside any other phase.
+
+---
 
 ## Validation
 
-- **Phase A/B:** persistence survives crash, app update, and OS restart. Probe runs in <500 ms on a warm disk.
+- **Phase 0:** `git ls-files | xargs wc -l | sort -nr` shows no streaming-area file >300 lines except the documented exemptions; CI gate enforces it. The 113 streaming + 53 server tests still pass; per-split smoke tests added.
+- **Phase A:** persistence survives crash, app update, and OS restart. Probe runs in <500 ms on a warm disk. `useCapabilities` returns identical data via the new `capabilities:get` IPC and the legacy `live-stream:get-detected-capabilities` IPC during the deprecation window.
+- **Phase B:** `useStreamSettings` round-trips settings without losing fields. Reset dialog enumerates the changes in plain language. Save throttles to ≤1 write/second under rapid form input.
 - **Phase C:** every existing FFmpeg-error path that we've seen in support tickets is now blocked at the UI level (write a test fixture per known bad combo). The constraint engine test suite covers all invalid combos from Plans 01 and 02.
-- **Phase D:** stream a local 1080p60 mp4 for 10 minutes; verify the produced HLS plays correctly and segment cadence matches `hls_time`.
+- **Phase D:** stream a local 1080p60 mp4 for 10 minutes; verify the produced HLS plays correctly and segment cadence matches `hls_time`. Loop toggle works without re-spawning the upload pipeline.
 - **Phase E:** capture mic + desktop + game-include in three concurrent sources; verify levels are correct, no double-audio, mute works in real time.
 - **Phase F:**
+  - Existing 28-test suite still green.
+  - New cross-process integration test (Phase F-δ) covers viewer-connect → bandwidth-drop → recommendation → ACK → respawn.
   - `viewerProbe.js` unit test: mock `MediaSource.isTypeSupported`, `mediaCapabilities.decodingInfo`, and `navigator.connection`; assert `ViewerCapabilities` shape and `supportedCodecFamilies` derivation are correct across browsers that support none, some, or all of the three tiers.
-  - Verify `viewer-capabilities` message is sent on WebSocket connect; open the player in a browser that does not support HEVC and confirm `supportedCodecFamilies` omits `"hevc"`.
+  - Verify `viewer-capabilities` message is sent on Socket.IO connect; open the player in a browser that does not support HEVC and confirm `supportedCodecFamilies` omits `"hevc"`.
   - Throttle the player's network via Chrome devtools (2 Mbit); wait for 10 HLS segments; confirm `hlsBandwidthEstimateMbit` in the message is within range of the throttle setting.
   - Stream at 8 Mbit; open the player on a throttled network at 2 Mbit; observe the streamer respawn at ≤2 Mbit within ~3–5 seconds.
   - Open a second viewer at 1 Mbit; observe a further drop.
   - Close both viewers; observe the streamer does NOT raise above the initial ceiling.
   - Manually set a value above the initial ceiling; UI rejects it.
-- **Phase G:** verify the health widget shows accurate values during artificial stalls (drop the ffmpeg process or pull the network).
+  - `AdaptationToast` shows on `LEVEL_SWITCHED`; reduced-motion users see fade-only.
+- **Phase G:** verify the health widget shows accurate values during artificial stalls (drop the ffmpeg process or pull the network). Per-session log dump matches what was streamed.
+- **Phase H:**
+  - Validation matrix (H9) green on every row.
+  - Lighthouse mobile audit on `/live/<sessionId>` ≥ 90 for Performance, Accessibility, Best Practices.
+  - All chrome respects `prefers-reduced-motion`.
+  - Wake lock is acquired on play, released on pause and on `pagehide`.
+- **Phase I:**
+  - Strategy ladder degrades cleanly: a Chromium >=116 user gets Document-PiP; a Safari user gets native PiP; an obscure browser gets the portal fallback.
+  - Broadcasting on `/live/broadcast` then navigating to every other route shows the `LiveBroadcastBadge`. Clicking returns to the broadcast page; right-click "Stop stream" stops it.
+  - Watching a stream then navigating to `/profile` either enters PiP (when opted in) or shows `ViewerPresenceBadge`. Clicking it remounts the player on the same `sessionId` and seeks to live edge.
+  - Closing the PiP window does not double-stop playback (no race with the route's own teardown).
+- **Phase J:**
+  - No raw hex in `sx` for `src/features/streaming/` or `src/features/player/` (lint rule).
+  - All streaming-area animations cite a `theme.transitions.streaming.*` token.
+  - Live-pulse animation halves to a static dot under `prefers-reduced-motion`.
+  - The two existing component overrides in `darkTheme.js` (`MuiInputBase`, `MuiDrawer`) remain untouched; the new variants extend, never replace.

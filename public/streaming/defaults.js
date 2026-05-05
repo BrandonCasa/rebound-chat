@@ -8,22 +8,37 @@
  * available on a given host, edit the corresponding profile entry in
  * `platform/profiles.js` rather than this file.
  *
- * `ffmpegPath`/`ffprobePath` reference globals that only exist inside the
- * renderer process; they are read lazily so this module imports cleanly
- * from any environment.
+ * `ffmpegPath`/`ffprobePath` are intentionally NOT defaulted here. The
+ * Electron main process is the only thing that runs FFmpeg, and it
+ * resolves the bundled binary via `resolveFfBinary()` in `electron.js`
+ * and injects it into `StreamConfig.ffmpegPath` during
+ * `ElectronLiveStreamManager.normalizeConfig`. Letting these leak into
+ * persisted user settings would re-introduce the user-configurable path
+ * we explicitly removed.
  */
 
 import { currentPlatformProfile } from "./platform/index.js";
 
-const ffmpegPathDefault = () => (typeof window !== "undefined" && window.ffmpegPath) || "ffmpeg.exe";
-const ffprobePathDefault = () => (typeof window !== "undefined" && window.ffprobePath) || "ffprobe.exe";
-
-const getNodeEnv = () => (typeof process !== "undefined" && process?.env ? process.env.NODE_ENV : undefined);
+// `globalThis.IN_ELECTRON_ENV` is exposed by `public/preload.js` for the
+// renderer. It is never set in the main process, so we also fall back to
+// `process.versions.electron`, which is present in the main process and in
+// any Node-side code spawned by Electron. Without this fallback,
+// `DEFAULT_SETTINGS.websiteBaseUrl` resolves to "" in the main process,
+// gets persisted to `stream-settings.json`, then clobbers the renderer's
+// correct value during settings hydration — causing
+// `createSession` to call `fetch("/live/api/session")` and crash with
+// `ERR_INVALID_URL`.
+const isElectronContext = () => {
+	if (globalThis?.IN_ELECTRON_ENV) return true;
+	if (typeof process !== "undefined" && process.versions?.electron) return true;
+	return false;
+};
 
 const websiteBaseUrlDefault = () => {
-	const nodeEnv = getNodeEnv();
-	if ((!nodeEnv || nodeEnv === "development") && globalThis?.IN_ELECTRON_ENV) return "http://localhost:6001";
-	if (nodeEnv === "production" && globalThis?.IN_ELECTRON_ENV) return "https://rebound.nexus";
+	const nodeEnv = process.env.NODE_ENV;
+	if (!isElectronContext()) return "";
+	if (nodeEnv === "production") return "https://rebound.nexus";
+	if (!nodeEnv || nodeEnv === "development") return "http://localhost:6001";
 	return "";
 };
 
@@ -36,6 +51,14 @@ const websiteBaseUrlDefault = () => {
  * `fps * hlsTime` to align IDR frames with HLS segment boundaries. Without
  * that alignment players have to wait for the next IDR after seeking, which
  * adds visible latency on segment-boundary joins.
+ *
+ * `captureFps` defaults to the same value as the output `fps`. The renderer
+ * exposes a single "Frame rate" control that writes both fields in lock-step
+ * (see `DesktopLivePage.route.jsx`); the two-field shape is preserved in the
+ * pipeline because `effectiveCaptureFps()` and the gfxcapture filter graph
+ * still need to reason about source vs. encoder rate independently (e.g.
+ * file-mode playback inherits its source rate from the file rather than from
+ * the user's chosen output rate).
  *
  * The NVENC defaults form a coherent low-latency profile (see
  * `profiles/lowLatency.js` for the documented rationale): `tune ull` is
@@ -51,7 +74,7 @@ const websiteBaseUrlDefault = () => {
  */
 const buildDefaultSettings = (options = {}) => {
 	const profile = options.profile || currentPlatformProfile();
-	const fps = options.fps ?? 30;
+	const fps = options.fps ?? 60;
 	const hlsTimeNumber = Number(options.hlsTime ?? "2");
 	const gopSize = fps * hlsTimeNumber;
 	return {
@@ -60,14 +83,12 @@ const buildDefaultSettings = (options = {}) => {
 		authToken: "",
 		sessionLabel: "",
 		retainSegmentCount: 5,
-		ffmpegPath: ffmpegPathDefault(),
-		ffprobePath: ffprobePathDefault(),
 		sourceMode: "screen",
 		filePath: "",
 		fileLoop: true,
 		source: null,
 		captureBackend: profile.defaults.captureBackend,
-		captureFps: 30,
+		captureFps: fps,
 		rtbufsize: "256M",
 		manualInputArgs: "",
 		audioInputArgs: "",

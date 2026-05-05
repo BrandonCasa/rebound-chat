@@ -1,8 +1,7 @@
-const getNodeEnv = () => (typeof process !== "undefined" && process?.env ? process.env.NODE_ENV : undefined);
 const getOrigin = () => (typeof window !== "undefined" && window.location?.origin ? window.location.origin : "");
 
 export const getLiveBase = () => {
-	const nodeEnv = getNodeEnv();
+	const nodeEnv = process.env.NODE_ENV;
 
 	if ((!nodeEnv || nodeEnv === "development") && globalThis?.IN_ELECTRON_ENV) return "http://localhost:6001";
 	if (nodeEnv === "production" && globalThis?.IN_ELECTRON_ENV) return "https://rebound.nexus";
