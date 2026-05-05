@@ -7,7 +7,7 @@
  * what it differs on.
  */
 
-const ffmpegPathDefault = () => (typeof window !== "undefined" && window.ffmpegPath) || "ffmpeg.exe";
+const ffmpegPathDefault = () => (typeof window !== "undefined" && window?.ffmpegPath) || "ffmpeg.exe";
 
 const baseDefaults = {
 	ffmpegPath: ffmpegPathDefault(),

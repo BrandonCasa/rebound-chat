@@ -130,7 +130,7 @@ const buildArgs = (config, capabilities = defaultCapabilities()) => {
 	argv.push(...hls.buildArgs(config));
 
 	return {
-		command: config.ffmpegPath,
+		command: config.ffmpegPath || (typeof window !== "undefined" && window.ffmpegPath) || "ffmpeg.exe",
 		args: argv,
 	};
 };
