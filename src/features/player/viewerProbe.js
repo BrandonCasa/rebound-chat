@@ -115,7 +115,15 @@ const probeCodecs = async () => {
 
 const probeNetwork = () => {
 	if (typeof navigator === "undefined") {
-		return { downlinkMbit: null, effectiveType: null, rttMs: null, saveData: false, hlsBandwidthEstimateMbit: null, currentHlsLevel: null };
+		return {
+			downlinkMbit: null,
+			effectiveType: null,
+			rttMs: null,
+			saveData: false,
+			hlsBandwidthEstimateMbit: null,
+			currentHlsLevel: null,
+			loadFractionAvg: null,
+		};
 	}
 
 	const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection || null;
@@ -127,6 +135,15 @@ const probeNetwork = () => {
 		saveData: Boolean(connection?.saveData),
 		hlsBandwidthEstimateMbit: null,
 		currentHlsLevel: null,
+		// Rolling avg of `segmentLoadDurationMs / playableDurationMs`
+		// across the last few fragments. Filled in lazily by the
+		// `FRAG_LOADED` listener — see `attachHlsBandwidthListener`.
+		// This signal is independent of the encoded bitrate (unlike
+		// `hls.bandwidthEstimate`) so the server-side recommender can
+		// distinguish "the link can't keep up" (load fraction → 1.0)
+		// from "we're sending what the link is able to deliver, but it
+		// could deliver more" (load fraction → 0).
+		loadFractionAvg: null,
 	};
 };
 
@@ -176,6 +193,31 @@ const probeViewerCapabilities = async ({ viewerId } = {}) => {
 	};
 };
 
+// Number of recent fragments retained when averaging load fraction. A
+// short window keeps the signal responsive to congestion onset without
+// noisy single-segment outliers (one TLS handshake or one idle stall
+// can skew a single measurement by an order of magnitude).
+const LOAD_FRACTION_WINDOW = 8;
+
+/**
+ * Pull `(loadDurationMs, playableDurationSec)` out of an `FRAG_LOADED`
+ * event payload. hls.js shapes vary slightly by major version — newer
+ * builds put the loader stats on `data.frag.stats`, older builds put
+ * them on `data.stats` directly. Returns `null` for either field when
+ * the shape is unfamiliar so the caller can skip without throwing.
+ */
+const extractFragTimings = (data) => {
+	const frag = data?.frag || null;
+	const stats = frag?.stats || data?.stats || null;
+	const loading = stats?.loading || null;
+	const start = Number(loading?.first ?? loading?.start);
+	const end = Number(loading?.end);
+	const playable = Number(frag?.duration);
+	const loadMs = Number.isFinite(start) && Number.isFinite(end) && end >= start ? end - start : null;
+	const playableSec = Number.isFinite(playable) && playable > 0 ? playable : null;
+	return { loadMs, playableSec };
+};
+
 /**
  * Subscribe to hls.js events and feed the bandwidth signal back to the
  * caller. We deliberately throttle:
@@ -183,6 +225,17 @@ const probeViewerCapabilities = async ({ viewerId } = {}) => {
  *   - `FRAG_LOADED`: refresh on every 10th fragment AND only when the
  *     estimate moves by >15%. Fragment-by-fragment chatter would cost
  *     bandwidth without changing the recommendation.
+ *
+ *     We also accumulate a rolling avg of `loadDurationMs /
+ *     playableDurationMs` from the same event. That signal is
+ *     independent of the encoded bitrate (unlike
+ *     `hls.bandwidthEstimate`, which is structurally bounded above by
+ *     the segment size we're being served), so the server-side
+ *     recommender can use it to tell "the link is genuinely choked"
+ *     apart from "the link is delivering exactly what we asked of it,
+ *     and could deliver much more." See `recommender.js`'s
+ *     inconclusive-zone gate for the consumer of this signal.
+ *
  *   - `LEVEL_SWITCHED`: forward immediately. A level drop is a strong
  *     signal that this viewer is in trouble; the server should hear
  *     about it on the same RTT, not 10 segments later.
@@ -194,6 +247,7 @@ const probeViewerCapabilities = async ({ viewerId } = {}) => {
  *   hls: any,
  *   onUpdate: (patch: { hlsBandwidthEstimateMbit: number | null,
  *                       currentHlsLevel: number | null,
+ *                       loadFractionAvg: number | null,
  *                       triggeredBy: string }) => void,
  * }} options
  * @returns {() => void}
@@ -205,6 +259,7 @@ const attachHlsBandwidthListener = ({ hls, onUpdate }) => {
 	let fragmentsSeen = 0;
 	let lastReportedMbit = null;
 	let lastReportedLevel = null;
+	const loadFractionWindow = [];
 
 	const readBandwidthMbit = () => {
 		const estimate = Number(hls.bandwidthEstimate);
@@ -218,15 +273,33 @@ const attachHlsBandwidthListener = ({ hls, onUpdate }) => {
 		return Math.abs(next - lastReportedMbit) / lastReportedMbit > 0.15;
 	};
 
-	const onFragLoaded = () => {
+	const currentLoadFractionAvg = () => {
+		if (loadFractionWindow.length === 0) return null;
+		let sum = 0;
+		for (const value of loadFractionWindow) sum += value;
+		return sum / loadFractionWindow.length;
+	};
+
+	const onFragLoaded = (_event, data) => {
 		fragmentsSeen += 1;
+		const { loadMs, playableSec } = extractFragTimings(data);
+		if (typeof loadMs === "number" && typeof playableSec === "number" && playableSec > 0) {
+			const fraction = loadMs / 1000 / playableSec;
+			if (Number.isFinite(fraction) && fraction >= 0) {
+				loadFractionWindow.push(fraction);
+				while (loadFractionWindow.length > LOAD_FRACTION_WINDOW) loadFractionWindow.shift();
+			}
+		}
+
 		if (fragmentsSeen % 10 !== 0) return;
 		const next = readBandwidthMbit();
+		const fractionAvg = currentLoadFractionAvg();
 		if (!significantlyDifferent(next)) return;
 		lastReportedMbit = next;
 		onUpdate({
 			hlsBandwidthEstimateMbit: next,
 			currentHlsLevel: lastReportedLevel,
+			loadFractionAvg: fractionAvg,
 			triggeredBy: "hls_bandwidth",
 		});
 	};
@@ -242,6 +315,7 @@ const attachHlsBandwidthListener = ({ hls, onUpdate }) => {
 		onUpdate({
 			hlsBandwidthEstimateMbit: next,
 			currentHlsLevel: nextLevel,
+			loadFractionAvg: currentLoadFractionAvg(),
 			triggeredBy: droppedDown ? "hls_level_drop" : "hls_bandwidth",
 		});
 	};

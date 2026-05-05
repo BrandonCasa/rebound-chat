@@ -68,6 +68,7 @@
  * @property {boolean} saveData
  * @property {number | null} hlsBandwidthEstimateMbit  -- from hls.js, more reliable than navigator
  * @property {number | null} currentHlsLevel           -- index of last LEVEL_SWITCHED event
+ * @property {number | null} loadFractionAvg           -- avg(segmentLoadDurationMs / playableDurationMs) over recent fragments. Independent of encoded rate.
  *
  * @typedef {Object} ViewerDisplayProbe
  * @property {number} viewportWidth
@@ -97,6 +98,7 @@
  * @property {number} viewerCount
  * @property {number | null} minDownlinkMbit
  * @property {number | null} medianDownlinkMbit
+ * @property {number | null} maxLoadFraction          -- worst viewer's `network.loadFractionAvg`. Used by recommender as a bandwidth-independent congestion / headroom signal.
  * @property {string[]} supportedCodecs                -- intersection across viewers
  * @property {{ w: number, h: number } | null} maxResolution
  * @property {number} saveDataCount

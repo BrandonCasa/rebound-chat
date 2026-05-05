@@ -18,6 +18,37 @@
  *      never recommend a literally unplayable bitrate; cap at the
  *      ceiling.
  *
+ *      ABR death-spiral guard. `hls.bandwidthEstimate` (the source of
+ *      `minDownlinkMbit` for the common case) is structurally bounded
+ *      *above* by the bitrate the streamer is currently emitting:
+ *      smaller segments don't have enough bytes in flight to outrun the
+ *      per-fragment TTFB / TLS-resume overhead, and VBR motion troughs
+ *      shrink segments well below the configured ceiling. Once the
+ *      streamer drops in response to one such measurement, the next
+ *      measurement is bounded by the new lower rate, justifying another
+ *      drop, and so on until we hit `ABSOLUTE_FLOOR_BPS`. We break the
+ *      cycle two ways:
+ *
+ *        a) Inconclusive-zone hold. If the proposed candidate is below
+ *           the streamer's *current* bitrate but the measured downlink
+ *           is within ~`INCONCLUSIVE_RATIO` of `currentBps`, the link
+ *           may simply be delivering exactly what we asked of it — that
+ *           tells us nothing about real capacity. Hold at `currentBps`
+ *           rather than ratchet down.
+ *
+ *        b) `maxLoadFraction` override. The viewer probe also reports
+ *           the rolling avg of `segmentLoadDuration / playableDuration`
+ *           per fragment, which is NOT bounded by the encoded rate. A
+ *           low value (≈0 → segments arriving in a small fraction of
+ *           their playback duration) is unambiguous evidence the link
+ *           has spare capacity; a value approaching 1.0 (segments
+ *           taking nearly as long to load as to play) is unambiguous
+ *           congestion. We let `maxLoadFraction < HEADROOM_THRESHOLD`
+ *           bypass the hold (so the recommender can actually climb
+ *           back to ceiling), and let `maxLoadFraction >=
+ *           CONGESTION_THRESHOLD` waive the hold so a real drop is
+ *           still applied.
+ *
  *   2. Codec.  Pick the highest-efficiency codec in the intersection of
  *      what every viewer can decode AND what the ceiling permits. The
  *      ranking is AV1 > HEVC > H.264 > VP9 because that is also the
@@ -45,6 +76,25 @@ const HEADROOM_MULTIPLIER = 0.8;
 const ABSOLUTE_FLOOR_BPS = 500_000;
 const SIGNIFICANT_DELTA = 0.1;
 
+// "Inconclusive zone" for the bandwidth-estimate downshift gate. When
+// the smoothed downlink lands within this fraction of the streamer's
+// current bitrate (i.e. the link is delivering ~100% of what we asked
+// for), the measurement carries no information about true capacity —
+// hls.js' segment-throughput EWMA is bounded above by the encoded rate.
+// Only treat downlinks below this ratio as real evidence of congestion.
+const INCONCLUSIVE_RATIO = 0.85;
+
+// `maxLoadFraction` thresholds. Load fraction = segmentLoadDurationMs /
+// segmentPlayableDurationMs, averaged over recent fragments per viewer.
+// Below `HEADROOM_THRESHOLD`, every viewer's segments are arriving in a
+// small slice of their playback duration → the link clearly has spare
+// capacity, regardless of what the bandwidth estimate looks like. At or
+// above `CONGESTION_THRESHOLD`, a viewer is barely keeping up → real
+// congestion; trust the downshift even if the downlink reading looks
+// inconclusive.
+const HEADROOM_LOAD_FRACTION = 0.4;
+const CONGESTION_LOAD_FRACTION = 0.85;
+
 const PROCESSED_INFINITY = (value) => (typeof value === "number" && Number.isFinite(value) ? value : null);
 
 const codecFamilyOf = (codec) => {
@@ -65,13 +115,44 @@ const snapToLadder = (height) => {
 	return snapped;
 };
 
-const recommendBitrate = ({ minDownlinkMbit, ceiling }) => {
+const recommendBitrate = ({ minDownlinkMbit, ceiling, currentBps, maxLoadFraction }) => {
 	if (!ceiling || typeof ceiling.videoBitrate !== "number") return null;
 	if (typeof minDownlinkMbit !== "number" || minDownlinkMbit <= 0) {
 		return ceiling.videoBitrate;
 	}
+
 	const downlinkBps = minDownlinkMbit * 1_000_000;
 	const candidate = Math.round(downlinkBps * SAFETY_MULTIPLIER * HEADROOM_MULTIPLIER);
+
+	const haveLoadFraction = typeof maxLoadFraction === "number" && Number.isFinite(maxLoadFraction);
+	const linkClearlyHasHeadroom = haveLoadFraction && maxLoadFraction < HEADROOM_LOAD_FRACTION;
+	const linkClearlyCongested = haveLoadFraction && maxLoadFraction >= CONGESTION_LOAD_FRACTION;
+
+	// Path 1: load-fraction headroom override. Every viewer's segments
+	// are arriving in a small slice of their playable duration — there
+	// is real, unambiguous spare capacity on the link. Aim for the
+	// ceiling regardless of what the bandwidth estimate looks like
+	// (the controlSession's raise dwell still throttles the jump). This
+	// is what lets the recommender climb back to ceiling after a drop;
+	// without it, every measurement is pinned near `currentBps` and
+	// the system gets stuck at the first downward step.
+	if (linkClearlyHasHeadroom) {
+		return Math.max(ABSOLUTE_FLOOR_BPS, ceiling.videoBitrate);
+	}
+
+	// Path 2: inconclusive-zone downshift gate. The proposed candidate
+	// is below the streamer's current bitrate, but the measured
+	// downlink is in the "we delivered exactly what was asked of us"
+	// zone — hls.js' EWMA can't see capacity above what the encoder is
+	// emitting, so this measurement is uninformative. Hold the line.
+	// We waive the hold when load-fraction reports real congestion
+	// (`linkClearlyCongested`) so genuine drops still apply.
+	if (typeof currentBps === "number" && Number.isFinite(currentBps) && currentBps > 0 && candidate < currentBps && !linkClearlyCongested) {
+		if (downlinkBps >= currentBps * INCONCLUSIVE_RATIO) {
+			return Math.max(ABSOLUTE_FLOOR_BPS, Math.min(currentBps, ceiling.videoBitrate));
+		}
+	}
+
 	const clamped = Math.max(ABSOLUTE_FLOOR_BPS, Math.min(candidate, ceiling.videoBitrate));
 	return clamped;
 };
@@ -130,6 +211,23 @@ const recommendFps = ({ viewerSnapshots, ceiling }) => {
 	return Math.max(15, Math.round(ceiling.fps / 2));
 };
 
+const parseBitrateValueToBps = (value) => {
+	if (value == null) return null;
+	if (typeof value === "number") return Number.isFinite(value) && value > 0 ? value : null;
+	if (typeof value !== "string") return null;
+	const text = value.trim().toLowerCase();
+	if (!text) return null;
+	const match = /^([\d.]+)\s*([kmg]?)/.exec(text);
+	if (!match) return null;
+	const n = Number.parseFloat(match[1]);
+	if (!Number.isFinite(n) || n <= 0) return null;
+	const unit = match[2];
+	if (unit === "g") return Math.round(n * 1_000_000_000);
+	if (unit === "m") return Math.round(n * 1_000_000);
+	if (unit === "k") return Math.round(n * 1_000);
+	return Math.round(n);
+};
+
 /**
  * Build a recommendation. Returns null when there's nothing meaningful
  * to push (e.g. zero viewers and the previous push was already empty).
@@ -139,10 +237,11 @@ const recommendFps = ({ viewerSnapshots, ceiling }) => {
  *   summary: import("../../../../shared/streaming/types.js").ViewerSummary,
  *   viewerSnapshots: import("../../../../shared/streaming/types.js").ViewerCapabilities[],
  *   ceiling: import("../../../../shared/streaming/types.js").InitialCeiling | null,
+ *   currentSettings?: { videoBitrate?: number | string | null } | null,
  * }} input
  * @returns {import("../../../../shared/streaming/types.js").RecommendedSettings | null}
  */
-const buildRecommendation = ({ sessionId, summary, viewerSnapshots, ceiling }) => {
+const buildRecommendation = ({ sessionId, summary, viewerSnapshots, ceiling, currentSettings = null }) => {
 	if (!ceiling) return null;
 	if (!summary || summary.viewerCount === 0) {
 		return {
@@ -158,7 +257,15 @@ const buildRecommendation = ({ sessionId, summary, viewerSnapshots, ceiling }) =
 		};
 	}
 
-	const videoBitrate = recommendBitrate({ minDownlinkMbit: summary.minDownlinkMbit, ceiling });
+	const currentBps = parseBitrateValueToBps(currentSettings?.videoBitrate ?? null);
+	const maxLoadFraction = typeof summary.maxLoadFraction === "number" ? summary.maxLoadFraction : null;
+
+	const videoBitrate = recommendBitrate({
+		minDownlinkMbit: summary.minDownlinkMbit,
+		ceiling,
+		currentBps,
+		maxLoadFraction,
+	});
 	const videoCodec = recommendCodec({ supportedCodecs: summary.supportedCodecs, ceiling });
 	const { outputWidth, outputHeight } = recommendResolution({ maxResolution: summary.maxResolution, ceiling });
 	const fps = recommendFps({ viewerSnapshots, ceiling });
@@ -166,6 +273,12 @@ const buildRecommendation = ({ sessionId, summary, viewerSnapshots, ceiling }) =
 	const reasons = [];
 	if (typeof summary.minDownlinkMbit === "number") {
 		reasons.push(`worst viewer downlink ${summary.minDownlinkMbit.toFixed(2)} Mbit/s`);
+	}
+	if (typeof maxLoadFraction === "number") {
+		reasons.push(`worst-viewer segment load fraction ${maxLoadFraction.toFixed(2)}`);
+	}
+	if (currentBps != null && typeof videoBitrate === "number" && videoBitrate === currentBps && videoBitrate < ceiling.videoBitrate) {
+		reasons.push("held current bitrate — measurement inconclusive (downlink ≈ encoded rate)");
 	}
 	if (videoCodec !== ceiling.videoCodec) {
 		reasons.push(`codec demoted from ${ceiling.videoCodec} (intersection: ${summary.supportedCodecs.join(", ") || "n/a"})`);
@@ -217,4 +330,18 @@ const isMeaningfulChange = (previous, next) => {
 	return false;
 };
 
-export { buildRecommendation, isMeaningfulChange, codecFamilyOf, snapToLadder, RESOLUTION_LADDER, CODEC_FAMILY_RANK, SIGNIFICANT_DELTA, ABSOLUTE_FLOOR_BPS };
+export {
+	buildRecommendation,
+	isMeaningfulChange,
+	codecFamilyOf,
+	snapToLadder,
+	recommendBitrate,
+	parseBitrateValueToBps,
+	RESOLUTION_LADDER,
+	CODEC_FAMILY_RANK,
+	SIGNIFICANT_DELTA,
+	ABSOLUTE_FLOOR_BPS,
+	INCONCLUSIVE_RATIO,
+	HEADROOM_LOAD_FRACTION,
+	CONGESTION_LOAD_FRACTION,
+};

@@ -3,9 +3,8 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { expect } = require("chai");
 
-const { aggregateViewers, createViewerStore, effectiveDownlinkMbit, samplePercentile, trimSamples, HISTORY_WINDOW_MS, MAX_SAMPLES } = await import(
-	"../../../src/live/control/viewerStore.js"
-);
+const { aggregateViewers, createViewerStore, effectiveDownlinkMbit, viewerLoadFraction, samplePercentile, trimSamples, HISTORY_WINDOW_MS, MAX_SAMPLES } =
+	await import("../../../src/live/control/viewerStore.js");
 
 const buildViewer = (overrides = {}) => ({
 	viewerId: overrides.viewerId || `viewer-${Math.random().toString(36).slice(2, 8)}`,
@@ -21,6 +20,7 @@ const buildViewer = (overrides = {}) => ({
 		saveData: false,
 		hlsBandwidthEstimateMbit: null,
 		currentHlsLevel: null,
+		loadFractionAvg: null,
 		...overrides.network,
 	},
 	display: {
@@ -98,6 +98,56 @@ describe("aggregateViewers", () => {
 		expect(summary.viewerCount).to.equal(0);
 		expect(summary.minDownlinkMbit).to.equal(null);
 		expect(summary.supportedCodecs).to.deep.equal([]);
+	});
+
+	it("exposes the worst-viewer maxLoadFraction so the recommender can detect headroom / congestion", () => {
+		// Three viewers: one in clear headroom (0.1), one steady-state
+		// (0.5), one near-saturated (0.92). The recommender uses
+		// max(loadFraction) as the worst-case congestion signal — the
+		// streamer should adapt to the most-stressed link, not the
+		// average. We expose `maxLoadFraction` so downstream gates
+		// (inconclusive-zone hold, headroom override) can branch.
+		const viewers = [
+			buildViewer({ network: { hlsBandwidthEstimateMbit: 50, loadFractionAvg: 0.1 } }),
+			buildViewer({ network: { hlsBandwidthEstimateMbit: 8, loadFractionAvg: 0.5 } }),
+			buildViewer({ network: { hlsBandwidthEstimateMbit: 4, loadFractionAvg: 0.92 } }),
+		];
+		const summary = aggregateViewers(viewers, "session-1");
+		expect(summary.maxLoadFraction).to.equal(0.92);
+	});
+
+	it("returns null maxLoadFraction when no viewer has reported a load fraction yet", () => {
+		// Brand-new viewers / legacy clients pre-`loadFractionAvg`
+		// don't fill in this field. The aggregator must surface null
+		// rather than 0, so the recommender knows to fall back to the
+		// bandwidth-only heuristics rather than treat "no data" as
+		// "lots of headroom".
+		const viewers = [
+			buildViewer({ network: { hlsBandwidthEstimateMbit: 8 } }),
+			buildViewer({ network: { hlsBandwidthEstimateMbit: 4, loadFractionAvg: undefined } }),
+		];
+		const summary = aggregateViewers(viewers, "session-1");
+		expect(summary.maxLoadFraction).to.equal(null);
+	});
+});
+
+describe("viewerLoadFraction", () => {
+	it("returns the value verbatim when within the [0, 5] clamp range", () => {
+		expect(viewerLoadFraction(buildViewer({ network: { loadFractionAvg: 0.3 } }))).to.equal(0.3);
+		expect(viewerLoadFraction(buildViewer({ network: { loadFractionAvg: 0 } }))).to.equal(0);
+	});
+
+	it("clamps absurdly large outliers to 5 so a single retransmit doesn't dominate the aggregate", () => {
+		expect(viewerLoadFraction(buildViewer({ network: { loadFractionAvg: 100 } }))).to.equal(5);
+	});
+
+	it("returns null when the viewer hasn't reported a load fraction", () => {
+		expect(viewerLoadFraction(buildViewer({ network: { loadFractionAvg: null } }))).to.equal(null);
+		expect(viewerLoadFraction(buildViewer({ network: {} }))).to.equal(null);
+	});
+
+	it("rejects negative values defensively", () => {
+		expect(viewerLoadFraction(buildViewer({ network: { loadFractionAvg: -0.1 } }))).to.equal(null);
 	});
 });
 

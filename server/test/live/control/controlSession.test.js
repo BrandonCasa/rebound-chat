@@ -468,6 +468,75 @@ describe("controlSession adapting fan-out", () => {
 	});
 });
 
+describe("controlSession ABR spiral guard", () => {
+	let emitted;
+	let session;
+
+	beforeEach(() => {
+		emitted = [];
+		session = createControlSession({
+			sessionId: "session-spiral",
+			emit: (event) => emitted.push(event),
+			log: null,
+			raiseDwellMs: 0,
+			minIntervalMs: 0,
+		});
+	});
+
+	afterEach(() => session.teardown());
+
+	it("does not push a downward recommendation when the viewer's downlink ≈ currentSettings.videoBitrate", () => {
+		// Reproduces the death-spiral failure mode: streamer is
+		// running at 4 Mbps, hls.bandwidthEstimate reports ~4 Mbit/s
+		// (because hls.js can't see capacity above what we send), and
+		// without the inconclusive-zone gate the recommender would
+		// fire a 0.56 * 4M = 2.24M downshift. After the fix it must
+		// hold at 4M.
+		session.attachStreamer("streamer-1", {
+			initialCeiling: { videoBitrate: 8_000_000, videoCodec: "h264_nvenc", outputWidth: 1920, outputHeight: 1080, fps: 60, createdAt: Date.now() },
+			currentSettings: {
+				videoBitrate: "4M",
+				videoCodec: "h264_nvenc",
+				outputWidth: 1920,
+				outputHeight: 1080,
+				fps: 60,
+			},
+			autoAdapt: true,
+		});
+		emitted.length = 0;
+
+		session.upsertViewer("viewer-A", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 4 } }));
+
+		const recs = recommendationsFrom(emitted);
+		expect(recs.length).to.equal(1);
+		expect(recs[0].envelope.videoBitrate).to.equal(4_000_000, "must hold at the current encoded rate, not ratchet down");
+		expect(recs[0].envelope.reason).to.match(/held current bitrate/);
+	});
+
+	it("DOES push a downward recommendation when the viewer's downlink is convincingly below currentSettings", () => {
+		session.attachStreamer("streamer-1", {
+			initialCeiling: { videoBitrate: 8_000_000, videoCodec: "h264_nvenc", outputWidth: 1920, outputHeight: 1080, fps: 60, createdAt: Date.now() },
+			currentSettings: {
+				videoBitrate: "4M",
+				videoCodec: "h264_nvenc",
+				outputWidth: 1920,
+				outputHeight: 1080,
+				fps: 60,
+			},
+			autoAdapt: true,
+		});
+		emitted.length = 0;
+
+		// Viewer is genuinely choked: half the encoded rate. This is
+		// real congestion, drop is warranted.
+		session.upsertViewer("viewer-A", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 2 } }));
+
+		const recs = recommendationsFrom(emitted);
+		expect(recs.length).to.be.greaterThan(0);
+		expect(recs[recs.length - 1].envelope.videoBitrate).to.be.lessThan(4_000_000);
+	});
+});
+
 describe("controlSession adapting suppression for matching currentSettings", () => {
 	let emitted;
 	let session;

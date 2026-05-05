@@ -148,6 +148,32 @@ const smoothedEntryDownlinkMbit = (entry, { now, historyWindowMs, smoothingPerce
 	return Math.min(latest, percentile);
 };
 
+/**
+ * Pull a clamped `loadFractionAvg` (segment download ms / playback ms,
+ * averaged over recent fragments) from a viewer's network probe. Values
+ * are clamped to [0, 5] to bound the impact of a single anomalous
+ * sample (e.g. a TCP reset retransmit that pads `loadDuration` orders
+ * of magnitude beyond the playable duration). Returns `null` when the
+ * viewer hasn't reported one yet (e.g. just connected, no FRAG_LOADED
+ * has fired) so the recommender can fall back to the bandwidth-only
+ * heuristics for legacy viewers.
+ */
+const viewerLoadFraction = (viewer) => {
+	const value = viewer?.network?.loadFractionAvg;
+	if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
+	if (value > 5) return 5;
+	return value;
+};
+
+const MAX_FINITE = (values) => {
+	let max = null;
+	for (const value of values) {
+		if (typeof value !== "number" || !Number.isFinite(value)) continue;
+		if (max == null || value > max) max = value;
+	}
+	return max;
+};
+
 const toMaxResolution = (viewers) => {
 	let maxArea = 0;
 	let result = null;
@@ -189,11 +215,16 @@ const intersectFamilies = (viewers) => {
  */
 const aggregateViewers = (viewerList, sessionId) => {
 	const downlinks = viewerList.map(effectiveDownlinkMbit).filter((value) => typeof value === "number");
+	const loadFractions = viewerList.map(viewerLoadFraction).filter((value) => typeof value === "number");
 	return {
 		sessionId,
 		viewerCount: viewerList.length,
 		minDownlinkMbit: MIN_FINITE(downlinks),
 		medianDownlinkMbit: MEDIAN(downlinks),
+		// Worst-viewer segment-load fraction. Used by the recommender as
+		// a bandwidth-independent congestion / headroom signal — see
+		// `recommender.js`.
+		maxLoadFraction: MAX_FINITE(loadFractions),
 		supportedCodecs: intersectFamilies(viewerList),
 		maxResolution: toMaxResolution(viewerList),
 		saveDataCount: viewerList.filter((viewer) => viewer?.network?.saveData).length,
@@ -213,11 +244,13 @@ const aggregateEntries = (entries, sessionId, options) => {
 		.map((entry) => smoothedEntryDownlinkMbit(entry, { now, historyWindowMs, smoothingPercentile }))
 		.filter((value) => typeof value === "number");
 	const viewerList = entries.map((entry) => entry.capabilities).filter(Boolean);
+	const loadFractions = viewerList.map(viewerLoadFraction).filter((value) => typeof value === "number");
 	return {
 		sessionId,
 		viewerCount: viewerList.length,
 		minDownlinkMbit: MIN_FINITE(downlinks),
 		medianDownlinkMbit: MEDIAN(downlinks),
+		maxLoadFraction: MAX_FINITE(loadFractions),
 		supportedCodecs: intersectFamilies(viewerList),
 		maxResolution: toMaxResolution(viewerList),
 		saveDataCount: viewerList.filter((viewer) => viewer?.network?.saveData).length,
@@ -324,10 +357,12 @@ export {
 	aggregateEntries,
 	effectiveDownlinkMbit,
 	smoothedEntryDownlinkMbit,
+	viewerLoadFraction,
 	samplePercentile,
 	trimSamples,
 	MEDIAN,
 	MIN_FINITE,
+	MAX_FINITE,
 	HISTORY_WINDOW_MS,
 	SMOOTHING_PERCENTILE,
 	MAX_SAMPLES,

@@ -241,6 +241,7 @@ const useLiveControlClient = ({ sessionId, websiteBaseUrl, hls, authToken, enabl
 					{
 						hlsBandwidthEstimateMbit: patch.hlsBandwidthEstimateMbit,
 						currentHlsLevel: patch.currentHlsLevel,
+						loadFractionAvg: patch.loadFractionAvg,
 					},
 					patch.triggeredBy
 				);

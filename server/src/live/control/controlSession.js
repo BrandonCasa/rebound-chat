@@ -286,6 +286,15 @@ const createControlSession = ({
 			summary,
 			viewerSnapshots: viewerStore.listViewerSnapshots(sessionId),
 			ceiling,
+			// Hand the recommender the streamer's just-applied settings
+			// (cached on every STREAMER_HELLO + post-respawn updateCeiling)
+			// so it can detect the "measurement-bounded-by-encoded-rate"
+			// trap. Without `currentSettings`, every downward push
+			// produces a fresh measurement bound near the new (lower)
+			// rate that justifies another downward push, ratcheting all
+			// the way to `ABSOLUTE_FLOOR_BPS`. See `recommender.js` for
+			// the inconclusive-zone gate.
+			currentSettings,
 		});
 
 		if (!recommendation) {
