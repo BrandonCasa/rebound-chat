@@ -27,7 +27,7 @@ const buildRecommendation = (overrides = {}) => ({
 	...overrides,
 });
 
-describe("applyRecommendation lower-only clamp", () => {
+describe("applyRecommendation ceiling-bounded clamp", () => {
 	it("never raises any numeric field above the ceiling", () => {
 		const current = buildConfig();
 		const ceiling = buildInitialCeiling(current);
@@ -103,6 +103,82 @@ describe("applyRecommendation lower-only clamp", () => {
 		assert.ok(codecChange);
 		assert.equal(codecChange.from, "hevc_nvenc");
 		assert.equal(codecChange.to, "h264_nvenc");
+	});
+
+	it("raises numeric fields toward the recommendation when above current and within the ceiling", () => {
+		// Streamer was previously demoted by a poor viewer; now the
+		// server says we can move back up partway. The adapter must let
+		// us climb, not pin us at the demoted state forever.
+		const current = buildConfig({ videoBitrate: "3M", outputWidth: 1280, outputHeight: 720, fps: 30 });
+		const ceiling = buildInitialCeiling(buildConfig());
+		const recommendation = buildRecommendation({
+			videoBitrate: 6_000_000,
+			outputWidth: 1600,
+			outputHeight: 900,
+			fps: 60,
+		});
+
+		const { next, diff, clampedBy, wouldRespawn } = applyRecommendation(current, recommendation, ceiling);
+		assert.equal(wouldRespawn, true);
+		assert.equal(next.videoBitrate, "6M");
+		assert.equal(next.outputWidth, 1600);
+		assert.equal(next.outputHeight, 900);
+		assert.equal(next.fps, 60);
+		assert.equal(clampedBy, null, "recommendation was within the ceiling so nothing was clamped down");
+		const fields = diff.map((entry) => entry.field).sort();
+		assert.deepEqual(fields, ["fps", "outputHeight", "outputWidth", "videoBitrate"]);
+	});
+
+	it("clamps an above-ceiling recommendation to the ceiling on the way up", () => {
+		const current = buildConfig({ videoBitrate: "3M", outputWidth: 1280, outputHeight: 720, fps: 30 });
+		const ceiling = buildInitialCeiling(buildConfig());
+		const recommendation = buildRecommendation({
+			videoBitrate: 25_000_000,
+			outputWidth: 3840,
+			outputHeight: 2160,
+			fps: 120,
+		});
+
+		const { next, clampedBy } = applyRecommendation(current, recommendation, ceiling);
+		assert.equal(next.videoBitrate, "8M");
+		assert.equal(next.outputWidth, 1920);
+		assert.equal(next.outputHeight, 1080);
+		assert.equal(next.fps, 60);
+		assert.equal(clampedBy, "user-initial-ceiling");
+	});
+
+	it("promotes back to the exact ceiling codec across hardware families", () => {
+		// The recommender previously pushed us off NVENC AV1 onto a
+		// software fallback because the only viewer couldn't decode AV1.
+		// That viewer leaves, so the recommender now restores the
+		// ceiling codec. The adapter must accept it because the user
+		// already proved their box can encode it (it was the ceiling).
+		const current = buildConfig({ videoCodec: "libopenh264" });
+		const ceiling = buildInitialCeiling(buildConfig({ videoCodec: "av1_nvenc" }));
+		const recommendation = buildRecommendation({ videoCodec: "av1_nvenc" });
+
+		const { next, diff } = applyRecommendation(current, recommendation, ceiling);
+		assert.equal(next.videoCodec, "av1_nvenc");
+		const codecChange = diff.find((entry) => entry.field === "videoCodec");
+		assert.ok(codecChange);
+		assert.equal(codecChange.from, "libopenh264");
+		assert.equal(codecChange.to, "av1_nvenc");
+	});
+
+	it("rejects a cross-family codec swap that is not the ceiling codec", () => {
+		// Same ceiling as the current codec — a recommendation suggesting
+		// a *different* family from both is unsafe (we have no proof the
+		// streamer's box can encode it) and must be ignored.
+		const current = buildConfig({ videoCodec: "h264_nvenc" });
+		const ceiling = buildInitialCeiling(current);
+		const recommendation = buildRecommendation({ videoCodec: "libsvtav1" });
+
+		const { next, diff } = applyRecommendation(current, recommendation, ceiling);
+		assert.equal(next.videoCodec, "h264_nvenc");
+		assert.equal(
+			diff.find((entry) => entry.field === "videoCodec"),
+			undefined
+		);
 	});
 
 	it("returns wouldRespawn=false when nothing meaningful changed", () => {

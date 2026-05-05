@@ -2,17 +2,33 @@
  * Pure adapter: takes (currentSettings, recommendation, ceiling) and
  * returns the next clamped settings + a description of what changed.
  *
- * Two invariants:
+ * Three invariants:
  *
- *   1. Lower-only.  No numeric field can ever rise above the user's
- *      original ceiling. The server applies the same clamp before
- *      sending; this is the belt to that pair of braces.
+ *   1. Ceiling-bounded.  No numeric field can ever rise above the
+ *      user's original ceiling. The server applies the same clamp
+ *      before sending; this is the belt to that pair of braces.
  *
- *   2. Codec demotion is ladder-aware. We never *raise* the codec
- *      complexity (e.g. h264 → av1) under server pressure because
- *      the user's box may not be able to encode the new codec at
- *      all. The recommender is the one allowed to demote h264 → vp9
- *      when literally nobody can decode h264; we accept that.
+ *   2. Bidirectional within the ceiling.  When viewer conditions
+ *      improve (e.g. a slow viewer leaves, or only fast viewers join)
+ *      the recommendation can ask the streamer to raise quality back
+ *      up — but never above what the user originally selected. Raise
+ *      flapping is prevented on the *server* side via a dwell window
+ *      in `controlSession.js`; the adapter itself just trusts what it
+ *      receives.
+ *
+ *   3. Codec swaps are capability-aware. We never blindly *promote*
+ *      the codec family (e.g. h264 → av1) because the user's box may
+ *      not be able to encode the new codec at all. We allow:
+ *        a) the same-hardware-family ladder (e.g. hevc_nvenc ↔
+ *           h264_nvenc) — the user's box demonstrably has that
+ *           backend already;
+ *        b) returning to the *exact* ceiling codec — that was the
+ *           user's verified intent at stream start, so it's safe to
+ *           restore even after a temporary cross-family demotion.
+ *      The recommender is the one allowed to demote h264 → vp9 when
+ *      literally nobody can decode h264; the adapter holds at the
+ *      current codec until the recommendation matches one of the safe
+ *      paths above.
  *
  * Returns `{ next, diff, clampedBy }`. `clampedBy` is non-null when the
  * ceiling pulled a value tighter than the recommendation asked for —
@@ -41,10 +57,11 @@ const toBitrateString = (bps) => {
 	return `${bps}`;
 };
 
-const codecsCompatibleForLowerOnly = (currentCodec, recommendedCodec) => {
+const codecsCompatibleForRespawn = (currentCodec, recommendedCodec, ceilingCodec) => {
 	if (!currentCodec) return true;
 	if (!recommendedCodec) return false;
 	if (currentCodec === recommendedCodec) return true;
+	if (ceilingCodec && recommendedCodec === ceilingCodec) return true;
 	const trim = (value) => value.replace(/^h264_|^hevc_|^av1_|^vp9_/, "");
 	return trim(currentCodec) === trim(recommendedCodec);
 };
@@ -74,7 +91,7 @@ const applyRecommendation = (current, recommendation, ceiling) => {
 	const ceilingBps = toBpsOrNull(ceiling.videoBitrate);
 	if (recommendedBps != null && ceilingBps != null && currentBps != null) {
 		const target = Math.min(recommendedBps, ceilingBps);
-		if (target < currentBps) {
+		if (target !== currentBps) {
 			next.videoBitrate = toBitrateString(target);
 			diff.push({ field: "videoBitrate", from: current.videoBitrate, to: next.videoBitrate });
 			if (target === ceilingBps && ceilingBps < recommendedBps) clampedBy = "user-initial-ceiling";
@@ -88,7 +105,7 @@ const applyRecommendation = (current, recommendation, ceiling) => {
 		if (typeof currentValue !== "number" || typeof recommendedValue !== "number") continue;
 		const ceilingNumber = typeof ceilingValue === "number" ? ceilingValue : Infinity;
 		const target = Math.min(recommendedValue, ceilingNumber);
-		if (target < currentValue) {
+		if (target !== currentValue) {
 			next[field] = target;
 			diff.push({ field, from: currentValue, to: target });
 			if (target === ceilingNumber && ceilingNumber < recommendedValue) clampedBy = "user-initial-ceiling";
@@ -96,7 +113,7 @@ const applyRecommendation = (current, recommendation, ceiling) => {
 	}
 
 	if (recommendation.videoCodec && recommendation.videoCodec !== current.videoCodec) {
-		if (codecsCompatibleForLowerOnly(current.videoCodec, recommendation.videoCodec)) {
+		if (codecsCompatibleForRespawn(current.videoCodec, recommendation.videoCodec, ceiling.videoCodec)) {
 			next.videoCodec = recommendation.videoCodec;
 			diff.push({ field: "videoCodec", from: current.videoCodec, to: recommendation.videoCodec });
 		}
@@ -111,4 +128,4 @@ const summarizeDiff = (diff) => {
 	return diff.map((entry) => `${entry.field}: ${entry.from} → ${entry.to}`).join("; ");
 };
 
-export { applyRecommendation, summarizeDiff, NUMERIC_FIELDS, toBitrateString };
+export { applyRecommendation, summarizeDiff, codecsCompatibleForRespawn, NUMERIC_FIELDS, toBitrateString };

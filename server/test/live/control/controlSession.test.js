@@ -3,7 +3,10 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { expect } = require("chai");
 
-const { createControlSession } = await import("../../../src/live/control/controlSession.js");
+const { createControlSession, recommendationDirection } = await import("../../../src/live/control/controlSession.js");
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const recommendationsFrom = (events) => events.filter((event) => event.envelope.type === "recommended-settings");
 
 const buildCapabilities = (overrides = {}) => ({
 	viewerId: overrides.viewerId || "viewer",
@@ -102,5 +105,183 @@ describe("controlSession push behaviour", () => {
 		session.upsertViewer("viewer-A", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 4 } }));
 		session.upsertViewer("viewer-A", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1 } }));
 		expect(() => session.teardown()).to.not.throw();
+	});
+});
+
+describe("recommendationDirection", () => {
+	const baseRec = {
+		videoBitrate: 4_000_000,
+		videoCodec: "h264_nvenc",
+		outputWidth: 1280,
+		outputHeight: 720,
+		fps: 60,
+	};
+
+	it("returns 'same' when there is no previous recommendation", () => {
+		expect(recommendationDirection(null, baseRec)).to.equal("same");
+	});
+
+	it("returns 'up' when any numeric field rises and none fall", () => {
+		const next = { ...baseRec, videoBitrate: 8_000_000, outputWidth: 1920, outputHeight: 1080 };
+		expect(recommendationDirection(baseRec, next)).to.equal("up");
+	});
+
+	it("returns 'down' when any numeric field falls", () => {
+		const next = { ...baseRec, videoBitrate: 2_000_000 };
+		expect(recommendationDirection(baseRec, next)).to.equal("down");
+	});
+
+	it("returns 'down' for mixed up/down moves so cuts are never delayed", () => {
+		const next = { ...baseRec, videoBitrate: 8_000_000, outputHeight: 540 };
+		expect(recommendationDirection(baseRec, next)).to.equal("down");
+	});
+
+	it("classifies codec promotion (h264 → av1) as 'up'", () => {
+		const next = { ...baseRec, videoCodec: "av1_nvenc" };
+		expect(recommendationDirection(baseRec, next)).to.equal("up");
+	});
+
+	it("classifies codec demotion (h264 → vp9) as 'down'", () => {
+		const next = { ...baseRec, videoCodec: "libvpx-vp9" };
+		expect(recommendationDirection(baseRec, next)).to.equal("down");
+	});
+});
+
+describe("controlSession raise hysteresis", () => {
+	const RAISE_DWELL = 60;
+	let emitted;
+	let session;
+
+	beforeEach(() => {
+		emitted = [];
+		session = createControlSession({
+			sessionId: "session-raise",
+			emit: (event) => emitted.push(event),
+			log: null,
+			raiseDwellMs: RAISE_DWELL,
+			minIntervalMs: 0,
+		});
+	});
+
+	afterEach(() => session.teardown());
+
+	const attach = () =>
+		session.attachStreamer("streamer-1", {
+			initialCeiling: buildCeiling(),
+			currentSettings: null,
+			autoAdapt: true,
+		});
+
+	it("downgrades push immediately when a slow viewer joins", async () => {
+		attach();
+		emitted.length = 0;
+		session.upsertViewer("viewer-slow", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1.2 } }));
+		const recs = recommendationsFrom(emitted);
+		expect(recs).to.have.lengthOf(1);
+		expect(recs[0].envelope.videoBitrate).to.be.lessThan(8_000_000);
+		expect(session.hasPendingRaise()).to.equal(false);
+	});
+
+	it("delays an upward recommendation until the dwell window elapses", async () => {
+		attach();
+		session.upsertViewer("viewer-slow", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1.2 } }));
+		emitted.length = 0;
+
+		session.removeViewer("viewer-slow");
+		expect(session.hasPendingRaise()).to.equal(true, "raise should be pending immediately after the slow viewer leaves");
+		expect(recommendationsFrom(emitted)).to.have.lengthOf(0, "nothing should be pushed during the dwell");
+
+		await wait(RAISE_DWELL + 30);
+
+		const recs = recommendationsFrom(emitted);
+		expect(session.hasPendingRaise()).to.equal(false);
+		expect(recs).to.have.lengthOf(1, "exactly one promotion push should arrive after the dwell");
+		expect(recs[0].envelope.videoBitrate).to.equal(8_000_000);
+		expect(recs[0].envelope.derivedFromViewerCount).to.equal(0);
+	});
+
+	it("cancels a pending raise when a fresh slow viewer joins during the dwell", async () => {
+		attach();
+		session.upsertViewer("viewer-slow", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1.2 } }));
+		emitted.length = 0;
+
+		session.removeViewer("viewer-slow");
+		expect(session.hasPendingRaise()).to.equal(true);
+
+		await wait(Math.floor(RAISE_DWELL / 2));
+		session.upsertViewer("viewer-also-slow", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 0.6 } }));
+		expect(session.hasPendingRaise()).to.equal(false, "a downward signal must clear the pending raise");
+
+		// The newly-pushed downgrade is the only recommendation that should
+		// arrive — the dwell-fired raise must NOT be pushed afterwards.
+		const downRecs = recommendationsFrom(emitted);
+		expect(downRecs.length).to.be.greaterThanOrEqual(1);
+		expect(downRecs[downRecs.length - 1].envelope.videoBitrate).to.be.lessThan(8_000_000);
+
+		emitted.length = 0;
+		await wait(RAISE_DWELL + 30);
+		expect(recommendationsFrom(emitted)).to.have.lengthOf(0, "no raise should fire after a slow viewer rejoined");
+	});
+
+	it("does not stack raise timers when multiple ups arrive during the dwell", async () => {
+		attach();
+		session.upsertViewer("viewer-slow", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1.2 } }));
+		emitted.length = 0;
+
+		session.removeViewer("viewer-slow");
+		// A faster viewer joining nudges the recommendation slightly higher
+		// (still up) — must not reset / duplicate the pending timer.
+		session.upsertViewer("viewer-fast", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 80 } }));
+		expect(session.hasPendingRaise()).to.equal(true);
+
+		await wait(RAISE_DWELL + 30);
+		expect(recommendationsFrom(emitted)).to.have.lengthOf(1, "exactly one raise push should fire");
+	});
+
+	it("force-bypasses a pending raise when the streamer re-attaches", () => {
+		attach();
+		session.upsertViewer("viewer-slow", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1.2 } }));
+		session.removeViewer("viewer-slow");
+		expect(session.hasPendingRaise()).to.equal(true, "raise pending after the slow viewer left");
+		emitted.length = 0;
+
+		// A re-attach is a force push — it must clear the pending raise
+		// and emit the current recommendation synchronously, regardless of
+		// direction.
+		session.attachStreamer("streamer-2", {
+			initialCeiling: buildCeiling(),
+			currentSettings: null,
+			autoAdapt: true,
+		});
+		expect(session.hasPendingRaise()).to.equal(false);
+		const recs = recommendationsFrom(emitted);
+		expect(recs.length).to.be.greaterThanOrEqual(1);
+		expect(recs[recs.length - 1].envelope.videoBitrate).to.equal(8_000_000);
+	});
+
+	it("stays at the demoted state when the dwell elapses but conditions did not actually improve", async () => {
+		attach();
+		session.upsertViewer("viewer-slow-A", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1.2 } }));
+		emitted.length = 0;
+
+		// Pretend a viewer leaves and is replaced by an equally-poor one
+		// before the recommender ever recomputes a higher target.
+		session.removeViewer("viewer-slow-A");
+		session.upsertViewer("viewer-slow-B", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1.2 } }));
+		await wait(RAISE_DWELL + 30);
+
+		// The recommender should see the same demoted target as before
+		// and decline to push anything new.
+		expect(recommendationsFrom(emitted).length).to.equal(0, "no push when conditions never actually improved");
+	});
+
+	it("clears any pending raise when teardown is called", async () => {
+		attach();
+		session.upsertViewer("viewer-slow", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1.2 } }));
+		session.removeViewer("viewer-slow");
+		expect(session.hasPendingRaise()).to.equal(true);
+		session.teardown();
+		await wait(RAISE_DWELL + 30);
+		expect(session.hasPendingRaise()).to.equal(false);
 	});
 });

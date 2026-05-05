@@ -427,18 +427,18 @@ Add `public/streaming/audio/filterGraph.js` that builds the `amix` filter from N
 
 **F-δ. Integration tests.** End-to-end harness that spins up a real `/live-control` namespace, an in-memory viewer probe, and a fake `ElectronLiveStreamManager` to exercise: (1) initial connect, (2) viewer joins, (3) viewer's `hlsBandwidthEstimateMbit` drops, (4) recommendation pushed, (5) respawn ACK. Today the unit tests cover the modules in isolation.
 
-**F-ε. Document the protocol.** Add `shared/streaming/PROTOCOL.md` with the message catalog, the throttling rules (every 10 segments / >15% change / `LEVEL_SWITCHED` immediate), and the "lower-only" guarantee. Both renderers and the server import from `protocol.js`; the markdown is the human-readable spec.
+**F-ε. Document the protocol.** Add `shared/streaming/PROTOCOL.md` with the message catalog, the throttling rules (every 10 segments / >15% change / `LEVEL_SWITCHED` immediate), and the **ceiling-bounded** adaptation guarantee. Both renderers and the server import from `protocol.js`; the markdown is the human-readable spec.
 
-The "lower-only" guarantee is enforced in `public/streaming/server-control/adapter.js`:
+The ceiling-bounded guarantee is enforced in `public/streaming/server-control/adapter.js`:
 
 ```js
 export function applyRecommendation(current, recommendation, ceiling) {
-  const clampDown = (cur, rec, ceil) => Math.min(cur, rec ?? cur, ceil);
-  return { videoBitrate: clampDown(current.videoBitrate, recommendation.videoBitrate, ceiling.videoBitrate), ... };
+  const clamp = (rec, ceil) => Math.min(rec ?? ceil, ceil);
+  return { videoBitrate: clamp(recommendation.videoBitrate, ceiling.videoBitrate), ... };
 }
 ```
 
-Server applies the same clamp in `recommender.js` before sending. Belt and suspenders.
+The streamer adapts **bidirectionally within the ceiling**: it lowers immediately when the recommender says so (protect viewers from buffering) and raises back up when conditions improve, never above what the user originally selected. The raise side is gated on the server by a dwell window (`RAISE_DWELL_MS` in `server/src/live/control/controlSession.js`) so a transient viewer disconnect cannot cause an FFmpeg respawn flap. Server applies the same `min(rec, ceiling)` clamp in `recommender.js` before sending. Belt and suspenders.
 
 ---
 
@@ -839,7 +839,7 @@ Exactly **three** boundaries:
   - Throttle the player's network via Chrome devtools (2 Mbit); wait for 10 HLS segments; confirm `hlsBandwidthEstimateMbit` in the message is within range of the throttle setting.
   - Stream at 8 Mbit; open the player on a throttled network at 2 Mbit; observe the streamer respawn at ≤2 Mbit within ~3–5 seconds.
   - Open a second viewer at 1 Mbit; observe a further drop.
-  - Close both viewers; observe the streamer does NOT raise above the initial ceiling.
+  - Close both viewers; observe the streamer raises back **up to (and never above) the initial ceiling** within `RAISE_DWELL_MS` (~8 s) of stable improvement. Re-open a slow viewer **before** that window elapses; observe the pending raise is cancelled and the streamer holds at the demoted state.
   - Manually set a value above the initial ceiling; UI rejects it.
   - `AdaptationToast` shows on `LEVEL_SWITCHED`; reduced-motion users see fade-only.
 - **Phase G:** verify the health widget shows accurate values during artificial stalls (drop the ffmpeg process or pull the network). Per-session log dump matches what was streamed.

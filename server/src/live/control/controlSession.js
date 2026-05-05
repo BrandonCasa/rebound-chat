@@ -8,24 +8,79 @@
  * and is torn down when the streamer goes away or the last viewer
  * disconnects with no streamer present.
  *
- * The recommender is rate-limited so we never push more often than
- * once every `MIN_RECOMMENDATION_INTERVAL_MS` even if viewers reconnect
- * in a flurry.
+ * Push throttling has two layers:
+ *
+ *   1. `MIN_RECOMMENDATION_INTERVAL_MS` — the minimum gap between any
+ *      two pushes regardless of direction. Stops a flurry of viewer
+ *      reconnects from spamming the streamer.
+ *
+ *   2. `RAISE_DWELL_MS` — the minimum *uninterrupted* improvement
+ *      window before we ask the streamer to raise quality back up
+ *      toward the ceiling. A previously-poor viewer's disconnect that
+ *      lasts only a second or two should NOT cause an FFmpeg respawn:
+ *      respawning is expensive (every viewer sees a 1-3s rebuffer at
+ *      `EXT-X-DISCONTINUITY`) and a transient blip is the worst time
+ *      to spend that. Downward moves remain immediate so viewers are
+ *      protected from buffering as soon as the worst link tightens.
  */
 
-import { buildRecommendation, isMeaningfulChange } from "./recommender.js";
+import { buildRecommendation, codecFamilyOf, CODEC_FAMILY_RANK, isMeaningfulChange } from "./recommender.js";
 import { createViewerStore } from "./viewerStore.js";
 
 const MIN_RECOMMENDATION_INTERVAL_MS = 2_000;
+const RAISE_DWELL_MS = 8_000;
 
-const createControlSession = ({ sessionId, emit, log }) => {
+const NUMERIC_DIRECTION_FIELDS = ["videoBitrate", "outputWidth", "outputHeight", "fps"];
+
+/**
+ * Compare two recommendations and return whether the next one moves
+ * quality up (toward the ceiling), down (away from it), or sideways.
+ * "Down" wins when there's any conflict so we never delay a quality
+ * cut behind a quality raise.
+ *
+ * @param {import("../../../../shared/streaming/types.js").RecommendedSettings | null} previous
+ * @param {import("../../../../shared/streaming/types.js").RecommendedSettings} next
+ * @returns {"up" | "down" | "same"}
+ */
+const recommendationDirection = (previous, next) => {
+	if (!previous || !next) return "same";
+	let sawUp = false;
+	let sawDown = false;
+	for (const field of NUMERIC_DIRECTION_FIELDS) {
+		const prev = previous[field];
+		const cur = next[field];
+		if (typeof prev !== "number" || typeof cur !== "number") continue;
+		if (cur > prev) sawUp = true;
+		else if (cur < prev) sawDown = true;
+	}
+	const prevRank = CODEC_FAMILY_RANK.indexOf(codecFamilyOf(previous.videoCodec));
+	const nextRank = CODEC_FAMILY_RANK.indexOf(codecFamilyOf(next.videoCodec));
+	if (prevRank >= 0 && nextRank >= 0 && prevRank !== nextRank) {
+		if (nextRank < prevRank) sawUp = true;
+		else sawDown = true;
+	}
+	if (sawDown) return "down";
+	if (sawUp) return "up";
+	return "same";
+};
+
+const createControlSession = ({ sessionId, emit, log, raiseDwellMs = RAISE_DWELL_MS, minIntervalMs = MIN_RECOMMENDATION_INTERVAL_MS } = {}) => {
 	const viewerStore = createViewerStore();
 	let ceiling = null;
 	let lastRecommendation = null;
 	let lastRecommendationAt = 0;
 	let pendingRecomputeTimer = null;
+	let pendingRaiseTimer = null;
+	let pendingRaiseSince = 0;
 	let streamerSocketId = null;
 	let autoAdaptEnabled = true;
+
+	const cancelPendingRaise = () => {
+		if (!pendingRaiseTimer) return;
+		clearTimeout(pendingRaiseTimer);
+		pendingRaiseTimer = null;
+		pendingRaiseSince = 0;
+	};
 
 	const safeLog = (level, message) => {
 		if (!log || typeof log[level] !== "function") return;
@@ -42,7 +97,7 @@ const createControlSession = ({ sessionId, emit, log }) => {
 		return true;
 	};
 
-	const recomputeAndPush = ({ force = false } = {}) => {
+	const recomputeAndPush = ({ force = false, fromRaiseTimer = false } = {}) => {
 		if (pendingRecomputeTimer) {
 			clearTimeout(pendingRecomputeTimer);
 			pendingRecomputeTimer = null;
@@ -62,11 +117,48 @@ const createControlSession = ({ sessionId, emit, log }) => {
 			ceiling,
 		});
 
-		if (!recommendation) return;
-		if (!force && !isMeaningfulChange(lastRecommendation, recommendation)) return;
+		if (!recommendation) {
+			cancelPendingRaise();
+			return;
+		}
+		if (!force && !isMeaningfulChange(lastRecommendation, recommendation)) {
+			// Nothing meaningful changed since the last push. If a raise is
+			// pending, leave it alone — its dwell is still ticking against the
+			// same target. If conditions had actually improved further we would
+			// hit isMeaningfulChange=true and re-enter the branches below.
+			return;
+		}
+
+		const direction = recommendationDirection(lastRecommendation, recommendation);
+
+		// Defer upward moves: we only ask the streamer to raise quality after
+		// `raiseDwellMs` of *uninterrupted* improvement. A forced push (auto-
+		// adapt toggled on, streamer (re-)attached, viewer summary requested
+		// a fresh recommendation) bypasses the dwell so the streamer's first
+		// push is always immediate. A push fired by the dwell timer itself
+		// also bypasses the branch — that's how we exit the wait state.
+		if (!force && !fromRaiseTimer && direction === "up") {
+			if (!pendingRaiseTimer) {
+				pendingRaiseSince = Date.now();
+				pendingRaiseTimer = setTimeout(() => {
+					pendingRaiseTimer = null;
+					pendingRaiseSince = 0;
+					recomputeAndPush({ fromRaiseTimer: true });
+				}, raiseDwellMs);
+				safeLog("info", `raise pending — waiting ${raiseDwellMs}ms before promoting bitrate=${recommendation.videoBitrate} codec=${recommendation.videoCodec}`);
+			}
+			return;
+		}
+
+		// Either the recommendation is a downgrade (apply now to protect
+		// viewers), the raise dwell timer just fired (the wait is satisfied,
+		// re-evaluate against the fresh summary), or a force push is in
+		// flight. In every case we drop any still-armed raise — its window is
+		// moot now.
+		cancelPendingRaise();
 
 		const now = Date.now();
-		const nextAt = lastRecommendationAt + MIN_RECOMMENDATION_INTERVAL_MS;
+		const nextAt = lastRecommendationAt + minIntervalMs;
 		if (!force && now < nextAt) {
 			pendingRecomputeTimer = setTimeout(() => {
 				pendingRecomputeTimer = null;
@@ -79,7 +171,7 @@ const createControlSession = ({ sessionId, emit, log }) => {
 		lastRecommendationAt = now;
 		safeLog(
 			"info",
-			`pushing recommendation viewers=${summary.viewerCount} bitrate=${recommendation.videoBitrate} codec=${recommendation.videoCodec} reason=${recommendation.reason}`
+			`pushing recommendation viewers=${summary.viewerCount} bitrate=${recommendation.videoBitrate} codec=${recommendation.videoCodec} direction=${direction} reason=${recommendation.reason}`
 		);
 		sendToStreamer({ type: "recommended-settings", ...recommendation });
 	};
@@ -137,6 +229,7 @@ const createControlSession = ({ sessionId, emit, log }) => {
 			clearTimeout(pendingRecomputeTimer);
 			pendingRecomputeTimer = null;
 		}
+		cancelPendingRaise();
 		viewerStore.dropSession(sessionId);
 		streamerSocketId = null;
 	};
@@ -153,6 +246,8 @@ const createControlSession = ({ sessionId, emit, log }) => {
 		isEmpty,
 		teardown,
 		getStreamerSocketId: () => streamerSocketId,
+		getPendingRaiseSince: () => pendingRaiseSince,
+		hasPendingRaise: () => Boolean(pendingRaiseTimer),
 	};
 };
 
@@ -192,4 +287,4 @@ const createControlRegistry = ({ log } = {}) => {
 	};
 };
 
-export { createControlSession, createControlRegistry, MIN_RECOMMENDATION_INTERVAL_MS };
+export { createControlSession, createControlRegistry, recommendationDirection, MIN_RECOMMENDATION_INTERVAL_MS, RAISE_DWELL_MS };
