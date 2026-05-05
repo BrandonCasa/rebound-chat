@@ -64,7 +64,24 @@ const buildCaptureArgs = (config, capabilities) => {
  */
 const buildAudioInputArgs = (config) => {
 	if (!config.audioInputArgs?.length) return [];
-	return ["-thread_queue_size", "1024", ...config.audioInputArgs];
+	const prefix = ["-thread_queue_size", "1024"];
+	if (config.rtbufsize) prefix.push("-rtbufsize", config.rtbufsize);
+	return [...prefix, ...config.audioInputArgs];
+};
+
+/**
+ * Pin the output to a constant frame rate using the configured stream FPS
+ * (falling back to capture FPS). Pairing `-fps_mode cfr` with `-r` makes
+ * HLS segment durations predictable and prevents drift when the upstream
+ * source is variable (desktop capture only emits frames on screen change).
+ *
+ * @param {StreamConfig} config
+ * @returns {string[]}
+ */
+const buildCfrOutputArgs = (config) => {
+	const fps = config.fps || config.captureFps;
+	if (!fps) return [];
+	return ["-fps_mode", "cfr", "-r", String(fps)];
 };
 
 /**
@@ -123,6 +140,8 @@ const buildArgs = (config, capabilities = defaultCapabilities()) => {
 	argv.push(...encoder.buildArgs(config));
 
 	argv.push(...buildAudioCodecArgs(config));
+
+	argv.push(...buildCfrOutputArgs(config));
 
 	argv.push(...hls.buildArgs(config));
 

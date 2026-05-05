@@ -16,6 +16,7 @@ const buildInputArgs = (config) => {
 	const sourceName = config.source?.name || "desktop";
 	const sourceId = config.source?.id || "";
 	const args = ["-thread_queue_size", "1024"];
+	if (config.rtbufsize) args.push("-rtbufsize", config.rtbufsize);
 	args.push("-f", "gdigrab", "-framerate", String(config.captureFps), "-draw_mouse", config.drawMouse ? "1" : "0");
 	args.push("-i", sourceId.startsWith("window:") ? `title=${sourceName}` : "desktop");
 	return args;

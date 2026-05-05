@@ -10,6 +10,7 @@
  */
 const buildInputArgs = (config) => {
 	const args = ["-thread_queue_size", "1024"];
+	if (config.rtbufsize) args.push("-rtbufsize", config.rtbufsize);
 	args.push("-f", "x11grab", "-framerate", String(config.captureFps), "-draw_mouse", config.drawMouse ? "1" : "0", "-i", process.env.DISPLAY || ":0.0");
 	return args;
 };

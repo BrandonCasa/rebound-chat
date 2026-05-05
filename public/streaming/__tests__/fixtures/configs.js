@@ -12,6 +12,7 @@ const baseDefaults = {
 	source: { id: "screen:0", name: "Display 1" },
 	captureBackend: "gfxcapture",
 	captureFps: 60,
+	rtbufsize: "256M",
 	manualInputArgs: [],
 	audioInputArgs: [],
 	mapSourceAudio: false,

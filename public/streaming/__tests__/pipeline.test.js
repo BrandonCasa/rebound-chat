@@ -32,7 +32,11 @@ const winLegacy = { platform: "win32", supportsHwmapCudaFromD3D11: false };
 const macCaps = { platform: "darwin", supportsHwmapCudaFromD3D11: false };
 const linuxCaps = { platform: "linux", supportsHwmapCudaFromD3D11: false };
 
-const tail = () => [
+const tail = (fps = 60) => [
+	"-fps_mode",
+	"cfr",
+	"-r",
+	String(fps),
 	"-f",
 	"hls",
 	"-hls_time",
@@ -253,6 +257,8 @@ describe("pipeline.buildArgs — Windows + gdigrab + libx264", () => {
 			"-y",
 			"-thread_queue_size",
 			"1024",
+			"-rtbufsize",
+			"256M",
 			"-f",
 			"gdigrab",
 			"-framerate",
@@ -298,6 +304,8 @@ describe("pipeline.buildArgs — macOS Apple Silicon (videotoolbox)", () => {
 			"-y",
 			"-thread_queue_size",
 			"1024",
+			"-rtbufsize",
+			"256M",
 			"-f",
 			"avfoundation",
 			"-framerate",
@@ -335,10 +343,12 @@ describe("pipeline.buildArgs — Linux + libx264", () => {
 	it("uses x11grab input and CPU filters", () => {
 		const result = buildArgs(linuxX11Software(), linuxCaps);
 		assert.equal(result.usedFastPath, false);
-		assert.deepEqual(result.args.slice(0, 12), [
+		assert.deepEqual(result.args.slice(0, 14), [
 			"-y",
 			"-thread_queue_size",
 			"1024",
+			"-rtbufsize",
+			"256M",
 			"-f",
 			"x11grab",
 			"-framerate",

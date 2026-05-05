@@ -149,6 +149,7 @@ const defaultSettings = {
 	retainSegmentCount: "5",
 	ffmpegPath: window.ffmpegPath || "ffmpeg.exe",
 	captureFps: "30",
+	rtbufsize: "256M",
 	manualInputArgs: "",
 	audioInputArgs: "",
 	mapSourceAudio: false,
@@ -646,6 +647,7 @@ function DesktopLivePage() {
 								<Stack spacing={1.5}>
 									<SettingGrid>
 										<Field label="Capture FPS" name="captureFps" settings={settings} setSettings={setSettings} disabled={isBusy} />
+										<Field label="Real-time buffer (rtbufsize)" name="rtbufsize" settings={settings} setSettings={setSettings} disabled={isBusy} />
 										<ToggleField label="Draw mouse cursor" name="drawMouse" settings={settings} setSettings={setSettings} disabled={isBusy} />
 										<ToggleField label="Map audio from primary input" name="mapSourceAudio" settings={settings} setSettings={setSettings} disabled={isBusy} />
 									</SettingGrid>

@@ -21,6 +21,11 @@
  * @property {StreamSource | null} source
  * @property {string} captureBackend             - "gfxcapture" | "gdigrab"
  * @property {number} captureFps
+ * @property {string} rtbufsize
+ *   Real-time input buffer size passed to live capture inputs (gdigrab,
+ *   avfoundation, x11grab, dshow audio). Empty string disables the flag.
+ *   Accepts FFmpeg size syntax (e.g. "256M", "512M"). Helps avoid
+ *   "real-time buffer 100% full, frame dropped!" warnings.
  * @property {string[]} manualInputArgs
  * @property {string[]} audioInputArgs
  * @property {boolean} mapSourceAudio

@@ -157,6 +157,7 @@ class ElectronLiveStreamManager {
 			source: config.source || null,
 			captureBackend: normalizeChoice(config.captureBackend, profile.captureBackends, profile.defaults.captureBackend, "Capture backend"),
 			captureFps,
+			rtbufsize: String(config.rtbufsize ?? DEFAULT_SETTINGS.rtbufsize ?? "").trim(),
 			manualInputArgs,
 			audioInputArgs,
 			mapSourceAudio: Boolean(config.mapSourceAudio),
@@ -336,7 +337,11 @@ class ElectronLiveStreamManager {
 		const includeAudio = config.audioInputArgs.length || config.mapSourceAudio;
 		const codecs = codecString(config.videoCodec, config.audioCodec, includeAudio);
 		const codecsPart = codecs ? `,CODECS="${codecs}"` : "";
-		const body = ["#EXTM3U", "#EXT-X-VERSION:7", `#EXT-X-STREAM-INF:BANDWIDTH=${bandwidth}${codecsPart}${resolution}`, "video.m3u8", ""].join("\n");
+		const advertisedFps = config.fps || config.captureFps;
+		const frameRatePart = advertisedFps ? `,FRAME-RATE=${Number(advertisedFps).toFixed(3)}` : "";
+		const body = ["#EXTM3U", "#EXT-X-VERSION:7", `#EXT-X-STREAM-INF:BANDWIDTH=${bandwidth}${codecsPart}${resolution}${frameRatePart}`, "video.m3u8", ""].join(
+			"\n"
+		);
 
 		await writeFile(masterPath, body, "utf8");
 		this.log("Generated fallback master.m3u8");

@@ -40,6 +40,7 @@ const buildDefaultSettings = (options = {}) => {
 		source: null,
 		captureBackend: profile.defaults.captureBackend,
 		captureFps: 30,
+		rtbufsize: "256M",
 		manualInputArgs: "",
 		audioInputArgs: "",
 		mapSourceAudio: false,
