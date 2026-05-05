@@ -223,6 +223,21 @@ function LiveStreamPlayer({ stream, sx }) {
 			}
 		}, 2000);
 
+		// Try to auto play when stream switches or is loaded and playable.
+		const tryAutoPlay = async () => {
+			try {
+				await video.play();
+				setPlayerValue({ error: "" });
+			} catch (_err) {
+				// Autoplay failed (maybe due to user gesture policies).
+				// Do not set error so error UI is not shown unless "real" error.
+			}
+		};
+
+		if (stream?.isPlayable) {
+			tryAutoPlay();
+		}
+
 		return () => {
 			window.clearInterval(syncIntervalRef.current);
 			syncIntervalRef.current = null;
@@ -324,6 +339,7 @@ function LiveStreamPlayer({ stream, sx }) {
 			}}>
 			<video
 				ref={videoRef}
+				autoPlay
 				playsInline
 				style={{
 					width: "100%",

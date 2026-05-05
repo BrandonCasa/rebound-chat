@@ -16,11 +16,14 @@ import {
 	Divider,
 	FormControl,
 	FormControlLabel,
+	FormLabel,
 	Grid,
 	IconButton,
 	InputLabel,
 	MenuItem,
 	Paper,
+	Radio,
+	RadioGroup,
 	Select,
 	Stack,
 	Switch,
@@ -29,14 +32,18 @@ import {
 	Typography,
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 import { getLiveBase } from "../../helpers/live";
 import { setDialogOpened } from "../../slices/dialogSlice";
 import { scrollbarStyles } from "../scrollbarStyles";
 
-const VIDEO_CODEC_OPTIONS = [
+// Fallback dropdown lists, used when the platform profile catalog is not yet
+// loaded over IPC (or when running outside Electron). Once
+// `electronLive.getCapabilities()` resolves, the effective lists come from the
+// active platform profile in `public/streaming/platform/profiles.js`.
+const FALLBACK_VIDEO_CODEC_OPTIONS = [
 	"av1_nvenc",
 	"hevc_nvenc",
 	"h264_nvenc",
@@ -47,19 +54,17 @@ const VIDEO_CODEC_OPTIONS = [
 	"libsvtav1",
 	"libaom-av1",
 	"libvpx-vp9",
-	"libx265",
-	"libx264",
 	"hevc_videotoolbox",
 	"h264_videotoolbox",
 ];
-const AUDIO_CODEC_OPTIONS = ["aac", "libmp3lame"];
+const FALLBACK_AUDIO_CODEC_OPTIONS = ["aac"];
 const NVENC_PROFILE_OPTIONS = ["quality_live", "balanced_live", "fast_live", "low_latency", "ultra_low_latency", "custom"];
 const NVENC_PRESET_LADDER = ["p7", "p6", "p5", "p4", "p3", "p2", "p1"];
 const NVENC_TUNE_OPTIONS = ["hq", "ll", "ull", "lossless"];
 const NVENC_MULTIPASS_OPTIONS = ["disabled", "qres", "fullres"];
 const NVENC_RC_OPTIONS = ["vbr", "cbr", "constqp"];
 const NVENC_B_REF_MODE_OPTIONS = ["disabled", "each", "middle"];
-const ENCODER_PRESETS = {
+const FALLBACK_ENCODER_PRESETS = {
 	nvenc: NVENC_PRESET_LADDER,
 	software: ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo"],
 	svt_av1: Array.from({ length: 13 }, (_value, index) => String(index)),
@@ -68,7 +73,7 @@ const ENCODER_PRESETS = {
 	qsv: ["veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"],
 	videotoolbox: ["realtime"],
 };
-const DEFAULT_ENCODER_PRESETS = {
+const FALLBACK_DEFAULT_ENCODER_PRESETS = {
 	nvenc: "p6",
 	software: "medium",
 	svt_av1: "8",
@@ -103,16 +108,16 @@ const NVENC_PROFILE_DEFAULTS = {
 		nvencLookahead: "8",
 	},
 	fast_live: {
-		encoderPreset: "p4",
+		encoderPreset: "p1",
 		nvencTune: "ll",
-		nvencMultipass: "qres",
+		nvencMultipass: "disabled",
 		nvencRc: "vbr",
-		nvencCq: "26",
-		nvencSpatialAq: true,
+		nvencCq: "30",
+		nvencSpatialAq: false,
 		nvencTemporalAq: false,
-		nvencBRefMode: "middle",
-		nvencBFrames: "1",
-		nvencLookahead: "4",
+		nvencBRefMode: "disabled",
+		nvencBFrames: "0",
+		nvencLookahead: "0",
 	},
 	low_latency: {
 		encoderPreset: "p3",
@@ -146,34 +151,38 @@ const defaultSettings = {
 	sessionLabel: "",
 	retainSegmentCount: "5",
 	ffmpegPath: window.ffmpegPath || "ffmpeg.exe",
-	captureFps: "30",
+	sourceMode: "screen",
+	filePath: "",
+	fileLoop: true,
+	captureFps: "120",
+	rtbufsize: "256M",
 	manualInputArgs: "",
 	audioInputArgs: "",
 	mapSourceAudio: false,
 	drawMouse: true,
-	videoCodec: "h264_nvenc",
+	videoCodec: "hevc_nvenc",
 	audioCodec: "aac",
 	outputWidth: "1920",
 	outputHeight: "1080",
 	videoBitrate: "8M",
 	audioBitrate: "160k",
-	fps: "30",
-	nvencProfile: "ultra_low_latency",
-	encoderPreset: "p5",
-	nvencTune: "hq",
-	nvencMultipass: "qres",
+	fps: "120",
+	nvencProfile: "fast_live",
+	encoderPreset: "p1",
+	nvencTune: "ll",
+	nvencMultipass: "disabled",
 	nvencRc: "vbr",
-	nvencCq: "25",
-	nvencSpatialAq: true,
-	nvencTemporalAq: true,
-	nvencBRefMode: "middle",
-	nvencBFrames: "2",
-	nvencLookahead: "8",
+	nvencCq: "30",
+	nvencSpatialAq: false,
+	nvencTemporalAq: false,
+	nvencBRefMode: "disabled",
+	nvencBFrames: "0",
+	nvencLookahead: "0",
 	gopSize: "60",
 	hlsTime: "2",
 	hlsListSize: "10",
 	convertStreamToSdr: false,
-	openSharePage: true,
+	openSharePage: false,
 };
 
 const codecFamily = (codec) => {
@@ -209,7 +218,11 @@ const Field = ({ label, name, settings, setSettings, type = "text", disabled = f
 		onChange={(event) => {
 			const value = event.target.value;
 			const markCustom = name !== "nvencProfile" && (name.startsWith("nvenc") || name === "encoderPreset");
-			setSettings((current) => ({ ...current, [name]: value, nvencProfile: markCustom ? "custom" : current.nvencProfile }));
+			setSettings((current) => ({
+				...current,
+				[name]: value,
+				...(markCustom ? { nvencProfile: "custom" } : {}),
+			}));
 		}}
 	/>
 );
@@ -223,7 +236,11 @@ const SelectField = ({ label, name, values, settings, setSettings, disabled = fa
 			onChange={(event) => {
 				const value = event.target.value;
 				const markCustom = name !== "nvencProfile" && (name.startsWith("nvenc") || name === "encoderPreset");
-				setSettings((current) => ({ ...current, [name]: value, nvencProfile: markCustom ? "custom" : current.nvencProfile }));
+				setSettings((current) => ({
+					...current,
+					[name]: value,
+					...(markCustom ? { nvencProfile: "custom" } : {}),
+				}));
 			}}>
 			{values.map((value) => (
 				<MenuItem key={value} value={value}>
@@ -243,7 +260,11 @@ const ToggleField = ({ label, name, settings, setSettings, disabled = false }) =
 				onChange={(event) => {
 					const checked = event.target.checked;
 					const markCustom = name !== "nvencProfile" && name.startsWith("nvenc");
-					setSettings((current) => ({ ...current, [name]: checked, nvencProfile: markCustom ? "custom" : current.nvencProfile }));
+					setSettings((current) => ({
+						...current,
+						[name]: checked,
+						...(markCustom ? { nvencProfile: "custom" } : {}),
+					}));
 				}}
 			/>
 		}
@@ -261,8 +282,9 @@ const SettingGrid = ({ children }) => (
 	</Grid>
 );
 
-const SourceTile = ({ source, selected, onSelect }) => {
+const SourceTile = ({ source, thumbnail, selected, onSelect }) => {
 	const theme = useTheme();
+	const subtitle = source.kind === "screen" || source.id?.startsWith("screen:") ? "Screen" : source.appName ? `Window · ${source.appName}` : "Window";
 
 	return (
 		<Paper
@@ -284,23 +306,23 @@ const SourceTile = ({ source, selected, onSelect }) => {
 				bgcolor: selected ? alpha(theme.palette.primary.main, 0.12) : "background.paper",
 			}}>
 			<Box
-				component="img"
-				src={source.thumbnail}
-				alt=""
 				sx={{
-					display: "block",
+					display: "flex",
+					alignItems: "center",
+					justifyContent: "center",
 					width: "100%",
 					aspectRatio: "16 / 9",
-					objectFit: "cover",
 					bgcolor: "background.default",
-				}}
-			/>
+					overflow: "hidden",
+				}}>
+				{thumbnail ? <Box component="img" src={thumbnail} alt="" sx={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <CircularProgress size={20} />}
+			</Box>
 			<Stack spacing={0.5} sx={{ p: 1 }}>
 				<Typography variant="body2" noWrap>
 					{source.name}
 				</Typography>
 				<Typography variant="caption" color="text.secondary" noWrap>
-					{source.id.startsWith("screen:") ? "Screen" : "Window"}
+					{subtitle}
 				</Typography>
 			</Stack>
 		</Paper>
@@ -318,27 +340,55 @@ function DesktopLivePage() {
 	const [logs, setLogs] = useState([]);
 	const [streamState, setStreamState] = useState({ status: "idle", sessionInfo: null });
 	const [sessionInfo, setSessionInfo] = useState(null);
+	const [capabilities, setCapabilities] = useState(null);
+	const [detectedCapabilities, setDetectedCapabilities] = useState(null);
+	const [thumbnails, setThumbnails] = useState({});
+	const [advancedMode, setAdvancedMode] = useState(false);
+	const saveSettingsTimeoutRef = useRef(null);
+	const hydratedSettingsRef = useRef(false);
 	const electronLive = window.electronAPI?.liveStream;
-	const isElectron = Boolean(electronLive);
+	const electronSources = window.electronAPI?.sources;
+	const isElectron = Boolean(electronLive && electronSources);
+	const videoCodecOptions = capabilities?.videoCodecs?.length ? capabilities.videoCodecs : FALLBACK_VIDEO_CODEC_OPTIONS;
+	const audioCodecOptions = capabilities?.audioCodecs?.length ? capabilities.audioCodecs : FALLBACK_AUDIO_CODEC_OPTIONS;
+	const encoderPresetCatalog =
+		capabilities?.encoderPresets && Object.keys(capabilities.encoderPresets).length ? capabilities.encoderPresets : FALLBACK_ENCODER_PRESETS;
+	const defaultEncoderPresetCatalog =
+		capabilities?.defaultEncoderPresets && Object.keys(capabilities.defaultEncoderPresets).length
+			? capabilities.defaultEncoderPresets
+			: FALLBACK_DEFAULT_ENCODER_PRESETS;
 	const family = codecFamily(settings.videoCodec);
-	const encoderPresetOptions = ENCODER_PRESETS[family] || ENCODER_PRESETS.nvenc;
+	const encoderPresetOptions = encoderPresetCatalog[family] || Object.values(encoderPresetCatalog)[0] || [];
 	const isBusy = ["starting", "streaming", "stopping"].includes(streamState.status);
 	const selectedSource = useMemo(() => sources.find((source) => source.id === selectedSourceId) || null, [selectedSourceId, sources]);
 
 	const loadSources = useCallback(async () => {
-		if (!electronLive) return;
+		if (!electronSources) return;
 		setLoadingSources(true);
 		setError("");
 		try {
-			const nextSources = await electronLive.getSources({ types: ["screen", "window"], thumbnailWidth: 320, thumbnailHeight: 180 });
+			// Ask for high-resolution thumbnails up front. desktopCapturer treats
+			// this as a max bound, so non-16:9 windows still come back at their
+			// native aspect ratio.
+			const nextSources = await electronSources.list({
+				types: ["screen", "window"],
+				thumbnailSize: { width: 1280, height: 720 },
+			});
 			setSources(nextSources);
+			setThumbnails(() => {
+				const next = {};
+				for (const source of nextSources) {
+					if (source?.id && source.thumbnail) next[source.id] = source.thumbnail;
+				}
+				return next;
+			});
 			setSelectedSourceId((current) => (current && nextSources.some((source) => source.id === current) ? current : nextSources[0]?.id || ""));
 		} catch (err) {
 			setError(err.message || "Unable to load desktop sources.");
 		} finally {
 			setLoadingSources(false);
 		}
-	}, [electronLive]);
+	}, [electronSources]);
 
 	useEffect(() => {
 		if (!electronLive) return undefined;
@@ -370,17 +420,101 @@ function DesktopLivePage() {
 	}, [loadSources]);
 
 	useEffect(() => {
+		if (!electronLive?.getCapabilities) return undefined;
+		let cancelled = false;
+		electronLive
+			.getCapabilities()
+			.then((caps) => {
+				if (!cancelled) setCapabilities(caps);
+			})
+			.catch(() => {
+				// Older preload or no capabilities support; the fallback lists keep the UI usable.
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [electronLive]);
+
+	useEffect(() => {
+		if (!electronLive?.loadSettings) return undefined;
+		let cancelled = false;
+		electronLive
+			.loadSettings()
+			.then((saved) => {
+				if (!cancelled && saved && typeof saved === "object") {
+					setSettings((current) => ({
+						...current,
+						...saved,
+					}));
+					hydratedSettingsRef.current = true;
+				}
+			})
+			.catch(() => {
+				hydratedSettingsRef.current = true;
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [electronLive]);
+
+	useEffect(() => {
+		if (!electronLive?.getDetectedCapabilities) return undefined;
+		let cancelled = false;
+		electronLive
+			.getDetectedCapabilities()
+			.then((caps) => {
+				if (!cancelled) setDetectedCapabilities(caps);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [electronLive]);
+
+	useEffect(() => {
+		if (!electronLive?.saveSettings) return undefined;
+		if (!hydratedSettingsRef.current) return undefined;
+		if (saveSettingsTimeoutRef.current) {
+			clearTimeout(saveSettingsTimeoutRef.current);
+		}
+		saveSettingsTimeoutRef.current = setTimeout(() => {
+			electronLive.saveSettings(settings).catch(() => {});
+		}, 1000);
+		return () => {
+			if (saveSettingsTimeoutRef.current) {
+				clearTimeout(saveSettingsTimeoutRef.current);
+			}
+		};
+	}, [electronLive, settings]);
+
+	// Snap settings into bounds whenever the host's capability catalog changes.
+	useEffect(() => {
+		if (!capabilities) return;
+		setSettings((current) => {
+			const patch = {};
+			if (capabilities.videoCodecs?.length && !capabilities.videoCodecs.includes(current.videoCodec)) {
+				patch.videoCodec = capabilities.defaults?.videoCodec || capabilities.videoCodecs[0];
+			}
+			if (capabilities.audioCodecs?.length && !capabilities.audioCodecs.includes(current.audioCodec)) {
+				patch.audioCodec = capabilities.defaults?.audioCodec || capabilities.audioCodecs[0];
+			}
+			return Object.keys(patch).length ? { ...current, ...patch } : current;
+		});
+	}, [capabilities]);
+
+	useEffect(() => {
 		const profile = NVENC_PROFILE_DEFAULTS[settings.nvencProfile];
 		if (!profile) return;
 		setSettings((current) => ({ ...current, ...profile }));
 	}, [settings.nvencProfile]);
 
 	useEffect(() => {
-		const options = ENCODER_PRESETS[family] || ENCODER_PRESETS.nvenc;
+		const options = encoderPresetCatalog[family] || Object.values(encoderPresetCatalog)[0] || [];
+		if (!options.length) return;
 		if (!options.includes(settings.encoderPreset)) {
-			setSettings((current) => ({ ...current, encoderPreset: DEFAULT_ENCODER_PRESETS[family] || options[0] }));
+			setSettings((current) => ({ ...current, encoderPreset: defaultEncoderPresetCatalog[family] || options[0] }));
 		}
-	}, [family, settings.encoderPreset]);
+	}, [family, settings.encoderPreset, encoderPresetCatalog, defaultEncoderPresetCatalog]);
 
 	const handleLogin = () => {
 		dispatch(
@@ -399,12 +533,32 @@ function DesktopLivePage() {
 		try {
 			const state = await electronLive.start({
 				...settings,
-				source: selectedSource,
+				source: settings.sourceMode === "file" ? null : selectedSource,
 				authToken: auth.authToken || "",
 			});
 			setStreamState(state);
 		} catch (err) {
 			setError(err.message || "Unable to start stream.");
+		}
+	};
+
+	const handleResetSettings = async () => {
+		if (!electronLive?.resetSettings) return;
+		try {
+			const next = await electronLive.resetSettings();
+			setSettings((current) => ({ ...current, ...next }));
+		} catch (_err) {
+			// Keep current settings if reset fails.
+		}
+	};
+
+	const handleReprobe = async () => {
+		if (!electronLive?.reprobeCapabilities) return;
+		try {
+			const next = await electronLive.reprobeCapabilities();
+			setDetectedCapabilities(next);
+		} catch (_err) {
+			// Keep current capabilities if reprobe fails.
 		}
 	};
 
@@ -446,7 +600,14 @@ function DesktopLivePage() {
 							color={streamState.status === "streaming" ? "success" : streamState.status === "error" ? "error" : "default"}
 							label={streamState.status || "idle"}
 						/>
+						{detectedCapabilities?.gpu?.model ? <Chip size="small" variant="outlined" label={detectedCapabilities.gpu.model} /> : null}
 						{auth.loggedIn ? <Chip size="small" color="primary" label={auth.displayName || auth.username || "Account"} /> : null}
+						<Button size="small" variant="text" onClick={handleReprobe} disabled={isBusy}>
+							Re-probe
+						</Button>
+						<Button size="small" variant="text" onClick={handleResetSettings} disabled={isBusy}>
+							Reset
+						</Button>
 						{sessionInfo?.shareUrl ? (
 							<Button size="small" variant="outlined" startIcon={<LaunchRounded />} onClick={() => electronLive.openUrl(sessionInfo.shareUrl)}>
 								Share
@@ -485,27 +646,72 @@ function DesktopLivePage() {
 									<Stack spacing={0.25}>
 										<Typography variant="h6">Source</Typography>
 										<Typography variant="body2" color="text.secondary">
-											{selectedSource ? selectedSource.name : "No source selected"}
+											{settings.sourceMode === "file" ? settings.filePath || "No file selected" : selectedSource ? selectedSource.name : "No source selected"}
 										</Typography>
 									</Stack>
-									<Tooltip title="Refresh sources">
-										<span>
-											<IconButton onClick={loadSources} disabled={loadingSources || isBusy} aria-label="Refresh desktop sources">
-												{loadingSources ? <CircularProgress size={20} /> : <RefreshRounded />}
-											</IconButton>
-										</span>
-									</Tooltip>
+									{settings.sourceMode === "file" ? null : (
+										<Tooltip title="Refresh sources">
+											<span>
+												<IconButton onClick={loadSources} disabled={loadingSources || isBusy} aria-label="Refresh desktop sources">
+													{loadingSources ? <CircularProgress size={20} /> : <RefreshRounded />}
+												</IconButton>
+											</span>
+										</Tooltip>
+									)}
 								</Stack>
-								<Box
-									sx={{
-										display: "grid",
-										gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(3, minmax(0, 1fr))" },
-										gap: 1.5,
-									}}>
-									{sources.map((source) => (
-										<SourceTile key={source.key || source.id} source={source} selected={source.id === selectedSourceId} onSelect={setSelectedSourceId} />
-									))}
-								</Box>
+								<FormControl component="fieldset" disabled={isBusy}>
+									<FormLabel component="legend">Mode</FormLabel>
+									<RadioGroup
+										row
+										value={settings.sourceMode || "screen"}
+										onChange={(event) => {
+											const mode = event.target.value;
+											setSettings((current) => ({
+												...current,
+												sourceMode: mode,
+												captureBackend: mode === "file" ? "file" : current.captureBackend === "file" ? "gdigrab" : current.captureBackend,
+											}));
+										}}>
+										<FormControlLabel value="screen" control={<Radio />} label="Screen / Window" />
+										<FormControlLabel value="file" control={<Radio />} label="Video file" />
+									</RadioGroup>
+								</FormControl>
+								{settings.sourceMode === "file" ? (
+									<Stack spacing={1}>
+										<TextField
+											label="Video file path"
+											size="small"
+											fullWidth
+											value={settings.filePath || ""}
+											disabled={isBusy}
+											onChange={(event) => {
+												const next = event.target.value;
+												setSettings((current) => ({
+													...current,
+													filePath: next,
+												}));
+											}}
+										/>
+										<ToggleField label="Loop forever" name="fileLoop" settings={settings} setSettings={setSettings} disabled={isBusy} />
+									</Stack>
+								) : (
+									<Box
+										sx={{
+											display: "grid",
+											gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(3, minmax(0, 1fr))" },
+											gap: 1.5,
+										}}>
+										{sources.map((source) => (
+											<SourceTile
+												key={source.id}
+												source={source}
+												thumbnail={thumbnails[source.id]}
+												selected={source.id === selectedSourceId}
+												onSelect={setSelectedSourceId}
+											/>
+										))}
+									</Box>
+								)}
 							</Stack>
 						</Paper>
 
@@ -531,8 +737,27 @@ function DesktopLivePage() {
 							<AccordionDetails>
 								<Stack spacing={1.5}>
 									<SettingGrid>
-										<Field label="Capture FPS" name="captureFps" settings={settings} setSettings={setSettings} disabled={isBusy} />
-										<ToggleField label="Draw mouse cursor" name="drawMouse" settings={settings} setSettings={setSettings} disabled={isBusy} />
+										<Field
+											label="Capture FPS"
+											name="captureFps"
+											settings={settings}
+											setSettings={setSettings}
+											disabled={isBusy || settings.sourceMode === "file"}
+										/>
+										<Field
+											label="Real-time buffer (rtbufsize)"
+											name="rtbufsize"
+											settings={settings}
+											setSettings={setSettings}
+											disabled={isBusy || settings.sourceMode === "file"}
+										/>
+										<ToggleField
+											label="Draw mouse cursor"
+											name="drawMouse"
+											settings={settings}
+											setSettings={setSettings}
+											disabled={isBusy || settings.sourceMode === "file"}
+										/>
 										<ToggleField label="Map audio from primary input" name="mapSourceAudio" settings={settings} setSettings={setSettings} disabled={isBusy} />
 									</SettingGrid>
 									<Field label="Manual FFmpeg input args" name="manualInputArgs" settings={settings} setSettings={setSettings} disabled={isBusy} multiline />
@@ -546,11 +771,17 @@ function DesktopLivePage() {
 								<Typography variant="subtitle1">Output</Typography>
 							</AccordionSummary>
 							<AccordionDetails>
+								<Stack direction="row" justifyContent="flex-end" sx={{ mb: 1 }}>
+									<FormControlLabel
+										control={<Switch checked={advancedMode} onChange={(event) => setAdvancedMode(event.target.checked)} disabled={isBusy} />}
+										label={advancedMode ? "Advanced" : "Auto-optimized"}
+									/>
+								</Stack>
 								<SettingGrid>
 									<SelectField
 										label="Video codec"
 										name="videoCodec"
-										values={VIDEO_CODEC_OPTIONS}
+										values={videoCodecOptions}
 										settings={settings}
 										setSettings={setSettings}
 										disabled={isBusy}
@@ -558,7 +789,7 @@ function DesktopLivePage() {
 									<SelectField
 										label="Audio codec"
 										name="audioCodec"
-										values={AUDIO_CODEC_OPTIONS}
+										values={audioCodecOptions}
 										settings={settings}
 										setSettings={setSettings}
 										disabled={isBusy}
@@ -574,7 +805,7 @@ function DesktopLivePage() {
 							</AccordionDetails>
 						</Accordion>
 
-						<Accordion disableGutters>
+						<Accordion disableGutters disabled={!advancedMode}>
 							<AccordionSummary expandIcon={<ExpandMoreRounded />}>
 								<Typography variant="subtitle1">Encoder</Typography>
 							</AccordionSummary>
@@ -677,7 +908,11 @@ function DesktopLivePage() {
 									variant="contained"
 									startIcon={streamState.status === "starting" ? <CircularProgress color="inherit" size={18} /> : <PlayArrowRounded />}
 									onClick={handleStart}
-									disabled={isBusy || (!selectedSource && !settings.manualInputArgs) || (!auth.authToken && !settings.liveCreateToken)}>
+									disabled={
+										isBusy ||
+										(settings.sourceMode === "file" ? !settings.filePath && !settings.manualInputArgs : !selectedSource && !settings.manualInputArgs) ||
+										(!auth.authToken && !settings.liveCreateToken)
+									}>
 									Start
 								</Button>
 								<Button variant="outlined" color="error" startIcon={<StopRounded />} onClick={handleStop} disabled={!isBusy}>

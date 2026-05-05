@@ -4,21 +4,26 @@ import { fileURLToPath } from "url";
 import { dirname, extname, join } from "path";
 import { existsSync } from "fs";
 import { readFile } from "fs/promises";
-import { app, BrowserWindow, desktopCapturer, ipcMain, protocol, shell } from "electron";
+import { app, BrowserWindow, desktopCapturer, ipcMain, protocol, screen, shell } from "electron";
 import log from "electron-log";
 import updater from "electron-updater";
 const { autoUpdater } = updater;
 import isDev from "electron-is-dev";
 import { registerLiveStreamIpc } from "./electron-live-stream.js";
+import { SourceService, registerSourceServiceIpc } from "./sources/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const ffmpegRoot = isDev ? join(__dirname, "..", "native", "ffmpeg") : join(process.resourcesPath, "ffmpeg");
+const bundledFfmpegRoot = isDev ? join(__dirname, "..", "native", "ffmpeg") : join(process.resourcesPath, "ffmpeg");
+
+const userFfmpegRoot = join(app.getPath("userData"), "ffmpeg");
 
 const resolveFfBinary = (name) => {
 	const filename = process.platform === "win32" ? `${name}.exe` : name;
-	return join(ffmpegRoot, "bin", filename);
+	const userOverride = join(userFfmpegRoot, "bin", filename);
+	if (existsSync(userOverride)) return userOverride;
+	return join(bundledFfmpegRoot, "bin", filename);
 };
 
 const ffmpegBinaryPath = resolveFfBinary("ffmpeg");
@@ -121,11 +126,28 @@ function allowUpdateAction(actionName) {
 	return true;
 }
 
+const broadcastToRenderers = (channel, payload) => {
+	for (const win of BrowserWindow.getAllWindows()) {
+		if (!win.isDestroyed()) {
+			win.webContents.send(channel, payload);
+		}
+	}
+};
+
+const sourceService = new SourceService({
+	desktopCapturer,
+	onLog: (message) => log.info(`[sources] ${message}`),
+	onError: (err, sourceId) => log.error(`[sources] ${sourceId || ""} ${err?.message || err}`),
+});
+
+let sourceIpcDispose = null;
+
 registerLiveStreamIpc({
 	ipcMain,
 	app,
-	desktopCapturer,
 	shell,
+	ffmpegPath: ffmpegBinaryPath,
+	getDisplays: () => screen.getAllDisplays(),
 	sendToRenderer: sendStatus,
 	logger: log,
 });
@@ -343,14 +365,27 @@ autoUpdater.on("update-downloaded", (info) => {
 
 app.whenReady().then(async () => {
 	if (!existsSync(ffmpegBinaryPath)) {
-		log.warn(`Bundled ffmpeg not found at ${ffmpegBinaryPath}. Run 'pnpm run prepare:ffmpeg' to fetch it.`);
+		log.warn(`ffmpeg binary not found at ${ffmpegBinaryPath}. Place a custom binary at ${join(userFfmpegRoot, "bin")} or run 'pnpm run prepare:ffmpeg'.`);
 	}
 	if (!existsSync(ffprobeBinaryPath)) {
-		log.warn(`Bundled ffprobe not found at ${ffprobeBinaryPath}. Run 'pnpm run prepare:ffmpeg' to fetch it.`);
+		log.warn(`ffprobe binary not found at ${ffprobeBinaryPath}. Place a custom binary at ${join(userFfmpegRoot, "bin")} or run 'pnpm run prepare:ffmpeg'.`);
 	}
 
-	ipcMain.handle("system:get-ffmpeg-path", () => ffmpegBinaryPath);
-	ipcMain.handle("system:get-ffprobe-path", () => ffprobeBinaryPath);
+	try {
+		await sourceService.start();
+		const registration = registerSourceServiceIpc({
+			ipcMain,
+			service: sourceService,
+			broadcast: broadcastToRenderers,
+		});
+		sourceIpcDispose = registration.dispose;
+	} catch (err) {
+		log.error("Failed to start SourceService", err);
+	}
+
+	ipcMain.handle("system:get-ffmpeg-path", () => resolveFfBinary("ffmpeg"));
+	ipcMain.handle("system:get-ffprobe-path", () => resolveFfBinary("ffprobe"));
+	ipcMain.handle("system:get-ffmpeg-user-dir", () => userFfmpegRoot);
 
 	const mimeByExt = {
 		".js": "application/javascript",
@@ -397,6 +432,28 @@ app.whenReady().then(async () => {
 	});
 
 	await createWindow();
+});
+
+app.on("before-quit", () => {
+	if (sourceIpcDispose) {
+		try {
+			sourceIpcDispose();
+		} catch (err) {
+			log.warn("Failed to dispose source IPC handlers", err);
+		}
+		sourceIpcDispose = null;
+	}
+});
+
+app.on("will-quit", async (event) => {
+	if (!sourceService.started || sourceService.stopped) return;
+	event.preventDefault();
+	try {
+		await sourceService.stop();
+	} catch (err) {
+		log.warn("Failed to stop SourceService cleanly", err);
+	}
+	app.quit();
 });
 
 app.on("window-all-closed", () => {
