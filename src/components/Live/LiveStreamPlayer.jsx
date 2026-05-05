@@ -52,6 +52,8 @@ function LiveStreamPlayer({ stream, sx }) {
 	const hlsRef = useRef(null);
 	const syncIntervalRef = useRef(null);
 	const hasInitialSyncedRef = useRef(false);
+	const userPausedRef = useRef(false);
+	const resumeTimerRef = useRef(null);
 	const [playerState, setPlayerState] = useState({
 		isPlaying: false,
 		isMuted: false,
@@ -142,6 +144,7 @@ function LiveStreamPlayer({ stream, sx }) {
 		}
 
 		hasInitialSyncedRef.current = false;
+		userPausedRef.current = false;
 
 		setPlayerValue({
 			isPlaying: false,
@@ -157,15 +160,57 @@ function LiveStreamPlayer({ stream, sx }) {
 			syncToLive({ force: true });
 		};
 
+		const clearResumeTimer = () => {
+			if (resumeTimerRef.current) {
+				window.clearTimeout(resumeTimerRef.current);
+				resumeTimerRef.current = null;
+			}
+		};
+
+		// HLS occasionally pauses playback when the playlist briefly runs out of
+		// fresh segments (the underlying media element treats the tail of the
+		// buffered range as "ended"). Whenever a pause was not initiated by the
+		// viewer, jump back to the live edge and retry play() with a short
+		// back-off. The userPausedRef guard inside the timeout makes the loop
+		// self-canceling if the user clicks pause while we're waiting.
+		const scheduleResume = (delayMs = 250) => {
+			clearResumeTimer();
+			resumeTimerRef.current = window.setTimeout(async () => {
+				resumeTimerRef.current = null;
+				const target = videoRef.current;
+				if (!target || userPausedRef.current || !target.paused) return;
+
+				if (getSeekableWindow(target)) {
+					syncToLive({ force: true });
+				}
+
+				try {
+					await target.play();
+					setPlayerValue({ error: "" });
+				} catch (_err) {
+					scheduleResume(1000);
+				}
+			}, delayMs);
+		};
+
 		const handleLoadedMetadata = syncOnceWhenSeekable;
 		const handleCanPlay = syncOnceWhenSeekable;
 		const handlePlay = () => {
 			setPlayerValue({ isPlaying: true });
 			syncOnceWhenSeekable();
+			clearResumeTimer();
 		};
 		const handlePause = () => {
 			video.playbackRate = 1;
 			setPlayerValue({ isPlaying: false });
+			if (!userPausedRef.current) {
+				scheduleResume(250);
+			}
+		};
+		const handleEnded = () => {
+			if (!userPausedRef.current) {
+				scheduleResume(250);
+			}
 		};
 		const handleWaiting = () => {
 			video.playbackRate = 1;
@@ -183,6 +228,7 @@ function LiveStreamPlayer({ stream, sx }) {
 		video.addEventListener("canplay", handleCanPlay);
 		video.addEventListener("play", handlePlay);
 		video.addEventListener("pause", handlePause);
+		video.addEventListener("ended", handleEnded);
 		video.addEventListener("waiting", handleWaiting);
 		video.addEventListener("playing", handlePlaying);
 		video.addEventListener("volumechange", handleVolumeChange);
@@ -254,6 +300,8 @@ function LiveStreamPlayer({ stream, sx }) {
 		return () => {
 			window.clearInterval(syncIntervalRef.current);
 			syncIntervalRef.current = null;
+			clearResumeTimer();
+			userPausedRef.current = true;
 
 			if (hlsRef.current) {
 				hlsRef.current.destroy();
@@ -269,6 +317,7 @@ function LiveStreamPlayer({ stream, sx }) {
 			video.removeEventListener("canplay", handleCanPlay);
 			video.removeEventListener("play", handlePlay);
 			video.removeEventListener("pause", handlePause);
+			video.removeEventListener("ended", handleEnded);
 			video.removeEventListener("waiting", handleWaiting);
 			video.removeEventListener("playing", handlePlaying);
 			video.removeEventListener("volumechange", handleVolumeChange);
@@ -280,6 +329,7 @@ function LiveStreamPlayer({ stream, sx }) {
 		if (!video || !stream?.isPlayable) return;
 
 		if (video.paused) {
+			userPausedRef.current = false;
 			try {
 				if (!hasInitialSyncedRef.current) {
 					hasInitialSyncedRef.current = true;
@@ -293,6 +343,7 @@ function LiveStreamPlayer({ stream, sx }) {
 			return;
 		}
 
+		userPausedRef.current = true;
 		video.pause();
 	};
 
