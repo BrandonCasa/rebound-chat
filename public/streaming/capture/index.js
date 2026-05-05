@@ -12,7 +12,6 @@
 
 import * as gdigrab from "./gdigrab.js";
 import * as gfxcapture from "./gfxcapture.js";
-import * as gfxcaptureCuda from "./gfxcaptureCuda.js";
 import * as avfoundation from "./avfoundation.js";
 import * as x11grab from "./x11grab.js";
 
@@ -64,4 +63,4 @@ const selectInputBackend = (config, platform) => {
 	return inputBackends[kind];
 };
 
-export { selectBackendKind, usesGfxCapture, selectInputBackend, gfxcapture, gfxcaptureCuda };
+export { selectBackendKind, usesGfxCapture, selectInputBackend, gfxcapture };

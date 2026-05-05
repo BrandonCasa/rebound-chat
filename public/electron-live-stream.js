@@ -18,11 +18,10 @@ import { splitCommandLine } from "./streaming/strings.js";
 import { normalizeAudioCodec } from "./streaming/audio.js";
 import { DEFAULT_SETTINGS } from "./streaming/defaults.js";
 import { availableEncoderPresets, currentPlatformProfile, defaultEncoderPresets } from "./streaming/platform/index.js";
-import { buildArgs as buildPipelineArgs, defaultCapabilities, fallbackOnFailure } from "./streaming/pipeline.js";
+import { buildArgs as buildPipelineArgs, defaultCapabilities } from "./streaming/pipeline.js";
 
 const UPLOAD_POLL_INTERVAL_MS = 750;
 const SEGMENT_EXTENSIONS = new Set([".aac", ".m4a", ".m4s", ".mp3", ".mp4", ".ts"]);
-const FAST_PATH_FAILURE_WINDOW_MS = 3000;
 
 const extensionForName = (filename) => {
 	const index = filename.lastIndexOf(".");
@@ -239,22 +238,18 @@ class ElectronLiveStreamManager {
 	}
 
 	buildFfmpegCommand(config, capabilities = this.capabilities) {
-		const { command, args, usedFastPath } = buildPipelineArgs(config, capabilities);
-		return { command, args, usedFastPath, full: [command, ...args] };
+		const { command, args } = buildPipelineArgs(config, capabilities);
+		return { command, args, full: [command, ...args] };
 	}
 
 	spawnFfmpeg(config) {
-		const { command, args, usedFastPath } = this.buildFfmpegCommand(config);
+		const { command, args } = this.buildFfmpegCommand(config);
 		this.log(`Running: ${[command, ...args].join(" ")}`);
-		if (usedFastPath) {
-			this.log("Using NVENC GPU-resident fast path (gfxcapture → hwmap → cuda → nvenc).");
-		}
 		const child = spawn(command, args, {
 			cwd: config.remoteDir,
 			stdio: ["ignore", "pipe", "pipe"],
 			windowsHide: true,
 		});
-		const startedAt = Date.now();
 
 		const handleData = (data) => {
 			this.logBuffer += data.toString();
@@ -271,7 +266,7 @@ class ElectronLiveStreamManager {
 		child.once("error", (err) => {
 			this.log(`FFmpeg failed to start: ${err.message}`);
 			if (this.ffmpegProcess === child && !this.stopping) {
-				void this.handleFfmpegExit({ child, code: null, signal: null, error: err.message, startedAt, usedFastPath });
+				void this.handleFfmpegExit({ child, code: null, signal: null, error: err.message });
 			}
 		});
 		child.once("exit", (code, signal) => {
@@ -280,33 +275,18 @@ class ElectronLiveStreamManager {
 				this.logBuffer = "";
 			}
 			this.log(`FFmpeg exited with code=${code ?? "null"} signal=${signal ?? "none"}`);
-			void this.handleFfmpegExit({ child, code, signal, error: null, startedAt, usedFastPath });
+			void this.handleFfmpegExit({ child, code, signal, error: null });
 		});
 
 		return child;
 	}
 
-	async handleFfmpegExit({ child, code, signal, error, startedAt, usedFastPath }) {
+	async handleFfmpegExit({ child, code, signal, error }) {
 		if (this.ffmpegProcess === child) {
 			this.ffmpegProcess = null;
 		}
 
 		if (this.stopping || this.status === "idle") return;
-
-		const elapsed = Date.now() - startedAt;
-		const exitedQuickly = elapsed < FAST_PATH_FAILURE_WINDOW_MS;
-		const failed = error || (code !== null && code !== 0);
-
-		if (failed && exitedQuickly && usedFastPath && this.capabilities.supportsHwmapCudaFromD3D11) {
-			this.log("NVENC fast path exited within 3s; falling back to legacy CPU chain and retrying once.");
-			this.capabilities = fallbackOnFailure(this.capabilities);
-			try {
-				this.ffmpegProcess = this.spawnFfmpeg(this.activeConfig);
-				return;
-			} catch (retryErr) {
-				this.log(`Fallback retry failed to start: ${retryErr.message}`);
-			}
-		}
 
 		const reason = error || `FFmpeg exited with code ${code ?? signal ?? "unknown"}.`;
 		void this.stop({ error: reason });

@@ -45,16 +45,26 @@ const buildArgs = (config) => {
 	}
 
 	if (config.hdrMode === "passthrough") {
-		// Signal HDR10 colour space so the container and players treat this stream
-		// as HDR. gfxcapture captures at full P010 precision; NVENC encodes
-		// the 10-bit frames as-is. HEVC or AV1 is strongly recommended for HDR
-		// passthrough; H.264 does not carry HDR10 metadata in a standardised way.
+		// Signal HDR10 colour space so the container and players treat
+		// this stream as HDR. gfxcapture captures at full 10-bit
+		// precision (X2BGR10 D3D11 hwframe); NVENC accepts that frame
+		// directly via NV_ENC_INPUT_RESOURCE_TYPE_DIRECTX and the HEVC
+		// wrapper auto-forces MAIN10 when input is 10-bit (see the
+		// IS_10BIT(...) check in libavcodec/nvenc_hevc.c). HEVC or AV1
+		// is strongly recommended for HDR passthrough; H.264 does not
+		// carry HDR10 metadata in a standardised way.
 		args.push("-color_primaries", "bt2020");
 		args.push("-color_trc", "smpte2084");
 		args.push("-colorspace", "bt2020nc");
+		// Pin the profile explicitly for HEVC. NVENC would auto-set it
+		// anyway, but this surfaces a clear error early if the upstream
+		// chain ever degrades to 8-bit by accident.
+		if (isHevcCodec(videoCodec)) args.push("-profile:v", "main10");
 	} else if (config.hdrMode === "convert") {
-		// tonemap_cuda outputs BT.709 NV12. Declare it explicitly so players
-		// don't accidentally try to interpret it as HDR.
+		// The HDR→SDR tonemap is performed in the filter graph by
+		// `zscale ... tonemap=hable ... format=yuv420p` (CPU). Declare
+		// the resulting BT.709 colour space explicitly so players don't
+		// try to interpret the SDR output as HDR.
 		args.push("-color_primaries", "bt709");
 		args.push("-color_trc", "bt709");
 		args.push("-colorspace", "bt709");

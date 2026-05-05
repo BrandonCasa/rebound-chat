@@ -51,11 +51,19 @@
  * @property {string} hlsTime
  * @property {number} hlsListSize
  * @property {"off" | "convert" | "passthrough"} hdrMode
- *   - "off"         — SDR source; current NV12 fast path, no HDR handling.
- *   - "convert"     — HDR source, tonemap to SDR via tonemap_cuda (GPU) or
- *                     zscale/tonemap (CPU fallback). Output is SDR BT.709.
- *   - "passthrough" — HDR source, encode natively in HDR10 (P010 capture +
- *                     BT.2020/PQ colour metadata). Recommended with HEVC or AV1.
+ *   - "off"         — SDR source. `gfxcapture` emits an 8-bit BGRA D3D11
+ *                     hwframe; NVENC consumes it directly.
+ *   - "convert"     — HDR source, tonemap to SDR via CPU `zscale`/`tonemap`.
+ *                     Requires `hwdownload` because there is no on-GPU
+ *                     tonemap path on stock FFmpeg + gfxcapture (the CUDA
+ *                     fast path advertised in earlier comments was
+ *                     fictional). Output is SDR BT.709.
+ *   - "passthrough" — HDR source, encode natively in HDR10. `gfxcapture`
+ *                     captures at X2BGR10 (10-bit) and the D3D11 hwframe
+ *                     is fed straight into NVENC. NVENC auto-selects the
+ *                     MAIN10 profile for 10-bit input. Recommended with
+ *                     HEVC or AV1; H.264 lacks standardised HDR10
+ *                     signalling.
  * @property {string} [vaapiDevice]
  *   Optional VA-API render-node path used when a `*_vaapi` encoder is
  *   selected. Defaults to `/dev/dri/renderD128` (the device referenced by
@@ -63,13 +71,14 @@
  */
 
 /**
- * Capabilities describe what the host environment can do. They are derived
- * from the OS, FFmpeg build, and runtime fallback state. The fast path is
- * only chosen when capabilities permit it.
+ * Capabilities describe what the host environment can do. They are
+ * derived from the OS and the FFmpeg build. Today the only knob that
+ * affects the pipeline is `platform`; the field is kept as an object so
+ * future host-specific switches can be threaded through without
+ * touching every signature.
  *
  * @typedef {Object} Capabilities
  * @property {NodeJS.Platform} platform
- * @property {boolean} supportsHwmapCudaFromD3D11
  */
 
 /**

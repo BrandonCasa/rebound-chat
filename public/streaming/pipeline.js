@@ -6,10 +6,6 @@
  *
  * `buildArgs(config, capabilities)` returns the argv ready to spawn.
  *
- * `fallbackOnFailure(capabilities)` returns a Capabilities object with the
- * NVENC fast path disabled, used by the caller if the first attempt exits
- * non-zero quickly.
- *
  * @typedef {import("./types.js").StreamConfig} StreamConfig
  * @typedef {import("./types.js").Capabilities} Capabilities
  */
@@ -26,18 +22,6 @@ import * as hls from "./output/hls.js";
  */
 const defaultCapabilities = (platform = process.platform) => ({
 	platform,
-	supportsHwmapCudaFromD3D11: platform === "win32",
-});
-
-/**
- * Disable the fast path. Used after a one-shot CUDA derivation failure.
- *
- * @param {Capabilities} capabilities
- * @returns {Capabilities}
- */
-const fallbackOnFailure = (capabilities) => ({
-	...capabilities,
-	supportsHwmapCudaFromD3D11: false,
 });
 
 /**
@@ -102,7 +86,7 @@ const buildAudioCodecArgs = (config) => {
  *
  * @param {StreamConfig} config
  * @param {Capabilities} [capabilities]
- * @returns {{ command: string, args: string[], usedFastPath: boolean }}
+ * @returns {{ command: string, args: string[] }}
  */
 const buildArgs = (config, capabilities = defaultCapabilities()) => {
 	const argv = ["-y"];
@@ -145,14 +129,10 @@ const buildArgs = (config, capabilities = defaultCapabilities()) => {
 
 	argv.push(...hls.buildArgs(config));
 
-	const onWindows = capabilities.platform === "win32";
-	const isNvencFastPath = onWindows && usingGfxCapture && capabilities.supportsHwmapCudaFromD3D11 && /_nvenc$/.test(config.videoCodec);
-
 	return {
 		command: config.ffmpegPath,
 		args: argv,
-		usedFastPath: isNvencFastPath,
 	};
 };
 
-export { buildArgs, defaultCapabilities, fallbackOnFailure };
+export { buildArgs, defaultCapabilities };

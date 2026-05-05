@@ -11,7 +11,7 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 
-import { buildArgs, fallbackOnFailure } from "../pipeline.js";
+import { buildArgs } from "../pipeline.js";
 import {
 	linuxVaapi,
 	linuxX11Software,
@@ -19,7 +19,7 @@ import {
 	windowsGdigrabSoftware,
 	windowsGfxcaptureSoftware,
 	windowsManualInputArgs,
-	windowsNvencFastPathNoResize,
+	windowsNvencNoResize,
 	windowsNvencHevcWithAudio,
 	windowsQsv,
 	windowsRtxNvenc1080p60,
@@ -28,10 +28,9 @@ import {
 	windowsRtxNvencDifferentFps,
 } from "./fixtures/configs.js";
 
-const winFastPath = { platform: "win32", supportsHwmapCudaFromD3D11: true };
-const winLegacy = { platform: "win32", supportsHwmapCudaFromD3D11: false };
-const macCaps = { platform: "darwin", supportsHwmapCudaFromD3D11: false };
-const linuxCaps = { platform: "linux", supportsHwmapCudaFromD3D11: false };
+const winCaps = { platform: "win32" };
+const macCaps = { platform: "darwin" };
+const linuxCaps = { platform: "linux" };
 
 const tail = (fps = 60) => [
 	"-fps_mode",
@@ -94,22 +93,15 @@ const nvencEncoderTail = (preset = "p6") => [
 	"16",
 ];
 
-describe("pipeline.buildArgs — Windows + NVENC fast path", () => {
-	it("lets gfxcapture's D3D11 video processor do convert + resize in a single pass", () => {
-		const result = buildArgs(windowsRtxNvenc1080p60(), winFastPath);
+describe("pipeline.buildArgs — Windows + gfxcapture + NVENC (SDR)", () => {
+	it("feeds gfxcapture's BGRA D3D11 hwframe straight into NVENC: no -init_hw_device, no hwmap, no hwdownload", () => {
+		const result = buildArgs(windowsRtxNvenc1080p60(), winCaps);
 
 		assert.equal(result.command, "ffmpeg.exe");
-		assert.equal(result.usedFastPath, true);
 		assert.deepEqual(result.args, [
 			"-y",
-			"-init_hw_device",
-			"d3d11va=dx",
-			"-init_hw_device",
-			"cuda=cu@dx",
-			"-filter_hw_device",
-			"cu",
 			"-filter_complex",
-			"gfxcapture=monitor_idx=0:max_framerate=60:capture_cursor=1:width=1920:height=1080:resize_mode=scale_aspect:output_fmt=nv12,hwmap=derive_device=cuda:mode=read,fps=60[v]",
+			"gfxcapture=monitor_idx=0:max_framerate=60:capture_cursor=1:width=1920:height=1080:resize_mode=scale_aspect:output_fmt=bgra,fps=60[v]",
 			"-map",
 			"[v]",
 			...nvencEncoderTail(),
@@ -117,26 +109,30 @@ describe("pipeline.buildArgs — Windows + NVENC fast path", () => {
 		]);
 	});
 
-	it("inserts an fps step in the fast path when capture and stream FPS differ", () => {
-		const result = buildArgs(windowsRtxNvencDifferentFps(), winFastPath);
-		assert.equal(result.usedFastPath, true);
+	it("inserts the fps step when capture and stream FPS differ", () => {
+		const result = buildArgs(windowsRtxNvencDifferentFps(), winCaps);
 		assert.ok(result.args.includes("-filter_complex"));
 		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
-		assert.match(filter, /hwmap=derive_device=cuda:mode=read,fps=30\[v\]/);
+		assert.match(filter, /,fps=30\[v\]$/);
 	});
 
 	it("omits gfxcapture width/height when no output size is configured", () => {
-		const result = buildArgs(windowsNvencFastPathNoResize(), winFastPath);
-		assert.equal(result.usedFastPath, true);
+		const result = buildArgs(windowsNvencNoResize(), winCaps);
 		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
 		assert.doesNotMatch(filter, /width=/);
-		assert.match(filter, /output_fmt=nv12/);
-		assert.ok(result.args.includes("-init_hw_device"));
+		assert.match(filter, /output_fmt=bgra/);
+	});
+
+	it("never emits the fictional -init_hw_device cuda=cu@dx or hwmap=derive_device=cuda steps", () => {
+		const result = buildArgs(windowsRtxNvenc1080p60(), winCaps);
+		const argv = result.args.join(" ");
+		assert.doesNotMatch(argv, /cuda=cu@dx/);
+		assert.doesNotMatch(argv, /hwmap=derive_device=cuda/);
+		assert.doesNotMatch(argv, /-init_hw_device/);
 	});
 
 	it("includes audio mapping when audioInputArgs are provided (HEVC)", () => {
-		const result = buildArgs(windowsNvencHevcWithAudio(), winFastPath);
-		assert.equal(result.usedFastPath, true);
+		const result = buildArgs(windowsNvencHevcWithAudio(), winCaps);
 		assert.ok(result.args.includes("-map"));
 		assert.ok(result.args.includes("0:a:0"));
 		assert.ok(result.args.includes("-c:v"));
@@ -148,89 +144,54 @@ describe("pipeline.buildArgs — Windows + NVENC fast path", () => {
 	});
 });
 
-describe("pipeline.buildArgs — Windows + NVENC + HDR convert (GPU tonemap_cuda)", () => {
-	it("stays on the fast path and inserts tonemap_cuda with p010 capture", () => {
-		const result = buildArgs(windowsRtxNvenc1440pHdrConvert(), winFastPath);
-		assert.equal(result.usedFastPath, true);
+describe("pipeline.buildArgs — Windows + gfxcapture + NVENC + HDR convert", () => {
+	it("downloads the BGRA hwframe and tonemaps on CPU via zscale", () => {
+		const result = buildArgs(windowsRtxNvenc1440pHdrConvert(), winCaps);
 		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
-		assert.match(filter, /output_fmt=p010/);
-		assert.match(filter, /hwmap=derive_device=cuda/);
-		assert.match(filter, /tonemap_cuda=tonemap=hable:format=nv12/);
-		assert.doesNotMatch(filter, /hwdownload/);
-		assert.doesNotMatch(filter, /zscale/);
+		assert.match(filter, /output_fmt=bgra/);
+		assert.match(filter, /,hwdownload,format=bgra,/);
+		assert.match(filter, /tonemap=hable/);
+		assert.match(filter, /format=yuv420p/);
+		assert.doesNotMatch(filter, /hwmap=derive_device=cuda/);
+		assert.doesNotMatch(filter, /tonemap_cuda/);
 	});
 
 	it("emits BT.709 colour metadata on the encoder args for hdrMode=convert", () => {
-		const result = buildArgs(windowsRtxNvenc1440pHdrConvert(), winFastPath);
+		const result = buildArgs(windowsRtxNvenc1440pHdrConvert(), winCaps);
 		const args = result.args;
 		assert.equal(args[args.indexOf("-color_primaries") + 1], "bt709");
 		assert.equal(args[args.indexOf("-color_trc") + 1], "bt709");
 		assert.equal(args[args.indexOf("-colorspace") + 1], "bt709");
 	});
-
-	it("falls back to CPU zscale chain when CUDA derivation is unavailable", () => {
-		const result = buildArgs(windowsRtxNvenc1440pHdrConvert(), winLegacy);
-		assert.equal(result.usedFastPath, false);
-		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
-		assert.match(filter, /hwdownload/);
-		assert.match(filter, /tonemap=hable/);
-		assert.doesNotMatch(filter, /hwmap=derive_device=cuda/);
-		assert.doesNotMatch(filter, /tonemap_cuda/);
-	});
 });
 
-describe("pipeline.buildArgs — Windows + NVENC + HDR passthrough", () => {
-	it("stays on the fast path with p010 capture and no tonemap filter", () => {
-		const result = buildArgs(windowsRtxNvenc1440pHdrPassthrough(), winFastPath);
-		assert.equal(result.usedFastPath, true);
+describe("pipeline.buildArgs — Windows + gfxcapture + NVENC + HDR passthrough", () => {
+	it("captures X2BGR10 and feeds it straight into NVENC (no hwdownload, no tonemap)", () => {
+		const result = buildArgs(windowsRtxNvenc1440pHdrPassthrough(), winCaps);
 		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
-		assert.match(filter, /output_fmt=p010/);
-		assert.match(filter, /hwmap=derive_device=cuda/);
-		assert.doesNotMatch(filter, /tonemap_cuda/);
+		assert.match(filter, /output_fmt=x2bgr10/);
 		assert.doesNotMatch(filter, /hwdownload/);
+		assert.doesNotMatch(filter, /tonemap/);
+		assert.doesNotMatch(filter, /hwmap=derive_device=cuda/);
 	});
 
-	it("emits BT.2020/PQ colour metadata on the encoder args for hdrMode=passthrough", () => {
-		const result = buildArgs(windowsRtxNvenc1440pHdrPassthrough(), winFastPath);
+	it("emits BT.2020/PQ colour metadata and pins -profile:v main10 for HEVC passthrough", () => {
+		const result = buildArgs(windowsRtxNvenc1440pHdrPassthrough(), winCaps);
 		const args = result.args;
 		assert.equal(args[args.indexOf("-color_primaries") + 1], "bt2020");
 		assert.equal(args[args.indexOf("-color_trc") + 1], "smpte2084");
 		assert.equal(args[args.indexOf("-colorspace") + 1], "bt2020nc");
+		assert.equal(args[args.indexOf("-profile:v") + 1], "main10");
 	});
 });
 
-describe("pipeline.buildArgs — Windows legacy fallback (CUDA derivation unavailable)", () => {
-	it("rides NV12 end-to-end (no PCIe-hungry BGRA download, no CPU yuv420p pass)", () => {
-		const result = buildArgs(windowsRtxNvenc1080p60(), winLegacy);
-		assert.equal(result.usedFastPath, false);
+describe("pipeline.buildArgs — Windows + gfxcapture + software encoder", () => {
+	it("downloads the BGRA hwframe and converts to yuv420p before libx264", () => {
+		const result = buildArgs(windowsGfxcaptureSoftware(), winCaps);
 		assert.deepEqual(result.args, [
 			"-y",
 			"-filter_complex",
-			"gfxcapture=monitor_idx=0:max_framerate=60:capture_cursor=1:width=1920:height=1080:resize_mode=scale_aspect:output_fmt=nv12,hwdownload,fps=60[v]",
-			"-map",
-			"[v]",
-			...nvencEncoderTail(),
-			...tail(),
-		]);
-	});
-
-	it("fallbackOnFailure(capabilities) flips the fast-path bit off", () => {
-		const downgraded = fallbackOnFailure(winFastPath);
-		assert.equal(downgraded.platform, "win32");
-		assert.equal(downgraded.supportsHwmapCudaFromD3D11, false);
-		const result = buildArgs(windowsRtxNvenc1080p60(), downgraded);
-		assert.equal(result.usedFastPath, false);
-	});
-});
-
-describe("pipeline.buildArgs — Windows + software encoder via gfxcapture", () => {
-	it("rides NV12 from gfxcapture into libx264 (libx264 accepts NV12 directly)", () => {
-		const result = buildArgs(windowsGfxcaptureSoftware(), winFastPath);
-		assert.equal(result.usedFastPath, false);
-		assert.deepEqual(result.args, [
-			"-y",
-			"-filter_complex",
-			"gfxcapture=monitor_idx=0:max_framerate=60:capture_cursor=1:width=1920:height=1080:resize_mode=scale_aspect:output_fmt=nv12,hwdownload,fps=60[v]",
+			"gfxcapture=monitor_idx=0:max_framerate=60:capture_cursor=1:width=1920:height=1080:resize_mode=scale_aspect:output_fmt=bgra,hwdownload,format=yuv420p,fps=60[v]",
 			"-map",
 			"[v]",
 			"-c:v",
@@ -252,8 +213,7 @@ describe("pipeline.buildArgs — Windows + software encoder via gfxcapture", () 
 
 describe("pipeline.buildArgs — Windows + gdigrab + libx264", () => {
 	it("emits a -i input source and a -vf scale chain", () => {
-		const result = buildArgs(windowsGdigrabSoftware(), winFastPath);
-		assert.equal(result.usedFastPath, false);
+		const result = buildArgs(windowsGdigrabSoftware(), winCaps);
 		assert.deepEqual(result.args, [
 			"-y",
 			"-thread_queue_size",
@@ -291,8 +251,7 @@ describe("pipeline.buildArgs — Windows + gdigrab + libx264", () => {
 
 describe("pipeline.buildArgs — Windows + manual input args", () => {
 	it("uses the user-provided input verbatim and skips the gfxcapture filter-source", () => {
-		const result = buildArgs(windowsManualInputArgs(), winFastPath);
-		assert.equal(result.usedFastPath, false);
+		const result = buildArgs(windowsManualInputArgs(), winCaps);
 		assert.deepEqual(result.args.slice(0, 8), ["-y", "-f", "lavfi", "-i", "testsrc=size=1920x1080:rate=60", "-map", "0:v:0", "-vf"]);
 	});
 });
@@ -300,7 +259,6 @@ describe("pipeline.buildArgs — Windows + manual input args", () => {
 describe("pipeline.buildArgs — macOS Apple Silicon (videotoolbox)", () => {
 	it("uses avfoundation input and emits -realtime 1", () => {
 		const result = buildArgs(macAppleSilicon(), macCaps);
-		assert.equal(result.usedFastPath, false);
 		assert.deepEqual(result.args, [
 			"-y",
 			"-thread_queue_size",
@@ -343,7 +301,6 @@ describe("pipeline.buildArgs — macOS Apple Silicon (videotoolbox)", () => {
 describe("pipeline.buildArgs — Linux + libx264", () => {
 	it("uses x11grab input and CPU filters", () => {
 		const result = buildArgs(linuxX11Software(), linuxCaps);
-		assert.equal(result.usedFastPath, false);
 		assert.deepEqual(result.args.slice(0, 14), [
 			"-y",
 			"-thread_queue_size",
@@ -367,8 +324,7 @@ describe("pipeline.buildArgs — Linux + libx264", () => {
 
 describe("pipeline.buildArgs — Windows + QSV", () => {
 	it("emits qsv codec args with -preset", () => {
-		const result = buildArgs(windowsQsv(), winFastPath);
-		assert.equal(result.usedFastPath, false);
+		const result = buildArgs(windowsQsv(), winCaps);
 		assert.equal(result.args[result.args.indexOf("-c:v") + 1], "h264_qsv");
 		assert.equal(result.args[result.args.indexOf("-preset") + 1], "medium");
 	});
@@ -377,7 +333,6 @@ describe("pipeline.buildArgs — Windows + QSV", () => {
 describe("pipeline.buildArgs — Linux + VAAPI", () => {
 	it("opens a VA-API device and binds it to the filter graph", () => {
 		const result = buildArgs(linuxVaapi(), linuxCaps);
-		assert.equal(result.usedFastPath, false);
 		const args = result.args;
 		const initIdx = args.indexOf("-init_hw_device");
 		assert.notEqual(initIdx, -1, "expected -init_hw_device to be set for VAAPI");
@@ -411,39 +366,23 @@ describe("pipeline.buildArgs — Linux + VAAPI", () => {
 });
 
 describe("pipeline.buildArgs — resize is performed in the cheapest place for each path", () => {
-	it("fast path: gfxcapture's D3D11 video processor does convert + resize in one pass (no scale_cuda)", () => {
-		const result = buildArgs(windowsRtxNvenc1080p60(), winFastPath);
+	it("gfxcapture's D3D11 video processor does convert + resize in one pass (no scale_cuda, no software scale)", () => {
+		const result = buildArgs(windowsRtxNvenc1080p60(), winCaps);
 		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
-		assert.match(filter, /width=1920:height=1080:resize_mode=scale_aspect:output_fmt=nv12/);
+		assert.match(filter, /width=1920:height=1080:resize_mode=scale_aspect:output_fmt=bgra/);
 		assert.doesNotMatch(filter, /scale_cuda/);
+		assert.doesNotMatch(filter, /\bscale=/);
 	});
 
-	it("legacy SDR: NV12 captured + resized in gfxcapture, no CPU pixel-format pass", () => {
-		const result = buildArgs(windowsRtxNvenc1080p60(), winLegacy);
-		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
-		assert.match(filter, /output_fmt=nv12/);
-		assert.match(filter, /,hwdownload,fps=60\[v\]/);
-		assert.doesNotMatch(filter, /format=bgra/);
-		assert.doesNotMatch(filter, /format=yuv420p/);
-	});
-
-	it("legacy HDR convert: still BGRA because zscale's tonemap operates in RGB space", () => {
-		const result = buildArgs(windowsRtxNvenc1440pHdrConvert(), winLegacy);
+	it("HDR convert: still BGRA capture because zscale's tonemap operates in RGB space", () => {
+		const result = buildArgs(windowsRtxNvenc1440pHdrConvert(), winCaps);
 		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
 		assert.match(filter, /output_fmt=bgra/);
 		assert.match(filter, /tonemap=hable/);
 	});
 
-	it("HDR convert on the fast path: tonemap_cuda runs in VRAM, no hwdownload", () => {
-		const result = buildArgs(windowsRtxNvenc1440pHdrConvert(), winFastPath);
-		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
-		assert.match(filter, /tonemap_cuda=tonemap=hable:format=nv12/);
-		assert.doesNotMatch(filter, /hwdownload/);
-		assert.doesNotMatch(filter, /zscale/);
-	});
-
 	it("non-gfxcapture inputs use software scale= (no hwctx is initialized for them)", () => {
-		const result = buildArgs(windowsGdigrabSoftware(), winFastPath);
+		const result = buildArgs(windowsGdigrabSoftware(), winCaps);
 		assert.ok(result.args.includes("-vf"));
 		const vf = result.args[result.args.indexOf("-vf") + 1];
 		assert.match(vf, /^scale=1920:1080:force_original_aspect_ratio=decrease/);
@@ -455,7 +394,7 @@ describe("pipeline.buildArgs — recording-rate ceiling (fps + 15 %)", () => {
 		const config = windowsRtxNvenc1080p60();
 		config.captureFps = 240;
 		config.fps = 120;
-		const result = buildArgs(config, winFastPath);
+		const result = buildArgs(config, winCaps);
 		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
 		assert.match(filter, /max_framerate=138\b/);
 		assert.match(filter, /,fps=120\[v\]/);
@@ -465,7 +404,7 @@ describe("pipeline.buildArgs — recording-rate ceiling (fps + 15 %)", () => {
 		const config = windowsRtxNvenc1080p60();
 		config.captureFps = 30;
 		config.fps = 120;
-		const result = buildArgs(config, winFastPath);
+		const result = buildArgs(config, winCaps);
 		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
 		assert.match(filter, /max_framerate=30\b/);
 	});
@@ -474,7 +413,7 @@ describe("pipeline.buildArgs — recording-rate ceiling (fps + 15 %)", () => {
 		const config = windowsGdigrabSoftware();
 		config.captureFps = 240;
 		config.fps = 60;
-		const result = buildArgs(config, winFastPath);
+		const result = buildArgs(config, winCaps);
 		const idx = result.args.indexOf("-framerate");
 		assert.notEqual(idx, -1);
 		assert.equal(result.args[idx + 1], "69");

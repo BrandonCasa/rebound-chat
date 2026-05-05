@@ -94,7 +94,7 @@ const windowsNvencHevcWithAudio = () =>
 		audioInputArgs: ["-f", "dshow", "-i", "audio=Microphone"],
 	});
 
-const windowsNvencFastPathNoResize = () =>
+const windowsNvencNoResize = () =>
 	withDefaults({
 		outputWidth: null,
 		outputHeight: null,
@@ -145,7 +145,7 @@ export {
 	windowsGfxcaptureSoftware,
 	windowsManualInputArgs,
 	windowsNvencHevcWithAudio,
-	windowsNvencFastPathNoResize,
+	windowsNvencNoResize,
 	macAppleSilicon,
 	linuxX11Software,
 	linuxVaapi,
