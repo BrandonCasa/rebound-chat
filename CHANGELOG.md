@@ -11,6 +11,24 @@ All notable changes to this project will be documented here.
 - **NVENC defaults are now a coherent low-latency profile.** Previously the defaults paired `tune ull` with five flags that each individually contradict it: `multipass fullres`, `temporal_aq 1`, `b_ref_mode middle`, `bf 3`, and `rc-lookahead 16`. Lookahead alone was a hard ~533 ms latency floor at 30 fps because the encoder could not emit frame N until it had seen frame N+16. The encoder now emits no `-multipass`, `-temporal_aq 0`, `-b_ref_mode disabled`, `-bf 0`, no `-rc-lookahead`, and `-preset p4` (the documented "ll" alias). Expected glass-to-glass drop in the encoder alone: ~500–700 ms; expected NVENC engine occupancy drop: ~30–50% (no second pass). (`public/streaming/defaults.js`, `public/streaming/presets.js`, `public/streaming/platform/profiles.js`)
 - **GOP size is now derived from `fps × hlsTime`** instead of a fixed `60`. `buildDefaultSettings({ profile, fps, hlsTime })` accepts the rate-side inputs and computes `gopSize`, which is what guarantees IDR frames land on HLS segment boundaries. The previous fixed `60` was correct only at 30 fps × 2 s segments and silently produced misaligned segments at 60 fps. (`public/streaming/defaults.js`)
 
+### Changed (parallelized live uploader + modular extraction)
+
+- **Uploader orchestration moved out of `ElectronLiveStreamManager` into `public/streaming/uploader/`** with focused modules for HTTP client, file-source I/O, pure planning, pass execution, scheduler, heartbeat, and composition (`index.js`). The manager now delegates uploader lifecycle via `start()`, `flush()`, and `stop()`, rather than owning upload internals. (`public/electron-live-stream.js`, `public/streaming/uploader/*`)
+- **Segment uploads now stream bodies from disk and run in bounded parallelism.** `runUploadPass` executes three phases: init upload once, segment uploads concurrently (limit 3), then ordered playlist uploads (`video.m3u8` then `master.m3u8`) so manifests are only published after segment availability. (`public/streaming/uploader/uploadPass.js`, `public/streaming/uploader/fileSource.js`)
+- **Polling switched from `setInterval` guard logic to a self-rescheduling scheduler.** Slow passes no longer get silently dropped: if a pass exceeds the interval, the next pass is scheduled immediately; otherwise cadence is preserved. (`public/streaming/uploader/uploadScheduler.js`)
+- **Heartbeat is now a separate timer, decoupled from upload pass success.** Session keepalive traffic no longer depends on whether an upload pass is currently blocked or failing. (`public/streaming/uploader/heartbeat.js`, `public/streaming/uploader/index.js`)
+- **Per-pass duration logging is now mandatory and regex-friendly.** Each pass emits structured timing for total duration and phase timings (`phaseA`, `phaseB`, `phaseC`), plus uploaded file and byte counts, to speed up future latency investigations. (`public/streaming/uploader/index.js`)
+
+### Tests (uploader subsystem)
+
+- Added targeted uploader tests in `public/streaming/uploader/__tests__/`:
+  - `uploadPlanner.test.js` validates deterministic plan bucketing (init/segments/playlists).
+  - `uploadPass.test.js` verifies parallel segment uploads and ordered playlist publishing.
+  - `uploadScheduler.test.js` verifies immediate catch-up after slow passes and cadence preservation for fast passes.
+  - `heartbeat.test.js` verifies independent heartbeat ticking and clean shutdown.
+  - `index.test.js` verifies end-to-end composition start/flush/stop behavior with no dangling timers.
+- Extended `pnpm run test:streaming` to include uploader test files under `public/streaming/uploader/__tests__/*.test.js`. (`package.json`)
+
 ### Added (streaming quality profiles)
 
 - **Curated streaming quality profiles** under `public/streaming/profiles/`. Each profile is a `Partial<StreamConfig>` describing one coherent encoder trade-off:

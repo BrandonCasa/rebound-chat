@@ -41,7 +41,7 @@
 	"scripts": {
 		"start": "vite --host",
 		"build": "vite build",
-		"test:streaming": "node --test public/streaming/__tests__/*.test.js public/streaming/__tests__/**/*.test.js",
+		"test:streaming": "node --test public/streaming/__tests__/*.test.js public/streaming/__tests__/**/*.test.js public/streaming/uploader/__tests__/*.test.js",
 		"test:sources": "node --test public/sources/__tests__/*.test.js",
 		"electron": "electron .",
 		"predev:kill-ports": "kill-port 3000 6001 6002 27017",

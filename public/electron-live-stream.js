@@ -1,7 +1,7 @@
 import { spawn } from "child_process";
-import { mkdir, readdir, readFile, rm, stat, writeFile } from "fs/promises";
+import { mkdir, rm, stat, writeFile } from "fs/promises";
 import { tmpdir } from "os";
-import { join, relative } from "path";
+import { join } from "path";
 
 import { codecFamily, codecString, lower, parseBitrateToBps } from "./streaming/codecs.js";
 import {
@@ -19,14 +19,10 @@ import { normalizeAudioCodec } from "./streaming/audio.js";
 import { DEFAULT_SETTINGS } from "./streaming/defaults.js";
 import { availableEncoderPresets, currentPlatformProfile, defaultEncoderPresets } from "./streaming/platform/index.js";
 import { buildArgs as buildPipelineArgs, defaultCapabilities } from "./streaming/pipeline.js";
+import { uploadAgent } from "./streaming/uploader/httpClient.js";
+import { createUploader } from "./streaming/uploader/index.js";
 
 const UPLOAD_POLL_INTERVAL_MS = 750;
-const SEGMENT_EXTENSIONS = new Set([".aac", ".m4a", ".m4s", ".mp3", ".mp4", ".ts"]);
-
-const extensionForName = (filename) => {
-	const index = filename.lastIndexOf(".");
-	return index >= 0 ? filename.slice(index).toLowerCase() : "";
-};
 
 const parseResponseBody = async (response) => {
 	const text = await response.text();
@@ -59,10 +55,7 @@ class ElectronLiveStreamManager {
 		this.activeConfig = null;
 		this.sessionInfo = null;
 		this.ffmpegProcess = null;
-		this.uploadTimer = null;
-		this.uploadInFlight = false;
-		this.lastUploaded = new Map();
-		this.lastHeartbeatAt = 0;
+		this.uploader = null;
 		this.stopping = false;
 		this.logBuffer = "";
 		this.capabilities = defaultCapabilities();
@@ -327,130 +320,23 @@ class ElectronLiveStreamManager {
 		this.log("Generated fallback master.m3u8");
 	}
 
-	async candidateFiles() {
-		const config = this.activeConfig;
-		if (!config) return [];
-
-		let entries = [];
-		try {
-			entries = await readdir(config.remoteDir, { withFileTypes: true });
-		} catch (_err) {
-			return [];
-		}
-
-		const priority = (filename) => {
-			if (filename === "master.m3u8") return 2;
-			if (filename === "video.m3u8") return 1;
-			return 0;
-		};
-
-		return entries
-			.filter((entry) => entry.isFile())
-			.map((entry) => join(config.remoteDir, entry.name))
-			.filter((filePath) => {
-				const filename = filePath.split(/[\\/]/).pop();
-				return filename === "master.m3u8" || filename === "video.m3u8" || SEGMENT_EXTENSIONS.has(extensionForName(filename));
-			})
-			.sort((left, right) => {
-				const leftName = left.split(/[\\/]/).pop();
-				const rightName = right.split(/[\\/]/).pop();
-				return priority(leftName) - priority(rightName) || leftName.localeCompare(rightName);
-			});
-	}
-
-	async fileSignature(filePath) {
-		const stats = await stat(filePath);
-		if (!stats.isFile() || stats.size <= 0) return null;
-		return `${stats.size}:${stats.mtimeMs}`;
-	}
-
-	mimeTypeForPath(filePath) {
-		const filename = filePath.split(/[\\/]/).pop();
-		const extension = extensionForName(filename);
-		if (filename === "master.m3u8" || filename === "video.m3u8" || extension === ".m3u8") return "application/vnd.apple.mpegurl";
-		if (extension === ".m4s") return "video/iso.segment";
-		if (extension === ".mp4") return "video/mp4";
-		if (extension === ".ts") return "video/mp2t";
-		if (extension === ".aac") return "audio/aac";
-		return "application/octet-stream";
-	}
-
-	remoteUrlForPath(filePath) {
-		const config = this.activeConfig;
-		const sessionInfo = this.sessionInfo;
-		const filename = relative(config.remoteDir, filePath).split(/[\\/]/).pop();
-		const base = `${config.websiteBaseUrl}/live/api/${sessionInfo.sessionId}`;
-
-		if (filename === "master.m3u8") return `${base}/master.m3u8`;
-		if (filename === "video.m3u8") return `${base}/video.m3u8`;
-		return `${base}/segments/${encodeURIComponent(filename)}`;
-	}
-
-	async uploadFile(filePath) {
-		const signature = await this.fileSignature(filePath);
-		if (!signature || this.lastUploaded.get(filePath) === signature) return;
-
-		const url = this.remoteUrlForPath(filePath);
-		const contentType = this.mimeTypeForPath(filePath);
-		const isPlaylist = extensionForName(filePath) === ".m3u8";
-		const body = isPlaylist ? await readFile(filePath, "utf8") : await readFile(filePath);
-		const response = await fetch(url, {
-			method: "PUT",
-			headers: {
-				"Content-Type": contentType,
-				"X-Live-Ingest-Secret": this.sessionInfo.ingestSecret,
-			},
-			body,
-		});
-
-		await raiseForStatus(response);
-		this.lastUploaded.set(filePath, signature);
-		this.log(`Uploaded: ${filePath.split(/[\\/]/).pop()}`);
-	}
-
-	async sendHeartbeat() {
+	startUploader() {
 		const config = this.activeConfig;
 		const sessionInfo = this.sessionInfo;
 		if (!config || !sessionInfo) return;
 
-		const response = await fetch(`${config.websiteBaseUrl}/live/api/${sessionInfo.sessionId}/heartbeat`, {
-			method: "POST",
-			headers: {
-				"X-Live-Ingest-Secret": sessionInfo.ingestSecret,
-			},
+		this.uploader = createUploader({
+			dir: config.remoteDir,
+			websiteBaseUrl: config.websiteBaseUrl,
+			sessionInfo,
+			pollIntervalMs: UPLOAD_POLL_INTERVAL_MS,
+			fetchImpl: fetch,
+			raiseForStatus,
+			dispatcher: uploadAgent,
+			log: (message) => this.log(message),
+			ensureFallbackMasterPlaylist: () => this.ensureFallbackMasterPlaylist(),
 		});
-		await raiseForStatus(response);
-		this.lastHeartbeatAt = Date.now();
-	}
-
-	async uploadPass() {
-		if (!this.activeConfig || !this.sessionInfo || this.uploadInFlight) return;
-
-		this.uploadInFlight = true;
-		try {
-			await this.ensureFallbackMasterPlaylist();
-			const files = await this.candidateFiles();
-			for (const filePath of files) {
-				await this.uploadFile(filePath);
-			}
-
-			const heartbeatEvery = Math.max(5000, this.sessionInfo.heartbeatIntervalMs || 15000);
-			if (Date.now() - this.lastHeartbeatAt >= heartbeatEvery) {
-				await this.sendHeartbeat();
-			}
-		} catch (err) {
-			this.log(`Uploader error: ${err.message}`);
-		} finally {
-			this.uploadInFlight = false;
-		}
-	}
-
-	startUploader() {
-		this.lastHeartbeatAt = 0;
-		this.uploadTimer = setInterval(() => {
-			void this.uploadPass();
-		}, UPLOAD_POLL_INTERVAL_MS);
-		void this.uploadPass();
+		this.uploader.start();
 	}
 
 	async endSession() {
@@ -464,6 +350,7 @@ class ElectronLiveStreamManager {
 				headers: {
 					"X-Live-Ingest-Secret": sessionInfo.ingestSecret,
 				},
+				...(uploadAgent ? { dispatcher: uploadAgent } : {}),
 			});
 			if (![200, 204, 404, 410].includes(response.status)) {
 				await raiseForStatus(response);
@@ -487,7 +374,6 @@ class ElectronLiveStreamManager {
 		try {
 			await mkdir(config.remoteDir, { recursive: true });
 			this.activeConfig = config;
-			this.lastUploaded = new Map();
 
 			this.log("Creating live session...");
 			this.sessionInfo = await this.createSession(config);
@@ -549,15 +435,18 @@ class ElectronLiveStreamManager {
 		this.setState("stopping", { error });
 		this.log("Stopping stream...");
 
-		if (this.uploadTimer) {
-			clearInterval(this.uploadTimer);
-			this.uploadTimer = null;
-		}
+		const uploader = this.uploader;
+		this.uploader = null;
+		uploader?.stop();
 
 		await this.terminateFfmpeg();
 		this.ffmpegProcess = null;
 
-		await this.uploadPass();
+		try {
+			await uploader?.flush();
+		} catch (err) {
+			this.log(`Final upload pass failed: ${err.message}`);
+		}
 		await this.endSession();
 
 		const remoteDir = this.activeConfig?.remoteDir;
@@ -567,7 +456,6 @@ class ElectronLiveStreamManager {
 
 		this.activeConfig = null;
 		this.sessionInfo = null;
-		this.lastUploaded = new Map();
 		this.logBuffer = "";
 		this.stopping = false;
 		this.setState(error ? "error" : "idle", { error });
