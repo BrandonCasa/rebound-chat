@@ -3,7 +3,9 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { expect } = require("chai");
 
-const { createControlSession, recommendationDirection } = await import("../../../src/live/control/controlSession.js");
+const { createControlSession, recommendationDirection, recommendationMatchesCurrent, canonicalBitrateString } = await import(
+	"../../../src/live/control/controlSession.js"
+);
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const recommendationsFrom = (events) => events.filter((event) => event.envelope.type === "recommended-settings");
@@ -346,9 +348,10 @@ describe("controlSession adapting fan-out", () => {
 		attachWithStreamer();
 		session.upsertViewer("viewer-slow", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1.2 } }));
 		expect(session.hasPendingAdaptation()).to.equal(true);
+		const { ackId } = session.getAdaptingSnapshot();
 		emitted.length = 0;
 
-		session.ackRecommendation("streamer-1", { applied: true, actualSettings: null, clampedBy: null, reason: "", ackId: "ack-1" });
+		session.ackRecommendation("streamer-1", { applied: true, actualSettings: null, clampedBy: null, reason: "", ackId });
 
 		const cleared = viewerAdaptingFrom(emitted).filter((event) => event.envelope.state === "cleared");
 		expect(cleared).to.have.lengthOf(1, "ack must trigger a cleared broadcast");
@@ -400,8 +403,239 @@ describe("controlSession adapting fan-out", () => {
 		// immediately after attach. The steady-state assertion is "ack
 		// then null", not "attach then null".
 		attachWithStreamer();
-		expect(session.getAdaptingSnapshot()).to.not.equal(null);
-		session.ackRecommendation("streamer-1", { applied: false, actualSettings: null, clampedBy: null, reason: "no-op", ackId: "ack-attach" });
+		const snapshot = session.getAdaptingSnapshot();
+		expect(snapshot).to.not.equal(null);
+		session.ackRecommendation("streamer-1", { applied: false, actualSettings: null, clampedBy: null, reason: "no-op", ackId: snapshot.ackId });
 		expect(session.getAdaptingSnapshot()).to.equal(null);
+	});
+
+	it("ignores acks whose ackId predates the current adapting generation", async () => {
+		// First push: viewer-slow joins → recommendation with ackId=A
+		// is in flight. Second push (before the streamer acks): a slower
+		// viewer joins → the adapting state is replaced with ackId=B,
+		// targeting the new recommendation. Now ackId=A's late ack
+		// arrives — clearing the pending window for B would lie to
+		// viewers (the streamer has not actually applied B yet). The
+		// awaits give the recommender's `Date.now()` a chance to tick
+		// so the two recommendations don't share an updatedAt; in
+		// production the streamer's respawn naturally inserts >1ms.
+		attachWithStreamer();
+		session.upsertViewer("viewer-slow", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1.2 } }));
+		const firstAckId = session.getAdaptingSnapshot().ackId;
+		expect(firstAckId).to.be.a("string");
+
+		await wait(5);
+		session.upsertViewer("viewer-slower", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 0.4 } }));
+		const secondAckId = session.getAdaptingSnapshot().ackId;
+		expect(secondAckId).to.be.a("string");
+		expect(secondAckId).to.not.equal(firstAckId, "second push must arm a new adapting generation with a fresh ackId");
+		emitted.length = 0;
+
+		session.ackRecommendation("streamer-1", {
+			applied: true,
+			actualSettings: null,
+			clampedBy: null,
+			reason: "",
+			ackId: firstAckId,
+		});
+		expect(session.hasPendingAdaptation()).to.equal(true, "stale ack must not clear the newer adapting generation");
+		expect(session.getAdaptingSnapshot().ackId).to.equal(secondAckId);
+
+		// Streamer eventually acks the *current* generation — the
+		// pending window finally clears.
+		session.ackRecommendation("streamer-1", {
+			applied: true,
+			actualSettings: null,
+			clampedBy: null,
+			reason: "",
+			ackId: secondAckId,
+		});
+		expect(session.hasPendingAdaptation()).to.equal(false);
+	});
+
+	it("falls back to clearing on ack when the streamer omits ackId (legacy clients)", () => {
+		// Older streamer builds that pre-date the ackId protocol bit
+		// must still be able to clear adapting state. The drop gate is
+		// only armed when *both* sides supply an ackId.
+		attachWithStreamer();
+		session.upsertViewer("viewer-slow", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1.2 } }));
+		expect(session.hasPendingAdaptation()).to.equal(true);
+
+		session.ackRecommendation("streamer-1", { applied: true, actualSettings: null, clampedBy: null, reason: "" });
+		expect(session.hasPendingAdaptation()).to.equal(false);
+	});
+});
+
+describe("controlSession adapting suppression for matching currentSettings", () => {
+	let emitted;
+	let session;
+
+	beforeEach(() => {
+		emitted = [];
+		session = createControlSession({
+			sessionId: "session-adapt-match",
+			emit: (event) => emitted.push(event),
+			log: null,
+			raiseDwellMs: 0,
+			minIntervalMs: 0,
+		});
+	});
+
+	afterEach(() => session.teardown());
+
+	it("does NOT mark adapting pending on an attach force push that already matches currentSettings", () => {
+		// A streamer attaching mid-stream tells us its real applied
+		// settings. With no viewers, the recommender falls back to the
+		// ceiling-restoration baseline. When that baseline equals
+		// currentSettings, applying it would be a no-op respawn — we
+		// must skip the viewer-facing "host adjusting" pulse entirely
+		// (otherwise every (re)attach + every post-respawn updateCeiling
+		// produces a phantom flicker).
+		const ceiling = buildCeiling();
+		session.attachStreamer("streamer-1", {
+			initialCeiling: ceiling,
+			currentSettings: {
+				videoBitrate: "8M",
+				videoCodec: ceiling.videoCodec,
+				outputWidth: ceiling.outputWidth,
+				outputHeight: ceiling.outputHeight,
+				fps: ceiling.fps,
+			},
+			autoAdapt: true,
+		});
+
+		const recs = recommendationsFrom(emitted);
+		expect(recs).to.have.lengthOf(1, "the recommendation still goes out so the streamer can re-baseline");
+		const adaptingPending = viewerAdaptingFrom(emitted).filter((event) => event.envelope.state === "pending");
+		expect(adaptingPending).to.have.lengthOf(0, "no adapting fan-out when the push is a no-op for the streamer");
+		expect(session.hasPendingAdaptation()).to.equal(false);
+	});
+
+	it("DOES mark adapting pending when the recommendation actually moves the streamer", () => {
+		// Same fixture, but a slow viewer joins between attach and the
+		// next recompute — the recommendation now targets a lower
+		// bitrate that the streamer is not yet running, so the
+		// adapting fan-out must fire.
+		const ceiling = buildCeiling();
+		session.attachStreamer("streamer-1", {
+			initialCeiling: ceiling,
+			currentSettings: {
+				videoBitrate: "8M",
+				videoCodec: ceiling.videoCodec,
+				outputWidth: ceiling.outputWidth,
+				outputHeight: ceiling.outputHeight,
+				fps: ceiling.fps,
+			},
+			autoAdapt: true,
+		});
+		emitted.length = 0;
+
+		session.upsertViewer("viewer-slow", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1.2 } }));
+		const adaptingPending = viewerAdaptingFrom(emitted).filter((event) => event.envelope.state === "pending");
+		expect(adaptingPending).to.have.lengthOf(1, "real downgrades still produce an adapting pulse");
+		expect(session.hasPendingAdaptation()).to.equal(true);
+	});
+
+	it("re-baselines currentSettings on every STREAMER_HELLO so a post-respawn re-attach can suppress the second pulse", () => {
+		// Simulate the bug-#3 timeline:
+		//   1. attach → no viewers → recommendation matches current → no pulse
+		//   2. slow viewer joins → recommendation drops bitrate → pulse fires
+		//   3. streamer respawns at the new bitrate, sends HELLO again
+		//      with currentSettings reflecting the just-applied target
+		//   4. force-push from the (re)attach must not pulse a second
+		//      time because the streamer is already running the target.
+		const ceiling = buildCeiling();
+		session.attachStreamer("streamer-1", {
+			initialCeiling: ceiling,
+			currentSettings: {
+				videoBitrate: "8M",
+				videoCodec: ceiling.videoCodec,
+				outputWidth: ceiling.outputWidth,
+				outputHeight: ceiling.outputHeight,
+				fps: ceiling.fps,
+			},
+			autoAdapt: true,
+		});
+		session.upsertViewer("viewer-slow", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1.2 } }));
+		const inFlightSnapshot = session.getAdaptingSnapshot();
+		expect(inFlightSnapshot).to.not.equal(null);
+		// Streamer applies the recommendation, acks.
+		session.ackRecommendation("streamer-1", {
+			applied: true,
+			actualSettings: null,
+			clampedBy: null,
+			reason: "",
+			ackId: inFlightSnapshot.ackId,
+		});
+		expect(session.hasPendingAdaptation()).to.equal(false);
+		emitted.length = 0;
+
+		// Streamer's post-respawn `updateCeiling` arrives as another
+		// STREAMER_HELLO with currentSettings reflecting the just-
+		// applied target. The recommendation that comes out of the
+		// force-push will be the same bitrate (same viewer state), so
+		// no new pulse should fire.
+		const targetBitrate = inFlightSnapshot.target.videoBitrate;
+		session.attachStreamer("streamer-1", {
+			initialCeiling: ceiling,
+			currentSettings: {
+				videoBitrate: targetBitrate,
+				videoCodec: inFlightSnapshot.target.videoCodec,
+				outputWidth: inFlightSnapshot.target.outputWidth,
+				outputHeight: inFlightSnapshot.target.outputHeight,
+				fps: inFlightSnapshot.target.fps,
+			},
+			autoAdapt: true,
+		});
+		const adaptingPending = viewerAdaptingFrom(emitted).filter((event) => event.envelope.state === "pending");
+		expect(adaptingPending).to.have.lengthOf(0, "the post-respawn re-attach must not pulse a second time");
+		expect(session.hasPendingAdaptation()).to.equal(false);
+	});
+});
+
+describe("canonicalBitrateString / recommendationMatchesCurrent", () => {
+	it("canonicalises bitrate values across string + numeric forms", () => {
+		expect(canonicalBitrateString(8_000_000)).to.equal("8M");
+		expect(canonicalBitrateString("8M")).to.equal("8M");
+		expect(canonicalBitrateString("8000k")).to.equal("8M");
+		expect(canonicalBitrateString("8000000")).to.equal("8M");
+		expect(canonicalBitrateString(6_638_400)).to.equal("6.64M");
+		expect(canonicalBitrateString(500_000)).to.equal("500k");
+	});
+
+	it("returns null for unparseable bitrate values", () => {
+		expect(canonicalBitrateString(null)).to.equal(null);
+		expect(canonicalBitrateString("")).to.equal(null);
+		expect(canonicalBitrateString("abc")).to.equal(null);
+		expect(canonicalBitrateString(0)).to.equal(null);
+		expect(canonicalBitrateString(-1)).to.equal(null);
+	});
+
+	it("treats sub-display-precision bitrate deltas as a match", () => {
+		// Same regression coverage as the streamer-side adapter test:
+		// 6_638_400 bps rounds to "6.64M", which is what an "8M" ceiling
+		// stream would already display. We must not pulse the adapting
+		// chrome over a respawn the streamer would no-op.
+		expect(
+			recommendationMatchesCurrent(
+				{ videoBitrate: 6_638_400, videoCodec: "h264_nvenc", outputWidth: 1920, outputHeight: 1080, fps: 60 },
+				{ videoBitrate: "6.64M", videoCodec: "h264_nvenc", outputWidth: 1920, outputHeight: 1080, fps: 60 }
+			)
+		).to.equal(true);
+	});
+
+	it("rejects matches when codec / resolution / fps differ", () => {
+		const base = { videoBitrate: 4_000_000, videoCodec: "h264_nvenc", outputWidth: 1280, outputHeight: 720, fps: 30 };
+		const current = { videoBitrate: "4M", videoCodec: "h264_nvenc", outputWidth: 1280, outputHeight: 720, fps: 30 };
+		expect(recommendationMatchesCurrent(base, current)).to.equal(true);
+		expect(recommendationMatchesCurrent({ ...base, videoCodec: "hevc_nvenc" }, current)).to.equal(false);
+		expect(recommendationMatchesCurrent({ ...base, outputWidth: 1920 }, current)).to.equal(false);
+		expect(recommendationMatchesCurrent({ ...base, outputHeight: 1080 }, current)).to.equal(false);
+		expect(recommendationMatchesCurrent({ ...base, fps: 60 }, current)).to.equal(false);
+	});
+
+	it("returns false when either side is missing", () => {
+		expect(recommendationMatchesCurrent(null, { videoBitrate: "8M" })).to.equal(false);
+		expect(recommendationMatchesCurrent({ videoBitrate: 8_000_000 }, null)).to.equal(false);
 	});
 });

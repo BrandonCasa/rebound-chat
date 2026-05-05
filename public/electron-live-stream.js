@@ -421,21 +421,37 @@ class ElectronLiveStreamManager {
 	async handleRecommendation(recommendation) {
 		const sessionId = this.sessionInfo?.sessionId;
 		if (!sessionId || !this.activeConfig || !this.initialCeiling) return;
-		if (this.status !== "streaming") return;
-		if (this.respawning) {
-			this.log(`Recommendation ignored: respawn already in flight`);
-			return;
-		}
-
-		if (!this.autoAdaptEnabled) {
+		// Every early-return below is acked back to the server with the
+		// recommendation's `updatedAt` as `ackId` so the server can
+		// clear its `markAdaptingPending` window immediately. Without
+		// these explicit no-op acks the viewer-facing "host adjusting"
+		// chip would only clear when the server's 8-second safety
+		// timeout fires — even though the streamer made an instant
+		// decision not to act.
+		const ackId = recommendation?.updatedAt ? String(recommendation.updatedAt) : null;
+		const sendNoopAck = ({ clampedBy, reason }) => {
 			this.serverControl.sendAck({
 				sessionId,
 				applied: false,
 				actualSettings: this._snapshotApplicableSettings(),
-				clampedBy: "user-disabled",
-				reason: "auto-adaptation disabled",
-				ackId: recommendation?.updatedAt ? String(recommendation.updatedAt) : null,
+				clampedBy,
+				reason,
+				ackId,
 			});
+		};
+
+		if (this.status !== "streaming") {
+			sendNoopAck({ clampedBy: "not-streaming", reason: `pipeline status=${this.status}` });
+			return;
+		}
+		if (this.respawning) {
+			this.log(`Recommendation ignored: respawn already in flight`);
+			sendNoopAck({ clampedBy: "respawn-busy", reason: "respawn already in flight" });
+			return;
+		}
+
+		if (!this.autoAdaptEnabled) {
+			sendNoopAck({ clampedBy: "user-disabled", reason: "auto-adaptation disabled" });
 			return;
 		}
 
@@ -443,14 +459,7 @@ class ElectronLiveStreamManager {
 			allowResolutionAdaptation: this.resolutionAdaptEnabled,
 		});
 		if (!wouldRespawn) {
-			this.serverControl.sendAck({
-				sessionId,
-				applied: false,
-				actualSettings: this._snapshotApplicableSettings(),
-				clampedBy: "no-change",
-				reason: "settings already at or below recommendation",
-				ackId: recommendation?.updatedAt ? String(recommendation.updatedAt) : null,
-			});
+			sendNoopAck({ clampedBy: "no-change", reason: "settings already at or below recommendation" });
 			return;
 		}
 
@@ -476,7 +485,7 @@ class ElectronLiveStreamManager {
 				actualSettings: this._snapshotApplicableSettings(),
 				clampedBy,
 				reason: summarizeDiff(diff),
-				ackId: recommendation?.updatedAt ? String(recommendation.updatedAt) : null,
+				ackId,
 			});
 		} catch (err) {
 			this.log(`Respawn failed: ${err.message}`);
@@ -486,7 +495,7 @@ class ElectronLiveStreamManager {
 				actualSettings: this._snapshotApplicableSettings(),
 				clampedBy: "respawn-failed",
 				reason: err.message || "respawn failed",
-				ackId: recommendation?.updatedAt ? String(recommendation.updatedAt) : null,
+				ackId,
 			});
 		}
 	}

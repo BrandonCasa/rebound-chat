@@ -49,6 +49,59 @@ const ADAPTING_TIMEOUT_MS = 8_000;
 const NUMERIC_DIRECTION_FIELDS = ["videoBitrate", "outputWidth", "outputHeight", "fps"];
 
 /**
+ * Convert a `videoBitrate` value (string like "8M"/"8000k" or numeric
+ * bps) to the canonical display string the streamer-side adapter would
+ * emit (e.g. 6_638_400 → "6.64M"). Lets us detect recommendations
+ * whose applied result would be byte-identical to what the streamer is
+ * already running and short-circuit `markAdaptingPending` for the
+ * post-respawn / first-attach force pushes that previously caused a
+ * second "host adjusting" pulse per real adaptation.
+ */
+const canonicalBitrateString = (value) => {
+	if (value == null) return null;
+	let bps;
+	if (typeof value === "number") {
+		if (!Number.isFinite(value) || value <= 0) return null;
+		bps = value;
+	} else if (typeof value === "string") {
+		const match = /^([\d.]+)\s*([kKmMgG]?)/.exec(value.trim());
+		if (!match) return null;
+		const n = Number(match[1]);
+		if (!Number.isFinite(n) || n <= 0) return null;
+		const unit = (match[2] || "").toLowerCase();
+		if (unit === "g") bps = n * 1_000_000_000;
+		else if (unit === "m") bps = n * 1_000_000;
+		else if (unit === "k") bps = n * 1_000;
+		else bps = n;
+	} else {
+		return null;
+	}
+	if (bps >= 1_000_000) return `${(bps / 1_000_000).toFixed(2).replace(/\.00$/, "")}M`;
+	if (bps >= 1_000) return `${Math.round(bps / 1_000)}k`;
+	return `${Math.round(bps)}`;
+};
+
+/**
+ * Whether applying `recommendation` to `current` would be a no-op
+ * (byte-identical bitrate after canonicalisation, same codec/resolution/
+ * fps). The streamer-side adapter has its own `wouldRespawn=false`
+ * check; this server-side mirror lets us skip the viewer-facing
+ * adapting fan-out for pushes the streamer is going to ack as
+ * `clampedBy: "no-change"` anyway.
+ */
+const recommendationMatchesCurrent = (recommendation, current) => {
+	if (!recommendation || !current) return false;
+	const recBitrate = canonicalBitrateString(recommendation.videoBitrate);
+	const curBitrate = canonicalBitrateString(current.videoBitrate);
+	if (recBitrate == null || curBitrate == null || recBitrate !== curBitrate) return false;
+	if (recommendation.videoCodec && recommendation.videoCodec !== current.videoCodec) return false;
+	if (typeof recommendation.outputWidth === "number" && recommendation.outputWidth !== current.outputWidth) return false;
+	if (typeof recommendation.outputHeight === "number" && recommendation.outputHeight !== current.outputHeight) return false;
+	if (typeof recommendation.fps === "number" && recommendation.fps !== current.fps) return false;
+	return true;
+};
+
+/**
  * Compare two recommendations and return whether the next one moves
  * quality up (toward the ceiling), down (away from it), or sideways.
  * "Down" wins when there's any conflict so we never delay a quality
@@ -97,6 +150,14 @@ const createControlSession = ({
 	let pendingRaiseSince = 0;
 	let streamerSocketId = null;
 	let autoAdaptEnabled = true;
+	// Latest snapshot of the streamer's *applied* settings, as told to
+	// us by `STREAMER_HELLO` (initial attach + every post-respawn
+	// `updateCeiling`). Used to short-circuit `markAdaptingPending`
+	// when a force push would tell the streamer to apply a
+	// recommendation it is already running — the streamer would ack
+	// `clampedBy: "no-change"` immediately and we'd have shown viewers
+	// an unnecessary "host adjusting" pulse for a no-op respawn.
+	let currentSettings = null;
 	// State of the most-recent server→streamer recommendation push, as
 	// observed by viewers. `null` means the pipeline is steady; non-null
 	// means we sent a `recommended-settings` and have not yet seen the
@@ -165,6 +226,15 @@ const createControlSession = ({
 			direction,
 			derivedFromViewerCount: recommendation.derivedFromViewerCount ?? null,
 			generation: now,
+			// Stamp the in-flight push with the recommendation's
+			// `updatedAt` so streamer acks can be matched back to the
+			// generation that produced them. Without this, an ack for an
+			// earlier recommendation can clear adapting state armed for
+			// a *later* recommendation that's still in flight (e.g. the
+			// streamer was mid-respawn for rec1 when rec2 was pushed,
+			// then rec1's ack arrives later and silently clears rec2's
+			// pending window).
+			ackId: recommendation.updatedAt != null ? String(recommendation.updatedAt) : null,
 			since: now,
 		};
 		fanoutToViewers(buildAdaptingEnvelope(ADAPTING_STATE.PENDING));
@@ -267,12 +337,22 @@ const createControlSession = ({
 			"info",
 			`pushing recommendation viewers=${summary.viewerCount} bitrate=${recommendation.videoBitrate} codec=${recommendation.videoCodec} direction=${direction} reason=${recommendation.reason}`
 		);
-		const delivered = sendToStreamer({ type: "recommended-settings", ...recommendation });
+		const delivered = sendToStreamer({ type: MSG.RECOMMENDED_SETTINGS, ...recommendation });
 		// Only flag the pipeline as "adapting" when the recommendation
 		// actually went out the wire to a streamer. If no streamer is
 		// attached the push is a no-op and viewers should not be told
-		// anyone is adjusting on their behalf.
-		if (delivered) markAdaptingPending({ recommendation, direction });
+		// anyone is adjusting on their behalf. Likewise, when the push
+		// would be a no-op for the streamer (recommendation matches the
+		// settings the streamer last reported as applied), skip the
+		// adapting fan-out: the streamer will ack `clampedBy: "no-change"`
+		// immediately and showing "host adjusting" for a sub-100 ms
+		// window manifests as a UX flicker on viewers.
+		if (!delivered) return;
+		if (recommendationMatchesCurrent(recommendation, currentSettings)) {
+			safeLog("info", `skipping adapting fan-out — recommendation already matches current settings`);
+			return;
+		}
+		markAdaptingPending({ recommendation, direction });
 	};
 
 	const upsertViewer = (socketId, capabilities) => {
@@ -285,9 +365,14 @@ const createControlSession = ({
 		recomputeAndPush();
 	};
 
-	const attachStreamer = (socketId, { initialCeiling, currentSettings, autoAdapt }) => {
+	const attachStreamer = (socketId, { initialCeiling, currentSettings: incomingCurrentSettings, autoAdapt }) => {
 		streamerSocketId = socketId;
 		ceiling = initialCeiling || null;
+		// Stash the streamer's just-applied settings (sent on initial
+		// attach AND on every post-respawn `updateCeiling` hello) so
+		// `recomputeAndPush` can detect force pushes that would be a
+		// no-op for the streamer and skip the adapting fan-out.
+		if (incomingCurrentSettings) currentSettings = incomingCurrentSettings;
 		if (typeof autoAdapt === "boolean") autoAdaptEnabled = autoAdapt;
 		// A fresh attach (or re-attach) means whatever adapting-window
 		// was in flight no longer reflects reality. Clear it before the
@@ -316,8 +401,20 @@ const createControlSession = ({
 
 	const ackRecommendation = (socketId, ack) => {
 		if (streamerSocketId !== socketId) return;
-		safeLog("info", `ack received applied=${ack.applied} clampedBy=${ack.clampedBy || "none"} reason=${ack.reason || ""}`);
+		safeLog("info", `ack received applied=${ack.applied} clampedBy=${ack.clampedBy || "none"} reason=${ack.reason || ""} ackId=${ack.ackId || "?"}`);
 		fanoutToViewers({ type: MSG.STREAMER_ACK_BROADCAST, ack });
+		// Drop acks whose `ackId` predates the current adapting
+		// generation. Without this gate, an ack for `rec1` arriving
+		// after the server has already pushed `rec2` (e.g. the streamer
+		// was mid-respawn for `rec1` when `rec2` was pushed and
+		// silently dropped) would clear the pending window armed for
+		// `rec2`, leaving viewers' chrome out of sync with the actual
+		// in-flight target. We only enforce the gate when both sides
+		// have an `ackId` — older streamer builds may not send one.
+		if (adaptingState && ack.ackId && adaptingState.ackId && String(ack.ackId) !== adaptingState.ackId) {
+			safeLog("warn", `dropping stale ack ackId=${ack.ackId} expected=${adaptingState.ackId}`);
+			return;
+		}
 		clearAdaptingState({ reason: "streamer_ack" });
 	};
 
@@ -341,6 +438,7 @@ const createControlSession = ({
 		cancelPendingRaise();
 		cancelAdaptingTimeout();
 		adaptingState = null;
+		currentSettings = null;
 		viewerStore.dropSession(sessionId);
 		streamerSocketId = null;
 	};
@@ -355,6 +453,7 @@ const createControlSession = ({
 			direction: adaptingState.direction,
 			derivedFromViewerCount: adaptingState.derivedFromViewerCount,
 			generation: adaptingState.generation,
+			ackId: adaptingState.ackId,
 			since: adaptingState.since,
 		};
 	};
@@ -414,4 +513,12 @@ const createControlRegistry = ({ log } = {}) => {
 	};
 };
 
-export { createControlSession, createControlRegistry, recommendationDirection, MIN_RECOMMENDATION_INTERVAL_MS, RAISE_DWELL_MS };
+export {
+	createControlSession,
+	createControlRegistry,
+	recommendationDirection,
+	recommendationMatchesCurrent,
+	canonicalBitrateString,
+	MIN_RECOMMENDATION_INTERVAL_MS,
+	RAISE_DWELL_MS,
+};
