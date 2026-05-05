@@ -77,7 +77,12 @@ const createServerControlClient = ({ logger } = {}) => {
 				events.emit("hello", envelope);
 				return;
 			case MSG.VIEWER_SUMMARY:
-				events.emit("viewer-summary", envelope);
+				// The server nests the summary under `summary` to keep
+				// the envelope shape consistent with other broadcasts.
+				// Hand the inner payload up to the manager so the
+				// renderer doesn't see `protocolVersion` / `type`
+				// leaking into its viewer-summary state.
+				events.emit("viewer-summary", envelope.summary || null);
 				return;
 			case MSG.RECOMMENDED_SETTINGS:
 				events.emit("recommended-settings", envelope);

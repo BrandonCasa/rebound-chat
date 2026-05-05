@@ -23,7 +23,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io as ioClient } from "socket.io-client";
 
-import { ADAPTING_STATE, MSG, ROLE, SOCKET_NAMESPACE, buildHello, buildViewerCapabilities, isProtocolCompatible } from "../../../shared/streaming/protocol.js";
+import { ADAPTING_STATE, MSG, ROLE, SOCKET_NAMESPACE, buildViewerCapabilities, isProtocolCompatible } from "../../../shared/streaming/protocol.js";
 import { attachHlsBandwidthListener, attachNetworkChangeListener, probeViewerCapabilities } from "./viewerProbe.js";
 
 // Belt-and-braces against a server-side ack / timeout that never
@@ -143,7 +143,13 @@ const useLiveControlClient = ({ sessionId, websiteBaseUrl, hls, authToken, enabl
 			socket.on("connect", () => {
 				if (cancelled) return;
 				setConnected(true);
-				socket.emit("control", buildHello({ role: ROLE.VIEWER, sessionId }));
+				// The server emits its own HELLO from the `connection`
+				// handler (carrying any cached `summary` + the in-flight
+				// `adapting` snapshot), so the viewer never needs to
+				// announce itself with a HELLO of its own. Capabilities
+				// are what the server actually wants to ingest after
+				// auth — emit those immediately and let the next
+				// recompute fan a summary back.
 				sendCapabilities("connect");
 			});
 

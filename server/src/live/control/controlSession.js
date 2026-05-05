@@ -268,8 +268,15 @@ const createControlSession = ({
 		}
 
 		const summary = viewerStore.getSummary(sessionId);
+		// Both broadcasts nest the payload under `summary` so receivers
+		// can rely on a single shape regardless of whether they're a
+		// viewer or the streamer. The streamer client used to be handed
+		// the summary spread at the top of the envelope, which mixed
+		// `protocolVersion` / `type` into the renderer's diagnostics
+		// state. Mirroring `STREAMER_ACK_BROADCAST`'s nesting keeps
+		// every multi-recipient message envelope consistent.
 		fanoutToViewers({ type: MSG.VIEWER_SUMMARY_BROADCAST, summary });
-		sendToStreamer({ type: MSG.VIEWER_SUMMARY, ...summary });
+		sendToStreamer({ type: MSG.VIEWER_SUMMARY, summary });
 
 		if (!ceiling) return;
 		if (!autoAdaptEnabled && !force) return;
@@ -391,10 +398,23 @@ const createControlSession = ({
 	const detachStreamer = (socketId, { reason = "" } = {}) => {
 		if (streamerSocketId !== socketId) return false;
 		streamerSocketId = null;
+		// Drop any in-flight raise timer along with the streamer that
+		// armed it. If the timer fires after the streamer has gone,
+		// `sendToStreamer` no-ops but `recomputeAndPush` still updates
+		// `lastRecommendation` / `lastRecommendationAt` as if the push
+		// landed — that drift then biases whether the *next* streamer
+		// attach gets a force-push. Cancelling here keeps the recommender's
+		// view of "what was last delivered" honest.
+		cancelPendingRaise();
 		// The streamer can no longer ack — clear any pending adapting
 		// state so viewers stop seeing "host adjusting" the moment the
 		// streamer is known to be gone.
 		clearAdaptingState({ reason: `streamer_detached:${reason || "unknown"}` });
+		// And the streamer's last-applied settings are no longer
+		// authoritative once it has detached. Clearing them stops a
+		// stale `currentSettings` from suppressing a legitimate adapting
+		// fan-out the next time a streamer attaches.
+		currentSettings = null;
 		safeLog("info", `streamer detached reason=${reason}`);
 		return true;
 	};
@@ -458,6 +478,19 @@ const createControlSession = ({
 		};
 	};
 
+	// Snapshot of the most-recently aggregated viewer summary, used by
+	// the socket layer to hydrate late-joining viewers in the HELLO
+	// envelope. Without this, a fresh tab watches a stale UI for one
+	// recompute round-trip until its own capabilities arrive and the
+	// next broadcast lands. Returns `null` when the session has never
+	// produced a summary yet (no viewers have connected) so the socket
+	// layer can omit the field cleanly.
+	const getSummarySnapshot = () => {
+		const summary = viewerStore.getSummary(sessionId);
+		if (!summary || summary.viewerCount === 0) return null;
+		return summary;
+	};
+
 	return {
 		sessionId,
 		upsertViewer,
@@ -473,6 +506,7 @@ const createControlSession = ({
 		getPendingRaiseSince: () => pendingRaiseSince,
 		hasPendingRaise: () => Boolean(pendingRaiseTimer),
 		getAdaptingSnapshot,
+		getSummarySnapshot,
 		hasPendingAdaptation: () => Boolean(adaptingState),
 	};
 };

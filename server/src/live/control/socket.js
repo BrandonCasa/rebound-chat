@@ -172,7 +172,15 @@ const createLiveControlNamespace = ({ io, registry = createControlRegistry({ log
 				type: MSG.HELLO,
 				role: ROLE.VIEWER,
 				sessionId,
-				summary: null,
+				// Hand the late-joining viewer the most-recent viewer
+				// summary so the diagnostics panel renders real numbers
+				// on first paint instead of waiting one round-trip for
+				// the next broadcast (which only arrives once this
+				// viewer has finished probing and emitted its own
+				// capabilities). `null` is returned when the session
+				// has never produced a summary — the viewer hook tolerates
+				// either shape.
+				summary: controlSession.getSummarySnapshot ? controlSession.getSummarySnapshot() : null,
 				// Hand the late-joining viewer the current adapting
 				// snapshot (if any) so they can immediately render the
 				// "host is adjusting their stream for you" affordance

@@ -10,6 +10,8 @@ const { createControlSession, recommendationDirection, recommendationMatchesCurr
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const recommendationsFrom = (events) => events.filter((event) => event.envelope.type === "recommended-settings");
 const viewerAdaptingFrom = (events) => events.filter((event) => event.scope === "viewers" && event.envelope.type === "streamer-adapting-broadcast");
+const streamerSummariesFrom = (events) => events.filter((event) => event.scope === "streamer" && event.envelope.type === "viewer-summary");
+const viewerSummariesFrom = (events) => events.filter((event) => event.scope === "viewers" && event.envelope.type === "viewer-summary-broadcast");
 
 const buildCapabilities = (overrides = {}) => ({
 	viewerId: overrides.viewerId || "viewer",
@@ -590,6 +592,183 @@ describe("controlSession adapting suppression for matching currentSettings", () 
 		const adaptingPending = viewerAdaptingFrom(emitted).filter((event) => event.envelope.state === "pending");
 		expect(adaptingPending).to.have.lengthOf(0, "the post-respawn re-attach must not pulse a second time");
 		expect(session.hasPendingAdaptation()).to.equal(false);
+	});
+});
+
+describe("controlSession viewer-summary envelope shape", () => {
+	let emitted;
+	let session;
+
+	beforeEach(() => {
+		emitted = [];
+		session = createControlSession({
+			sessionId: "session-summary-shape",
+			emit: (event) => emitted.push(event),
+			log: null,
+			raiseDwellMs: 0,
+			minIntervalMs: 0,
+		});
+	});
+
+	afterEach(() => session.teardown());
+
+	it("nests the summary payload under `summary` for both audiences", () => {
+		// Both viewer and streamer broadcasts must carry the same
+		// envelope shape (`{ type, summary }`) so a single receiver
+		// implementation can speak to both. The streamer used to be
+		// handed the summary spread at the top of the envelope, which
+		// leaked `protocolVersion` / `type` into the renderer's
+		// diagnostics state and made downstream code juggle two shapes.
+		session.attachStreamer("streamer-1", {
+			initialCeiling: buildCeiling(),
+			currentSettings: null,
+			autoAdapt: true,
+		});
+		session.upsertViewer("viewer-A", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 4 } }));
+
+		const streamerSummary = streamerSummariesFrom(emitted).at(-1);
+		const viewerSummary = viewerSummariesFrom(emitted).at(-1);
+		expect(streamerSummary).to.exist;
+		expect(viewerSummary).to.exist;
+
+		expect(streamerSummary.envelope).to.have.property("summary");
+		expect(streamerSummary.envelope.summary).to.have.property("viewerCount");
+		expect(streamerSummary.envelope).to.not.have.property("viewerCount", undefined);
+		// Top-level fields that used to leak via the spread shape must
+		// no longer be present alongside the nested payload.
+		expect(streamerSummary.envelope).to.not.have.property("minDownlinkMbit");
+		expect(streamerSummary.envelope).to.not.have.property("medianDownlinkMbit");
+
+		expect(viewerSummary.envelope).to.have.property("summary");
+		expect(viewerSummary.envelope.summary).to.have.property("viewerCount");
+		expect(viewerSummary.envelope.summary).to.deep.equal(streamerSummary.envelope.summary);
+	});
+});
+
+describe("controlSession late-join HELLO snapshot accessors", () => {
+	let emitted;
+	let session;
+
+	beforeEach(() => {
+		emitted = [];
+		session = createControlSession({
+			sessionId: "session-late-join",
+			emit: (event) => emitted.push(event),
+			log: null,
+			raiseDwellMs: 0,
+			minIntervalMs: 0,
+		});
+	});
+
+	afterEach(() => session.teardown());
+
+	it("returns null from getSummarySnapshot before any viewer has connected", () => {
+		// A brand-new session with nobody joined yet has nothing useful
+		// to hand a late-joiner — better to omit `summary` than show a
+		// "0 viewers" placeholder that will be replaced one round-trip
+		// later anyway.
+		expect(session.getSummarySnapshot()).to.equal(null);
+	});
+
+	it("exposes the live summary once at least one viewer has connected", () => {
+		// A second viewer arriving must see the aggregated state of
+		// the cohort as it stands rather than waiting for the next
+		// broadcast triggered by their own capabilities upload.
+		session.upsertViewer("viewer-A", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 4 } }));
+		const snapshot = session.getSummarySnapshot();
+		expect(snapshot).to.not.equal(null);
+		expect(snapshot.viewerCount).to.equal(1);
+		expect(snapshot).to.have.property("minDownlinkMbit");
+		expect(snapshot).to.have.property("supportedCodecs");
+	});
+
+	it("returns null again once every viewer has disconnected", () => {
+		session.upsertViewer("viewer-A", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 4 } }));
+		expect(session.getSummarySnapshot()).to.not.equal(null);
+		session.removeViewer("viewer-A");
+		expect(session.getSummarySnapshot()).to.equal(null);
+	});
+});
+
+describe("controlSession detachStreamer cleanup", () => {
+	const RAISE_DWELL = 60;
+	let emitted;
+	let session;
+
+	beforeEach(() => {
+		emitted = [];
+		session = createControlSession({
+			sessionId: "session-detach",
+			emit: (event) => emitted.push(event),
+			log: null,
+			raiseDwellMs: RAISE_DWELL,
+			minIntervalMs: 0,
+		});
+	});
+
+	afterEach(() => session.teardown());
+
+	it("cancels any pending raise the streamer was waiting on when it detaches", async () => {
+		// A pending raise armed for streamer A keeps ticking even after
+		// A goes away. If left alone, the timer fires later and
+		// `recomputeAndPush` updates `lastRecommendation` /
+		// `lastRecommendationAt` as if the push had been delivered —
+		// the next streamer attaching then inherits stale "last push"
+		// state that biases its force-push decision. The cancel keeps
+		// the recommender's view of what was last delivered honest.
+		session.attachStreamer("streamer-1", {
+			initialCeiling: buildCeiling(),
+			currentSettings: null,
+			autoAdapt: true,
+		});
+		session.upsertViewer("viewer-slow", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1.2 } }));
+		session.removeViewer("viewer-slow");
+		expect(session.hasPendingRaise()).to.equal(true);
+
+		session.detachStreamer("streamer-1", { reason: "transport_close" });
+		expect(session.hasPendingRaise()).to.equal(false, "the raise timer must die with its streamer");
+
+		emitted.length = 0;
+		await wait(RAISE_DWELL + 30);
+		expect(recommendationsFrom(emitted)).to.have.lengthOf(0, "no push should fire after the streamer is gone");
+	});
+
+	it("clears cached currentSettings on detach so the next attach is not falsely suppressed", () => {
+		// `currentSettings` is used to short-circuit the adapting
+		// fan-out when a force push would be a no-op respawn for the
+		// streamer. If we keep it after the streamer detaches, a
+		// brand-new streamer that doesn't pass `currentSettings` in
+		// its hello inherits the previous streamer's applied state —
+		// which can suppress a legitimate "host adjusting" pulse for a
+		// recommendation the new streamer is actually about to apply.
+		const ceiling = buildCeiling();
+		session.attachStreamer("streamer-1", {
+			initialCeiling: ceiling,
+			currentSettings: {
+				videoBitrate: "8M",
+				videoCodec: ceiling.videoCodec,
+				outputWidth: ceiling.outputWidth,
+				outputHeight: ceiling.outputHeight,
+				fps: ceiling.fps,
+			},
+			autoAdapt: true,
+		});
+		session.detachStreamer("streamer-1", { reason: "transport_close" });
+		emitted.length = 0;
+
+		// Streamer-2 attaches without passing currentSettings; with
+		// the previous streamer's settings still cached, no adapting
+		// pulse would fan out for the (matching) ceiling-restoration
+		// baseline. After the fix, currentSettings has been cleared so
+		// the pulse is allowed to fire.
+		session.attachStreamer("streamer-2", {
+			initialCeiling: ceiling,
+			currentSettings: null,
+			autoAdapt: true,
+		});
+		const adaptingPending = viewerAdaptingFrom(emitted).filter((event) => event.envelope.state === "pending");
+		expect(adaptingPending).to.have.lengthOf(1, "fresh streamer with unknown applied state must still get a pulse");
+		expect(session.hasPendingAdaptation()).to.equal(true);
 	});
 });
 
