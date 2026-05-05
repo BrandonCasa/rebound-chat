@@ -1,5 +1,21 @@
 # Plan 05: Unified observability with OpenTelemetry + Jaeger across renderer, main, and server (plus on-demand CPU/heap profiles)
 
+## Update (2026-05-04)
+
+- There is currently no `tools/profiler/` workspace in the repo, so this plan should be executed as a staged bootstrap rather than a single large drop.
+- Plan 03 uploader instrumentation points and Plan 04 capability-probe outputs are still pending; this plan should not block on them for core OTel rollout.
+- The first win is end-to-end traceability for renderer click -> IPC -> main -> server request flow; GPU/deep profiling can remain explicitly optional until the control plane and uploader timing are stable.
+
+### Updated rollout strategy
+
+1. Phase A + B + C + D first (Jaeger + Node + renderer + propagation) with strict off-by-default gating.
+2. Phase E limited to FFmpeg span wrapper + lightweight runtime heartbeat events.
+3. Phase F (CPU/heap inspector tooling) can land in parallel with E because it is OTel-independent.
+4. Phase G orchestrator after A-F are proven individually.
+5. Phase H (GPU profiling) split into:
+   - H-live: vendor-agnostic counter polling where available.
+   - H-deep: vendor-specific deep capture wrappers as optional add-ons.
+
 ## Status of prerequisites
 
 - **Plans 01–03** (NVENC defaults, VBV bufsize, parallel uploads): All should be complete before this plan. Plan 05 Phase H (GPU profiling) references timing numbers that Plans 01–03 affect (encoder latency, per-segment VBV behavior, upload pass durations). The profiler is most useful after the hot-path changes have landed and we need to verify they actually helped.

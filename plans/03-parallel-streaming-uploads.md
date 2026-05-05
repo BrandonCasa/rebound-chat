@@ -1,5 +1,20 @@
 # Plan 03: Parallelize uploads, stream the file body, never silently drop a pass
 
+## Update (2026-05-04)
+
+- `public/streaming/` modularization from Plans 01-02 is in place (`defaults`, `types`, encoder modules, profile files, and related tests are present).
+- Upload orchestration is still concentrated in `public/electron-live-stream.js`; `public/streaming/uploader/` does not exist yet.
+- This plan remains the next operational bottleneck because upload pass timing still determines real viewer smoothness under network contention.
+
+### Updated implementation order (incremental, low-risk)
+
+1. Add `public/streaming/uploader/httpClient.js` and `fileSource.js`, then consume them from `public/electron-live-stream.js` without changing scheduling behavior.
+2. Add `uploadPlanner.js` as a pure module and cover it with unit tests.
+3. Land `uploadPass.js` with bounded parallel segment uploads + ordered playlists.
+4. Replace interval polling with `uploadScheduler.js` (self-rescheduling `setTimeout` cadence).
+5. Split heartbeat into `heartbeat.js` and make pass-duration logging mandatory.
+6. Add `index.js` composition wrapper and only then reduce `ElectronLiveStreamManager` uploader responsibilities.
+
 ## Status of prerequisites
 
 - **Plans 01–02**: Can be done in any order relative to this plan. The uploader refactor is independent of encoder defaults (Plan 01) and VBV bufsize (Plan 02). Plan 04 (UI rewrite) will eventually replace `ElectronLiveStreamManager` entirely — this plan extracts the uploader into a self-contained subsystem so that Plan 04 can wire it in cleanly rather than inheriting a monolith.

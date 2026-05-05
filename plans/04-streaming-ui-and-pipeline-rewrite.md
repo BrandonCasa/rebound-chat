@@ -1,5 +1,19 @@
 # Plan 04: Streaming UI rewrite, capability-aware settings, audio redesign, and server-driven adaptation
 
+## Update (2026-05-04)
+
+- The streaming pipeline split is already present (`public/streaming/pipeline.js`, encoder modules, profiles, defaults, and tests), so this plan should avoid redoing that work.
+- Plan 03 extraction (`public/streaming/uploader/`) is not landed yet, so anything that assumes a fully isolated uploader should be treated as "after Plan 03 step 6".
+- `public/streaming/types.js` already carries key fields from Plans 01-02 (`vbvMultiplier`, profile-oriented settings), so Phase C can consume current types first and postpone type relocation to `shared/` until both renderer and main actually need cross-process imports.
+
+### Updated execution priorities
+
+1. Ship Phase A (capability probe) + Phase B (settings persistence) first as non-UI-risk infrastructure.
+2. Do a minimal Phase C pass that introduces auto-optimized vs advanced controls in the existing route before full component extraction.
+3. Land Phase D (file source mode) early because it is isolated and high user value.
+4. Gate Phase E (Windows per-process audio helper) behind a feature flag and ship desktop/mic mixer baseline first.
+5. Start Phase F (server-driven adaptation) only after Plan 03 scheduler + pass logging is live so adaptation decisions have reliable timing signal.
+
 ## Status of prerequisites
 
 - **Plan 01** (NVENC defaults + quality profile system): Must be complete. The `public/streaming/profiles/` system and updated `defaults.js` are inputs to Phase C's auto-optimize and constraint engine.
