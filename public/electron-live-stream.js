@@ -52,6 +52,7 @@ class ElectronLiveStreamManager {
 		this.shell = shell;
 		this.sendToRenderer = sendToRenderer;
 		this.logger = logger;
+		this.ffmpegPath = ffmpegPath;
 		this.status = "idle";
 		this.error = "";
 		this.activeConfig = null;
@@ -201,7 +202,7 @@ class ElectronLiveStreamManager {
 			authToken: String(config.authToken || "").trim(),
 			sessionLabel: String(config.sessionLabel || "").trim(),
 			retainSegmentCount: parsePositiveInt(config.retainSegmentCount, "Retain segments"),
-			ffmpegPath: String(config.ffmpegPath || "ffmpeg.exe").trim(),
+			ffmpegPath: String(config.ffmpegPath || this.ffmpegPath || "ffmpeg.exe").trim(),
 			sourceMode,
 			filePath,
 			fileLoop,
