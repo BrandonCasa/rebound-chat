@@ -44,6 +44,7 @@ const autoOptimize = (capabilities, fallbackSettings = buildDefaultSettings()) =
 		outputWidth: width,
 		outputHeight: height,
 		fps,
+		captureFps: fps,
 		gopSize: fps * Number.parseFloat(fallbackSettings.hlsTime || "2"),
 		videoBitrate: pickBitrate(width, height, fps),
 		vbvMultiplier: 1.0,

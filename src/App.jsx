@@ -147,17 +147,6 @@ const App = () => {
 		}
 	}, [authState.loggedIn, authState.authToken, dispatch]);
 
-	useEffect(() => {
-		async function fetchFfBinaries() {
-			const [ffmpegPath, ffprobePath] = await Promise.all([window.electronAPI.system.getFfmpegPath(), window.electronAPI.system.getFfprobePath()]);
-			window.ffmpegPath = ffmpegPath;
-			window.ffprobePath = ffprobePath;
-		}
-		if (window.isElectron && (!window.ffmpegPath || !window.ffprobePath)) {
-			fetchFfBinaries();
-		}
-	}, []);
-
 	const showAutoUpdate = window.isElectron;
 
 	return (

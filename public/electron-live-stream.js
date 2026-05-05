@@ -23,6 +23,10 @@ import { uploadAgent } from "./streaming/uploader/httpClient.js";
 import { createUploader } from "./streaming/uploader/index.js";
 import { createCapabilityStore } from "./streaming/capabilities/probe.js";
 import { createSettingsStore } from "./streaming/settings/store.js";
+import { applyRecommendation, summarizeDiff } from "./streaming/server-control/adapter.js";
+import { buildInitialCeiling } from "./streaming/server-control/initialCeiling.js";
+import { readPlaylistCursor } from "./streaming/server-control/segmentCursor.js";
+import { createServerControlClient } from "./streaming/server-control/socket.js";
 
 const UPLOAD_POLL_INTERVAL_MS = 750;
 
@@ -60,6 +64,14 @@ class ElectronLiveStreamManager {
 		this.ffmpegProcess = null;
 		this.uploader = null;
 		this.stopping = false;
+		this.respawning = false;
+		this.generation = 0;
+		this.initialCeiling = null;
+		this.autoAdaptEnabled = true;
+		this.viewerSummary = null;
+		this.lastRecommendation = null;
+		this.adaptationHistory = [];
+		this.controlConnected = false;
 		this.logBuffer = "";
 		this.capabilities = defaultCapabilities();
 		this.detectedCapabilitiesStore = createCapabilityStore({
@@ -71,6 +83,38 @@ class ElectronLiveStreamManager {
 			app,
 			getCapabilities: () => this.detectedCapabilitiesStore.get(),
 		});
+		this.serverControl = createServerControlClient({ logger });
+		this._wireServerControlEvents();
+	}
+
+	_wireServerControlEvents() {
+		this.serverControl.events.on("viewer-summary", (summary) => {
+			this.viewerSummary = summary;
+			this.sendToRenderer("live-stream-viewer-summary", summary);
+		});
+		this.serverControl.events.on("recommended-settings", (recommendation) => {
+			this.lastRecommendation = recommendation;
+			this.sendToRenderer("live-stream-recommendation", recommendation);
+			void this.handleRecommendation(recommendation);
+		});
+		this.serverControl.events.on("hello", (hello) => {
+			if (hello?.summary) {
+				this.viewerSummary = hello.summary;
+				this.sendToRenderer("live-stream-viewer-summary", hello.summary);
+			}
+			if (hello?.recommendation) {
+				this.lastRecommendation = hello.recommendation;
+				this.sendToRenderer("live-stream-recommendation", hello.recommendation);
+			}
+		});
+		this.serverControl.events.on("connected", () => {
+			this.controlConnected = true;
+			this.sendToRenderer("live-stream-control-connected", { connected: true });
+		});
+		this.serverControl.events.on("disconnected", () => {
+			this.controlConnected = false;
+			this.sendToRenderer("live-stream-control-connected", { connected: false });
+		});
 	}
 
 	getState() {
@@ -81,6 +125,26 @@ class ElectronLiveStreamManager {
 			ffmpegPid: this.ffmpegProcess?.pid || null,
 			startedAt: this.activeConfig?.startedAt || null,
 			source: this.activeConfig?.source || null,
+			generation: this.generation,
+			initialCeiling: this.initialCeiling,
+			autoAdaptEnabled: this.autoAdaptEnabled,
+			viewerSummary: this.viewerSummary,
+			lastRecommendation: this.lastRecommendation,
+			adaptationHistory: this.adaptationHistory.slice(-25),
+			currentSettings: this._snapshotApplicableSettings(),
+			controlConnected: this.controlConnected,
+		};
+	}
+
+	_snapshotApplicableSettings() {
+		if (!this.activeConfig) return null;
+		return {
+			videoBitrate: this.activeConfig.videoBitrate,
+			videoCodec: this.activeConfig.videoCodec,
+			outputWidth: this.activeConfig.outputWidth,
+			outputHeight: this.activeConfig.outputHeight,
+			fps: this.activeConfig.fps,
+			encoderPreset: this.activeConfig.encoderPreset,
 		};
 	}
 
@@ -202,7 +266,7 @@ class ElectronLiveStreamManager {
 			authToken: String(config.authToken || "").trim(),
 			sessionLabel: String(config.sessionLabel || "").trim(),
 			retainSegmentCount: parsePositiveInt(config.retainSegmentCount, "Retain segments"),
-			ffmpegPath: String(config.ffmpegPath || this.ffmpegPath || "ffmpeg.exe").trim(),
+			ffmpegPath: this.ffmpegPath,
 			sourceMode,
 			filePath,
 			fileLoop,
@@ -291,13 +355,13 @@ class ElectronLiveStreamManager {
 		};
 	}
 
-	buildFfmpegCommand(config, capabilities = this.capabilities) {
-		const { command, args } = buildPipelineArgs(config, capabilities);
+	buildFfmpegCommand(config, capabilities = this.capabilities, respawnOptions = null) {
+		const { command, args } = buildPipelineArgs(config, capabilities, respawnOptions ? { respawn: respawnOptions } : {});
 		return { command, args, full: [command, ...args] };
 	}
 
-	spawnFfmpeg(config) {
-		const { command, args } = this.buildFfmpegCommand(config);
+	spawnFfmpeg(config, respawnOptions = null) {
+		const { command, args } = this.buildFfmpegCommand(config, this.capabilities, respawnOptions);
 		this.log(`Running: ${[command, ...args].join(" ")}`);
 		const child = spawn(command, args, {
 			cwd: config.remoteDir,
@@ -319,7 +383,7 @@ class ElectronLiveStreamManager {
 		child.stderr?.on("data", handleData);
 		child.once("error", (err) => {
 			this.log(`FFmpeg failed to start: ${err.message}`);
-			if (this.ffmpegProcess === child && !this.stopping) {
+			if (this.ffmpegProcess === child && !this.stopping && !this.respawning) {
 				void this.handleFfmpegExit({ child, code: null, signal: null, error: err.message });
 			}
 		});
@@ -340,10 +404,136 @@ class ElectronLiveStreamManager {
 			this.ffmpegProcess = null;
 		}
 
-		if (this.stopping || this.status === "idle") return;
+		if (this.stopping || this.respawning || this.status === "idle") return;
 
 		const reason = error || `FFmpeg exited with code ${code ?? signal ?? "unknown"}.`;
 		void this.stop({ error: reason });
+	}
+
+	/**
+	 * Apply a server-pushed recommendation. Runs the lower-only clamp
+	 * via the pure adapter, decides whether the change is worth a
+	 * respawn, executes the respawn, and acks the result back to the
+	 * server.
+	 */
+	async handleRecommendation(recommendation) {
+		const sessionId = this.sessionInfo?.sessionId;
+		if (!sessionId || !this.activeConfig || !this.initialCeiling) return;
+		if (this.status !== "streaming") return;
+		if (this.respawning) {
+			this.log(`Recommendation ignored: respawn already in flight`);
+			return;
+		}
+
+		if (!this.autoAdaptEnabled) {
+			this.serverControl.sendAck({
+				sessionId,
+				applied: false,
+				actualSettings: this._snapshotApplicableSettings(),
+				clampedBy: "user-disabled",
+				reason: "auto-adaptation disabled",
+				ackId: recommendation?.updatedAt ? String(recommendation.updatedAt) : null,
+			});
+			return;
+		}
+
+		const { next, diff, clampedBy, wouldRespawn } = applyRecommendation(this.activeConfig, recommendation, this.initialCeiling);
+		if (!wouldRespawn) {
+			this.serverControl.sendAck({
+				sessionId,
+				applied: false,
+				actualSettings: this._snapshotApplicableSettings(),
+				clampedBy: "no-change",
+				reason: "settings already at or below recommendation",
+				ackId: recommendation?.updatedAt ? String(recommendation.updatedAt) : null,
+			});
+			return;
+		}
+
+		this.log(`Applying recommendation: ${summarizeDiff(diff)}${clampedBy ? ` (clamped by ${clampedBy})` : ""}`);
+
+		try {
+			await this._respawnFfmpegWithSettings(next);
+			const entry = {
+				appliedAt: Date.now(),
+				diff,
+				clampedBy,
+				reason: recommendation.reason,
+				generation: this.generation,
+				viewerCount: this.viewerSummary?.viewerCount ?? null,
+			};
+			this.adaptationHistory.push(entry);
+			this.adaptationHistory = this.adaptationHistory.slice(-50);
+			this.sendToRenderer("live-stream-adaptation", entry);
+			this.setState(this.status, { error: this.error });
+			this.serverControl.sendAck({
+				sessionId,
+				applied: true,
+				actualSettings: this._snapshotApplicableSettings(),
+				clampedBy,
+				reason: summarizeDiff(diff),
+				ackId: recommendation?.updatedAt ? String(recommendation.updatedAt) : null,
+			});
+		} catch (err) {
+			this.log(`Respawn failed: ${err.message}`);
+			this.serverControl.sendAck({
+				sessionId,
+				applied: false,
+				actualSettings: this._snapshotApplicableSettings(),
+				clampedBy: "respawn-failed",
+				reason: err.message || "respawn failed",
+				ackId: recommendation?.updatedAt ? String(recommendation.updatedAt) : null,
+			});
+		}
+	}
+
+	async _respawnFfmpegWithSettings(patch) {
+		if (!this.activeConfig) throw new Error("No active config to respawn against.");
+		if (this.respawning) throw new Error("Respawn already in flight.");
+		this.respawning = true;
+		try {
+			const cursor = readPlaylistCursor(this.activeConfig.remoteDir);
+			const startNumber = cursor.nextStartNumber || 0;
+
+			await this.terminateFfmpeg();
+
+			const nextConfig = {
+				...this.activeConfig,
+				...patch,
+				startedAt: this.activeConfig.startedAt,
+				remoteDir: this.activeConfig.remoteDir,
+			};
+			this.activeConfig = nextConfig;
+			this.generation += 1;
+			this.uploader?.invalidateInit?.();
+
+			this.log(`Respawning FFmpeg generation=${this.generation} startNumber=${startNumber}`);
+			this.ffmpegProcess = this.spawnFfmpeg(this.activeConfig, {
+				discontStart: true,
+				startNumber,
+			});
+
+			this.serverControl.updateCeiling({
+				ceiling: this.initialCeiling,
+				currentSettings: this._snapshotApplicableSettings(),
+				autoAdapt: this.autoAdaptEnabled,
+			});
+		} finally {
+			this.respawning = false;
+		}
+	}
+
+	setAutoAdapt(enabled) {
+		const next = Boolean(enabled);
+		if (next === this.autoAdaptEnabled) return this.getState();
+		this.autoAdaptEnabled = next;
+		this.log(`Auto-adaptation ${next ? "enabled" : "disabled"}`);
+		const sessionId = this.sessionInfo?.sessionId;
+		if (sessionId) {
+			this.serverControl.setAutoAdapt({ sessionId, autoAdapt: next });
+		}
+		this.setState(this.status, { error: this.error });
+		return this.getState();
 	}
 
 	async ensureFallbackMasterPlaylist() {
@@ -428,6 +618,12 @@ class ElectronLiveStreamManager {
 
 		const config = this.normalizeConfig(rawConfig);
 		this.stopping = false;
+		this.respawning = false;
+		this.generation = 0;
+		this.adaptationHistory = [];
+		this.viewerSummary = null;
+		this.lastRecommendation = null;
+		this.autoAdaptEnabled = rawConfig.autoAdaptEnabled !== false;
 		this.error = "";
 		this.capabilities = defaultCapabilities();
 		this.setState("starting");
@@ -435,6 +631,7 @@ class ElectronLiveStreamManager {
 		try {
 			await mkdir(config.remoteDir, { recursive: true });
 			this.activeConfig = config;
+			this.initialCeiling = buildInitialCeiling(config);
 
 			this.log("Creating live session...");
 			this.sessionInfo = await this.createSession(config);
@@ -445,6 +642,14 @@ class ElectronLiveStreamManager {
 
 			this.startUploader();
 			this.ffmpegProcess = this.spawnFfmpeg(config);
+			this.serverControl.start({
+				websiteBaseUrl: config.websiteBaseUrl,
+				sessionId: this.sessionInfo.sessionId,
+				ingestSecret: this.sessionInfo.ingestSecret,
+				ceiling: this.initialCeiling,
+				currentSettings: this._snapshotApplicableSettings(),
+				autoAdapt: this.autoAdaptEnabled,
+			});
 			this.setState("streaming");
 			this.log("Streaming started");
 
@@ -500,6 +705,12 @@ class ElectronLiveStreamManager {
 		this.uploader = null;
 		uploader?.stop();
 
+		try {
+			this.serverControl.stop({ reason: error ? "error" : "stream_ended" });
+		} catch (err) {
+			this.log(`Server-control teardown failed: ${err.message}`);
+		}
+
 		await this.terminateFfmpeg();
 		this.ffmpegProcess = null;
 
@@ -517,6 +728,12 @@ class ElectronLiveStreamManager {
 
 		this.activeConfig = null;
 		this.sessionInfo = null;
+		this.initialCeiling = null;
+		this.viewerSummary = null;
+		this.lastRecommendation = null;
+		this.adaptationHistory = [];
+		this.controlConnected = false;
+		this.generation = 0;
 		this.logBuffer = "";
 		this.stopping = false;
 		this.setState(error ? "error" : "idle", { error });
@@ -545,6 +762,7 @@ const registerLiveStreamIpc = ({ ipcMain, app, shell, sendToRenderer, logger, ff
 	ipcMain.handle("settings:reset", () => manager.resetSettings());
 	ipcMain.handle("live-stream:start", (_event, config) => manager.start(config));
 	ipcMain.handle("live-stream:stop", () => manager.stop());
+	ipcMain.handle("live-stream:set-auto-adapt", (_event, enabled) => manager.setAutoAdapt(enabled));
 	ipcMain.handle("live-stream:open-url", (_event, url) => {
 		if (!url) return false;
 		void shell.openExternal(url);

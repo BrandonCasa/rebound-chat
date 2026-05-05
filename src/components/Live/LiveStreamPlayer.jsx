@@ -10,7 +10,8 @@ import { alpha, useTheme } from "@mui/material/styles";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 
-import { buildLiveHlsConfig } from "../../helpers/live";
+import { buildLiveHlsConfig, getLiveBase } from "../../helpers/live";
+import { useLiveControlClient } from "../../features/player/useLiveControlClient";
 import LiveStreamInfoTooltip, { formatDuration } from "./LiveStreamInfoTooltip";
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -59,9 +60,20 @@ function LiveStreamPlayer({ stream, sx }) {
 		syncLabel: "Waiting for stream",
 		error: "",
 	});
+	const [hlsInstance, setHlsInstance] = useState(null);
 
 	const targetDuration = stream?.mediaInfo?.mediaPlaylist?.targetDuration || 2;
 	const syncTuning = useMemo(() => buildSyncTuning(targetDuration), [targetDuration]);
+
+	const liveControlSessionId = stream?.sessionId || null;
+	const liveControlBaseUrl = getLiveBase() || (typeof window !== "undefined" ? window.location?.origin : "");
+	useLiveControlClient({
+		sessionId: liveControlSessionId,
+		websiteBaseUrl: liveControlBaseUrl,
+		hls: hlsInstance,
+		authToken,
+		enabled: Boolean(liveControlSessionId),
+	});
 
 	useEffect(() => {
 		authTokenRef.current = authToken;
@@ -187,6 +199,7 @@ function LiveStreamPlayer({ stream, sx }) {
 			});
 
 			hlsRef.current = hls;
+			setHlsInstance(hls);
 			hls.on(Hls.Events.ERROR, (_event, data) => {
 				if (!data?.fatal) return;
 
@@ -245,6 +258,7 @@ function LiveStreamPlayer({ stream, sx }) {
 			if (hlsRef.current) {
 				hlsRef.current.destroy();
 				hlsRef.current = null;
+				setHlsInstance(null);
 			}
 
 			video.pause();

@@ -36,6 +36,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useDispatch, useSelector } from "react-redux";
 
 import { getLiveBase } from "../../helpers/live";
+import LiveStatusPanel from "../../features/streaming/ui/panels/LiveStatusPanel";
 import { setDialogOpened } from "../../slices/dialogSlice";
 import { scrollbarStyles } from "../scrollbarStyles";
 
@@ -150,11 +151,10 @@ const defaultSettings = {
 	liveCreateToken: "",
 	sessionLabel: "",
 	retainSegmentCount: "5",
-	ffmpegPath: window.ffmpegPath || "ffmpeg.exe",
 	sourceMode: "screen",
 	filePath: "",
 	fileLoop: true,
-	captureFps: "120",
+	captureFps: "60",
 	rtbufsize: "256M",
 	manualInputArgs: "",
 	audioInputArgs: "",
@@ -166,7 +166,7 @@ const defaultSettings = {
 	outputHeight: "1080",
 	videoBitrate: "8M",
 	audioBitrate: "160k",
-	fps: "120",
+	fps: "60",
 	nvencProfile: "fast_live",
 	encoderPreset: "p1",
 	nvencTune: "ll",
@@ -178,7 +178,7 @@ const defaultSettings = {
 	nvencBRefMode: "disabled",
 	nvencBFrames: "0",
 	nvencLookahead: "0",
-	gopSize: "60",
+	gopSize: "120",
 	hlsTime: "2",
 	hlsListSize: "10",
 	convertStreamToSdr: false,
@@ -344,6 +344,11 @@ function DesktopLivePage() {
 	const [detectedCapabilities, setDetectedCapabilities] = useState(null);
 	const [thumbnails, setThumbnails] = useState({});
 	const [advancedMode, setAdvancedMode] = useState(false);
+	const [viewerSummary, setViewerSummary] = useState(null);
+	const [recommendation, setRecommendation] = useState(null);
+	const [adaptationHistory, setAdaptationHistory] = useState([]);
+	const [autoAdaptEnabled, setAutoAdaptEnabled] = useState(true);
+	const [controlConnected, setControlConnected] = useState(false);
 	const saveSettingsTimeoutRef = useRef(null);
 	const hydratedSettingsRef = useRef(false);
 	const electronLive = window.electronAPI?.liveStream;
@@ -395,23 +400,44 @@ function DesktopLivePage() {
 
 		let mounted = true;
 		electronLive.getState().then((state) => {
-			if (mounted) setStreamState(state);
+			if (!mounted) return;
+			setStreamState(state);
+			if (state.viewerSummary) setViewerSummary(state.viewerSummary);
+			if (state.lastRecommendation) setRecommendation(state.lastRecommendation);
+			if (state.adaptationHistory?.length) setAdaptationHistory(state.adaptationHistory);
+			if (typeof state.autoAdaptEnabled === "boolean") setAutoAdaptEnabled(state.autoAdaptEnabled);
+			if (typeof state.controlConnected === "boolean") setControlConnected(state.controlConnected);
 		});
 
 		const offState = electronLive.onState((state) => {
 			setStreamState(state);
 			setSessionInfo(state.sessionInfo || null);
+			if (state.viewerSummary !== undefined) setViewerSummary(state.viewerSummary);
+			if (state.lastRecommendation !== undefined) setRecommendation(state.lastRecommendation);
+			if (Array.isArray(state.adaptationHistory)) setAdaptationHistory(state.adaptationHistory);
+			if (typeof state.autoAdaptEnabled === "boolean") setAutoAdaptEnabled(state.autoAdaptEnabled);
+			if (typeof state.controlConnected === "boolean") setControlConnected(state.controlConnected);
 		});
 		const offSession = electronLive.onSession((session) => setSessionInfo(session));
 		const offLog = electronLive.onLog((entry) => {
 			setLogs((current) => [...current.slice(-250), entry]);
 		});
+		const offViewerSummary = electronLive.onViewerSummary?.((summary) => setViewerSummary(summary));
+		const offRecommendation = electronLive.onRecommendation?.((rec) => setRecommendation(rec));
+		const offAdaptation = electronLive.onAdaptation?.((entry) => {
+			setAdaptationHistory((current) => [...current, entry].slice(-50));
+		});
+		const offControlConnected = electronLive.onControlConnected?.((payload) => setControlConnected(Boolean(payload?.connected)));
 
 		return () => {
 			mounted = false;
 			offState?.();
 			offSession?.();
 			offLog?.();
+			offViewerSummary?.();
+			offRecommendation?.();
+			offAdaptation?.();
+			offControlConnected?.();
 		};
 	}, [electronLive]);
 
@@ -442,10 +468,14 @@ function DesktopLivePage() {
 			.loadSettings()
 			.then((saved) => {
 				if (!cancelled && saved && typeof saved === "object") {
-					setSettings((current) => ({
-						...current,
-						...saved,
-					}));
+					setSettings((current) => {
+						// Skip empty-string entries so a stale stream-settings.json
+						// (e.g. one persisted before the websiteBaseUrl default was
+						// resolvable in the main process) cannot clobber the
+						// renderer's defaults derived from `getLiveBase()`.
+						const overrides = Object.fromEntries(Object.entries(saved).filter(([_key, value]) => value !== ""));
+						return { ...current, ...overrides };
+					});
 					hydratedSettingsRef.current = true;
 				}
 			})
@@ -530,17 +560,35 @@ function DesktopLivePage() {
 		if (!electronLive) return;
 		setError("");
 		setLogs([]);
+		setAdaptationHistory([]);
+		setViewerSummary(null);
+		setRecommendation(null);
 		try {
 			const state = await electronLive.start({
 				...settings,
 				source: settings.sourceMode === "file" ? null : selectedSource,
 				authToken: auth.authToken || "",
+				autoAdaptEnabled,
 			});
 			setStreamState(state);
 		} catch (err) {
 			setError(err.message || "Unable to start stream.");
 		}
 	};
+
+	const handleToggleAutoAdapt = useCallback(
+		async (next) => {
+			setAutoAdaptEnabled(next);
+			if (!electronLive?.setAutoAdapt) return;
+			try {
+				const state = await electronLive.setAutoAdapt(next);
+				if (state) setStreamState(state);
+			} catch (_err) {
+				// keep optimistic toggle; main process will broadcast next state
+			}
+		},
+		[electronLive]
+	);
 
 	const handleResetSettings = async () => {
 		if (!electronLive?.resetSettings) return;
@@ -640,6 +688,17 @@ function DesktopLivePage() {
 						overflow: "hidden",
 					}}>
 					<Stack spacing={2} sx={{ minHeight: 0, overflowY: "auto", overflowX: "hidden", pr: 0.5, ...scrollbarStyles }}>
+						<LiveStatusPanel
+							streamState={streamState}
+							viewerSummary={viewerSummary}
+							recommendation={recommendation}
+							adaptationHistory={streamState?.adaptationHistory?.length ? streamState.adaptationHistory : adaptationHistory}
+							currentSettings={streamState?.currentSettings}
+							initialCeiling={streamState?.initialCeiling}
+							autoAdaptEnabled={typeof streamState?.autoAdaptEnabled === "boolean" ? streamState.autoAdaptEnabled : autoAdaptEnabled}
+							onToggleAutoAdapt={handleToggleAutoAdapt}
+							controlConnected={controlConnected}
+						/>
 						<Paper variant="outlined" sx={{ p: 2 }}>
 							<Stack spacing={1.5}>
 								<Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
@@ -725,7 +784,6 @@ function DesktopLivePage() {
 									<Field label="Live create token" name="liveCreateToken" settings={settings} setSettings={setSettings} disabled={isBusy} type="password" />
 									<Field label="Session label" name="sessionLabel" settings={settings} setSettings={setSettings} disabled={isBusy || auth.loggedIn} />
 									<Field label="Retain segments" name="retainSegmentCount" settings={settings} setSettings={setSettings} disabled={isBusy} />
-									<Field label="FFmpeg path" name="ffmpegPath" settings={settings} setSettings={setSettings} disabled={isBusy} />
 								</SettingGrid>
 							</AccordionDetails>
 						</Accordion>
@@ -737,13 +795,6 @@ function DesktopLivePage() {
 							<AccordionDetails>
 								<Stack spacing={1.5}>
 									<SettingGrid>
-										<Field
-											label="Capture FPS"
-											name="captureFps"
-											settings={settings}
-											setSettings={setSettings}
-											disabled={isBusy || settings.sourceMode === "file"}
-										/>
 										<Field
 											label="Real-time buffer (rtbufsize)"
 											name="rtbufsize"
@@ -798,7 +849,23 @@ function DesktopLivePage() {
 									<Field label="Height" name="outputHeight" settings={settings} setSettings={setSettings} disabled={isBusy} />
 									<Field label="Video bitrate" name="videoBitrate" settings={settings} setSettings={setSettings} disabled={isBusy} />
 									<Field label="Audio bitrate" name="audioBitrate" settings={settings} setSettings={setSettings} disabled={isBusy} />
-									<Field label="Output FPS" name="fps" settings={settings} setSettings={setSettings} disabled={isBusy} />
+									<TextField
+										label="Frame rate (FPS)"
+										type="text"
+										value={settings.fps}
+										disabled={isBusy}
+										fullWidth
+										size="small"
+										helperText="Applied to both capture and encoder rate."
+										onChange={(event) => {
+											const value = event.target.value;
+											setSettings((current) => ({
+												...current,
+												fps: value,
+												captureFps: value,
+											}));
+										}}
+									/>
 									<Field label="GOP size" name="gopSize" settings={settings} setSettings={setSettings} disabled={isBusy} />
 									<ToggleField label="HDR to SDR" name="convertStreamToSdr" settings={settings} setSettings={setSettings} disabled={isBusy} />
 								</SettingGrid>
