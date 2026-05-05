@@ -24,9 +24,10 @@
 import lowLatency from "./lowLatency.js";
 import balanced from "./balanced.js";
 import quality from "./quality.js";
+import stableUplink from "./stableUplink.js";
 
 /** @type {StreamingProfile[]} */
-const STREAMING_PROFILES = [lowLatency, balanced, quality];
+const STREAMING_PROFILES = [lowLatency, balanced, quality, stableUplink];
 
 /**
  * Default profile for new installs. Mirrors `buildDefaultSettings`'s
@@ -58,4 +59,4 @@ const getProfile = (id) => STREAMING_PROFILES.find((profile) => profile.id === i
  */
 const applyProfile = (profile, settings) => ({ ...settings, ...profile.values });
 
-export { STREAMING_PROFILES, DEFAULT_PROFILE_ID, getProfile, applyProfile, lowLatency, balanced, quality };
+export { STREAMING_PROFILES, DEFAULT_PROFILE_ID, getProfile, applyProfile, lowLatency, balanced, quality, stableUplink };

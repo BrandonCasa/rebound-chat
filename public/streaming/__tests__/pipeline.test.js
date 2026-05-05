@@ -62,6 +62,7 @@ const tail = (fps = 60) => [
 //   - -b_ref_mode disabled
 //   - -bf 0
 //   - no -rc-lookahead  (nvencLookahead: 0 → suppressed by guard in nvenc.js line 43)
+//   - -bufsize 8000000  (vbvMultiplier: 1.0 → 1-second VBV window for live HLS)
 const nvencEncoderTail = (preset = "p4") => [
 	"-c:v",
 	"h264_nvenc",
@@ -76,7 +77,7 @@ const nvencEncoderTail = (preset = "p4") => [
 	"-maxrate",
 	"8M",
 	"-bufsize",
-	"16000000",
+	"8000000",
 	"-preset",
 	preset,
 	"-tune",
@@ -205,7 +206,7 @@ describe("pipeline.buildArgs — Windows + gfxcapture + software encoder", () =>
 			"-maxrate",
 			"8M",
 			"-bufsize",
-			"16000000",
+			"8000000",
 			"-preset",
 			"veryfast",
 			...tail(),
@@ -243,7 +244,7 @@ describe("pipeline.buildArgs — Windows + gdigrab + libx264", () => {
 			"-maxrate",
 			"8M",
 			"-bufsize",
-			"16000000",
+			"8000000",
 			"-preset",
 			"veryfast",
 			...tail(),
@@ -292,7 +293,7 @@ describe("pipeline.buildArgs — macOS Apple Silicon (videotoolbox)", () => {
 			"-maxrate",
 			"8M",
 			"-bufsize",
-			"16000000",
+			"8000000",
 			"-realtime",
 			"1",
 			...tail(),

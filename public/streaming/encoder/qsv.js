@@ -4,8 +4,9 @@
  * @typedef {import("../types.js").StreamConfig} StreamConfig
  */
 
-import { isAv1Codec, isHevcCodec, isVp9Codec, parseBitrateToBps } from "../codecs.js";
+import { isAv1Codec, isHevcCodec, isVp9Codec } from "../codecs.js";
 import { normalizeEncoderPreset } from "../presets.js";
+import { computeVbvBufsize } from "./_vbv.js";
 
 /**
  * @param {StreamConfig} config
@@ -25,7 +26,14 @@ const buildArgs = (config) => {
 
 	args.push("-g", gopSize, "-keyint_min", gopSize, "-sc_threshold", "0");
 
-	args.push("-b:v", config.videoBitrate, "-maxrate", config.videoBitrate, "-bufsize", String(parseBitrateToBps(config.videoBitrate) * 2));
+	args.push(
+		"-b:v",
+		config.videoBitrate,
+		"-maxrate",
+		config.videoBitrate,
+		"-bufsize",
+		String(computeVbvBufsize(config.videoBitrate, config.vbvMultiplier ?? 1.0))
+	);
 
 	args.push("-preset", preset);
 

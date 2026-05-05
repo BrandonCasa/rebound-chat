@@ -21,14 +21,14 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 
-import { applyProfile, balanced, DEFAULT_PROFILE_ID, getProfile, lowLatency, quality, STREAMING_PROFILES } from "../../profiles/index.js";
+import { applyProfile, balanced, DEFAULT_PROFILE_ID, getProfile, lowLatency, quality, stableUplink, STREAMING_PROFILES } from "../../profiles/index.js";
 import { buildArgs as buildNvencArgs } from "../../encoder/nvenc.js";
 import { windowsRtxNvenc1080p60 } from "../fixtures/configs.js";
 
 describe("profiles registry", () => {
-	it("exports three profiles with the expected ids", () => {
+	it("exports four profiles with the expected ids", () => {
 		const ids = STREAMING_PROFILES.map((profile) => profile.id).sort();
-		assert.deepEqual(ids, ["balanced", "low-latency", "quality"]);
+		assert.deepEqual(ids, ["balanced", "low-latency", "quality", "stable-uplink"]);
 	});
 
 	it("default profile id resolves to a registered profile", () => {
@@ -95,6 +95,22 @@ describe("profiles → nvenc.buildArgs round-trip", () => {
 		assert.equal(args[args.indexOf("-rc-lookahead") + 1], "16", "quality uses -rc-lookahead 16");
 		assert.equal(args[args.indexOf("-temporal_aq") + 1], "1", "quality enables temporal-AQ");
 		assert.equal(args[args.indexOf("-preset") + 1], "p6", "quality uses 'slow' preset (p6)");
+	});
+
+	it("stable-uplink: CBR rate control with a 0.5×-bitrate VBV window for capped uplinks", () => {
+		const args = buildNvencArgs(applyProfile(stableUplink, baseline));
+		// CBR (vs. low-latency's vbr) is the entire point — peak bitrate must
+		// converge to the configured ceiling on contended uplinks.
+		assert.equal(args[args.indexOf("-rc") + 1], "cbr", "stable-uplink uses -rc cbr");
+		// Tight VBV: 8M × 0.5 = 4_000_000 bits (half-second window).
+		assert.equal(args[args.indexOf("-bufsize") + 1], "4000000", "stable-uplink uses a 0.5×-bitrate VBV buffer");
+		// Same latency profile as Low Latency: every frame-holding flag stays off.
+		assert.ok(!args.includes("-rc-lookahead"), "stable-uplink must not emit -rc-lookahead");
+		assert.ok(!args.includes("-multipass"), "stable-uplink must not emit -multipass");
+		assert.equal(args[args.indexOf("-bf") + 1], "0", "stable-uplink keeps -bf 0");
+		assert.equal(args[args.indexOf("-b_ref_mode") + 1], "disabled", "stable-uplink keeps -b_ref_mode disabled");
+		assert.equal(args[args.indexOf("-temporal_aq") + 1], "0", "stable-uplink keeps -temporal_aq 0");
+		assert.equal(args[args.indexOf("-preset") + 1], "p4", "stable-uplink uses the 'll' alias preset (p4)");
 	});
 });
 

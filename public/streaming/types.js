@@ -48,6 +48,16 @@
  * @property {number | null} nvencBFrames
  * @property {number | null} nvencLookahead
  * @property {number} gopSize
+ * @property {number} vbvMultiplier
+ *   VBV buffer width expressed as a multiple of the per-second video
+ *   bitrate. The encoder is allowed to skew bit allocation across this
+ *   window before its average has to converge to `videoBitrate`.
+ *
+ *   1.0 (default) = 1-second window — standard for live segmented
+ *   streaming, gives predictable per-segment file sizes and a tighter
+ *   peak instantaneous bitrate. 0.5 narrows the window further (CBR-
+ *   like behaviour, best for capped uplinks); 2.0 restores the legacy
+ *   2-second window used for VOD.
  * @property {string} hlsTime
  * @property {number} hlsListSize
  * @property {"off" | "convert" | "passthrough"} hdrMode

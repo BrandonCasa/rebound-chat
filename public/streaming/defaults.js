@@ -18,7 +18,12 @@ import { currentPlatformProfile } from "./platform/index.js";
 const ffmpegPathDefault = () => (typeof window !== "undefined" && window.ffmpegPath) || "ffmpeg.exe";
 const ffprobePathDefault = () => (typeof window !== "undefined" && window.ffprobePath) || "ffprobe.exe";
 
-const websiteBaseUrlDefault = () => (!process?.env?.NODE_ENV || process?.env?.NODE_ENV === "development" ? "http://localhost:6001" : "https://rebound.nexus");
+const getNodeEnv = () => (typeof process !== "undefined" && process?.env ? process.env.NODE_ENV : undefined);
+
+const websiteBaseUrlDefault = () => {
+	const nodeEnv = getNodeEnv();
+	return !nodeEnv || nodeEnv === "development" ? "http://localhost:6001" : "https://rebound.nexus";
+};
 
 /**
  * Build a fresh DEFAULT_SETTINGS object. The profile-derived fields are
@@ -81,6 +86,7 @@ const buildDefaultSettings = (options = {}) => {
 		nvencBFrames: 0,
 		nvencLookahead: 0,
 		gopSize,
+		vbvMultiplier: 1.0,
 		hlsTime: String(options.hlsTime ?? "2"),
 		hlsListSize: 6,
 		hdrMode: "off",

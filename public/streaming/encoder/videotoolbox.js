@@ -4,7 +4,8 @@
  * @typedef {import("../types.js").StreamConfig} StreamConfig
  */
 
-import { isAv1Codec, isHevcCodec, isVp9Codec, parseBitrateToBps } from "../codecs.js";
+import { isAv1Codec, isHevcCodec, isVp9Codec } from "../codecs.js";
+import { computeVbvBufsize } from "./_vbv.js";
 
 /**
  * @param {StreamConfig} config
@@ -23,7 +24,19 @@ const buildArgs = (config) => {
 
 	args.push("-g", gopSize, "-keyint_min", gopSize, "-sc_threshold", "0");
 
-	args.push("-b:v", config.videoBitrate, "-maxrate", config.videoBitrate, "-bufsize", String(parseBitrateToBps(config.videoBitrate) * 2));
+	// VideoToolbox honours `-bufsize` loosely — its rate control is
+	// driver-managed and treats the flag as advisory rather than a hard
+	// cap. We still emit it (and route it through the shared helper)
+	// so the configured `vbvMultiplier` has uniform meaning across all
+	// encoders and the renderer doesn't need encoder-specific UI.
+	args.push(
+		"-b:v",
+		config.videoBitrate,
+		"-maxrate",
+		config.videoBitrate,
+		"-bufsize",
+		String(computeVbvBufsize(config.videoBitrate, config.vbvMultiplier ?? 1.0))
+	);
 
 	args.push("-realtime", "1");
 

@@ -6,8 +6,9 @@
  * @typedef {import("../types.js").StreamConfig} StreamConfig
  */
 
-import { isAv1Codec, isHevcCodec, isVp9Codec, isVvcCodec, parseBitrateToBps } from "../codecs.js";
+import { isAv1Codec, isHevcCodec, isVp9Codec, isVvcCodec } from "../codecs.js";
 import { normalizeEncoderPreset } from "../presets.js";
+import { computeVbvBufsize } from "./_vbv.js";
 
 /**
  * @param {StreamConfig} config
@@ -51,7 +52,14 @@ const buildArgs = (config) => {
 		args.push("-pix_fmt", "yuv420p");
 	}
 
-	args.push("-b:v", config.videoBitrate, "-maxrate", config.videoBitrate, "-bufsize", String(parseBitrateToBps(config.videoBitrate) * 2));
+	args.push(
+		"-b:v",
+		config.videoBitrate,
+		"-maxrate",
+		config.videoBitrate,
+		"-bufsize",
+		String(computeVbvBufsize(config.videoBitrate, config.vbvMultiplier ?? 1.0))
+	);
 
 	// Apply -preset for codecs that use it; rav1e/libaom/libvpx use -speed/-cpu-used above.
 	const usesPresetFlag = !["libvpx-vp9", "libaom-av1", "librav1e", "libopenh264"].includes(videoCodec);

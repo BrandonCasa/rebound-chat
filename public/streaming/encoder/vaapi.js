@@ -17,7 +17,8 @@
  * @typedef {import("../types.js").StreamConfig} StreamConfig
  */
 
-import { isAv1Codec, isHevcCodec, isVp9Codec, parseBitrateToBps } from "../codecs.js";
+import { isAv1Codec, isHevcCodec, isVp9Codec } from "../codecs.js";
+import { computeVbvBufsize } from "./_vbv.js";
 
 /**
  * @param {StreamConfig} config
@@ -36,7 +37,19 @@ const buildArgs = (config) => {
 
 	args.push("-g", gopSize, "-keyint_min", gopSize);
 
-	args.push("-b:v", config.videoBitrate, "-maxrate", config.videoBitrate, "-bufsize", String(parseBitrateToBps(config.videoBitrate) * 2));
+	// VAAPI's rate control is driver-managed and varies per backend
+	// (Intel iHD vs Mesa Gallium vs AMD AMDVLK), so `-bufsize` is best
+	// treated as advisory. We pass it via the shared helper anyway so
+	// `vbvMultiplier` has uniform semantics — drivers that honour it
+	// will tighten the VBV; ones that don't will simply ignore it.
+	args.push(
+		"-b:v",
+		config.videoBitrate,
+		"-maxrate",
+		config.videoBitrate,
+		"-bufsize",
+		String(computeVbvBufsize(config.videoBitrate, config.vbvMultiplier ?? 1.0))
+	);
 
 	return args;
 };

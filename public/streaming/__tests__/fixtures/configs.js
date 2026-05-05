@@ -35,6 +35,7 @@ const baseDefaults = {
 	nvencBFrames: 0,
 	nvencLookahead: 0,
 	gopSize: 120,
+	vbvMultiplier: 1.0,
 	hlsTime: "2",
 	hlsListSize: 6,
 	hdrMode: "off",

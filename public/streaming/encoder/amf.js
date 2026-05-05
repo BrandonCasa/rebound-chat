@@ -6,8 +6,9 @@
  * @typedef {import("../types.js").StreamConfig} StreamConfig
  */
 
-import { isAv1Codec, isHevcCodec, parseBitrateToBps } from "../codecs.js";
+import { isAv1Codec, isHevcCodec } from "../codecs.js";
 import { normalizeEncoderPreset } from "../presets.js";
+import { computeVbvBufsize } from "./_vbv.js";
 
 /**
  * @param {StreamConfig} config
@@ -26,7 +27,18 @@ const buildArgs = (config) => {
 
 	args.push("-g", gopSize, "-keyint_min", gopSize);
 
-	args.push("-b:v", config.videoBitrate, "-maxrate", config.videoBitrate, "-bufsize", String(parseBitrateToBps(config.videoBitrate) * 2));
+	// AMF manages its own VBV internally and treats `-bufsize` as a
+	// hint rather than an authoritative cap. We still emit it (via the
+	// shared helper) so `vbvMultiplier` has consistent meaning across
+	// every encoder and the renderer doesn't have to special-case AMF.
+	args.push(
+		"-b:v",
+		config.videoBitrate,
+		"-maxrate",
+		config.videoBitrate,
+		"-bufsize",
+		String(computeVbvBufsize(config.videoBitrate, config.vbvMultiplier ?? 1.0))
+	);
 
 	args.push("-quality", quality);
 
