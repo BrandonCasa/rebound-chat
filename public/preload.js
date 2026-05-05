@@ -21,6 +21,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	liveStream: {
 		getState: () => ipcRenderer.invoke("live-stream:get-state"),
 		getCapabilities: () => ipcRenderer.invoke("live-stream:get-capabilities"),
+		getDetectedCapabilities: () => ipcRenderer.invoke("live-stream:get-detected-capabilities"),
+		reprobeCapabilities: () => ipcRenderer.invoke("live-stream:reprobe-capabilities"),
+		loadSettings: () => ipcRenderer.invoke("settings:load"),
+		saveSettings: (settings) => ipcRenderer.invoke("settings:save", settings),
+		resetSettings: () => ipcRenderer.invoke("settings:reset"),
 		start: (config) => ipcRenderer.invoke("live-stream:start", config),
 		stop: () => ipcRenderer.invoke("live-stream:stop"),
 		openUrl: (url) => ipcRenderer.invoke("live-stream:open-url", url),

@@ -1,4 +1,5 @@
 const getNodeEnv = () => (typeof process !== "undefined" && process?.env ? process.env.NODE_ENV : undefined);
+const getOrigin = () => (typeof window !== "undefined" && window.location?.origin ? window.location.origin : "");
 
 export const getLiveBase = () => {
 	const nodeEnv = getNodeEnv();
@@ -8,9 +9,15 @@ export const getLiveBase = () => {
 	return "";
 };
 
-export const getLiveShareApiUrl = (publicToken) => `${getLiveBase()}/live/api/share/${publicToken}`;
+const resolveLiveApiUrl = (pathname) => {
+	const base = getLiveBase() || getOrigin();
+	if (!base) return pathname;
+	return new URL(pathname, `${base}/`).toString();
+};
 
-export const getLiveStreamsApiUrl = () => `${getLiveBase()}/live/api/streams`;
+export const getLiveShareApiUrl = (publicToken) => resolveLiveApiUrl(`/live/api/share/${publicToken}`);
+
+export const getLiveStreamsApiUrl = () => resolveLiveApiUrl("/live/api/streams");
 
 export const buildLiveAuthHeaders = (authToken, headers = {}) => ({
 	...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),

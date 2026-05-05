@@ -14,6 +14,7 @@ import * as gdigrab from "./gdigrab.js";
 import * as gfxcapture from "./gfxcapture.js";
 import * as avfoundation from "./avfoundation.js";
 import * as x11grab from "./x11grab.js";
+import * as file from "./file.js";
 
 /**
  * Decide which backend would be used for the given config + host platform,
@@ -21,9 +22,10 @@ import * as x11grab from "./x11grab.js";
  *
  * @param {StreamConfig} config
  * @param {NodeJS.Platform} platform
- * @returns {"gfxcapture" | "gdigrab" | "avfoundation" | "x11grab"}
+ * @returns {"gfxcapture" | "gdigrab" | "avfoundation" | "x11grab" | "file"}
  */
 const selectBackendKind = (config, platform) => {
+	if (config.captureBackend === "file") return "file";
 	if (platform === "win32") {
 		return config.captureBackend === "gfxcapture" ? "gfxcapture" : "gdigrab";
 	}
@@ -48,6 +50,7 @@ const inputBackends = {
 	gdigrab,
 	avfoundation,
 	x11grab,
+	file,
 };
 
 /**

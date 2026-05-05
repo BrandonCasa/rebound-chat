@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 import { dirname, extname, join } from "path";
 import { existsSync } from "fs";
 import { readFile } from "fs/promises";
-import { app, BrowserWindow, desktopCapturer, ipcMain, protocol, shell } from "electron";
+import { app, BrowserWindow, desktopCapturer, ipcMain, protocol, screen, shell } from "electron";
 import log from "electron-log";
 import updater from "electron-updater";
 const { autoUpdater } = updater;
@@ -146,6 +146,8 @@ registerLiveStreamIpc({
 	ipcMain,
 	app,
 	shell,
+	ffmpegPath: ffmpegBinaryPath,
+	getDisplays: () => screen.getAllDisplays(),
 	sendToRenderer: sendStatus,
 	logger: log,
 });

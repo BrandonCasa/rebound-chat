@@ -22,7 +22,9 @@ const getNodeEnv = () => (typeof process !== "undefined" && process?.env ? proce
 
 const websiteBaseUrlDefault = () => {
 	const nodeEnv = getNodeEnv();
-	return !nodeEnv || nodeEnv === "development" ? "http://localhost:6001" : "https://rebound.nexus";
+	if ((!nodeEnv || nodeEnv === "development") && globalThis?.IN_ELECTRON_ENV) return "http://localhost:6001";
+	if (nodeEnv === "production" && globalThis?.IN_ELECTRON_ENV) return "https://rebound.nexus";
+	return "";
 };
 
 /**
@@ -60,6 +62,9 @@ const buildDefaultSettings = (options = {}) => {
 		retainSegmentCount: 5,
 		ffmpegPath: ffmpegPathDefault(),
 		ffprobePath: ffprobePathDefault(),
+		sourceMode: "screen",
+		filePath: "",
+		fileLoop: true,
 		source: null,
 		captureBackend: profile.defaults.captureBackend,
 		captureFps: 30,

@@ -19,7 +19,10 @@
  * @typedef {Object} StreamConfig
  * @property {string} ffmpegPath
  * @property {StreamSource | null} source
- * @property {string} captureBackend             - "gfxcapture" | "gdigrab"
+ * @property {"screen"|"window"|"file"} [sourceMode]
+ * @property {string=} filePath
+ * @property {boolean=} fileLoop
+ * @property {string} captureBackend             - "gfxcapture" | "gdigrab" | "file"
  * @property {number} captureFps
  * @property {string} rtbufsize
  *   Real-time input buffer size passed to live capture inputs (gdigrab,

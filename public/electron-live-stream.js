@@ -21,6 +21,8 @@ import { availableEncoderPresets, currentPlatformProfile, defaultEncoderPresets 
 import { buildArgs as buildPipelineArgs, defaultCapabilities } from "./streaming/pipeline.js";
 import { uploadAgent } from "./streaming/uploader/httpClient.js";
 import { createUploader } from "./streaming/uploader/index.js";
+import { createCapabilityStore } from "./streaming/capabilities/probe.js";
+import { createSettingsStore } from "./streaming/settings/store.js";
 
 const UPLOAD_POLL_INTERVAL_MS = 750;
 
@@ -45,7 +47,7 @@ const raiseForStatus = async (response) => {
 };
 
 class ElectronLiveStreamManager {
-	constructor({ app, shell, sendToRenderer, logger }) {
+	constructor({ app, shell, sendToRenderer, logger, ffmpegPath, getDisplays }) {
 		this.app = app;
 		this.shell = shell;
 		this.sendToRenderer = sendToRenderer;
@@ -59,6 +61,15 @@ class ElectronLiveStreamManager {
 		this.stopping = false;
 		this.logBuffer = "";
 		this.capabilities = defaultCapabilities();
+		this.detectedCapabilitiesStore = createCapabilityStore({
+			app,
+			ffmpegPath,
+			getDisplays,
+		});
+		this.settingsStore = createSettingsStore({
+			app,
+			getCapabilities: () => this.detectedCapabilitiesStore.get(),
+		});
 	}
 
 	getState() {
@@ -108,6 +119,41 @@ class ElectronLiveStreamManager {
 		this.sendToRenderer("live-stream-log", payload);
 	}
 
+	async getDetectedCapabilities() {
+		return this.detectedCapabilitiesStore.get();
+	}
+
+	async reprobeCapabilities() {
+		return this.detectedCapabilitiesStore.reprobe();
+	}
+
+	async loadSettings() {
+		return this.settingsStore.load();
+	}
+
+	async saveSettings(rawSettings = {}) {
+		const normalized = this.normalizeConfig({
+			...rawSettings,
+			skipSourceValidation: true,
+		});
+		const persistable = {
+			...DEFAULT_SETTINGS,
+			...rawSettings,
+			sourceMode: normalized.sourceMode,
+			captureBackend: normalized.captureBackend,
+			filePath: normalized.filePath,
+			fileLoop: normalized.fileLoop,
+		};
+		return this.settingsStore.save({
+			...persistable,
+			source: rawSettings.source || null,
+		});
+	}
+
+	async resetSettings() {
+		return this.settingsStore.reset();
+	}
+
 	normalizeConfig(rawConfig = {}) {
 		const config = {
 			...DEFAULT_SETTINGS,
@@ -129,7 +175,17 @@ class ElectronLiveStreamManager {
 		const audioInputArgs = splitCommandLine(config.audioInputArgs);
 		const manualInputArgs = splitCommandLine(config.manualInputArgs);
 
-		if (!manualInputArgs.length && !config.source?.id) {
+		const sourceMode = config.sourceMode === "file" ? "file" : "screen";
+		const filePath = String(config.filePath || "").trim();
+		const fileLoop = Boolean(config.fileLoop);
+		const requestedCaptureBackend = config.captureBackend === "file" ? profile.defaults.captureBackend : config.captureBackend;
+
+		if (sourceMode === "file" && !filePath && !manualInputArgs.length) {
+			throw new Error("Choose a video file or provide manual FFmpeg input arguments.");
+		}
+
+		const skipSourceValidation = Boolean(config.skipSourceValidation);
+		if (sourceMode !== "file" && !manualInputArgs.length && !config.source?.id && !skipSourceValidation) {
 			throw new Error("Choose a desktop source or provide manual FFmpeg input arguments.");
 		}
 
@@ -145,9 +201,13 @@ class ElectronLiveStreamManager {
 			authToken: String(config.authToken || "").trim(),
 			sessionLabel: String(config.sessionLabel || "").trim(),
 			retainSegmentCount: parsePositiveInt(config.retainSegmentCount, "Retain segments"),
-			ffmpegPath: String(config.ffmpegPath || "ffmpeg").trim(),
-			source: config.source || null,
-			captureBackend: normalizeChoice(config.captureBackend, profile.captureBackends, profile.defaults.captureBackend, "Capture backend"),
+			ffmpegPath: String(config.ffmpegPath || "ffmpeg.exe").trim(),
+			sourceMode,
+			filePath,
+			fileLoop,
+			source: sourceMode === "file" ? null : config.source || null,
+			captureBackend:
+				sourceMode === "file" ? "file" : normalizeChoice(requestedCaptureBackend, profile.captureBackends, profile.defaults.captureBackend, "Capture backend"),
 			captureFps,
 			rtbufsize: String(config.rtbufsize ?? DEFAULT_SETTINGS.rtbufsize ?? "").trim(),
 			manualInputArgs,
@@ -465,16 +525,23 @@ class ElectronLiveStreamManager {
 	}
 }
 
-const registerLiveStreamIpc = ({ ipcMain, app, shell, sendToRenderer, logger }) => {
+const registerLiveStreamIpc = ({ ipcMain, app, shell, sendToRenderer, logger, ffmpegPath, getDisplays }) => {
 	const manager = new ElectronLiveStreamManager({
 		app,
 		shell,
 		sendToRenderer,
 		logger,
+		ffmpegPath,
+		getDisplays,
 	});
 
 	ipcMain.handle("live-stream:get-state", () => manager.getState());
 	ipcMain.handle("live-stream:get-capabilities", () => manager.getCapabilities());
+	ipcMain.handle("live-stream:get-detected-capabilities", () => manager.getDetectedCapabilities());
+	ipcMain.handle("live-stream:reprobe-capabilities", () => manager.reprobeCapabilities());
+	ipcMain.handle("settings:load", () => manager.loadSettings());
+	ipcMain.handle("settings:save", (_event, settings) => manager.saveSettings(settings));
+	ipcMain.handle("settings:reset", () => manager.resetSettings());
 	ipcMain.handle("live-stream:start", (_event, config) => manager.start(config));
 	ipcMain.handle("live-stream:stop", () => manager.stop());
 	ipcMain.handle("live-stream:open-url", (_event, url) => {

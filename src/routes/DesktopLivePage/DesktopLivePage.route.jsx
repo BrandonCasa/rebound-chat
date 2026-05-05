@@ -16,11 +16,14 @@ import {
 	Divider,
 	FormControl,
 	FormControlLabel,
+	FormLabel,
 	Grid,
 	IconButton,
 	InputLabel,
 	MenuItem,
 	Paper,
+	Radio,
+	RadioGroup,
 	Select,
 	Stack,
 	Switch,
@@ -29,7 +32,7 @@ import {
 	Typography,
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 import { getLiveBase } from "../../helpers/live";
@@ -148,6 +151,9 @@ const defaultSettings = {
 	sessionLabel: "",
 	retainSegmentCount: "5",
 	ffmpegPath: window.ffmpegPath || "ffmpeg.exe",
+	sourceMode: "screen",
+	filePath: "",
+	fileLoop: true,
 	captureFps: "120",
 	rtbufsize: "256M",
 	manualInputArgs: "",
@@ -335,7 +341,11 @@ function DesktopLivePage() {
 	const [streamState, setStreamState] = useState({ status: "idle", sessionInfo: null });
 	const [sessionInfo, setSessionInfo] = useState(null);
 	const [capabilities, setCapabilities] = useState(null);
+	const [detectedCapabilities, setDetectedCapabilities] = useState(null);
 	const [thumbnails, setThumbnails] = useState({});
+	const [advancedMode, setAdvancedMode] = useState(false);
+	const saveSettingsTimeoutRef = useRef(null);
+	const hydratedSettingsRef = useRef(false);
 	const electronLive = window.electronAPI?.liveStream;
 	const electronSources = window.electronAPI?.sources;
 	const isElectron = Boolean(electronLive && electronSources);
@@ -425,6 +435,58 @@ function DesktopLivePage() {
 		};
 	}, [electronLive]);
 
+	useEffect(() => {
+		if (!electronLive?.loadSettings) return undefined;
+		let cancelled = false;
+		electronLive
+			.loadSettings()
+			.then((saved) => {
+				if (!cancelled && saved && typeof saved === "object") {
+					setSettings((current) => ({
+						...current,
+						...saved,
+					}));
+					hydratedSettingsRef.current = true;
+				}
+			})
+			.catch(() => {
+				hydratedSettingsRef.current = true;
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [electronLive]);
+
+	useEffect(() => {
+		if (!electronLive?.getDetectedCapabilities) return undefined;
+		let cancelled = false;
+		electronLive
+			.getDetectedCapabilities()
+			.then((caps) => {
+				if (!cancelled) setDetectedCapabilities(caps);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [electronLive]);
+
+	useEffect(() => {
+		if (!electronLive?.saveSettings) return undefined;
+		if (!hydratedSettingsRef.current) return undefined;
+		if (saveSettingsTimeoutRef.current) {
+			clearTimeout(saveSettingsTimeoutRef.current);
+		}
+		saveSettingsTimeoutRef.current = setTimeout(() => {
+			electronLive.saveSettings(settings).catch(() => {});
+		}, 1000);
+		return () => {
+			if (saveSettingsTimeoutRef.current) {
+				clearTimeout(saveSettingsTimeoutRef.current);
+			}
+		};
+	}, [electronLive, settings]);
+
 	// Snap settings into bounds whenever the host's capability catalog changes.
 	useEffect(() => {
 		if (!capabilities) return;
@@ -471,12 +533,32 @@ function DesktopLivePage() {
 		try {
 			const state = await electronLive.start({
 				...settings,
-				source: selectedSource,
+				source: settings.sourceMode === "file" ? null : selectedSource,
 				authToken: auth.authToken || "",
 			});
 			setStreamState(state);
 		} catch (err) {
 			setError(err.message || "Unable to start stream.");
+		}
+	};
+
+	const handleResetSettings = async () => {
+		if (!electronLive?.resetSettings) return;
+		try {
+			const next = await electronLive.resetSettings();
+			setSettings((current) => ({ ...current, ...next }));
+		} catch (_err) {
+			// Keep current settings if reset fails.
+		}
+	};
+
+	const handleReprobe = async () => {
+		if (!electronLive?.reprobeCapabilities) return;
+		try {
+			const next = await electronLive.reprobeCapabilities();
+			setDetectedCapabilities(next);
+		} catch (_err) {
+			// Keep current capabilities if reprobe fails.
 		}
 	};
 
@@ -518,7 +600,14 @@ function DesktopLivePage() {
 							color={streamState.status === "streaming" ? "success" : streamState.status === "error" ? "error" : "default"}
 							label={streamState.status || "idle"}
 						/>
+						{detectedCapabilities?.gpu?.model ? <Chip size="small" variant="outlined" label={detectedCapabilities.gpu.model} /> : null}
 						{auth.loggedIn ? <Chip size="small" color="primary" label={auth.displayName || auth.username || "Account"} /> : null}
+						<Button size="small" variant="text" onClick={handleReprobe} disabled={isBusy}>
+							Re-probe
+						</Button>
+						<Button size="small" variant="text" onClick={handleResetSettings} disabled={isBusy}>
+							Reset
+						</Button>
 						{sessionInfo?.shareUrl ? (
 							<Button size="small" variant="outlined" startIcon={<LaunchRounded />} onClick={() => electronLive.openUrl(sessionInfo.shareUrl)}>
 								Share
@@ -557,33 +646,72 @@ function DesktopLivePage() {
 									<Stack spacing={0.25}>
 										<Typography variant="h6">Source</Typography>
 										<Typography variant="body2" color="text.secondary">
-											{selectedSource ? selectedSource.name : "No source selected"}
+											{settings.sourceMode === "file" ? settings.filePath || "No file selected" : selectedSource ? selectedSource.name : "No source selected"}
 										</Typography>
 									</Stack>
-									<Tooltip title="Refresh sources">
-										<span>
-											<IconButton onClick={loadSources} disabled={loadingSources || isBusy} aria-label="Refresh desktop sources">
-												{loadingSources ? <CircularProgress size={20} /> : <RefreshRounded />}
-											</IconButton>
-										</span>
-									</Tooltip>
+									{settings.sourceMode === "file" ? null : (
+										<Tooltip title="Refresh sources">
+											<span>
+												<IconButton onClick={loadSources} disabled={loadingSources || isBusy} aria-label="Refresh desktop sources">
+													{loadingSources ? <CircularProgress size={20} /> : <RefreshRounded />}
+												</IconButton>
+											</span>
+										</Tooltip>
+									)}
 								</Stack>
-								<Box
-									sx={{
-										display: "grid",
-										gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(3, minmax(0, 1fr))" },
-										gap: 1.5,
-									}}>
-									{sources.map((source) => (
-										<SourceTile
-											key={source.id}
-											source={source}
-											thumbnail={thumbnails[source.id]}
-											selected={source.id === selectedSourceId}
-											onSelect={setSelectedSourceId}
+								<FormControl component="fieldset" disabled={isBusy}>
+									<FormLabel component="legend">Mode</FormLabel>
+									<RadioGroup
+										row
+										value={settings.sourceMode || "screen"}
+										onChange={(event) => {
+											const mode = event.target.value;
+											setSettings((current) => ({
+												...current,
+												sourceMode: mode,
+												captureBackend: mode === "file" ? "file" : current.captureBackend === "file" ? "gdigrab" : current.captureBackend,
+											}));
+										}}>
+										<FormControlLabel value="screen" control={<Radio />} label="Screen / Window" />
+										<FormControlLabel value="file" control={<Radio />} label="Video file" />
+									</RadioGroup>
+								</FormControl>
+								{settings.sourceMode === "file" ? (
+									<Stack spacing={1}>
+										<TextField
+											label="Video file path"
+											size="small"
+											fullWidth
+											value={settings.filePath || ""}
+											disabled={isBusy}
+											onChange={(event) => {
+												const next = event.target.value;
+												setSettings((current) => ({
+													...current,
+													filePath: next,
+												}));
+											}}
 										/>
-									))}
-								</Box>
+										<ToggleField label="Loop forever" name="fileLoop" settings={settings} setSettings={setSettings} disabled={isBusy} />
+									</Stack>
+								) : (
+									<Box
+										sx={{
+											display: "grid",
+											gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(3, minmax(0, 1fr))" },
+											gap: 1.5,
+										}}>
+										{sources.map((source) => (
+											<SourceTile
+												key={source.id}
+												source={source}
+												thumbnail={thumbnails[source.id]}
+												selected={source.id === selectedSourceId}
+												onSelect={setSelectedSourceId}
+											/>
+										))}
+									</Box>
+								)}
 							</Stack>
 						</Paper>
 
@@ -609,9 +737,27 @@ function DesktopLivePage() {
 							<AccordionDetails>
 								<Stack spacing={1.5}>
 									<SettingGrid>
-										<Field label="Capture FPS" name="captureFps" settings={settings} setSettings={setSettings} disabled={isBusy} />
-										<Field label="Real-time buffer (rtbufsize)" name="rtbufsize" settings={settings} setSettings={setSettings} disabled={isBusy} />
-										<ToggleField label="Draw mouse cursor" name="drawMouse" settings={settings} setSettings={setSettings} disabled={isBusy} />
+										<Field
+											label="Capture FPS"
+											name="captureFps"
+											settings={settings}
+											setSettings={setSettings}
+											disabled={isBusy || settings.sourceMode === "file"}
+										/>
+										<Field
+											label="Real-time buffer (rtbufsize)"
+											name="rtbufsize"
+											settings={settings}
+											setSettings={setSettings}
+											disabled={isBusy || settings.sourceMode === "file"}
+										/>
+										<ToggleField
+											label="Draw mouse cursor"
+											name="drawMouse"
+											settings={settings}
+											setSettings={setSettings}
+											disabled={isBusy || settings.sourceMode === "file"}
+										/>
 										<ToggleField label="Map audio from primary input" name="mapSourceAudio" settings={settings} setSettings={setSettings} disabled={isBusy} />
 									</SettingGrid>
 									<Field label="Manual FFmpeg input args" name="manualInputArgs" settings={settings} setSettings={setSettings} disabled={isBusy} multiline />
@@ -625,6 +771,12 @@ function DesktopLivePage() {
 								<Typography variant="subtitle1">Output</Typography>
 							</AccordionSummary>
 							<AccordionDetails>
+								<Stack direction="row" justifyContent="flex-end" sx={{ mb: 1 }}>
+									<FormControlLabel
+										control={<Switch checked={advancedMode} onChange={(event) => setAdvancedMode(event.target.checked)} disabled={isBusy} />}
+										label={advancedMode ? "Advanced" : "Auto-optimized"}
+									/>
+								</Stack>
 								<SettingGrid>
 									<SelectField
 										label="Video codec"
@@ -653,7 +805,7 @@ function DesktopLivePage() {
 							</AccordionDetails>
 						</Accordion>
 
-						<Accordion disableGutters>
+						<Accordion disableGutters disabled={!advancedMode}>
 							<AccordionSummary expandIcon={<ExpandMoreRounded />}>
 								<Typography variant="subtitle1">Encoder</Typography>
 							</AccordionSummary>
@@ -756,7 +908,11 @@ function DesktopLivePage() {
 									variant="contained"
 									startIcon={streamState.status === "starting" ? <CircularProgress color="inherit" size={18} /> : <PlayArrowRounded />}
 									onClick={handleStart}
-									disabled={isBusy || (!selectedSource && !settings.manualInputArgs) || (!auth.authToken && !settings.liveCreateToken)}>
+									disabled={
+										isBusy ||
+										(settings.sourceMode === "file" ? !settings.filePath && !settings.manualInputArgs : !selectedSource && !settings.manualInputArgs) ||
+										(!auth.authToken && !settings.liveCreateToken)
+									}>
 									Start
 								</Button>
 								<Button variant="outlined" color="error" startIcon={<StopRounded />} onClick={handleStop} disabled={!isBusy}>

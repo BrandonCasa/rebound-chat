@@ -53,16 +53,22 @@ describe("helpers/live.getLiveBase env matrix", () => {
 
 describe("streaming defaults websiteBaseUrl env matrix", () => {
 	const cases = [
-		{ nodeEnv: undefined, expected: "http://localhost:6001" },
-		{ nodeEnv: "development", expected: "http://localhost:6001" },
-		{ nodeEnv: "production", expected: "https://rebound.nexus" },
-		{ nodeEnv: "test", expected: "https://rebound.nexus" },
+		{ nodeEnv: undefined, inElectron: false, expected: "" },
+		{ nodeEnv: undefined, inElectron: true, expected: "http://localhost:6001" },
+		{ nodeEnv: "development", inElectron: false, expected: "" },
+		{ nodeEnv: "development", inElectron: true, expected: "http://localhost:6001" },
+		{ nodeEnv: "production", inElectron: false, expected: "" },
+		{ nodeEnv: "production", inElectron: true, expected: "https://rebound.nexus" },
+		{ nodeEnv: "test", inElectron: false, expected: "" },
+		{ nodeEnv: "test", inElectron: true, expected: "" },
 	];
 
-	for (const { nodeEnv, expected } of cases) {
+	for (const { nodeEnv, inElectron, expected } of cases) {
 		const nodeEnvLabel = nodeEnv ?? "undefined";
-		it(`NODE_ENV=${nodeEnvLabel} -> ${expected}`, () => {
+		const testName = `NODE_ENV=${nodeEnvLabel}, IN_ELECTRON_ENV=${String(inElectron)} -> ${expected || '""'}`;
+		it(testName, () => {
 			setNodeEnv(nodeEnv);
+			setInElectronEnv(inElectron);
 			const defaults = buildDefaultSettings();
 			assert.equal(defaults.websiteBaseUrl, expected);
 		});

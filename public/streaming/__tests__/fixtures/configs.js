@@ -7,8 +7,10 @@
  * what it differs on.
  */
 
+const ffmpegPathDefault = () => (typeof window !== "undefined" && window.ffmpegPath) || "ffmpeg.exe";
+
 const baseDefaults = {
-	ffmpegPath: "ffmpeg.exe",
+	ffmpegPath: ffmpegPathDefault(),
 	source: { id: "screen:0", name: "Display 1" },
 	captureBackend: "gfxcapture",
 	captureFps: 60,
@@ -89,6 +91,15 @@ const windowsManualInputArgs = () =>
 		source: null,
 	});
 
+const windowsFileSource = () =>
+	withDefaults({
+		sourceMode: "file",
+		captureBackend: "file",
+		filePath: "C:/videos/demo.mp4",
+		fileLoop: true,
+		source: null,
+	});
+
 const windowsNvencHevcWithAudio = () =>
 	withDefaults({
 		videoCodec: "hevc_nvenc",
@@ -145,6 +156,7 @@ export {
 	windowsGdigrabSoftware,
 	windowsGfxcaptureSoftware,
 	windowsManualInputArgs,
+	windowsFileSource,
 	windowsNvencHevcWithAudio,
 	windowsNvencNoResize,
 	macAppleSilicon,

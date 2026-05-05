@@ -19,6 +19,7 @@ import {
 	windowsGdigrabSoftware,
 	windowsGfxcaptureSoftware,
 	windowsManualInputArgs,
+	windowsFileSource,
 	windowsNvencNoResize,
 	windowsNvencHevcWithAudio,
 	windowsQsv,
@@ -256,6 +257,16 @@ describe("pipeline.buildArgs — Windows + manual input args", () => {
 	it("uses the user-provided input verbatim and skips the gfxcapture filter-source", () => {
 		const result = buildArgs(windowsManualInputArgs(), winCaps);
 		assert.deepEqual(result.args.slice(0, 8), ["-y", "-f", "lavfi", "-i", "testsrc=size=1920x1080:rate=60", "-map", "0:v:0", "-vf"]);
+	});
+});
+
+describe("pipeline.buildArgs — file source mode", () => {
+	it("uses -re + -stream_loop and skips desktop capture args", () => {
+		const result = buildArgs(windowsFileSource(), winCaps);
+		assert.deepEqual(result.args.slice(0, 7), ["-y", "-re", "-stream_loop", "-1", "-i", "C:/videos/demo.mp4", "-map"]);
+		const argv = result.args.join(" ");
+		assert.doesNotMatch(argv, /\bgdigrab\b/);
+		assert.doesNotMatch(argv, /\bgfxcapture=/);
 	});
 });
 
