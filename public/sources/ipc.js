@@ -68,7 +68,7 @@ const registerSourceServiceIpc = ({ ipcMain, service, broadcast }) => {
 		if (!sources.length) return null;
 
 		const subscriptionId = randomUUID();
-		const stop = service.watch(sources, payload?.options || {});
+		const stop = service.watch(sources);
 		subscriptions.set(subscriptionId, { stop, ownerId: event.sender.id });
 
 		event.sender.once("destroyed", () => {

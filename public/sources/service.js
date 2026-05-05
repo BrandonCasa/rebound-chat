@@ -1,15 +1,23 @@
 /**
- * High-level façade over the enumerator + thumbnail manager.
+ * Façade over Electron's `desktopCapturer` for the renderer.
  *
- * The renderer (and any future feature inside Electron) talks to a single
- * `SourceService` instance. Concrete responsibilities split as follows:
- *   - `listSources`            — proxy to the platform enumerator
- *   - `watch` / `captureOnce`  — proxy to the `ThumbnailManager`
- *   - `getCachedThumbnails`    — pulls the latest snapshot of the cache
+ * Replaces the previous FFmpeg snapshot pool. `desktopCapturer.getSources`
+ * already returns a `NativeImage` thumbnail for every source it lists, so
+ * one call enumerates and snapshots in a single round trip — no scratch
+ * directory, no child process, no per-source filter graphs.
  *
- * Lifecycle is explicit: callers run `await service.start()` after FFmpeg
- * paths have been resolved and `await service.stop()` from `before-quit`.
- * Calls before `start()` throw, so wiring problems surface immediately.
+ * Lifecycle:
+ *   - `listSources` is a one-shot enumeration the renderer uses to
+ *     populate the source picker.
+ *   - `watch(sources)` ref-counts a set of source ids. While anything is
+ *     watched, a single shared poll fires every `intervalMs` and emits a
+ *     `ThumbnailEvent` for each watched source present in the response.
+ *     Unwatch drops one ref; when refs hit zero the poll stops.
+ *   - `captureOnce` waits for the next poll tick (kicking one immediately
+ *     if needed) and resolves with the first matching event.
+ *
+ * The cache de-dupes identical `dataUrl`s so the renderer only repaints
+ * when the picture actually changed.
  *
  * @typedef {import("./types.js").SourceInfo} SourceInfo
  * @typedef {import("./types.js").ThumbnailEvent} ThumbnailEvent
@@ -17,72 +25,105 @@
  * @typedef {import("./types.js").ThumbnailListener} ThumbnailListener
  */
 
-import { mkdir, rm } from "node:fs/promises";
-
-import { selectEnumerator } from "./enumerator/index.js";
-import { ThumbnailManager } from "./thumbnailer/index.js";
 import { ThumbnailCache } from "./cache.js";
+
+const DEFAULT_INTERVAL_MS = 1000;
+const DEFAULT_THUMBNAIL_SIZE = { width: 480, height: 270 };
+const ALLOWED_TYPES = new Set(["screen", "window"]);
+
+const normalizeTypes = (types) => {
+	if (!Array.isArray(types) || !types.length) return ["screen", "window"];
+	const filtered = types.filter((type) => ALLOWED_TYPES.has(type));
+	return filtered.length ? filtered : ["screen", "window"];
+};
+
+const normalizeSize = (size, fallback) => {
+	const width = Number.parseInt(size?.width, 10);
+	const height = Number.parseInt(size?.height, 10);
+	return {
+		width: Number.isFinite(width) && width > 0 ? width : fallback.width,
+		height: Number.isFinite(height) && height > 0 ? height : fallback.height,
+	};
+};
+
+/**
+ * @param {{ id: string, name: string, display_id?: string, thumbnail?: { toDataURL?: () => string, getSize?: () => { width: number, height: number } }, appIcon?: { toDataURL?: () => string } }} source
+ * @returns {SourceInfo & { thumbnail?: string, thumbnailSize?: { width: number, height: number }, appIcon?: string }}
+ */
+const serializeSource = (source) => {
+	const id = String(source?.id || "");
+	const name = String(source?.name || "");
+	const kind = id.startsWith("screen") ? "screen" : "window";
+	const displayId = source?.display_id ? String(source.display_id) : "";
+	const thumbnail = typeof source?.thumbnail?.toDataURL === "function" ? source.thumbnail.toDataURL() : "";
+	const sizeFn = typeof source?.thumbnail?.getSize === "function" ? source.thumbnail.getSize() : null;
+	const appIcon = typeof source?.appIcon?.toDataURL === "function" ? source.appIcon.toDataURL() : "";
+	return {
+		id,
+		name,
+		kind,
+		displayId: displayId || undefined,
+		thumbnail: thumbnail || undefined,
+		thumbnailSize: sizeFn ? { width: Number(sizeFn.width) || 0, height: Number(sizeFn.height) || 0 } : undefined,
+		appIcon: appIcon || undefined,
+	};
+};
 
 class SourceService {
 	/**
 	 * @param {Object} options
-	 * @param {string} options.ffmpegPath
-	 * @param {string} options.cacheDir       Filesystem location for the snapshot scratch files.
-	 * @param {NodeJS.Platform} [options.platform]
-	 * @param {(event: ThumbnailEvent) => void} [options.onThumbnail]   Optional global tap (in addition to per-watcher callbacks).
+	 * @param {{ getSources: (opts: { types: string[], thumbnailSize?: { width: number, height: number }, fetchWindowIcons?: boolean }) => Promise<Array<unknown>> }} options.desktopCapturer
 	 * @param {(message: string) => void} [options.onLog]
 	 * @param {(error: Error, sourceId?: string) => void} [options.onError]
-	 * @param {{ intervalMs?: number, scale?: number, cacheCapacity?: number }} [options.defaults]
+	 * @param {{ intervalMs?: number, thumbnailSize?: { width: number, height: number }, cacheCapacity?: number, fetchWindowIcons?: boolean }} [options.defaults]
 	 */
-	constructor({ ffmpegPath, cacheDir, platform = process.platform, onThumbnail, onLog, onError, defaults = {} }) {
-		if (!ffmpegPath) throw new TypeError("SourceService requires an ffmpegPath.");
-		if (!cacheDir) throw new TypeError("SourceService requires a cacheDir.");
+	constructor({ desktopCapturer, onLog, onError, defaults = {} }) {
+		if (!desktopCapturer || typeof desktopCapturer.getSources !== "function") {
+			throw new TypeError("SourceService requires Electron's desktopCapturer module.");
+		}
 
-		this.ffmpegPath = ffmpegPath;
-		this.cacheDir = cacheDir;
-		this.platform = platform;
-		this.onThumbnailTap = onThumbnail || null;
+		this.desktopCapturer = desktopCapturer;
 		this.onLog = onLog || (() => {});
-		this.onError = onError || (() => {});
+		this.onError = onError || ((err) => this.onLog(`SourceService error: ${err?.message || err}`));
+		this.defaults = {
+			intervalMs: Number.isFinite(defaults.intervalMs) && defaults.intervalMs > 0 ? defaults.intervalMs : DEFAULT_INTERVAL_MS,
+			thumbnailSize: normalizeSize(defaults.thumbnailSize, DEFAULT_THUMBNAIL_SIZE),
+			fetchWindowIcons: Boolean(defaults.fetchWindowIcons),
+		};
 
-		this.enumerator = selectEnumerator(platform);
 		this.cache = new ThumbnailCache({ capacity: defaults.cacheCapacity });
+
+		/** @type {Map<string, number>} watched source id → reference count. */
+		this.subscriptions = new Map();
 		/** @type {Set<ThumbnailListener>} */
 		this.listeners = new Set();
 
-		this.manager = new ThumbnailManager({
-			cacheDir,
-			ffmpegPath,
-			platform,
-			onThumbnail: (event) => this.handleThumbnail(event),
-			onLog: this.onLog,
-			onError: this.onError,
-			defaults,
-		});
+		this.pollTimer = null;
+		this.pollInFlight = false;
+		/** @type {Array<{ resolve: () => void, reject: (err: Error) => void }>} */
+		this.pendingTickWaiters = [];
 
 		this.started = false;
 		this.stopped = false;
 	}
 
-	/**
-	 * Allocate the cache directory and mark the service as ready.
-	 */
 	async start() {
 		if (this.started) return;
-		await mkdir(this.cacheDir, { recursive: true });
 		this.started = true;
-		this.onLog(`SourceService ready (platform=${this.platform}, cacheDir=${this.cacheDir})`);
+		this.onLog(`SourceService ready (interval=${this.defaults.intervalMs}ms)`);
 	}
 
-	/**
-	 * Tear down every snapshot process and remove the cache directory.
-	 */
 	async stop() {
 		if (!this.started || this.stopped) return;
 		this.stopped = true;
+		this.stopPollLoop();
+		this.subscriptions.clear();
 		this.listeners.clear();
-		await this.manager.dispose();
-		await rm(this.cacheDir, { recursive: true, force: true }).catch(() => {});
+		this.cache.clear();
+		const waiters = this.pendingTickWaiters.splice(0);
+		for (const waiter of waiters) {
+			waiter.reject(new Error("SourceService was stopped before the next poll completed."));
+		}
 		this.onLog("SourceService stopped");
 	}
 
@@ -92,17 +133,36 @@ class SourceService {
 	}
 
 	/**
-	 * @param {EnumeratorOptions} [options]
+	 * @param {EnumeratorOptions & { thumbnailSize?: { width: number, height: number }, fetchWindowIcons?: boolean }} [options]
 	 * @returns {Promise<SourceInfo[]>}
 	 */
-	async listSources(options) {
+	async listSources(options = {}) {
 		this.assertReady();
-		return this.enumerator.enumerate(options);
+		const sources = await this.fetchSources(options);
+		return sources.map(serializeSource);
 	}
 
 	/**
-	 * Subscribe to thumbnails. The optional `sourceIds` filter only forwards
-	 * events that match the given ids; omit it to receive every event.
+	 * Internal helper that calls `desktopCapturer.getSources` with normalized
+	 * options. Used by both `listSources` and the polling loop so both honor
+	 * the same defaults.
+	 *
+	 * @param {{ types?: string[], thumbnailSize?: { width: number, height: number }, fetchWindowIcons?: boolean }} options
+	 */
+	async fetchSources(options = {}) {
+		const types = normalizeTypes(options.types);
+		const thumbnailSize = normalizeSize(options.thumbnailSize, this.defaults.thumbnailSize);
+		const fetchWindowIcons = options.fetchWindowIcons ?? this.defaults.fetchWindowIcons;
+		return this.desktopCapturer.getSources({
+			types,
+			thumbnailSize,
+			fetchWindowIcons,
+		});
+	}
+
+	/**
+	 * Subscribe to thumbnail events. The optional `sourceIds` filter only
+	 * forwards events whose id matches; omit it to receive every event.
 	 *
 	 * @param {ThumbnailListener} listener
 	 * @param {string[]} [sourceIds]
@@ -119,18 +179,35 @@ class SourceService {
 	}
 
 	/**
-	 * Begin watching the given source ids. Returns an unsubscribe function
-	 * that releases every reference taken by this call.
+	 * Begin watching the given sources. Returns an unsubscribe function that
+	 * releases every reference taken by this call. The poll loop runs as
+	 * long as at least one source is watched.
 	 *
 	 * @param {SourceInfo[]} sources
-	 * @param {{ intervalMs?: number, scale?: number }} [options]
 	 * @returns {() => void}
 	 */
-	watch(sources, options) {
+	watch(sources) {
 		this.assertReady();
-		const stops = sources.map((source) => this.manager.watch(source, options));
+		const ids = (Array.isArray(sources) ? sources : []).map((source) => source?.id).filter(Boolean);
+		for (const id of ids) {
+			this.subscriptions.set(id, (this.subscriptions.get(id) || 0) + 1);
+		}
+		if (this.subscriptions.size > 0) this.startPollLoop();
+
+		let released = false;
 		return () => {
-			for (const stop of stops) stop();
+			if (released) return;
+			released = true;
+			for (const id of ids) {
+				const next = (this.subscriptions.get(id) || 0) - 1;
+				if (next <= 0) {
+					this.subscriptions.delete(id);
+					this.cache.delete(id);
+				} else {
+					this.subscriptions.set(id, next);
+				}
+			}
+			if (this.subscriptions.size === 0) this.stopPollLoop();
 		};
 	}
 
@@ -144,24 +221,27 @@ class SourceService {
 	}
 
 	/**
-	 * One-shot capture: subscribes briefly, awaits the next snapshot, and
-	 * cleans up. Useful for "show this in a tooltip" style requests.
+	 * Ad-hoc capture: subscribe briefly, await the next snapshot, and clean
+	 * up. Useful for "show this in a tooltip" style requests.
 	 *
 	 * @param {SourceInfo} source
-	 * @param {{ intervalMs?: number, scale?: number, timeoutMs?: number }} [options]
+	 * @param {{ timeoutMs?: number }} [options]
 	 * @returns {Promise<ThumbnailEvent>}
 	 */
 	captureOnce(source, options = {}) {
 		this.assertReady();
-		const timeoutMs = options.timeoutMs || 10_000;
+		if (!source?.id) {
+			return Promise.reject(new TypeError("captureOnce requires a source with an id."));
+		}
+		const timeoutMs = Number.isFinite(options.timeoutMs) && options.timeoutMs > 0 ? options.timeoutMs : 10_000;
 
 		return new Promise((resolve, reject) => {
-			let unsubscribe = () => {};
 			let stopWatch = () => {};
+			let unsubscribe = () => {};
 			let timer = null;
 
 			const cleanup = () => {
-				clearTimeout(timer);
+				if (timer) clearTimeout(timer);
 				unsubscribe();
 				stopWatch();
 			};
@@ -175,12 +255,14 @@ class SourceService {
 			);
 
 			try {
-				stopWatch = this.watch([source], options);
+				stopWatch = this.watch([source]);
 			} catch (err) {
 				cleanup();
 				reject(err);
 				return;
 			}
+
+			void this.pollOnce().catch((err) => this.onLog(`captureOnce poll kick failed: ${err.message}`));
 
 			timer = setTimeout(() => {
 				cleanup();
@@ -189,12 +271,70 @@ class SourceService {
 		});
 	}
 
+	startPollLoop() {
+		if (this.pollTimer || this.stopped) return;
+		void this.pollOnce().catch((err) => this.onLog(`Initial poll failed: ${err.message}`));
+		this.pollTimer = setInterval(() => {
+			void this.pollOnce().catch((err) => this.onLog(`Poll failed: ${err.message}`));
+		}, this.defaults.intervalMs);
+		if (typeof this.pollTimer?.unref === "function") this.pollTimer.unref();
+	}
+
+	stopPollLoop() {
+		if (!this.pollTimer) return;
+		clearInterval(this.pollTimer);
+		this.pollTimer = null;
+	}
+
+	/**
+	 * Run a single enumeration cycle. Coalesces overlapping invocations so a
+	 * `captureOnce` kick during an in-flight poll just waits for the result
+	 * instead of doubling the load on `desktopCapturer`.
+	 */
+	async pollOnce() {
+		if (this.subscriptions.size === 0 || this.stopped) return;
+		if (this.pollInFlight) {
+			await new Promise((resolve, reject) => {
+				this.pendingTickWaiters.push({ resolve, reject });
+			});
+			return;
+		}
+
+		this.pollInFlight = true;
+		try {
+			const sources = await this.fetchSources();
+			if (this.stopped) return;
+			const capturedAt = new Date().toISOString();
+			for (const raw of sources) {
+				const id = String(raw?.id || "");
+				if (!this.subscriptions.has(id)) continue;
+				const dataUrl = typeof raw?.thumbnail?.toDataURL === "function" ? raw.thumbnail.toDataURL() : "";
+				if (!dataUrl) continue;
+				const size = typeof raw?.thumbnail?.getSize === "function" ? raw.thumbnail.getSize() : null;
+				const event = {
+					sourceId: id,
+					dataUrl,
+					width: Number(size?.width) || 0,
+					height: Number(size?.height) || 0,
+					capturedAt,
+				};
+				this.emitThumbnail(event);
+			}
+		} catch (err) {
+			const error = err instanceof Error ? err : new Error(String(err));
+			this.onError(error);
+		} finally {
+			this.pollInFlight = false;
+			const waiters = this.pendingTickWaiters.splice(0);
+			for (const waiter of waiters) waiter.resolve();
+		}
+	}
+
 	/**
 	 * @param {ThumbnailEvent} event
 	 */
-	handleThumbnail(event) {
+	emitThumbnail(event) {
 		const changed = this.cache.set(event);
-		if (this.onThumbnailTap) this.onThumbnailTap(event);
 		if (!changed) return;
 		for (const listener of this.listeners) {
 			try {
@@ -206,4 +346,4 @@ class SourceService {
 	}
 }
 
-export { SourceService };
+export { SourceService, serializeSource, DEFAULT_INTERVAL_MS, DEFAULT_THUMBNAIL_SIZE };

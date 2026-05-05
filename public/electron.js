@@ -4,8 +4,7 @@ import { fileURLToPath } from "url";
 import { dirname, extname, join } from "path";
 import { existsSync } from "fs";
 import { readFile } from "fs/promises";
-import { tmpdir } from "os";
-import { app, BrowserWindow, ipcMain, protocol, shell } from "electron";
+import { app, BrowserWindow, desktopCapturer, ipcMain, protocol, shell } from "electron";
 import log from "electron-log";
 import updater from "electron-updater";
 const { autoUpdater } = updater;
@@ -136,9 +135,7 @@ const broadcastToRenderers = (channel, payload) => {
 };
 
 const sourceService = new SourceService({
-	ffmpegPath: ffmpegBinaryPath,
-	cacheDir: join(tmpdir(), `rebound-thumbnails-${process.pid}`),
-	platform: process.platform,
+	desktopCapturer,
 	onLog: (message) => log.info(`[sources] ${message}`),
 	onError: (err, sourceId) => log.error(`[sources] ${sourceId || ""} ${err?.message || err}`),
 });

@@ -1,14 +1,10 @@
 /**
- * Public entry point for the cross-platform sources toolkit.
+ * Public entry point for the desktop sources toolkit.
  *
- * Re-exports the high-level API while keeping the internal modules
- * importable for tests and for any future consumer that needs lower-level
- * primitives.
+ * Re-exports the `SourceService` façade (and its IPC bridge), plus the
+ * thumbnail cache for any caller that wants to query it directly.
  */
 
 export { SourceService } from "./service.js";
-export { ThumbnailManager } from "./thumbnailer/index.js";
 export { ThumbnailCache } from "./cache.js";
-export { selectEnumerator } from "./enumerator/index.js";
-export { selectThumbnailBuilder } from "./thumbnailer/builders/index.js";
 export { registerSourceServiceIpc, CHANNELS as SOURCE_IPC_CHANNELS } from "./ipc.js";
