@@ -25,10 +25,28 @@ const websiteBaseUrlDefault = () => (!process?.env?.NODE_ENV || process?.env?.NO
  * resolved at call time so `buildDefaultSettings({ profile })` can be used
  * by callers (e.g. tests) that want a different host's defaults.
  *
- * @param {{ profile?: import("./platform/profiles.js").PlatformProfile }} [options]
+ * `fps` and `hlsTime` are accepted as inputs because the GOP size must be
+ * `fps * hlsTime` to align IDR frames with HLS segment boundaries. Without
+ * that alignment players have to wait for the next IDR after seeking, which
+ * adds visible latency on segment-boundary joins.
+ *
+ * The NVENC defaults form a coherent low-latency profile (see
+ * `profiles/lowLatency.js` for the documented rationale): `tune ull` is
+ * paired with disabled multipass, zero B-frames, zero lookahead, disabled
+ * B-frame referencing, and temporal-AQ off. Each of those flags would
+ * otherwise contradict the ULL tune by holding frames in the encoder.
+ *
+ * @param {{
+ *   profile?: import("./platform/profiles.js").PlatformProfile,
+ *   fps?: number,
+ *   hlsTime?: number | string,
+ * }} [options]
  */
 const buildDefaultSettings = (options = {}) => {
 	const profile = options.profile || currentPlatformProfile();
+	const fps = options.fps ?? 30;
+	const hlsTimeNumber = Number(options.hlsTime ?? "2");
+	const gopSize = fps * hlsTimeNumber;
 	return {
 		websiteBaseUrl: websiteBaseUrlDefault(),
 		liveCreateToken: "",
@@ -51,19 +69,19 @@ const buildDefaultSettings = (options = {}) => {
 		outputHeight: 1080,
 		videoBitrate: "8M",
 		audioBitrate: "160k",
-		fps: 30,
+		fps,
 		encoderPreset: profile.defaults.encoderPreset,
 		nvencTune: "ull",
-		nvencMultipass: "fullres",
+		nvencMultipass: "disabled",
 		nvencRc: "vbr",
 		nvencCq: 23,
 		nvencSpatialAq: true,
-		nvencTemporalAq: true,
-		nvencBRefMode: "middle",
-		nvencBFrames: 3,
-		nvencLookahead: 16,
-		gopSize: 60,
-		hlsTime: "2",
+		nvencTemporalAq: false,
+		nvencBRefMode: "disabled",
+		nvencBFrames: 0,
+		nvencLookahead: 0,
+		gopSize,
+		hlsTime: String(options.hlsTime ?? "2"),
 		hlsListSize: 6,
 		hdrMode: "off",
 		openSharePage: true,

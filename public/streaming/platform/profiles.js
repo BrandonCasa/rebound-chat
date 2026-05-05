@@ -106,7 +106,7 @@ const WIN32_X64 = {
 		videoCodec: "h264_nvenc",
 		audioCodec: "aac",
 		captureBackend: "gfxcapture",
-		encoderPreset: "p6",
+		encoderPreset: "p4",
 	},
 };
 
@@ -254,7 +254,7 @@ const FALLBACK_PROFILE = {
 		videoCodec: "h264_nvenc",
 		audioCodec: "aac",
 		captureBackend: "gfxcapture",
-		encoderPreset: "p6",
+		encoderPreset: "p4",
 	},
 };
 

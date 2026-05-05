@@ -56,7 +56,13 @@ const tail = (fps = 60) => [
 	"video.m3u8",
 ];
 
-const nvencEncoderTail = (preset = "p6") => [
+// Mirrors the new low-latency NVENC defaults from defaults.js:
+//   - no -multipass     (nvencMultipass: "disabled" → suppressed by guard in nvenc.js line 34)
+//   - -temporal_aq 0    (nvencTemporalAq: false; meaningless without lookahead)
+//   - -b_ref_mode disabled
+//   - -bf 0
+//   - no -rc-lookahead  (nvencLookahead: 0 → suppressed by guard in nvenc.js line 43)
+const nvencEncoderTail = (preset = "p4") => [
 	"-c:v",
 	"h264_nvenc",
 	"-g",
@@ -75,22 +81,18 @@ const nvencEncoderTail = (preset = "p6") => [
 	preset,
 	"-tune",
 	"ull",
-	"-multipass",
-	"fullres",
 	"-rc",
 	"vbr",
 	"-spatial_aq",
 	"1",
 	"-temporal_aq",
-	"1",
+	"0",
 	"-cq",
 	"23",
 	"-b_ref_mode",
-	"middle",
+	"disabled",
 	"-bf",
-	"3",
-	"-rc-lookahead",
-	"16",
+	"0",
 ];
 
 describe("pipeline.buildArgs — Windows + gfxcapture + NVENC (SDR)", () => {

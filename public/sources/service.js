@@ -28,7 +28,8 @@
 import { ThumbnailCache } from "./cache.js";
 
 const DEFAULT_INTERVAL_MS = 1000;
-const DEFAULT_THUMBNAIL_SIZE = { width: 480, height: 270 };
+const DEFAULT_THUMBNAIL_SIZE = { width: 1280, height: 720 };
+const DEFAULT_JPEG_QUALITY = 82;
 const ALLOWED_TYPES = new Set(["screen", "window"]);
 
 const normalizeTypes = (types) => {
@@ -47,6 +48,38 @@ const normalizeSize = (size, fallback) => {
 };
 
 /**
+ * Encode a NativeImage thumbnail as a data URL. JPEG is preferred because
+ * desktop captures are photographic content, where a quality≈82 JPEG is
+ * typically 5-20x smaller than a PNG and significantly faster to encode —
+ * the encode and the IPC serialization were the dominant costs of the old
+ * PNG path. Falls back to PNG via `toDataURL()` when `toJPEG` is missing
+ * (e.g. in unit tests or older Electron builds).
+ *
+ * @param {{ toJPEG?: (quality: number) => Buffer | Uint8Array, toDataURL?: () => string } | null | undefined} image
+ * @param {number} [quality]
+ * @returns {string}
+ */
+const thumbnailToDataUrl = (image, quality = DEFAULT_JPEG_QUALITY) => {
+	if (!image) return "";
+	if (typeof image.toJPEG === "function") {
+		try {
+			const buffer = image.toJPEG(quality);
+			if (buffer && typeof buffer.toString === "function") {
+				const base64 = buffer.toString("base64");
+				if (base64) return `data:image/jpeg;base64,${base64}`;
+			}
+		} catch (_err) {
+			// Some platforms (e.g. transparent windows on Linux) can fail JPEG
+			// encoding; fall through to the PNG path below.
+		}
+	}
+	if (typeof image.toDataURL === "function") {
+		return image.toDataURL();
+	}
+	return "";
+};
+
+/**
  * @param {{ id: string, name: string, display_id?: string, thumbnail?: { toDataURL?: () => string, getSize?: () => { width: number, height: number } }, appIcon?: { toDataURL?: () => string } }} source
  * @returns {SourceInfo & { thumbnail?: string, thumbnailSize?: { width: number, height: number }, appIcon?: string }}
  */
@@ -55,7 +88,7 @@ const serializeSource = (source) => {
 	const name = String(source?.name || "");
 	const kind = id.startsWith("screen") ? "screen" : "window";
 	const displayId = source?.display_id ? String(source.display_id) : "";
-	const thumbnail = typeof source?.thumbnail?.toDataURL === "function" ? source.thumbnail.toDataURL() : "";
+	const thumbnail = thumbnailToDataUrl(source?.thumbnail);
 	const sizeFn = typeof source?.thumbnail?.getSize === "function" ? source.thumbnail.getSize() : null;
 	const appIcon = typeof source?.appIcon?.toDataURL === "function" ? source.appIcon.toDataURL() : "";
 	return {
@@ -308,7 +341,7 @@ class SourceService {
 			for (const raw of sources) {
 				const id = String(raw?.id || "");
 				if (!this.subscriptions.has(id)) continue;
-				const dataUrl = typeof raw?.thumbnail?.toDataURL === "function" ? raw.thumbnail.toDataURL() : "";
+				const dataUrl = thumbnailToDataUrl(raw?.thumbnail);
 				if (!dataUrl) continue;
 				const size = typeof raw?.thumbnail?.getSize === "function" ? raw.thumbnail.getSize() : null;
 				const event = {
@@ -346,4 +379,4 @@ class SourceService {
 	}
 }
 
-export { SourceService, serializeSource, DEFAULT_INTERVAL_MS, DEFAULT_THUMBNAIL_SIZE };
+export { SourceService, serializeSource, thumbnailToDataUrl, DEFAULT_INTERVAL_MS, DEFAULT_THUMBNAIL_SIZE, DEFAULT_JPEG_QUALITY };

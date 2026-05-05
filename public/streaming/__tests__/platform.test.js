@@ -156,11 +156,11 @@ describe("defaults.buildDefaultSettings({ profile })", () => {
 		assert.equal(s.encoderPreset, "realtime");
 	});
 
-	it("win32-x64: nvenc codec, gfxcapture, p6 preset", () => {
+	it("win32-x64: nvenc codec, gfxcapture, p4 preset (low-latency default)", () => {
 		const s = buildDefaultSettings({ profile: WIN32_X64 });
 		assert.equal(s.videoCodec, "h264_nvenc");
 		assert.equal(s.captureBackend, "gfxcapture");
-		assert.equal(s.encoderPreset, "p6");
+		assert.equal(s.encoderPreset, "p4");
 	});
 
 	it("win32-arm64: svtav1 codec, preset 8", () => {
@@ -181,5 +181,36 @@ describe("defaults.buildDefaultSettings({ profile })", () => {
 		assert.equal(s.videoCodec, "libsvtav1");
 		assert.equal(s.captureBackend, "x11grab");
 		assert.equal(s.encoderPreset, "8");
+	});
+
+	it("nvenc defaults form a coherent low-latency profile (no flags that contradict tune=ull)", () => {
+		const s = buildDefaultSettings({ profile: WIN32_X64 });
+		assert.equal(s.nvencTune, "ull");
+		assert.equal(s.nvencMultipass, "disabled", "multipass adds a full first pass; cannot coexist with tune=ull");
+		assert.equal(s.nvencTemporalAq, false, "temporal-AQ requires lookahead, which is 0");
+		assert.equal(s.nvencBRefMode, "disabled");
+		assert.equal(s.nvencBFrames, 0, "B-frames force frame reordering and add output latency");
+		assert.equal(s.nvencLookahead, 0, "lookahead is a hard latency floor");
+	});
+
+	it("derives gopSize from fps × hlsTime so IDR frames align with HLS segment boundaries", () => {
+		const at30 = buildDefaultSettings({ profile: WIN32_X64, fps: 30, hlsTime: "2" });
+		assert.equal(at30.gopSize, 60, "30 fps × 2 s segments → 60-frame GOP");
+		assert.equal(at30.fps, 30);
+		assert.equal(at30.hlsTime, "2");
+
+		const at60 = buildDefaultSettings({ profile: WIN32_X64, fps: 60, hlsTime: "2" });
+		assert.equal(at60.gopSize, 120, "60 fps × 2 s segments → 120-frame GOP");
+
+		const at120With4s = buildDefaultSettings({ profile: WIN32_X64, fps: 120, hlsTime: "4" });
+		assert.equal(at120With4s.gopSize, 480, "120 fps × 4 s segments → 480-frame GOP");
+	});
+
+	it("hlsTime accepts both string and number inputs and round-trips as a string", () => {
+		const fromString = buildDefaultSettings({ profile: WIN32_X64, fps: 30, hlsTime: "2" });
+		const fromNumber = buildDefaultSettings({ profile: WIN32_X64, fps: 30, hlsTime: 2 });
+		assert.equal(fromString.hlsTime, "2");
+		assert.equal(fromNumber.hlsTime, "2");
+		assert.equal(fromString.gopSize, fromNumber.gopSize);
 	});
 });

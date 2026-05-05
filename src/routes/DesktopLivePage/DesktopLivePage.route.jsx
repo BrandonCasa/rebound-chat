@@ -357,8 +357,21 @@ function DesktopLivePage() {
 		setLoadingSources(true);
 		setError("");
 		try {
-			const nextSources = await electronSources.list({ types: ["screen", "window"] });
+			// Ask for high-resolution thumbnails up front. desktopCapturer treats
+			// this as a max bound, so non-16:9 windows still come back at their
+			// native aspect ratio.
+			const nextSources = await electronSources.list({
+				types: ["screen", "window"],
+				thumbnailSize: { width: 1280, height: 720 },
+			});
 			setSources(nextSources);
+			setThumbnails(() => {
+				const next = {};
+				for (const source of nextSources) {
+					if (source?.id && source.thumbnail) next[source.id] = source.thumbnail;
+				}
+				return next;
+			});
 			setSelectedSourceId((current) => (current && nextSources.some((source) => source.id === current) ? current : nextSources[0]?.id || ""));
 		} catch (err) {
 			setError(err.message || "Unable to load desktop sources.");
@@ -395,56 +408,6 @@ function DesktopLivePage() {
 	useEffect(() => {
 		loadSources();
 	}, [loadSources]);
-
-	useEffect(() => {
-		if (!electronSources) return undefined;
-		const off = electronSources.onThumbnail((event) => {
-			if (!event?.sourceId || !event.dataUrl) return;
-			setThumbnails((current) => ({ ...current, [event.sourceId]: event.dataUrl }));
-		});
-		return () => {
-			off?.();
-		};
-	}, [electronSources]);
-
-	useEffect(() => {
-		if (!electronSources || !sources.length) return undefined;
-		let cancelled = false;
-		let subscriptionId = null;
-
-		electronSources
-			.watch(sources, { width: 480, height: 270, intervalMs: 5000 })
-			.then((id) => {
-				if (cancelled && id) {
-					void electronSources.unwatch(id);
-					return;
-				}
-				subscriptionId = id;
-			})
-			.catch((err) => setError(err.message || "Unable to subscribe to thumbnails."));
-
-		electronSources
-			.getCached(sources.map((source) => source.id))
-			.then((cached) => {
-				if (cancelled || !Array.isArray(cached)) return;
-				if (!cached.length) return;
-				setThumbnails((current) => {
-					const next = { ...current };
-					for (const event of cached) {
-						if (event?.sourceId && event.dataUrl) next[event.sourceId] = event.dataUrl;
-					}
-					return next;
-				});
-			})
-			.catch(() => {
-				// Cache lookup is best-effort; ignore.
-			});
-
-		return () => {
-			cancelled = true;
-			if (subscriptionId) void electronSources.unwatch(subscriptionId);
-		};
-	}, [electronSources, sources]);
 
 	useEffect(() => {
 		if (!electronLive?.getCapabilities) return undefined;

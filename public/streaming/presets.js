@@ -56,7 +56,7 @@ const ENCODER_PRESETS = {
 };
 
 const DEFAULT_ENCODER_PRESETS = {
-	nvenc: "p6",
+	nvenc: "p4",
 	amf: "quality",
 	vaapi: "default",
 	software: "medium",

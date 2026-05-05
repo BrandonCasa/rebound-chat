@@ -6,6 +6,22 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased] — 2026-05-04
 
+### Changed (NVENC defaults rewritten for live latency)
+
+- **NVENC defaults are now a coherent low-latency profile.** Previously the defaults paired `tune ull` with five flags that each individually contradict it: `multipass fullres`, `temporal_aq 1`, `b_ref_mode middle`, `bf 3`, and `rc-lookahead 16`. Lookahead alone was a hard ~533 ms latency floor at 30 fps because the encoder could not emit frame N until it had seen frame N+16. The encoder now emits no `-multipass`, `-temporal_aq 0`, `-b_ref_mode disabled`, `-bf 0`, no `-rc-lookahead`, and `-preset p4` (the documented "ll" alias). Expected glass-to-glass drop in the encoder alone: ~500–700 ms; expected NVENC engine occupancy drop: ~30–50% (no second pass). (`public/streaming/defaults.js`, `public/streaming/presets.js`, `public/streaming/platform/profiles.js`)
+- **GOP size is now derived from `fps × hlsTime`** instead of a fixed `60`. `buildDefaultSettings({ profile, fps, hlsTime })` accepts the rate-side inputs and computes `gopSize`, which is what guarantees IDR frames land on HLS segment boundaries. The previous fixed `60` was correct only at 30 fps × 2 s segments and silently produced misaligned segments at 60 fps. (`public/streaming/defaults.js`)
+
+### Added (streaming quality profiles)
+
+- **Curated streaming quality profiles** under `public/streaming/profiles/`. Each profile is a `Partial<StreamConfig>` describing one coherent encoder trade-off:
+  - `low-latency` — the new effective default. No `-rc-lookahead`, `-bf 0`, no `-multipass`, `-b_ref_mode disabled`, `temporal_aq 0`, `preset p4`. Estimated ~500 ms glass-to-glass.
+  - `balanced` — `preset p5`, `multipass qres`, `bf 2`, `lookahead 8`, `temporal_aq 1`. Estimated ~1 s glass-to-glass.
+  - `quality` — the pre-fix defaults preserved as an explicit choice: `preset p6`, `multipass fullres`, `bf 3`, `lookahead 16`, both AQs on. Estimated ~1.5 s glass-to-glass.
+- `applyProfile(profile, settings)` is a one-line shallow merge; profiles are intentionally additive and never special-cased per profile. The renderer-side selector and `detectProfile` ("custom" detection when the user diverges) are deferred to Plan 04 Phase C.
+- `STREAMING_PROFILES`, `DEFAULT_PROFILE_ID`, and `getProfile(id)` exported from `public/streaming/profiles/index.js` for the renderer.
+- `StreamingProfile` typedef added to `public/streaming/types.js`.
+- New test suite `public/streaming/__tests__/profiles/profiles.test.js` validates profile shape, that every profile's values produce a valid argv via `nvenc.buildArgs`, and that the Low Latency argv is structurally free of `-rc-lookahead`, `-bf > 0`, `-multipass`, and `b_ref_mode middle`. `test:streaming` now also recurses into `__tests__/**`.
+
 ### Fixed (correction to the same release)
 
 - **The "NVENC GPU-resident fast path" described below never worked on stock FFmpeg.** Three independent claims it relied on are not real FFmpeg features:

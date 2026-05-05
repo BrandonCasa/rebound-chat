@@ -85,4 +85,33 @@
  * @typedef {(config: StreamConfig) => string[]} ArgBuilder
  */
 
+/**
+ * Curated set of encoder parameters that describe a coherent streaming
+ * trade-off (latency vs. quality vs. bandwidth stability). Selecting a
+ * profile in the renderer overwrites the dependent fields on the active
+ * `StreamConfig`. A profile is intentionally a `Partial<StreamConfig>`:
+ * it touches only the fields it has an opinion on and leaves everything
+ * else (resolution, codec selection, capture backend, audio, HLS
+ * timing) under the user's direct control.
+ *
+ * Profiles are file-per-profile in `public/streaming/profiles/`. To add
+ * a new profile, drop a file there and register it in `index.js`.
+ *
+ * @typedef {Object} StreamingProfile
+ * @property {string} id
+ *   Stable machine identifier — "low-latency" | "balanced" | "quality" |
+ *   "stable-uplink". Used by `detectProfile` (Plan 04) and persisted in
+ *   the settings store.
+ * @property {string} label
+ *   Display name shown in the settings UI.
+ * @property {string} description
+ *   One-sentence explanation of the trade-off this profile makes.
+ * @property {string} latencyHint
+ *   Human-readable glass-to-glass estimate, e.g. "~500 ms".
+ * @property {Partial<StreamConfig>} values
+ *   Subset of `StreamConfig` fields this profile sets. Applied via
+ *   `applyProfile(profile, settings)` as a shallow merge:
+ *   `{ ...settings, ...profile.values }`.
+ */
+
 export {};
