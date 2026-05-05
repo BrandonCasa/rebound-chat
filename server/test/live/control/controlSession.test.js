@@ -7,6 +7,7 @@ const { createControlSession, recommendationDirection } = await import("../../..
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const recommendationsFrom = (events) => events.filter((event) => event.envelope.type === "recommended-settings");
+const viewerAdaptingFrom = (events) => events.filter((event) => event.scope === "viewers" && event.envelope.type === "streamer-adapting-broadcast");
 
 const buildCapabilities = (overrides = {}) => ({
 	viewerId: overrides.viewerId || "viewer",
@@ -283,5 +284,124 @@ describe("controlSession raise hysteresis", () => {
 		session.teardown();
 		await wait(RAISE_DWELL + 30);
 		expect(session.hasPendingRaise()).to.equal(false);
+	});
+});
+
+describe("controlSession adapting fan-out", () => {
+	const ADAPT_TIMEOUT = 60;
+	let emitted;
+	let session;
+
+	beforeEach(() => {
+		emitted = [];
+		session = createControlSession({
+			sessionId: "session-adapt",
+			emit: (event) => emitted.push(event),
+			log: null,
+			raiseDwellMs: 0,
+			minIntervalMs: 0,
+			adaptingTimeoutMs: ADAPT_TIMEOUT,
+		});
+	});
+
+	afterEach(() => session.teardown());
+
+	const attachWithStreamer = () =>
+		session.attachStreamer("streamer-1", {
+			initialCeiling: buildCeiling(),
+			currentSettings: null,
+			autoAdapt: true,
+		});
+
+	it("fans out a pending broadcast to viewers whenever a recommendation is pushed", () => {
+		attachWithStreamer();
+		emitted.length = 0;
+
+		session.upsertViewer("viewer-slow", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1.2 } }));
+
+		const recs = recommendationsFrom(emitted);
+		const adaptingPushes = viewerAdaptingFrom(emitted);
+		expect(recs).to.have.lengthOf(1, "recommendation must reach the streamer");
+		expect(adaptingPushes).to.have.lengthOf(1, "viewers must hear about the adapting state");
+		const envelope = adaptingPushes[0].envelope;
+		expect(envelope.state).to.equal("pending");
+		expect(envelope.target.videoBitrate).to.equal(recs[0].envelope.videoBitrate);
+		expect(envelope.direction).to.equal("down");
+		expect(envelope.derivedFromViewerCount).to.equal(1);
+		expect(session.hasPendingAdaptation()).to.equal(true);
+	});
+
+	it("does NOT fan out adapting state when no streamer is attached to receive the recommendation", () => {
+		// No `attachStreamer` — viewers connecting in this state would
+		// see "host adjusting" with nobody actually adjusting anything,
+		// which is misleading and distressing.
+		emitted.length = 0;
+		session.upsertViewer("viewer-A", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 4 } }));
+
+		expect(viewerAdaptingFrom(emitted)).to.have.lengthOf(0);
+		expect(session.hasPendingAdaptation()).to.equal(false);
+	});
+
+	it("clears the adapting state for viewers as soon as the streamer acks", () => {
+		attachWithStreamer();
+		session.upsertViewer("viewer-slow", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1.2 } }));
+		expect(session.hasPendingAdaptation()).to.equal(true);
+		emitted.length = 0;
+
+		session.ackRecommendation("streamer-1", { applied: true, actualSettings: null, clampedBy: null, reason: "", ackId: "ack-1" });
+
+		const cleared = viewerAdaptingFrom(emitted).filter((event) => event.envelope.state === "cleared");
+		expect(cleared).to.have.lengthOf(1, "ack must trigger a cleared broadcast");
+		expect(session.hasPendingAdaptation()).to.equal(false);
+	});
+
+	it("clears adapting state via the safety timeout when the streamer never acks", async () => {
+		attachWithStreamer();
+		session.upsertViewer("viewer-slow", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1.2 } }));
+		expect(session.hasPendingAdaptation()).to.equal(true);
+		emitted.length = 0;
+
+		await wait(ADAPT_TIMEOUT + 30);
+
+		const cleared = viewerAdaptingFrom(emitted).filter((event) => event.envelope.state === "cleared");
+		expect(cleared.length).to.be.greaterThanOrEqual(1, "timeout must fan a cleared broadcast");
+		expect(cleared[cleared.length - 1].envelope.reason).to.equal("timeout");
+		expect(session.hasPendingAdaptation()).to.equal(false);
+	});
+
+	it("clears adapting state when the streamer detaches mid-respawn", () => {
+		attachWithStreamer();
+		session.upsertViewer("viewer-slow", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1.2 } }));
+		expect(session.hasPendingAdaptation()).to.equal(true);
+		emitted.length = 0;
+
+		session.detachStreamer("streamer-1", { reason: "transport_close" });
+
+		const cleared = viewerAdaptingFrom(emitted).filter((event) => event.envelope.state === "cleared");
+		expect(cleared).to.have.lengthOf(1);
+		expect(cleared[0].envelope.reason).to.contain("streamer_detached");
+		expect(session.hasPendingAdaptation()).to.equal(false);
+	});
+
+	it("exposes the in-flight snapshot for late-joining viewer HELLOs", () => {
+		attachWithStreamer();
+		session.upsertViewer("viewer-slow", buildCapabilities({ network: { hlsBandwidthEstimateMbit: 1.2 } }));
+
+		const snapshot = session.getAdaptingSnapshot();
+		expect(snapshot).to.not.equal(null);
+		expect(snapshot.state).to.equal("pending");
+		expect(snapshot.target).to.have.property("videoBitrate");
+		expect(snapshot.direction).to.equal("down");
+	});
+
+	it("returns null from getAdaptingSnapshot once the streamer has acked the in-flight push", () => {
+		// `attachStreamer` itself force-pushes a recommendation (the
+		// ceiling-restoration baseline), so the snapshot is non-null
+		// immediately after attach. The steady-state assertion is "ack
+		// then null", not "attach then null".
+		attachWithStreamer();
+		expect(session.getAdaptingSnapshot()).to.not.equal(null);
+		session.ackRecommendation("streamer-1", { applied: false, actualSettings: null, clampedBy: null, reason: "no-op", ackId: "ack-attach" });
+		expect(session.getAdaptingSnapshot()).to.equal(null);
 	});
 });

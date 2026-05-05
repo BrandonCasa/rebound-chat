@@ -15,7 +15,7 @@ import {
 } from "./streaming/presets.js";
 import { parseOptionalPositiveInt, parsePositiveFloat, parsePositiveInt } from "./streaming/numbers.js";
 import { splitCommandLine } from "./streaming/strings.js";
-import { normalizeAudioCodec } from "./streaming/audio.js";
+import { normalizeAudioCodec } from "./streaming/audio/codec.js";
 import { DEFAULT_SETTINGS } from "./streaming/defaults.js";
 import { availableEncoderPresets, currentPlatformProfile, defaultEncoderPresets } from "./streaming/platform/index.js";
 import { buildArgs as buildPipelineArgs, defaultCapabilities } from "./streaming/pipeline.js";
@@ -571,7 +571,7 @@ class ElectronLiveStreamManager {
 
 		const bandwidth = parseBitrateToBps(config.videoBitrate) + parseBitrateToBps(config.audioBitrate);
 		const resolution = config.outputWidth && config.outputHeight ? `,RESOLUTION=${config.outputWidth}x${config.outputHeight}` : "";
-		const includeAudio = config.audioInputArgs.length || config.mapSourceAudio;
+		const includeAudio = Boolean(config.audioInputArgs?.length || config.mapSourceAudio || config.sourceMode === "file");
 		const codecs = codecString(config.videoCodec, config.audioCodec, includeAudio);
 		const codecsPart = codecs ? `,CODECS="${codecs}"` : "";
 		const advertisedFps = config.fps || config.captureFps;

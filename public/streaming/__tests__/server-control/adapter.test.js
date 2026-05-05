@@ -196,6 +196,49 @@ describe("applyRecommendation ceiling-bounded clamp", () => {
 		assert.equal(wouldRespawn, false);
 	});
 
+	it("returns wouldRespawn=false when the recommendation only differs sub-display from the current bitrate", () => {
+		// Regression: the recommender emits integer bps values derived
+		// from a fractional downlink (e.g. round(downlinkBps * 0.7 * 0.8)).
+		// When that value collapses to the same `toBitrateString` output
+		// as the current bitrate, respawning would re-encode at the
+		// identical display precision and produce no observable change.
+		// Worse, the respawn triggers an `updateCeiling` hello back to the
+		// server which force-pushes the same recommendation again,
+		// causing an infinite respawn loop. The adapter must treat such
+		// recommendations as no-ops.
+		const current = buildConfig({ videoBitrate: "6.64M" });
+		const ceiling = buildInitialCeiling(current);
+		const recommendation = buildRecommendation({
+			videoBitrate: 6_638_400,
+			outputWidth: 1920,
+			outputHeight: 1080,
+		});
+
+		const { next, diff, wouldRespawn, clampedBy } = applyRecommendation(current, recommendation, ceiling);
+		assert.equal(wouldRespawn, false, "no respawn when target rounds to the current display string");
+		assert.equal(diff.length, 0);
+		assert.equal(next.videoBitrate, "6.64M");
+		assert.equal(clampedBy, null);
+	});
+
+	it("returns wouldRespawn=false when the bitrate string differs but the parsed bps matches", () => {
+		// "8000k" and "8M" represent the same encoder bitrate. Treating
+		// the canonical-bps comparison as the source of truth keeps the
+		// adapter idempotent even when the user's bitrate string isn't
+		// the canonical form `toBitrateString` would emit.
+		const current = buildConfig({ videoBitrate: "8000k" });
+		const ceiling = buildInitialCeiling(current);
+		const recommendation = buildRecommendation({
+			videoBitrate: 8_000_000,
+			outputWidth: 1920,
+			outputHeight: 1080,
+		});
+
+		const { wouldRespawn, diff } = applyRecommendation(current, recommendation, ceiling);
+		assert.equal(wouldRespawn, false);
+		assert.equal(diff.length, 0);
+	});
+
 	it("summarizeDiff reads as a human sentence", () => {
 		const summary = summarizeDiff([
 			{ field: "videoBitrate", from: "8M", to: "3M" },

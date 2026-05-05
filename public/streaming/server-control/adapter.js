@@ -101,8 +101,19 @@ const applyRecommendation = (current, recommendation, ceiling, options = {}) => 
 	const ceilingBps = toBpsOrNull(ceiling.videoBitrate);
 	if (recommendedBps != null && ceilingBps != null && currentBps != null) {
 		const target = Math.min(recommendedBps, ceilingBps);
-		if (target !== currentBps) {
-			next.videoBitrate = toBitrateString(target);
+		// Compare in *display* precision, not raw bps. The recommender
+		// emits integer bps (e.g. `Math.round(downlinkBps * 0.56)`) that
+		// often collapse to the same `toBitrateString` output as the
+		// current bitrate (e.g. 6,638,400 → "6.64M" matches "6.64M").
+		// Respawning over those would be a no-op encoded identically and
+		// trigger an infinite loop: every respawn sends a fresh hello to
+		// the server, the server force-pushes a recommendation, the
+		// adapter respawns again, repeat. Anchor the change check on the
+		// canonical string so sub-display deltas are dropped.
+		const nextBitrateString = toBitrateString(target);
+		const canonicalNextBps = toBpsOrNull(nextBitrateString);
+		if (nextBitrateString && canonicalNextBps != null && canonicalNextBps !== currentBps) {
+			next.videoBitrate = nextBitrateString;
 			diff.push({ field: "videoBitrate", from: current.videoBitrate, to: next.videoBitrate });
 			if (target === ceilingBps && ceilingBps < recommendedBps) clampedBy = "user-initial-ceiling";
 		}

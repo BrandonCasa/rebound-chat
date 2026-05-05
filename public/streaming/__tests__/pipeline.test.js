@@ -268,6 +268,16 @@ describe("pipeline.buildArgs — file source mode", () => {
 		assert.doesNotMatch(argv, /\bgdigrab\b/);
 		assert.doesNotMatch(argv, /\bgfxcapture=/);
 	});
+
+	it("auto-maps the file's audio track via -map 0:a? and emits aac codec args", () => {
+		const result = buildArgs(windowsFileSource(), winCaps);
+		const args = result.args;
+		const mapValues = args.reduce((acc, value, idx) => (value === "-map" ? [...acc, args[idx + 1]] : acc), []);
+		assert.ok(mapValues.includes("0:v:0"), `expected -map 0:v:0, got ${mapValues.join(", ")}`);
+		assert.ok(mapValues.includes("0:a?"), `expected -map 0:a? for the file's audio track, got ${mapValues.join(", ")}`);
+		assert.equal(args[args.indexOf("-c:a") + 1], "aac");
+		assert.equal(args[args.indexOf("-b:a") + 1], "160k");
+	});
 });
 
 describe("pipeline.buildArgs — macOS Apple Silicon (videotoolbox)", () => {

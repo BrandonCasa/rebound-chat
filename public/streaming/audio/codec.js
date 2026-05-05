@@ -2,8 +2,8 @@
  * Audio codec normalization helpers.
  */
 
-import { lower } from "./codecs.js";
-import { AUDIO_CODEC_OPTIONS } from "./defaults.js";
+import { lower } from "../codecs.js";
+import { AUDIO_CODEC_OPTIONS } from "../defaults.js";
 
 const normalizeAudioCodec = (value) => {
 	let codec = lower(value);

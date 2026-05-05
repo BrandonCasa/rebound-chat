@@ -172,7 +172,12 @@ const createLiveControlNamespace = ({ io, registry = createControlRegistry({ log
 				type: MSG.HELLO,
 				role: ROLE.VIEWER,
 				sessionId,
-				summary: controlSession.recomputeAndPush ? null : null,
+				summary: null,
+				// Hand the late-joining viewer the current adapting
+				// snapshot (if any) so they can immediately render the
+				// "host is adjusting their stream for you" affordance
+				// without waiting for the next push.
+				adapting: controlSession.getAdaptingSnapshot ? controlSession.getAdaptingSnapshot() : null,
 			});
 			logger.info(`[live-control] viewer ${socket.user?.username || "?"} joined sessionId=${sessionId} socketId=${socket.id}`);
 		} else {

@@ -829,8 +829,15 @@ function DesktopLivePage() {
 											setSettings={setSettings}
 											disabled={isBusy || settings.sourceMode === "file"}
 										/>
-										<ToggleField label="Map audio from primary input" name="mapSourceAudio" settings={settings} setSettings={setSettings} disabled={isBusy} />
+										<ToggleField
+											label="Map audio from primary input"
+											name="mapSourceAudio"
+											settings={settings}
+											setSettings={setSettings}
+											disabled={isBusy || settings.sourceMode === "file"}
+										/>
 									</SettingGrid>
+									{settings.sourceMode === "file" ? <Alert severity="info">The video file&apos;s audio track is captured automatically.</Alert> : null}
 									<Field label="Manual FFmpeg input args" name="manualInputArgs" settings={settings} setSettings={setSettings} disabled={isBusy} multiline />
 									<Field label="Audio FFmpeg input args" name="audioInputArgs" settings={settings} setSettings={setSettings} disabled={isBusy} multiline />
 								</Stack>

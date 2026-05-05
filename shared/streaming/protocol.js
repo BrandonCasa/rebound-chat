@@ -34,11 +34,29 @@ const MSG = Object.freeze({
 	HELLO: "hello",
 	VIEWER_CAPABILITIES: "viewer-capabilities",
 	VIEWER_SUMMARY: "viewer-summary",
+	VIEWER_SUMMARY_BROADCAST: "viewer-summary-broadcast",
 	RECOMMENDED_SETTINGS: "recommended-settings",
 	ACK: "ack",
+	STREAMER_ACK_BROADCAST: "streamer-ack-broadcast",
+	// Fan-out to viewers describing whether the streamer's pipeline is
+	// currently in the middle of applying a server-pushed recommendation.
+	// Lets viewers explain a coming rebuffer ("host is adjusting their
+	// stream for you") instead of presenting a generic spinner.
+	STREAMER_ADAPTING_BROADCAST: "streamer-adapting-broadcast",
 	ADAPTATION_TOGGLED: "adaptation-toggled",
 	STREAMER_HELLO: "streamer-hello",
 	STREAMER_GOODBYE: "streamer-goodbye",
+});
+
+const ADAPTING_STATE = Object.freeze({
+	PENDING: "pending",
+	CLEARED: "cleared",
+});
+
+const ADAPTING_DIRECTION = Object.freeze({
+	UP: "up",
+	DOWN: "down",
+	SAME: "same",
 });
 
 const TRIGGERED_BY = Object.freeze({
@@ -142,12 +160,45 @@ const buildAdaptationToggled = ({ sessionId, autoAdapt }) =>
 		autoAdapt: Boolean(autoAdapt),
 	});
 
+/**
+ * Fan-out to viewers describing whether the streamer is mid-respawn
+ * applying a server-pushed recommendation.
+ *
+ *   state = "pending" — server just pushed `recommended-settings` to
+ *           the streamer; the FFmpeg pipeline is expected to respawn
+ *           shortly and viewers will rebuffer at the next
+ *           `EXT-X-DISCONTINUITY`. Viewers should explain the upcoming
+ *           rebuffer rather than presenting a generic spinner.
+ *   state = "cleared" — the streamer acknowledged the recommendation
+ *           (or the server's safety timeout fired). Viewers can drop
+ *           the "host is adjusting" affordance.
+ *
+ * `target` carries the recommendation that triggered the adapting
+ * window so a richer viewer UI can name what is changing
+ * ("host is dropping to 720p"). `direction` is the same up/down/same
+ * classification the recommender uses internally.
+ */
+const buildStreamerAdaptingBroadcast = ({ sessionId, state, target, reason, direction, derivedFromViewerCount, generation, since, updatedAt }) =>
+	buildEnvelope(MSG.STREAMER_ADAPTING_BROADCAST, {
+		sessionId,
+		state,
+		target: target || null,
+		reason: reason || "",
+		direction: direction || ADAPTING_DIRECTION.SAME,
+		derivedFromViewerCount: derivedFromViewerCount ?? null,
+		generation: generation ?? null,
+		since: since ?? null,
+		updatedAt: updatedAt || Date.now(),
+	});
+
 export {
 	PROTOCOL_VERSION,
 	MSG,
 	TRIGGERED_BY,
 	ROLE,
 	SOCKET_NAMESPACE,
+	ADAPTING_STATE,
+	ADAPTING_DIRECTION,
 	buildEnvelope,
 	isProtocolCompatible,
 	buildHello,
@@ -158,4 +209,5 @@ export {
 	buildRecommendedSettings,
 	buildAck,
 	buildAdaptationToggled,
+	buildStreamerAdaptingBroadcast,
 };

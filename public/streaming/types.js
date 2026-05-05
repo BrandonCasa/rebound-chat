@@ -31,7 +31,12 @@
  *   "real-time buffer 100% full, frame dropped!" warnings.
  * @property {string[]} manualInputArgs
  * @property {string[]} audioInputArgs
+ *   Power-user override that becomes a single audio input
+ *   (e.g. `["-f", "dshow", "-i", "audio=Microphone"]`).
  * @property {boolean} mapSourceAudio
+ *   Map `0:a?` from the primary input alongside the video. File
+ *   sources (`sourceMode === "file"`) do this automatically without
+ *   requiring the flag.
  * @property {boolean} drawMouse
  * @property {string} videoCodec
  * @property {string} audioCodec

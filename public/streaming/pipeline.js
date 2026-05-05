@@ -69,11 +69,24 @@ const buildCfrOutputArgs = (config) => {
 };
 
 /**
+ * Whether this config produces any audio in the final output. File
+ * sources auto-pull `0:a?` from input 0 so the file's audio track makes
+ * it into the HLS muxer; desktop sources only have audio when the user
+ * provided an explicit `audioInputArgs` slice or asked for
+ * `mapSourceAudio` (rare — desktop demuxers don't typically expose
+ * audio streams).
+ *
+ * @param {StreamConfig} config
+ * @returns {boolean}
+ */
+const hasAudioOutput = (config) => Boolean(config.audioInputArgs?.length || config.mapSourceAudio || config.sourceMode === "file");
+
+/**
  * @param {StreamConfig} config
  * @returns {string[]}
  */
 const buildAudioCodecArgs = (config) => {
-	if (!config.audioInputArgs?.length && !config.mapSourceAudio) return [];
+	if (!hasAudioOutput(config)) return [];
 	const args = ["-c:a", config.audioCodec, "-b:a", config.audioBitrate];
 	if (config.audioCodec === "aac") {
 		args.push("-ac", "2", "-ar", "48000");
@@ -98,6 +111,7 @@ const buildAudioCodecArgs = (config) => {
 const buildArgs = (config, capabilities = defaultCapabilities(), options = {}) => {
 	const argv = ["-y"];
 	const usingGfxCapture = usesGfxCapture(config, capabilities.platform);
+	const hasFileSource = config.sourceMode === "file";
 
 	argv.push(...buildHwDeviceArgs(config, capabilities));
 
@@ -119,7 +133,9 @@ const buildArgs = (config, capabilities = defaultCapabilities(), options = {}) =
 		argv.push("-map", "0:v:0");
 		if (config.audioInputArgs?.length) {
 			argv.push("-map", "1:a:0");
-		} else if (config.mapSourceAudio) {
+		} else if (config.mapSourceAudio || hasFileSource) {
+			// `?` so a desktop source whose demuxer doesn't expose audio (or a
+			// file with no audio track) doesn't crash FFmpeg's mapper.
 			argv.push("-map", "0:a?");
 		}
 		if (videoFilter) {

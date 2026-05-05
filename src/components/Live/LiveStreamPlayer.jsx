@@ -1,3 +1,4 @@
+import AutoAwesomeMotionRounded from "@mui/icons-material/AutoAwesomeMotionRounded";
 import FullscreenRounded from "@mui/icons-material/FullscreenRounded";
 import PauseRounded from "@mui/icons-material/PauseRounded";
 import PlayArrowRounded from "@mui/icons-material/PlayArrowRounded";
@@ -5,7 +6,7 @@ import SyncRounded from "@mui/icons-material/SyncRounded";
 import VolumeOffRounded from "@mui/icons-material/VolumeOffRounded";
 import VolumeUpRounded from "@mui/icons-material/VolumeUpRounded";
 import Hls from "hls.js";
-import { Box, Chip, IconButton, LinearProgress, Slider, Stack, Tooltip, Typography, useMediaQuery } from "@mui/material";
+import { Box, Chip, CircularProgress, IconButton, LinearProgress, Slider, Stack, Tooltip, Typography, useMediaQuery } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
@@ -13,6 +14,25 @@ import { useSelector } from "react-redux";
 import { buildLiveHlsConfig, getLiveBase } from "../../helpers/live";
 import { useLiveControlClient } from "../../features/player/useLiveControlClient";
 import LiveStreamInfoTooltip, { formatDuration } from "./LiveStreamInfoTooltip";
+
+// Phrase the "host is adjusting their stream" affordance to match
+// what the viewer is currently experiencing. Pre-playback the wording
+// frames the wait as a personalised setup; mid-playback the framing
+// is about a brief upcoming rebuffer rather than a connection delay.
+const buildAdaptingMessage = ({ adapting, isPlaying }) => {
+	if (!adapting) return null;
+	const direction = adapting.direction;
+	const headline = isPlaying ? "Host is updating their stream quality" : "Host is adjusting their stream for you";
+	let detail;
+	if (direction === "down") {
+		detail = "Lowering quality so every viewer's connection can keep up — playback will resume in a moment.";
+	} else if (direction === "up") {
+		detail = "Raising quality back toward the host's ceiling — there will be a brief rebuffer.";
+	} else {
+		detail = "Applying new settings on the encoder — there will be a brief rebuffer.";
+	}
+	return { headline, detail };
+};
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -69,13 +89,15 @@ function LiveStreamPlayer({ stream, sx }) {
 
 	const liveControlSessionId = stream?.sessionId || null;
 	const liveControlBaseUrl = getLiveBase() || (typeof window !== "undefined" ? window.location?.origin : "");
-	useLiveControlClient({
+	const { adapting } = useLiveControlClient({
 		sessionId: liveControlSessionId,
 		websiteBaseUrl: liveControlBaseUrl,
 		hls: hlsInstance,
 		authToken,
 		enabled: Boolean(liveControlSessionId),
 	});
+
+	const adaptingMessage = useMemo(() => buildAdaptingMessage({ adapting, isPlaying: playerState.isPlaying }), [adapting, playerState.isPlaying]);
 
 	useEffect(() => {
 		authTokenRef.current = authToken;
@@ -474,6 +496,37 @@ function LiveStreamPlayer({ stream, sx }) {
 				</Box>
 			) : null}
 
+			{adaptingMessage ? (
+				<Box
+					role="status"
+					aria-live="polite"
+					sx={{
+						position: "absolute",
+						top: 56,
+						left: 12,
+						right: 12,
+						p: 1.25,
+						borderRadius: 1,
+						bgcolor: alpha(theme.palette.info.dark, 0.82),
+						color: "common.white",
+						display: "flex",
+						alignItems: "center",
+						gap: 1.25,
+						boxShadow: `0 6px 20px ${alpha(theme.palette.common.black, 0.35)}`,
+						pointerEvents: "none",
+					}}>
+					<CircularProgress size={18} thickness={5} sx={{ color: "common.white", flexShrink: 0 }} />
+					<Stack spacing={0.25} sx={{ minWidth: 0 }}>
+						<Typography variant="body2" sx={{ fontWeight: 600 }}>
+							{adaptingMessage.headline}
+						</Typography>
+						<Typography variant="caption" sx={{ color: alpha("#fff", 0.82) }}>
+							{adaptingMessage.detail}
+						</Typography>
+					</Stack>
+				</Box>
+			) : null}
+
 			{playerState.error ? (
 				<Box
 					sx={{
@@ -545,6 +598,20 @@ function LiveStreamPlayer({ stream, sx }) {
 							display: { xs: "none", sm: "inline-flex" },
 						}}
 					/>
+					{adapting ? (
+						<Tooltip title={adaptingMessage?.detail || "Host is adjusting their stream"}>
+							<Chip
+								size="small"
+								icon={<AutoAwesomeMotionRounded sx={{ fontSize: 16, color: "common.white !important" }} />}
+								label="Host adjusting"
+								sx={{
+									color: "common.white",
+									bgcolor: alpha(theme.palette.info.main, 0.55),
+									"& .MuiChip-icon": { color: "common.white" },
+								}}
+							/>
+						</Tooltip>
+					) : null}
 					<Box sx={{ flexGrow: 1 }} />
 					<Tooltip title={playerState.isMuted ? "Unmute" : "Mute"}>
 						<span>

@@ -34,11 +34,17 @@
  *      protected from buffering as soon as the worst link tightens.
  */
 
+import { ADAPTING_STATE, MSG } from "../../../../shared/streaming/protocol.js";
 import { buildRecommendation, codecFamilyOf, CODEC_FAMILY_RANK, isMeaningfulChange } from "./recommender.js";
 import { createViewerStore } from "./viewerStore.js";
 
 const MIN_RECOMMENDATION_INTERVAL_MS = 2_000;
 const RAISE_DWELL_MS = 8_000;
+// Safety net: if the streamer never acks (process crashed mid-respawn,
+// websocket drops without a proper goodbye, etc.) the viewers should
+// not be stuck looking at "host is adjusting…" forever. The pipeline's
+// own respawn rarely exceeds 3s, so an 8s grace window is generous.
+const ADAPTING_TIMEOUT_MS = 8_000;
 
 const NUMERIC_DIRECTION_FIELDS = ["videoBitrate", "outputWidth", "outputHeight", "fps"];
 
@@ -74,7 +80,14 @@ const recommendationDirection = (previous, next) => {
 	return "same";
 };
 
-const createControlSession = ({ sessionId, emit, log, raiseDwellMs = RAISE_DWELL_MS, minIntervalMs = MIN_RECOMMENDATION_INTERVAL_MS } = {}) => {
+const createControlSession = ({
+	sessionId,
+	emit,
+	log,
+	raiseDwellMs = RAISE_DWELL_MS,
+	minIntervalMs = MIN_RECOMMENDATION_INTERVAL_MS,
+	adaptingTimeoutMs = ADAPTING_TIMEOUT_MS,
+} = {}) => {
 	const viewerStore = createViewerStore();
 	let ceiling = null;
 	let lastRecommendation = null;
@@ -84,12 +97,26 @@ const createControlSession = ({ sessionId, emit, log, raiseDwellMs = RAISE_DWELL
 	let pendingRaiseSince = 0;
 	let streamerSocketId = null;
 	let autoAdaptEnabled = true;
+	// State of the most-recent server→streamer recommendation push, as
+	// observed by viewers. `null` means the pipeline is steady; non-null
+	// means we sent a `recommended-settings` and have not yet seen the
+	// streamer's matching ack (or the safety timeout). Only ever
+	// mutated through `markAdaptingPending` / `clearAdaptingState` so
+	// the fan-out and safety timer stay in lock-step with the value.
+	let adaptingState = null;
+	let adaptingTimeoutTimer = null;
 
 	const cancelPendingRaise = () => {
 		if (!pendingRaiseTimer) return;
 		clearTimeout(pendingRaiseTimer);
 		pendingRaiseTimer = null;
 		pendingRaiseSince = 0;
+	};
+
+	const cancelAdaptingTimeout = () => {
+		if (!adaptingTimeoutTimer) return;
+		clearTimeout(adaptingTimeoutTimer);
+		adaptingTimeoutTimer = null;
 	};
 
 	const safeLog = (level, message) => {
@@ -107,6 +134,63 @@ const createControlSession = ({ sessionId, emit, log, raiseDwellMs = RAISE_DWELL
 		return true;
 	};
 
+	const buildAdaptingEnvelope = (state) => {
+		if (!adaptingState) return null;
+		return {
+			type: MSG.STREAMER_ADAPTING_BROADCAST,
+			sessionId,
+			state,
+			target: adaptingState.target,
+			reason: adaptingState.reason,
+			direction: adaptingState.direction,
+			derivedFromViewerCount: adaptingState.derivedFromViewerCount,
+			generation: adaptingState.generation,
+			since: adaptingState.since,
+			updatedAt: Date.now(),
+		};
+	};
+
+	const markAdaptingPending = ({ recommendation, direction }) => {
+		cancelAdaptingTimeout();
+		const now = Date.now();
+		adaptingState = {
+			target: {
+				videoBitrate: recommendation.videoBitrate,
+				videoCodec: recommendation.videoCodec,
+				outputWidth: recommendation.outputWidth,
+				outputHeight: recommendation.outputHeight,
+				fps: recommendation.fps,
+			},
+			reason: recommendation.reason || "",
+			direction,
+			derivedFromViewerCount: recommendation.derivedFromViewerCount ?? null,
+			generation: now,
+			since: now,
+		};
+		fanoutToViewers(buildAdaptingEnvelope(ADAPTING_STATE.PENDING));
+		adaptingTimeoutTimer = setTimeout(() => {
+			adaptingTimeoutTimer = null;
+			if (!adaptingState) return;
+			safeLog("warn", `adaptation timeout fired without a streamer ack — clearing pending state generation=${adaptingState.generation}`);
+			clearAdaptingState({ reason: "timeout" });
+		}, adaptingTimeoutMs);
+	};
+
+	const clearAdaptingState = ({ reason } = {}) => {
+		if (!adaptingState) {
+			cancelAdaptingTimeout();
+			return false;
+		}
+		const envelope = buildAdaptingEnvelope(ADAPTING_STATE.CLEARED);
+		cancelAdaptingTimeout();
+		adaptingState = null;
+		if (envelope) {
+			if (reason) envelope.reason = reason;
+			fanoutToViewers(envelope);
+		}
+		return true;
+	};
+
 	const recomputeAndPush = ({ force = false, fromRaiseTimer = false } = {}) => {
 		if (pendingRecomputeTimer) {
 			clearTimeout(pendingRecomputeTimer);
@@ -114,8 +198,8 @@ const createControlSession = ({ sessionId, emit, log, raiseDwellMs = RAISE_DWELL
 		}
 
 		const summary = viewerStore.getSummary(sessionId);
-		fanoutToViewers({ type: "viewer-summary-broadcast", summary });
-		sendToStreamer({ type: "viewer-summary", ...summary });
+		fanoutToViewers({ type: MSG.VIEWER_SUMMARY_BROADCAST, summary });
+		sendToStreamer({ type: MSG.VIEWER_SUMMARY, ...summary });
 
 		if (!ceiling) return;
 		if (!autoAdaptEnabled && !force) return;
@@ -183,7 +267,12 @@ const createControlSession = ({ sessionId, emit, log, raiseDwellMs = RAISE_DWELL
 			"info",
 			`pushing recommendation viewers=${summary.viewerCount} bitrate=${recommendation.videoBitrate} codec=${recommendation.videoCodec} direction=${direction} reason=${recommendation.reason}`
 		);
-		sendToStreamer({ type: "recommended-settings", ...recommendation });
+		const delivered = sendToStreamer({ type: "recommended-settings", ...recommendation });
+		// Only flag the pipeline as "adapting" when the recommendation
+		// actually went out the wire to a streamer. If no streamer is
+		// attached the push is a no-op and viewers should not be told
+		// anyone is adjusting on their behalf.
+		if (delivered) markAdaptingPending({ recommendation, direction });
 	};
 
 	const upsertViewer = (socketId, capabilities) => {
@@ -200,6 +289,11 @@ const createControlSession = ({ sessionId, emit, log, raiseDwellMs = RAISE_DWELL
 		streamerSocketId = socketId;
 		ceiling = initialCeiling || null;
 		if (typeof autoAdapt === "boolean") autoAdaptEnabled = autoAdapt;
+		// A fresh attach (or re-attach) means whatever adapting-window
+		// was in flight no longer reflects reality. Clear it before the
+		// force-push below so viewers don't see stale "host adjusting"
+		// chrome from a previous streamer process.
+		clearAdaptingState({ reason: "streamer_reattach" });
 		safeLog("info", `streamer attached socketId=${socketId} ceilingBitrate=${ceiling?.videoBitrate ?? "?"} ceilingCodec=${ceiling?.videoCodec ?? "?"}`);
 		recomputeAndPush({ force: true });
 		return {
@@ -212,6 +306,10 @@ const createControlSession = ({ sessionId, emit, log, raiseDwellMs = RAISE_DWELL
 	const detachStreamer = (socketId, { reason = "" } = {}) => {
 		if (streamerSocketId !== socketId) return false;
 		streamerSocketId = null;
+		// The streamer can no longer ack — clear any pending adapting
+		// state so viewers stop seeing "host adjusting" the moment the
+		// streamer is known to be gone.
+		clearAdaptingState({ reason: `streamer_detached:${reason || "unknown"}` });
 		safeLog("info", `streamer detached reason=${reason}`);
 		return true;
 	};
@@ -219,7 +317,8 @@ const createControlSession = ({ sessionId, emit, log, raiseDwellMs = RAISE_DWELL
 	const ackRecommendation = (socketId, ack) => {
 		if (streamerSocketId !== socketId) return;
 		safeLog("info", `ack received applied=${ack.applied} clampedBy=${ack.clampedBy || "none"} reason=${ack.reason || ""}`);
-		fanoutToViewers({ type: "streamer-ack-broadcast", ack });
+		fanoutToViewers({ type: MSG.STREAMER_ACK_BROADCAST, ack });
+		clearAdaptingState({ reason: "streamer_ack" });
 	};
 
 	const setAutoAdapt = (socketId, enabled) => {
@@ -240,8 +339,24 @@ const createControlSession = ({ sessionId, emit, log, raiseDwellMs = RAISE_DWELL
 			pendingRecomputeTimer = null;
 		}
 		cancelPendingRaise();
+		cancelAdaptingTimeout();
+		adaptingState = null;
 		viewerStore.dropSession(sessionId);
 		streamerSocketId = null;
+	};
+
+	const getAdaptingSnapshot = () => {
+		if (!adaptingState) return null;
+		return {
+			state: ADAPTING_STATE.PENDING,
+			sessionId,
+			target: adaptingState.target,
+			reason: adaptingState.reason,
+			direction: adaptingState.direction,
+			derivedFromViewerCount: adaptingState.derivedFromViewerCount,
+			generation: adaptingState.generation,
+			since: adaptingState.since,
+		};
 	};
 
 	return {
@@ -258,6 +373,8 @@ const createControlSession = ({ sessionId, emit, log, raiseDwellMs = RAISE_DWELL
 		getStreamerSocketId: () => streamerSocketId,
 		getPendingRaiseSince: () => pendingRaiseSince,
 		hasPendingRaise: () => Boolean(pendingRaiseTimer),
+		getAdaptingSnapshot,
+		hasPendingAdaptation: () => Boolean(adaptingState),
 	};
 };
 
