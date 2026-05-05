@@ -80,6 +80,8 @@ const LiveStatusPanel = ({
 	initialCeiling,
 	autoAdaptEnabled,
 	onToggleAutoAdapt,
+	resolutionAdaptEnabled,
+	onToggleResolutionAdapt,
 	controlConnected,
 }) => {
 	const isStreaming = ["starting", "streaming", "stopping"].includes(streamState?.status);
@@ -138,7 +140,7 @@ const LiveStatusPanel = ({
 							What viewers are actually receiving — and how the server is asking us to adapt.
 						</Typography>
 					</Stack>
-					<Stack direction="row" spacing={1} alignItems="center">
+					<Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
 						<Tooltip
 							title={
 								controlConnected ? "Connected to live-control channel" : "Disconnected from live-control channel — recommendations will queue until reconnect."
@@ -154,6 +156,24 @@ const LiveStatusPanel = ({
 							control={<Switch size="small" checked={Boolean(autoAdaptEnabled)} onChange={(event) => onToggleAutoAdapt?.(event.target.checked)} />}
 							label={autoAdaptEnabled ? "Auto-adapt" : "Auto-adapt off"}
 						/>
+						<Tooltip
+							title={
+								resolutionAdaptEnabled
+									? "Resolution can step down (and back up) with viewer conditions. Most disruptive: viewers see a sharpness change."
+									: "Resolution is pinned at its current value. Bitrate, frame rate, and codec can still adapt."
+							}>
+							<FormControlLabel
+								control={
+									<Switch
+										size="small"
+										checked={Boolean(resolutionAdaptEnabled)}
+										onChange={(event) => onToggleResolutionAdapt?.(event.target.checked)}
+										disabled={!autoAdaptEnabled}
+									/>
+								}
+								label={resolutionAdaptEnabled ? "Adapt resolution" : "Resolution pinned"}
+							/>
+						</Tooltip>
 					</Stack>
 				</Stack>
 
@@ -199,7 +219,8 @@ const LiveStatusPanel = ({
 						))}
 					</Box>
 					<Typography variant="caption" color="text.secondary">
-						Server-driven adaptation can only ever lower these values. Disable Auto-adapt to lock the streamer at your ceiling regardless of viewer conditions.
+						Server-driven adaptation can only ever lower these values. Disable Auto-adapt to lock everything at your ceiling, or leave Resolution pinned to keep
+						the picture sharpness fixed while bitrate and frame rate still flex.
 					</Typography>
 				</Stack>
 

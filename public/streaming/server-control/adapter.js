@@ -70,6 +70,14 @@ const codecsCompatibleForRespawn = (currentCodec, recommendedCodec, ceilingCodec
  * @param {import("../types.js").StreamConfig} current
  * @param {import("../../../shared/streaming/types.js").RecommendedSettings} recommendation
  * @param {import("../../../shared/streaming/types.js").InitialCeiling} ceiling
+ * @param {{ allowResolutionAdaptation?: boolean }} [options]
+ *   `allowResolutionAdaptation` (default `true`) controls whether the
+ *   `outputWidth`/`outputHeight` fields participate in adaptation. When
+ *   `false`, the adapter pins the resolution at whatever the streamer is
+ *   currently emitting and only adjusts bitrate, fps, and codec. This is
+ *   useful when the user wants viewer-driven downshifts without the
+ *   visible "the picture just got fuzzy" jolt that resolution changes
+ *   cause across the HLS variant boundary.
  * @returns {{
  *   next: Partial<import("../types.js").StreamConfig>,
  *   diff: Array<{ field: string, from: any, to: any }>,
@@ -77,10 +85,12 @@ const codecsCompatibleForRespawn = (currentCodec, recommendedCodec, ceilingCodec
  *   wouldRespawn: boolean,
  * }}
  */
-const applyRecommendation = (current, recommendation, ceiling) => {
+const applyRecommendation = (current, recommendation, ceiling, options = {}) => {
 	if (!current || !recommendation || !ceiling) {
 		return { next: { ...current }, diff: [], clampedBy: null, wouldRespawn: false };
 	}
+
+	const allowResolutionAdaptation = options.allowResolutionAdaptation !== false;
 
 	const next = { ...current };
 	const diff = [];
@@ -99,6 +109,7 @@ const applyRecommendation = (current, recommendation, ceiling) => {
 	}
 
 	for (const field of ["outputWidth", "outputHeight", "fps"]) {
+		if (!allowResolutionAdaptation && (field === "outputWidth" || field === "outputHeight")) continue;
 		const currentValue = current[field];
 		const recommendedValue = recommendation[field];
 		const ceilingValue = ceiling[field];

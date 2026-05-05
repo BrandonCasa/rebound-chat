@@ -68,6 +68,7 @@ class ElectronLiveStreamManager {
 		this.generation = 0;
 		this.initialCeiling = null;
 		this.autoAdaptEnabled = true;
+		this.resolutionAdaptEnabled = false;
 		this.viewerSummary = null;
 		this.lastRecommendation = null;
 		this.adaptationHistory = [];
@@ -128,6 +129,7 @@ class ElectronLiveStreamManager {
 			generation: this.generation,
 			initialCeiling: this.initialCeiling,
 			autoAdaptEnabled: this.autoAdaptEnabled,
+			resolutionAdaptEnabled: this.resolutionAdaptEnabled,
 			viewerSummary: this.viewerSummary,
 			lastRecommendation: this.lastRecommendation,
 			adaptationHistory: this.adaptationHistory.slice(-25),
@@ -437,7 +439,9 @@ class ElectronLiveStreamManager {
 			return;
 		}
 
-		const { next, diff, clampedBy, wouldRespawn } = applyRecommendation(this.activeConfig, recommendation, this.initialCeiling);
+		const { next, diff, clampedBy, wouldRespawn } = applyRecommendation(this.activeConfig, recommendation, this.initialCeiling, {
+			allowResolutionAdaptation: this.resolutionAdaptEnabled,
+		});
 		if (!wouldRespawn) {
 			this.serverControl.sendAck({
 				sessionId,
@@ -536,6 +540,15 @@ class ElectronLiveStreamManager {
 		return this.getState();
 	}
 
+	setResolutionAdapt(enabled) {
+		const next = Boolean(enabled);
+		if (next === this.resolutionAdaptEnabled) return this.getState();
+		this.resolutionAdaptEnabled = next;
+		this.log(`Resolution adaptation ${next ? "enabled" : "disabled"}`);
+		this.setState(this.status, { error: this.error });
+		return this.getState();
+	}
+
 	async ensureFallbackMasterPlaylist() {
 		const config = this.activeConfig;
 		if (!config) return;
@@ -624,6 +637,7 @@ class ElectronLiveStreamManager {
 		this.viewerSummary = null;
 		this.lastRecommendation = null;
 		this.autoAdaptEnabled = rawConfig.autoAdaptEnabled !== false;
+		this.resolutionAdaptEnabled = rawConfig.resolutionAdaptEnabled === true;
 		this.error = "";
 		this.capabilities = defaultCapabilities();
 		this.setState("starting");
@@ -763,6 +777,7 @@ const registerLiveStreamIpc = ({ ipcMain, app, shell, sendToRenderer, logger, ff
 	ipcMain.handle("live-stream:start", (_event, config) => manager.start(config));
 	ipcMain.handle("live-stream:stop", () => manager.stop());
 	ipcMain.handle("live-stream:set-auto-adapt", (_event, enabled) => manager.setAutoAdapt(enabled));
+	ipcMain.handle("live-stream:set-resolution-adapt", (_event, enabled) => manager.setResolutionAdapt(enabled));
 	ipcMain.handle("live-stream:open-url", (_event, url) => {
 		if (!url) return false;
 		void shell.openExternal(url);

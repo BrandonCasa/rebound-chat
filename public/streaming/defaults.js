@@ -117,6 +117,13 @@ const buildDefaultSettings = (options = {}) => {
 		hlsListSize: 6,
 		hdrMode: "off",
 		openSharePage: true,
+		// Whether server-driven recommendations are allowed to change the
+		// stream's `outputWidth`/`outputHeight` mid-session. Default off:
+		// resolution swaps are visually jarring (viewers see a sudden
+		// "fuzzy → sharp" or vice-versa) and require an FFmpeg respawn,
+		// so we'd rather demote bitrate/fps/codec first and only step
+		// resolution when the user explicitly opts in.
+		resolutionAdaptEnabled: false,
 	};
 };
 

@@ -8,17 +8,27 @@
  * and is torn down when the streamer goes away or the last viewer
  * disconnects with no streamer present.
  *
- * Push throttling has two layers:
+ * Defence-in-depth against transient bandwidth blips that would cause
+ * viewers to rebuffer if we acted on them:
  *
- *   1. `MIN_RECOMMENDATION_INTERVAL_MS` — the minimum gap between any
+ *   1. Per-viewer sample smoothing (`viewerStore.js`) — every viewer
+ *      keeps a 30-second rolling buffer of measured downlinks; the
+ *      aggregator picks the 25th percentile. A single 1-second spike
+ *      upward never makes it past this layer.
+ *
+ *   2. `isMeaningfulChange` (`recommender.js`) — a 10% delta gate
+ *      stops sub-fractional fluctuations from triggering FFmpeg
+ *      respawns even when the smoothed signal does move a touch.
+ *
+ *   3. `MIN_RECOMMENDATION_INTERVAL_MS` — the minimum gap between any
  *      two pushes regardless of direction. Stops a flurry of viewer
  *      reconnects from spamming the streamer.
  *
- *   2. `RAISE_DWELL_MS` — the minimum *uninterrupted* improvement
- *      window before we ask the streamer to raise quality back up
- *      toward the ceiling. A previously-poor viewer's disconnect that
- *      lasts only a second or two should NOT cause an FFmpeg respawn:
- *      respawning is expensive (every viewer sees a 1-3s rebuffer at
+ *   4. `RAISE_DWELL_MS` — the minimum improvement window before we
+ *      ask the streamer to raise quality back up toward the ceiling.
+ *      A previously-poor viewer's disconnect that lasts only a second
+ *      or two should NOT cause an FFmpeg respawn: respawning is
+ *      expensive (every viewer sees a 1-3s rebuffer at
  *      `EXT-X-DISCONTINUITY`) and a transient blip is the worst time
  *      to spend that. Downward moves remain immediate so viewers are
  *      protected from buffering as soon as the worst link tightens.

@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		start: (config) => ipcRenderer.invoke("live-stream:start", config),
 		stop: () => ipcRenderer.invoke("live-stream:stop"),
 		setAutoAdapt: (enabled) => ipcRenderer.invoke("live-stream:set-auto-adapt", enabled),
+		setResolutionAdapt: (enabled) => ipcRenderer.invoke("live-stream:set-resolution-adapt", enabled),
 		openUrl: (url) => ipcRenderer.invoke("live-stream:open-url", url),
 		onLog: (cb) => {
 			const listener = (_event, payload) => cb(payload);

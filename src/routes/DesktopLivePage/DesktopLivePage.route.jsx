@@ -348,6 +348,7 @@ function DesktopLivePage() {
 	const [recommendation, setRecommendation] = useState(null);
 	const [adaptationHistory, setAdaptationHistory] = useState([]);
 	const [autoAdaptEnabled, setAutoAdaptEnabled] = useState(true);
+	const [resolutionAdaptEnabled, setResolutionAdaptEnabled] = useState(false);
 	const [controlConnected, setControlConnected] = useState(false);
 	const saveSettingsTimeoutRef = useRef(null);
 	const hydratedSettingsRef = useRef(false);
@@ -406,6 +407,7 @@ function DesktopLivePage() {
 			if (state.lastRecommendation) setRecommendation(state.lastRecommendation);
 			if (state.adaptationHistory?.length) setAdaptationHistory(state.adaptationHistory);
 			if (typeof state.autoAdaptEnabled === "boolean") setAutoAdaptEnabled(state.autoAdaptEnabled);
+			if (typeof state.resolutionAdaptEnabled === "boolean") setResolutionAdaptEnabled(state.resolutionAdaptEnabled);
 			if (typeof state.controlConnected === "boolean") setControlConnected(state.controlConnected);
 		});
 
@@ -416,6 +418,7 @@ function DesktopLivePage() {
 			if (state.lastRecommendation !== undefined) setRecommendation(state.lastRecommendation);
 			if (Array.isArray(state.adaptationHistory)) setAdaptationHistory(state.adaptationHistory);
 			if (typeof state.autoAdaptEnabled === "boolean") setAutoAdaptEnabled(state.autoAdaptEnabled);
+			if (typeof state.resolutionAdaptEnabled === "boolean") setResolutionAdaptEnabled(state.resolutionAdaptEnabled);
 			if (typeof state.controlConnected === "boolean") setControlConnected(state.controlConnected);
 		});
 		const offSession = electronLive.onSession((session) => setSessionInfo(session));
@@ -569,6 +572,7 @@ function DesktopLivePage() {
 				source: settings.sourceMode === "file" ? null : selectedSource,
 				authToken: auth.authToken || "",
 				autoAdaptEnabled,
+				resolutionAdaptEnabled,
 			});
 			setStreamState(state);
 		} catch (err) {
@@ -582,6 +586,20 @@ function DesktopLivePage() {
 			if (!electronLive?.setAutoAdapt) return;
 			try {
 				const state = await electronLive.setAutoAdapt(next);
+				if (state) setStreamState(state);
+			} catch (_err) {
+				// keep optimistic toggle; main process will broadcast next state
+			}
+		},
+		[electronLive]
+	);
+
+	const handleToggleResolutionAdapt = useCallback(
+		async (next) => {
+			setResolutionAdaptEnabled(next);
+			if (!electronLive?.setResolutionAdapt) return;
+			try {
+				const state = await electronLive.setResolutionAdapt(next);
 				if (state) setStreamState(state);
 			} catch (_err) {
 				// keep optimistic toggle; main process will broadcast next state
@@ -697,6 +715,8 @@ function DesktopLivePage() {
 							initialCeiling={streamState?.initialCeiling}
 							autoAdaptEnabled={typeof streamState?.autoAdaptEnabled === "boolean" ? streamState.autoAdaptEnabled : autoAdaptEnabled}
 							onToggleAutoAdapt={handleToggleAutoAdapt}
+							resolutionAdaptEnabled={typeof streamState?.resolutionAdaptEnabled === "boolean" ? streamState.resolutionAdaptEnabled : resolutionAdaptEnabled}
+							onToggleResolutionAdapt={handleToggleResolutionAdapt}
 							controlConnected={controlConnected}
 						/>
 						<Paper variant="outlined" sx={{ p: 2 }}>

@@ -209,4 +209,61 @@ describe("applyRecommendation ceiling-bounded clamp", () => {
 		assert.equal(result.diff.length, 0);
 		assert.equal(result.wouldRespawn, false);
 	});
+
+	it("pins resolution but still adapts bitrate/fps/codec when allowResolutionAdaptation=false", () => {
+		const current = buildConfig();
+		const ceiling = buildInitialCeiling(current);
+		const recommendation = buildRecommendation({
+			videoBitrate: 3_000_000,
+			outputWidth: 1280,
+			outputHeight: 720,
+			fps: 30,
+		});
+
+		const { next, diff, wouldRespawn } = applyRecommendation(current, recommendation, ceiling, { allowResolutionAdaptation: false });
+		assert.equal(wouldRespawn, true, "bitrate/fps still flex even with resolution pinned");
+		assert.equal(next.outputWidth, 1920, "outputWidth must stay at the current value");
+		assert.equal(next.outputHeight, 1080, "outputHeight must stay at the current value");
+		assert.equal(next.videoBitrate, "3M");
+		assert.equal(next.fps, 30);
+		const fields = diff.map((entry) => entry.field).sort();
+		assert.deepEqual(fields, ["fps", "videoBitrate"]);
+	});
+
+	it("does not change resolution at all when allowResolutionAdaptation=false even on the way up", () => {
+		// Streamer is already below its ceiling resolution. With resolution
+		// adaptation disabled, the adapter must NOT raise the resolution
+		// back toward the ceiling either — pinning is symmetric.
+		const current = buildConfig({ outputWidth: 1280, outputHeight: 720 });
+		const ceiling = buildInitialCeiling(buildConfig());
+		const recommendation = buildRecommendation({
+			outputWidth: 1920,
+			outputHeight: 1080,
+		});
+
+		const { next, diff } = applyRecommendation(current, recommendation, ceiling, { allowResolutionAdaptation: false });
+		assert.equal(next.outputWidth, 1280);
+		assert.equal(next.outputHeight, 720);
+		assert.equal(
+			diff.find((entry) => entry.field === "outputWidth"),
+			undefined
+		);
+		assert.equal(
+			diff.find((entry) => entry.field === "outputHeight"),
+			undefined
+		);
+	});
+
+	it("treats omitted options as allowResolutionAdaptation=true (backward compatible)", () => {
+		const current = buildConfig();
+		const ceiling = buildInitialCeiling(current);
+		const recommendation = buildRecommendation({
+			outputWidth: 1280,
+			outputHeight: 720,
+		});
+
+		const { next } = applyRecommendation(current, recommendation, ceiling);
+		assert.equal(next.outputWidth, 1280, "omitted options must default to legacy behaviour");
+		assert.equal(next.outputHeight, 720);
+	});
 });
