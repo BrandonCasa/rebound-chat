@@ -56,6 +56,10 @@
  *                     zscale/tonemap (CPU fallback). Output is SDR BT.709.
  *   - "passthrough" — HDR source, encode natively in HDR10 (P010 capture +
  *                     BT.2020/PQ colour metadata). Recommended with HEVC or AV1.
+ * @property {string} [vaapiDevice]
+ *   Optional VA-API render-node path used when a `*_vaapi` encoder is
+ *   selected. Defaults to `/dev/dri/renderD128` (the device referenced by
+ *   the FFmpeg HWAccelIntro spec). Linux only.
  */
 
 /**

@@ -19,13 +19,14 @@ import * as gfxcapture from "./gfxcapture.js";
  */
 const buildSourceFilter = (config) => {
 	const outputFmt = config.hdrMode !== "off" ? "p010" : "nv12";
-	// Capture at the source's native resolution. The downstream `scale_cuda`
-	// step (built by videoFilter.buildCudaFastPath) handles any resize
-	// **on the CUDA compute engine**, leaving the 3D engine free for the
-	// rest of the desktop. When source dimensions already match the
-	// configured output, scale_cuda's default `passthrough=1` makes it a
-	// true no-op, so this is strictly a win or a wash — never a loss.
-	return gfxcapture.buildSourceFilter(config, { outputFmt, resize: false });
+	// Let gfxcapture's D3D11 video processor do convert + resize in a
+	// single fixed-function pass. On NVIDIA that path writes only the
+	// configured output size (e.g. 1080p NV12 ≈ 3 MB/frame); a downstream
+	// scale_cuda would force gfxcapture to write the source-native size
+	// (e.g. 4K NV12 ≈ 12 MB/frame) and then redo the downscale on CUDA,
+	// which is strictly more 3D-engine output bandwidth and more total
+	// GPU work for high-resolution monitors.
+	return gfxcapture.buildSourceFilter(config, { outputFmt });
 };
 
 /**

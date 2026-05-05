@@ -126,6 +126,15 @@ const windowsQsv = () =>
 		encoderPreset: "medium",
 	});
 
+const linuxVaapi = () =>
+	withDefaults({
+		captureBackend: "x11grab",
+		videoCodec: "h264_vaapi",
+		encoderPreset: "medium",
+		captureFps: 30,
+		fps: 30,
+	});
+
 export {
 	withDefaults,
 	windowsRtxNvenc1080p60,
@@ -139,5 +148,6 @@ export {
 	windowsNvencFastPathNoResize,
 	macAppleSilicon,
 	linuxX11Software,
+	linuxVaapi,
 	windowsQsv,
 };

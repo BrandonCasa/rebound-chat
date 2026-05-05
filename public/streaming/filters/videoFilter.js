@@ -11,24 +11,26 @@
  * @typedef {import("../types.js").Capabilities} Capabilities
  */
 
-import { isNvencCodec } from "../codecs.js";
+import { isNvencCodec, isVaapiCodec } from "../codecs.js";
 import { gfxcapture, gfxcaptureCuda, usesGfxCapture } from "../capture/index.js";
 
 /**
  * Whether the CUDA fast path should emit an explicit `scale_cuda` step.
  *
- * On the fast path we tell gfxcapture **not** to resize (see
- * `gfxcaptureCuda.buildSourceFilter`), so resize work moves off the
- * D3D11 video processor (3D engine) and onto CUDA cores (compute engine).
- * `scale_cuda` always runs when an explicit output size is configured;
- * its default `passthrough=1` makes it a no-op when the source already
- * matches, so there's no penalty for monitors that capture at the
- * configured resolution.
+ * Today: never. gfxcapture's D3D11 video processor handles convert +
+ * resize in one pass and outputs at the configured size, which is
+ * strictly cheaper on the 3D engine than asking gfxcapture to write
+ * source-native NV12 and then downscaling on CUDA (the latter forces
+ * 3D-engine output bandwidth to scale with the source resolution
+ * instead of the output resolution, hurting 4K/ultrawide monitors).
  *
- * @param {StreamConfig} config
+ * Kept as a single decision point in case a future config explicitly
+ * opts gfxcapture out of its built-in resize.
+ *
+ * @param {StreamConfig} _config
  * @returns {boolean}
  */
-const needsResize = (config) => Boolean(config.outputWidth && config.outputHeight);
+const needsResize = (_config) => false;
 
 /**
  * Whether to insert an `fps` step.
@@ -55,28 +57,41 @@ const needsFps = (config) => Boolean(config.fps);
 /**
  * Build the legacy CPU filter chain. Used when:
  *  - the encoder is not NVENC, OR
- *  - the runtime told us the CUDA hwmap derivation failed.
+ *  - the runtime told us the CUDA hwmap derivation failed (e.g. when
+ *    the bundled FFmpeg build doesn't support `cuda=...@dx` at init
+ *    time — which is the common case for BtbN's lgpl-shared without
+ *    `--enable-cuda-nvcc`, so this chain is what most NVENC users
+ *    are actually running).
  *
- * When hdrMode is "convert" on this path, a CPU zscale/tonemap chain handles
- * the HDR→SDR conversion (slower, but correct as a fallback).
- * When hdrMode is "passthrough" on this path, no colour transform is applied;
- * the gfxcapture BGRA capture already applies the OS-level SDR conversion, so
- * the result is SDR rather than true HDR — a graceful-ish degradation.
+ * SDR + gfxcapture (the hot path):
+ *   gfxcapture(nv12, sized)  ← D3D11 video processor: convert + resize
+ *     → hwdownload          ← VRAM→system RAM at NV12 (1.5 B/px), 60 % less
+ *                              PCIe traffic than the BGRA path used to do
+ *     → fps                 ← cheap CPU pass (timestamps only)
+ *     → encoder             ← NVENC, libx264, libsvtav1, libvvenc, libopenh264
+ *                              all accept NV12 directly. libvpx-vp9 pins
+ *                              `-pix_fmt yuv420p` and ffmpeg auto-inserts a
+ *                              cheap NV12→YUV420p pass before encode for it.
  *
- * Resize placement (best path available without setting up an extra hwctx):
+ * HDR convert + gfxcapture:
+ *   gfxcapture(bgra, sized) → hwdownload → format=bgra
+ *     → zscale linearise → gbrpf32le → bt709 → tonemap=hable → bt709 yuv420p
+ *     → fps → encoder
+ *   Stays on BGRA because zscale/tonemap operate in RGB space; the cost
+ *   is unavoidable on a CPU fallback.
  *
- *   - **gfxcapture inputs** keep their built-in `resize_mode=scale_aspect`.
- *     That's a D3D11 video-processor blit on the 3D engine — slower than
- *     `scale_cuda`, but `hwdownload` has already converted us to a CPU
- *     format by the time we'd want a CUDA scaler, so D3D11 is the fastest
- *     remaining option for the legacy fallback.
- *   - **gdigrab / x11grab / avfoundation inputs** use software `scale=`
- *     because the legacy chain doesn't initialize a hardware device for
- *     them. For software encoders that's optimal anyway. For paths like
- *     gdigrab+nvenc, gdigrab+qsv, x11grab+vaapi, or avfoundation+
- *     videotoolbox, a hwupload + `scale_<family>` would be more efficient
- *     but requires a per-family hwctx; that's a follow-up because it's
- *     not the default capture backend on any platform.
+ * HDR passthrough + gfxcapture:
+ *   Treated like SDR (NV12 capture). gfxcapture's BGRA→NV12 path applies
+ *   the OS-level HDR→SDR mapping, so the result is SDR rather than true
+ *   HDR — a graceful degradation when CUDA isn't available.
+ *
+ * Non-gfxcapture inputs (gdigrab / x11grab / avfoundation):
+ *   software `scale=` because no hwctx is initialized for these inputs.
+ *   For software encoders that's optimal anyway. For hardware-encoder
+ *   pairings (gdigrab+nvenc, gdigrab+qsv, x11grab+vaapi, avfoundation+
+ *   videotoolbox) a hwupload + `scale_<family>` would be more efficient
+ *   but requires a per-family hwctx; left as a follow-up because none of
+ *   these is the default capture backend on its platform.
  *
  * @param {StreamConfig} config
  * @param {Capabilities} capabilities
@@ -85,14 +100,24 @@ const needsFps = (config) => Boolean(config.fps);
 const buildLegacyFilter = (config, capabilities) => {
 	const filters = [];
 	const usingGfxCapture = usesGfxCapture(config, capabilities.platform);
+	const hdrConvert = config.hdrMode === "convert";
+	// VAAPI encoders need VAAPI surfaces; we add `format=nv12,hwupload`
+	// after any CPU-side processing. The matching VA-API device is opened
+	// in `buildHwDeviceArgs` so this step has somewhere to upload to.
+	const usingVaapi = isVaapiCodec(config.videoCodec);
 
 	if (usingGfxCapture) {
-		filters.push(gfxcapture.buildSourceFilter(config));
+		// HDR-convert needs RGB for zscale's tonemap; everything else
+		// can ride NV12 straight from gfxcapture's D3D11 video processor.
+		const outputFmt = hdrConvert ? "bgra" : "nv12";
+		filters.push(gfxcapture.buildSourceFilter(config, { outputFmt }));
 		filters.push("hwdownload");
-		filters.push("format=bgra");
+		if (hdrConvert) {
+			filters.push("format=bgra");
+		}
 	}
 
-	if (config.hdrMode === "convert") {
+	if (hdrConvert) {
 		filters.push("zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p");
 	}
 
@@ -100,12 +125,12 @@ const buildLegacyFilter = (config, capabilities) => {
 		filters.push(`scale=${config.outputWidth}:${config.outputHeight}:force_original_aspect_ratio=decrease`);
 	}
 
-	if (config.fps) {
-		filters.push(`fps=${config.fps}`);
+	if (usingVaapi) {
+		filters.push("format=nv12", "hwupload");
 	}
 
-	if (usingGfxCapture && config.hdrMode !== "convert") {
-		filters.push("format=yuv420p");
+	if (config.fps) {
+		filters.push(`fps=${config.fps}`);
 	}
 
 	return filters.length ? filters.join(",") : null;
@@ -115,29 +140,28 @@ const buildLegacyFilter = (config, capabilities) => {
  * Build the GPU-resident NVENC fast path.
  *
  * hdrMode "off":
- *   gfxcapture(nv12, native size) → hwmap(cuda) → scale_cuda(nv12) → fps → nvenc
+ *   gfxcapture(nv12, sized) → hwmap(cuda) → fps → nvenc
  *
  * hdrMode "convert":
- *   gfxcapture(p010, native size) → hwmap(cuda) → tonemap_cuda(hable→nv12)
- *     → scale_cuda(nv12) → fps → nvenc
+ *   gfxcapture(p010, sized) → hwmap(cuda) → tonemap_cuda(hable→nv12) → fps → nvenc
+ *   Everything stays in VRAM; zero CPU video work.
  *
  * hdrMode "passthrough":
- *   gfxcapture(p010, native size) → hwmap(cuda) → scale_cuda(p010) → fps → nvenc
+ *   gfxcapture(p010, sized) → hwmap(cuda) → fps → nvenc
  *   NVENC encodes 10-bit HDR directly; colour metadata is added by the encoder.
  *
- * Why scale_cuda instead of letting gfxcapture resize:
- *   gfxcapture's built-in `resize_mode=scale_aspect` runs on the **D3D11 video
- *   processor**, which lives on the GPU's 3D engine. `scale_cuda` runs on the
- *   compute engine, so on a system that's also doing the rest of its work on
- *   3D (game, DWM, Electron compositor) we free up the busier queue. The two
- *   filters are effectively equivalent in quality for downscaling; both use
- *   the same dedicated silicon for sample fetches. `scale_cuda` defaults to
- *   `passthrough=1`, so when the source already matches the configured
- *   output it produces no work at all.
+ * Resize lives inside gfxcapture: D3D11's video processor does convert +
+ * downscale in a single fixed-function pass and outputs at the configured
+ * size. That's the cheapest possible path on NVIDIA hardware for the
+ * BGRA-source → NV12-target conversion that NVENC needs.
  *
- *   `force_original_aspect_ratio=decrease` mirrors gfxcapture's `scale_aspect`
- *   behaviour: never upscale, preserve aspect ratio when the source dims
- *   don't match the target's aspect.
+ * Note: this path requires D3D11→CUDA derivation at init time
+ * (`-init_hw_device cuda=cu@dx`). Some FFmpeg builds — including BtbN's
+ * lgpl-shared without `--enable-cuda-nvcc` — return ENOSYS for that
+ * derivation, in which case `pipeline.spawnFfmpeg` catches the early
+ * exit and retries via `buildLegacyFilter`. The legacy chain is also
+ * carefully tuned (NV12 end-to-end, no CPU pixel-format pass), so a
+ * fallback is not catastrophic for performance.
  *
  * @param {StreamConfig} config
  * @returns {string}

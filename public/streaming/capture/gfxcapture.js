@@ -43,7 +43,7 @@ const buildSourceFilter = (config, { outputFmt = "bgra", resize = true } = {}) =
 		options.push("resize_mode=scale_aspect");
 	}
 
-	options.push(`output_fmt=${outputFmt}`);
+	options.push(`pix_fmt=${outputFmt}`);
 	return `gfxcapture=${options.join(":")}`;
 };
 

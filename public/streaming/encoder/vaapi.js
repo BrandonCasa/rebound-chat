@@ -1,12 +1,16 @@
 /**
  * Pure argv builder for VAAPI encoders (h264_vaapi, hevc_vaapi, av1_vaapi, vp9_vaapi).
  *
- * VAAPI requires a VA-API device to be opened. The caller is responsible for
- * adding `-vaapi_device /dev/dri/renderD128` (or equivalent) before the input
- * via `manualInputArgs` if the default device is not `/dev/dri/renderD128`.
- * This builder emits the encode-side args only; the upload filter
- * (`format=nv12,hwupload`) is prepended to the `-vf` filter chain automatically
- * by {@link selectVideoFilter} when it detects a VAAPI codec.
+ * VAAPI requires a VA-API device to be opened and the frames fed to the
+ * encoder to live on that device. Two co-operating modules handle that:
+ *
+ *   - `hwcontexts.buildHwDeviceArgs` emits
+ *     `-init_hw_device vaapi=va:/dev/dri/renderD128 -filter_hw_device va`
+ *     (overridable via `config.vaapiDevice`).
+ *   - `filters.videoFilter.buildLegacyFilter` appends `format=nv12,hwupload`
+ *     to the `-vf` chain so the encoder receives VAAPI surfaces.
+ *
+ * This builder emits the encode-side args only.
  *
  * Linux only — VAAPI is not available on Windows or macOS.
  *

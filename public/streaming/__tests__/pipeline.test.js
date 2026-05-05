@@ -13,6 +13,7 @@ import { describe, it } from "node:test";
 
 import { buildArgs, fallbackOnFailure } from "../pipeline.js";
 import {
+	linuxVaapi,
 	linuxX11Software,
 	macAppleSilicon,
 	windowsGdigrabSoftware,
@@ -94,7 +95,7 @@ const nvencEncoderTail = (preset = "p6") => [
 ];
 
 describe("pipeline.buildArgs — Windows + NVENC fast path", () => {
-	it("captures at native resolution and resizes on the CUDA engine via scale_cuda", () => {
+	it("lets gfxcapture's D3D11 video processor do convert + resize in a single pass", () => {
 		const result = buildArgs(windowsRtxNvenc1080p60(), winFastPath);
 
 		assert.equal(result.command, "ffmpeg.exe");
@@ -108,7 +109,7 @@ describe("pipeline.buildArgs — Windows + NVENC fast path", () => {
 			"-filter_hw_device",
 			"cu",
 			"-filter_complex",
-			"gfxcapture=monitor_idx=0:max_framerate=60:capture_cursor=1:output_fmt=nv12,hwmap=derive_device=cuda:mode=read,scale_cuda=1920:1080:format=nv12:force_original_aspect_ratio=decrease,fps=60[v]",
+			"gfxcapture=monitor_idx=0:max_framerate=60:capture_cursor=1:width=1920:height=1080:resize_mode=scale_aspect:output_fmt=nv12,hwmap=derive_device=cuda:mode=read,fps=60[v]",
 			"-map",
 			"[v]",
 			...nvencEncoderTail(),
@@ -121,7 +122,7 @@ describe("pipeline.buildArgs — Windows + NVENC fast path", () => {
 		assert.equal(result.usedFastPath, true);
 		assert.ok(result.args.includes("-filter_complex"));
 		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
-		assert.match(filter, /scale_cuda=1920:1080:format=nv12:force_original_aspect_ratio=decrease,fps=30\[v\]/);
+		assert.match(filter, /hwmap=derive_device=cuda:mode=read,fps=30\[v\]/);
 	});
 
 	it("omits gfxcapture width/height when no output size is configured", () => {
@@ -199,13 +200,13 @@ describe("pipeline.buildArgs — Windows + NVENC + HDR passthrough", () => {
 });
 
 describe("pipeline.buildArgs — Windows legacy fallback (CUDA derivation unavailable)", () => {
-	it("emits hwdownload + format=bgra + format=yuv420p when supportsHwmapCudaFromD3D11 is false", () => {
+	it("rides NV12 end-to-end (no PCIe-hungry BGRA download, no CPU yuv420p pass)", () => {
 		const result = buildArgs(windowsRtxNvenc1080p60(), winLegacy);
 		assert.equal(result.usedFastPath, false);
 		assert.deepEqual(result.args, [
 			"-y",
 			"-filter_complex",
-			"gfxcapture=monitor_idx=0:max_framerate=60:capture_cursor=1:width=1920:height=1080:resize_mode=scale_aspect:output_fmt=bgra,hwdownload,format=bgra,fps=60,format=yuv420p[v]",
+			"gfxcapture=monitor_idx=0:max_framerate=60:capture_cursor=1:width=1920:height=1080:resize_mode=scale_aspect:output_fmt=nv12,hwdownload,fps=60[v]",
 			"-map",
 			"[v]",
 			...nvencEncoderTail(),
@@ -223,13 +224,13 @@ describe("pipeline.buildArgs — Windows legacy fallback (CUDA derivation unavai
 });
 
 describe("pipeline.buildArgs — Windows + software encoder via gfxcapture", () => {
-	it("uses the legacy CPU chain (libx264 cannot consume CUDA hwframes)", () => {
+	it("rides NV12 from gfxcapture into libx264 (libx264 accepts NV12 directly)", () => {
 		const result = buildArgs(windowsGfxcaptureSoftware(), winFastPath);
 		assert.equal(result.usedFastPath, false);
 		assert.deepEqual(result.args, [
 			"-y",
 			"-filter_complex",
-			"gfxcapture=monitor_idx=0:max_framerate=60:capture_cursor=1:width=1920:height=1080:resize_mode=scale_aspect:output_fmt=bgra,hwdownload,format=bgra,fps=60,format=yuv420p[v]",
+			"gfxcapture=monitor_idx=0:max_framerate=60:capture_cursor=1:width=1920:height=1080:resize_mode=scale_aspect:output_fmt=nv12,hwdownload,fps=60[v]",
 			"-map",
 			"[v]",
 			"-c:v",
@@ -373,43 +374,79 @@ describe("pipeline.buildArgs — Windows + QSV", () => {
 	});
 });
 
-describe("pipeline.buildArgs — fast-path resize lives on the CUDA engine", () => {
-	it("does not let gfxcapture do the resize on the fast path", () => {
+describe("pipeline.buildArgs — Linux + VAAPI", () => {
+	it("opens a VA-API device and binds it to the filter graph", () => {
+		const result = buildArgs(linuxVaapi(), linuxCaps);
+		assert.equal(result.usedFastPath, false);
+		const args = result.args;
+		const initIdx = args.indexOf("-init_hw_device");
+		assert.notEqual(initIdx, -1, "expected -init_hw_device to be set for VAAPI");
+		assert.equal(args[initIdx + 1], "vaapi=va:/dev/dri/renderD128");
+		const filterIdx = args.indexOf("-filter_hw_device");
+		assert.notEqual(filterIdx, -1, "expected -filter_hw_device to bind the VA-API device to the filter graph");
+		assert.equal(args[filterIdx + 1], "va");
+	});
+
+	it("appends format=nv12,hwupload to -vf so the encoder receives VAAPI surfaces", () => {
+		const result = buildArgs(linuxVaapi(), linuxCaps);
+		const vfIdx = result.args.indexOf("-vf");
+		assert.notEqual(vfIdx, -1, "expected -vf chain on the x11grab+vaapi path");
+		const vf = result.args[vfIdx + 1];
+		// CPU scale runs first, then format conversion + upload, then fps.
+		assert.match(vf, /^scale=1920:1080:force_original_aspect_ratio=decrease,format=nv12,hwupload,fps=30$/);
+	});
+
+	it("selects h264_vaapi as the encoder", () => {
+		const result = buildArgs(linuxVaapi(), linuxCaps);
+		assert.equal(result.args[result.args.indexOf("-c:v") + 1], "h264_vaapi");
+	});
+
+	it("honours config.vaapiDevice when provided", () => {
+		const config = linuxVaapi();
+		config.vaapiDevice = "/dev/dri/renderD129";
+		const result = buildArgs(config, linuxCaps);
+		const initIdx = result.args.indexOf("-init_hw_device");
+		assert.equal(result.args[initIdx + 1], "vaapi=va:/dev/dri/renderD129");
+	});
+});
+
+describe("pipeline.buildArgs — resize is performed in the cheapest place for each path", () => {
+	it("fast path: gfxcapture's D3D11 video processor does convert + resize in one pass (no scale_cuda)", () => {
 		const result = buildArgs(windowsRtxNvenc1080p60(), winFastPath);
 		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
-		assert.doesNotMatch(filter, /resize_mode/);
-		assert.doesNotMatch(filter, /\bwidth=/);
-		assert.doesNotMatch(filter, /\bheight=/);
-	});
-
-	it("emits scale_cuda after tonemap_cuda for hdrMode=convert", () => {
-		const result = buildArgs(windowsRtxNvenc1440pHdrConvert(), winFastPath);
-		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
-		const tonemapIdx = filter.indexOf("tonemap_cuda");
-		const scaleIdx = filter.indexOf("scale_cuda");
-		assert.notEqual(tonemapIdx, -1);
-		assert.notEqual(scaleIdx, -1);
-		assert.ok(tonemapIdx < scaleIdx, "tonemap_cuda must precede scale_cuda");
-		assert.match(filter, /scale_cuda=2560:1440:format=nv12/);
-	});
-
-	it("scales in p010 for hdrMode=passthrough", () => {
-		const result = buildArgs(windowsRtxNvenc1440pHdrPassthrough(), winFastPath);
-		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
-		assert.match(filter, /scale_cuda=2560:1440:format=p010/);
-	});
-
-	it("omits scale_cuda entirely when no output size is configured", () => {
-		const result = buildArgs(windowsNvencFastPathNoResize(), winFastPath);
-		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
+		assert.match(filter, /width=1920:height=1080:resize_mode=scale_aspect:output_fmt=nv12/);
 		assert.doesNotMatch(filter, /scale_cuda/);
 	});
 
-	it("legacy fallback keeps gfxcapture's D3D11 resize (best path before hwdownload)", () => {
+	it("legacy SDR: NV12 captured + resized in gfxcapture, no CPU pixel-format pass", () => {
 		const result = buildArgs(windowsRtxNvenc1080p60(), winLegacy);
 		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
-		assert.match(filter, /max_framerate=60:capture_cursor=1:width=1920:height=1080:resize_mode=scale_aspect/);
-		assert.doesNotMatch(filter, /scale_cuda/);
+		assert.match(filter, /output_fmt=nv12/);
+		assert.match(filter, /,hwdownload,fps=60\[v\]/);
+		assert.doesNotMatch(filter, /format=bgra/);
+		assert.doesNotMatch(filter, /format=yuv420p/);
+	});
+
+	it("legacy HDR convert: still BGRA because zscale's tonemap operates in RGB space", () => {
+		const result = buildArgs(windowsRtxNvenc1440pHdrConvert(), winLegacy);
+		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
+		assert.match(filter, /output_fmt=bgra/);
+		assert.match(filter, /tonemap=hable/);
+	});
+
+	it("HDR convert on the fast path: tonemap_cuda runs in VRAM, no hwdownload", () => {
+		const result = buildArgs(windowsRtxNvenc1440pHdrConvert(), winFastPath);
+		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
+		assert.match(filter, /tonemap_cuda=tonemap=hable:format=nv12/);
+		assert.doesNotMatch(filter, /hwdownload/);
+		assert.doesNotMatch(filter, /zscale/);
+	});
+
+	it("non-gfxcapture inputs use software scale= (no hwctx is initialized for them)", () => {
+		const result = buildArgs(windowsGdigrabSoftware(), winFastPath);
+		assert.ok(result.args.includes("-vf"));
+		const vf = result.args[result.args.indexOf("-vf") + 1];
+		assert.match(vf, /^scale=1920:1080:force_original_aspect_ratio=decrease/);
 	});
 });
 
