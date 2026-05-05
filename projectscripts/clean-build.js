@@ -8,6 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const buildDir = path.join(__dirname, "..", "build");
+const sharedDir = path.join(__dirname, "..", "shared");
 const appDir = path.join(__dirname, "..", "app");
 
 try {
@@ -23,6 +24,14 @@ try {
 	// 2) copy build → app/build
 	if (fs.existsSync(buildDir)) {
 		fs.cpSync(buildDir, path.join(appDir, "build"), { recursive: true });
+	}
+
+	// 2b) copy shared → app/shared (Electron main process files in app/build
+	// import from ../../../shared/... at runtime; without this copy the
+	// packaged ASAR is missing the shared protocol/types modules and the
+	// main process crashes on launch with ERR_MODULE_NOT_FOUND).
+	if (fs.existsSync(sharedDir)) {
+		fs.cpSync(sharedDir, path.join(appDir, "shared"), { recursive: true });
 	}
 
 	// 3) write new package.json
