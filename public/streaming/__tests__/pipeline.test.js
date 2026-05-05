@@ -94,7 +94,7 @@ const nvencEncoderTail = (preset = "p6") => [
 ];
 
 describe("pipeline.buildArgs — Windows + NVENC fast path", () => {
-	it("emits the GPU-resident chain with no fps/yuv420p when capture and stream match", () => {
+	it("captures at native resolution and resizes on the CUDA engine via scale_cuda", () => {
 		const result = buildArgs(windowsRtxNvenc1080p60(), winFastPath);
 
 		assert.equal(result.command, "ffmpeg.exe");
@@ -108,7 +108,7 @@ describe("pipeline.buildArgs — Windows + NVENC fast path", () => {
 			"-filter_hw_device",
 			"cu",
 			"-filter_complex",
-			"gfxcapture=monitor_idx=0:max_framerate=60:capture_cursor=1:width=1920:height=1080:resize_mode=scale_aspect:output_fmt=nv12,hwmap=derive_device=cuda:mode=read[v]",
+			"gfxcapture=monitor_idx=0:max_framerate=60:capture_cursor=1:output_fmt=nv12,hwmap=derive_device=cuda:mode=read,scale_cuda=1920:1080:format=nv12:force_original_aspect_ratio=decrease,fps=60[v]",
 			"-map",
 			"[v]",
 			...nvencEncoderTail(),
@@ -121,7 +121,7 @@ describe("pipeline.buildArgs — Windows + NVENC fast path", () => {
 		assert.equal(result.usedFastPath, true);
 		assert.ok(result.args.includes("-filter_complex"));
 		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
-		assert.match(filter, /hwmap=derive_device=cuda:mode=read,fps=30\[v\]/);
+		assert.match(filter, /scale_cuda=1920:1080:format=nv12:force_original_aspect_ratio=decrease,fps=30\[v\]/);
 	});
 
 	it("omits gfxcapture width/height when no output size is configured", () => {
@@ -370,5 +370,76 @@ describe("pipeline.buildArgs — Windows + QSV", () => {
 		assert.equal(result.usedFastPath, false);
 		assert.equal(result.args[result.args.indexOf("-c:v") + 1], "h264_qsv");
 		assert.equal(result.args[result.args.indexOf("-preset") + 1], "medium");
+	});
+});
+
+describe("pipeline.buildArgs — fast-path resize lives on the CUDA engine", () => {
+	it("does not let gfxcapture do the resize on the fast path", () => {
+		const result = buildArgs(windowsRtxNvenc1080p60(), winFastPath);
+		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
+		assert.doesNotMatch(filter, /resize_mode/);
+		assert.doesNotMatch(filter, /\bwidth=/);
+		assert.doesNotMatch(filter, /\bheight=/);
+	});
+
+	it("emits scale_cuda after tonemap_cuda for hdrMode=convert", () => {
+		const result = buildArgs(windowsRtxNvenc1440pHdrConvert(), winFastPath);
+		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
+		const tonemapIdx = filter.indexOf("tonemap_cuda");
+		const scaleIdx = filter.indexOf("scale_cuda");
+		assert.notEqual(tonemapIdx, -1);
+		assert.notEqual(scaleIdx, -1);
+		assert.ok(tonemapIdx < scaleIdx, "tonemap_cuda must precede scale_cuda");
+		assert.match(filter, /scale_cuda=2560:1440:format=nv12/);
+	});
+
+	it("scales in p010 for hdrMode=passthrough", () => {
+		const result = buildArgs(windowsRtxNvenc1440pHdrPassthrough(), winFastPath);
+		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
+		assert.match(filter, /scale_cuda=2560:1440:format=p010/);
+	});
+
+	it("omits scale_cuda entirely when no output size is configured", () => {
+		const result = buildArgs(windowsNvencFastPathNoResize(), winFastPath);
+		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
+		assert.doesNotMatch(filter, /scale_cuda/);
+	});
+
+	it("legacy fallback keeps gfxcapture's D3D11 resize (best path before hwdownload)", () => {
+		const result = buildArgs(windowsRtxNvenc1080p60(), winLegacy);
+		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
+		assert.match(filter, /max_framerate=60:capture_cursor=1:width=1920:height=1080:resize_mode=scale_aspect/);
+		assert.doesNotMatch(filter, /scale_cuda/);
+	});
+});
+
+describe("pipeline.buildArgs — recording-rate ceiling (fps + 15 %)", () => {
+	it("clamps gfxcapture max_framerate to ceil(fps * 1.15) when captureFps is higher", () => {
+		const config = windowsRtxNvenc1080p60();
+		config.captureFps = 240;
+		config.fps = 120;
+		const result = buildArgs(config, winFastPath);
+		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
+		assert.match(filter, /max_framerate=138\b/);
+		assert.match(filter, /,fps=120\[v\]/);
+	});
+
+	it("leaves gfxcapture max_framerate alone when captureFps is already below the ceiling", () => {
+		const config = windowsRtxNvenc1080p60();
+		config.captureFps = 30;
+		config.fps = 120;
+		const result = buildArgs(config, winFastPath);
+		const filter = result.args[result.args.indexOf("-filter_complex") + 1];
+		assert.match(filter, /max_framerate=30\b/);
+	});
+
+	it("clamps gdigrab -framerate to the same ceiling", () => {
+		const config = windowsGdigrabSoftware();
+		config.captureFps = 240;
+		config.fps = 60;
+		const result = buildArgs(config, winFastPath);
+		const idx = result.args.indexOf("-framerate");
+		assert.notEqual(idx, -1);
+		assert.equal(result.args[idx + 1], "69");
 	});
 });

@@ -15,27 +15,42 @@ import { isNvencCodec } from "../codecs.js";
 import { gfxcapture, gfxcaptureCuda, usesGfxCapture } from "../capture/index.js";
 
 /**
- * Whether the fast path needs an explicit `scale_cuda` step.
+ * Whether the CUDA fast path should emit an explicit `scale_cuda` step.
  *
- * The gfxcapture source itself handles resize via its `width=`, `height=`,
- * and `resize_mode=` options whenever `outputWidth`/`outputHeight` are set,
- * so frames already arrive at the requested size in NV12. `scale_cuda`
- * would be a redundant pass. We keep the helper as the single decision
- * point in case a future config opts out of gfxcapture's built-in resize.
- *
- * @param {StreamConfig} _config
- * @returns {boolean}
- */
-const needsResize = (_config) => false;
-
-/**
- * Whether to insert an `fps` step. Skipped when capture and output FPS
- * match, since the filter is then a no-op.
+ * On the fast path we tell gfxcapture **not** to resize (see
+ * `gfxcaptureCuda.buildSourceFilter`), so resize work moves off the
+ * D3D11 video processor (3D engine) and onto CUDA cores (compute engine).
+ * `scale_cuda` always runs when an explicit output size is configured;
+ * its default `passthrough=1` makes it a no-op when the source already
+ * matches, so there's no penalty for monitors that capture at the
+ * configured resolution.
  *
  * @param {StreamConfig} config
  * @returns {boolean}
  */
-const needsFps = (config) => Boolean(config.fps && config.fps !== config.captureFps);
+const needsResize = (config) => Boolean(config.outputWidth && config.outputHeight);
+
+/**
+ * Whether to insert an `fps` step.
+ *
+ * Inserted whenever `config.fps` is set, even when it equals
+ * `config.captureFps`. The filter strictly drops any frames that arrive
+ * faster than the configured target rate, providing a hard cap in
+ * front of the encoder. Without it, a real-time capture source that
+ * occasionally bursts above its declared `max_framerate` (gfxcapture
+ * is not strict about this in practice) can push NVENC — especially
+ * on low-latency presets like `p1` / `fast_live` — to encode faster
+ * than the configured `fps`, producing video whose timeline outpaces
+ * wall-clock playback.
+ *
+ * `effectiveCaptureFps()` already caps the source at fps + 15 %, so
+ * the filter at most drops the residual 15 % overshoot — never
+ * duplicates frames against an underrun.
+ *
+ * @param {StreamConfig} config
+ * @returns {boolean}
+ */
+const needsFps = (config) => Boolean(config.fps);
 
 /**
  * Build the legacy CPU filter chain. Used when:
@@ -47,6 +62,21 @@ const needsFps = (config) => Boolean(config.fps && config.fps !== config.capture
  * When hdrMode is "passthrough" on this path, no colour transform is applied;
  * the gfxcapture BGRA capture already applies the OS-level SDR conversion, so
  * the result is SDR rather than true HDR — a graceful-ish degradation.
+ *
+ * Resize placement (best path available without setting up an extra hwctx):
+ *
+ *   - **gfxcapture inputs** keep their built-in `resize_mode=scale_aspect`.
+ *     That's a D3D11 video-processor blit on the 3D engine — slower than
+ *     `scale_cuda`, but `hwdownload` has already converted us to a CPU
+ *     format by the time we'd want a CUDA scaler, so D3D11 is the fastest
+ *     remaining option for the legacy fallback.
+ *   - **gdigrab / x11grab / avfoundation inputs** use software `scale=`
+ *     because the legacy chain doesn't initialize a hardware device for
+ *     them. For software encoders that's optimal anyway. For paths like
+ *     gdigrab+nvenc, gdigrab+qsv, x11grab+vaapi, or avfoundation+
+ *     videotoolbox, a hwupload + `scale_<family>` would be more efficient
+ *     but requires a per-family hwctx; that's a follow-up because it's
+ *     not the default capture backend on any platform.
  *
  * @param {StreamConfig} config
  * @param {Capabilities} capabilities
@@ -85,18 +115,29 @@ const buildLegacyFilter = (config, capabilities) => {
  * Build the GPU-resident NVENC fast path.
  *
  * hdrMode "off":
- *   gfxcapture(nv12) → hwmap(cuda) → [scale_cuda] → [fps] → nvenc
+ *   gfxcapture(nv12, native size) → hwmap(cuda) → scale_cuda(nv12) → fps → nvenc
  *
  * hdrMode "convert":
- *   gfxcapture(p010) → hwmap(cuda) → tonemap_cuda(hable→nv12) → [fps] → nvenc
- *   Everything stays in VRAM; zero CPU video work.
+ *   gfxcapture(p010, native size) → hwmap(cuda) → tonemap_cuda(hable→nv12)
+ *     → scale_cuda(nv12) → fps → nvenc
  *
  * hdrMode "passthrough":
- *   gfxcapture(p010) → hwmap(cuda) → [fps] → nvenc
+ *   gfxcapture(p010, native size) → hwmap(cuda) → scale_cuda(p010) → fps → nvenc
  *   NVENC encodes 10-bit HDR directly; colour metadata is added by the encoder.
  *
- * scale_cuda is kept as a future hook (currently gfxcapture handles resize).
- * fps is only inserted when the requested fps differs from captureFps.
+ * Why scale_cuda instead of letting gfxcapture resize:
+ *   gfxcapture's built-in `resize_mode=scale_aspect` runs on the **D3D11 video
+ *   processor**, which lives on the GPU's 3D engine. `scale_cuda` runs on the
+ *   compute engine, so on a system that's also doing the rest of its work on
+ *   3D (game, DWM, Electron compositor) we free up the busier queue. The two
+ *   filters are effectively equivalent in quality for downscaling; both use
+ *   the same dedicated silicon for sample fetches. `scale_cuda` defaults to
+ *   `passthrough=1`, so when the source already matches the configured
+ *   output it produces no work at all.
+ *
+ *   `force_original_aspect_ratio=decrease` mirrors gfxcapture's `scale_aspect`
+ *   behaviour: never upscale, preserve aspect ratio when the source dims
+ *   don't match the target's aspect.
  *
  * @param {StreamConfig} config
  * @returns {string}
@@ -113,7 +154,7 @@ const buildCudaFastPath = (config) => {
 
 	if (needsResize(config)) {
 		const fmt = config.hdrMode === "passthrough" ? "p010" : "nv12";
-		filters.push(`scale_cuda=${config.outputWidth}:${config.outputHeight}:format=${fmt}`);
+		filters.push(`scale_cuda=${config.outputWidth}:${config.outputHeight}:format=${fmt}:force_original_aspect_ratio=decrease`);
 	}
 
 	if (needsFps(config)) {

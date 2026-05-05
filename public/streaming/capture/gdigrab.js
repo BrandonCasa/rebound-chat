@@ -8,6 +8,8 @@
  * @typedef {import("../types.js").StreamConfig} StreamConfig
  */
 
+import { effectiveCaptureFps } from "../numbers.js";
+
 /**
  * @param {StreamConfig} config
  * @returns {string[]}
@@ -17,7 +19,7 @@ const buildInputArgs = (config) => {
 	const sourceId = config.source?.id || "";
 	const args = ["-thread_queue_size", "1024"];
 	if (config.rtbufsize) args.push("-rtbufsize", config.rtbufsize);
-	args.push("-f", "gdigrab", "-framerate", String(config.captureFps), "-draw_mouse", config.drawMouse ? "1" : "0");
+	args.push("-f", "gdigrab", "-framerate", String(effectiveCaptureFps(config)), "-draw_mouse", config.drawMouse ? "1" : "0");
 	args.push("-i", sourceId.startsWith("window:") ? `title=${sourceName}` : "desktop");
 	return args;
 };
