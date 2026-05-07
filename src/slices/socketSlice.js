@@ -4,6 +4,8 @@ import { getSocketClient, initSocketClient, tearDownSocketClient } from "../help
 let lifecycleHandlers = null;
 
 const resolveDefaultSocketURL = () => {
+	const configuredSocketURL = import.meta.env?.VITE_SOCKET_URL;
+	if (configuredSocketURL) return configuredSocketURL;
 	if (process.env.NODE_ENV === "development") return "http://localhost:6002";
 	if (globalThis.IN_ELECTRON_ENV) return "https://rebound.nexus";
 	//if (typeof window !== "undefined" && window.location?.origin) return window.location.origin;
