@@ -20,8 +20,9 @@ const RegisterDialog = () => {
 	} = useRegisterDialog();
 
 	return (
-		<Dialog open={registerDialogState} onClose={handleDialogClose}>
+		<Dialog open={registerDialogState} onClose={handleDialogClose} data-testid="register-dialog">
 			<Box
+				data-testid="register-dialog-form"
 				sx={{
 					justifyContent: "center",
 					display: "flex",

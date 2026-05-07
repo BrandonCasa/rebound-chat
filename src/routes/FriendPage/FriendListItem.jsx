@@ -44,6 +44,10 @@ const FriendListItem = React.forwardRef(({ relation, profile, status, onPreview,
 		<Paper
 			ref={ref}
 			elevation={0}
+			data-testid="friend-list-item"
+			data-friend-relation-id={relation._id || ""}
+			data-friend-profile-id={profile.id || ""}
+			data-friend-status={status || ""}
 			onClick={() => onPreview(profile.id, relation._id)}
 			sx={{
 				position: "relative",
@@ -74,6 +78,7 @@ const FriendListItem = React.forwardRef(({ relation, profile, status, onPreview,
 					<Box sx={{ position: "relative", flexShrink: 0 }}>
 						<Avatar
 							src={profile.avatarUrl || defaultAvatar}
+							data-testid="friend-list-item-avatar"
 							sx={{
 								width: { xs: 52, sm: 64 },
 								height: { xs: 52, sm: 64 },
@@ -104,6 +109,7 @@ const FriendListItem = React.forwardRef(({ relation, profile, status, onPreview,
 							<Typography
 								variant="h6"
 								noWrap
+								data-testid="friend-list-item-name"
 								sx={{
 									fontWeight: 900,
 									letterSpacing: "-0.02em",
@@ -113,6 +119,7 @@ const FriendListItem = React.forwardRef(({ relation, profile, status, onPreview,
 							</Typography>
 
 							<Chip
+								data-testid="friend-list-item-status-chip"
 								label={meta.label}
 								color={meta.color}
 								size="small"
@@ -140,6 +147,7 @@ const FriendListItem = React.forwardRef(({ relation, profile, status, onPreview,
 									variant="contained"
 									color="info"
 									size="small"
+									data-testid="friend-list-item-chat-button"
 									onClick={stop(() => onChat(profile.id))}
 									sx={{
 										borderRadius: 999,
@@ -154,6 +162,7 @@ const FriendListItem = React.forwardRef(({ relation, profile, status, onPreview,
 							<Tooltip title="Remove Friend">
 								<IconButton
 									color="error"
+									data-testid="friend-list-item-remove-button"
 									onClick={stop(() => onAction("removefriend", { friendId: relation._id }, relation._id))}
 									sx={{
 										border: "1px solid",
@@ -176,6 +185,7 @@ const FriendListItem = React.forwardRef(({ relation, profile, status, onPreview,
 								variant="outlined"
 								color="warning"
 								size="small"
+								data-testid="friend-list-item-cancel-button"
 								onClick={stop(() => onAction("cancelfriend", { friendId: relation._id }, relation._id))}
 								sx={{
 									borderRadius: 999,
@@ -195,6 +205,7 @@ const FriendListItem = React.forwardRef(({ relation, profile, status, onPreview,
 									variant="contained"
 									color="success"
 									size="small"
+									data-testid="friend-list-item-accept-button"
 									onClick={stop(() => onAction("acceptfriend", { friendId: relation._id }, relation._id))}
 									sx={{
 										borderRadius: 999,
@@ -209,6 +220,7 @@ const FriendListItem = React.forwardRef(({ relation, profile, status, onPreview,
 							<Tooltip title="Decline Request">
 								<IconButton
 									color="error"
+									data-testid="friend-list-item-decline-button"
 									onClick={stop(() => onAction("declinefriend", { friendId: relation._id }, relation._id))}
 									sx={{
 										border: "1px solid",

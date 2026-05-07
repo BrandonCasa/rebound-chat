@@ -54,7 +54,7 @@ const formatDiff = (entry) => {
 const StatRow = ({ icon, label, value, secondary }) => {
 	const theme = useTheme();
 	return (
-		<Stack direction="row" spacing={1.5} alignItems="center">
+		<Stack direction="row" spacing={1.5} alignItems="center" data-testid="live-status-stat-row" data-live-status-stat={label || ""}>
 			<Box sx={{ color: theme.palette.text.secondary, display: "flex" }}>{icon}</Box>
 			<Stack spacing={0.25} sx={{ flexGrow: 1, minWidth: 0 }}>
 				<Typography variant="caption" color="text.secondary">

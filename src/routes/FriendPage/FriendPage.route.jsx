@@ -37,6 +37,7 @@ function EmptyState({ children }) {
 	return (
 		<Paper
 			elevation={0}
+			data-testid="friends-empty-state"
 			sx={{
 				p: { xs: 2.5, sm: 4 },
 				borderRadius: { xs: 3, sm: 4 },
@@ -58,7 +59,7 @@ function FriendSection({ type, items, paperRefs, onPreview, onChat, onAction }) 
 	const config = SECTION_CONFIG[type];
 
 	return (
-		<Stack spacing={{ xs: 1, sm: 1.5 }}>
+		<Stack spacing={{ xs: 1, sm: 1.5 }} data-testid="friends-section" data-friend-section={type}>
 			<Stack
 				direction="row"
 				alignItems="center"
@@ -144,7 +145,7 @@ export default function FriendsPage() {
 
 	if (!auth.loggedIn) {
 		return (
-			<Box sx={{ p: { xs: 1.5, sm: 3 } }}>
+			<Box sx={{ p: { xs: 1.5, sm: 3 } }} data-testid="friends-login-required">
 				<EmptyState>Please login.</EmptyState>
 			</Box>
 		);
@@ -152,7 +153,7 @@ export default function FriendsPage() {
 
 	if (loading) {
 		return (
-			<Box sx={{ p: { xs: 1.5, sm: 3 } }}>
+			<Box sx={{ p: { xs: 1.5, sm: 3 } }} data-testid="friends-loading-state">
 				<EmptyState>Loading friends...</EmptyState>
 			</Box>
 		);
@@ -160,6 +161,7 @@ export default function FriendsPage() {
 
 	return (
 		<Box
+			data-testid="friends-page"
 			sx={{
 				flexGrow: 1,
 				overflow: "auto",
@@ -169,6 +171,7 @@ export default function FriendsPage() {
 				py: { xs: 1.5, sm: 3 },
 			}}>
 			<Popover
+				data-testid="friends-profile-preview-popover"
 				anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
 				transformOrigin={{ vertical: "top", horizontal: "center" }}
 				anchorEl={userPreviewEl}
@@ -206,6 +209,7 @@ export default function FriendsPage() {
 				}}>
 				<Paper
 					elevation={0}
+					data-testid="friends-summary-card"
 					sx={{
 						p: { xs: 2, sm: 3 },
 						borderRadius: { xs: 3, sm: 5 },
@@ -261,6 +265,7 @@ export default function FriendsPage() {
 								},
 							}}>
 							<Chip
+								data-testid="friends-count-chip"
 								avatar={
 									<Avatar
 										sx={{
@@ -285,6 +290,7 @@ export default function FriendsPage() {
 							/>
 
 							<Chip
+								data-testid="friends-pending-count-chip"
 								avatar={
 									<Avatar
 										sx={{

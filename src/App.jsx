@@ -1,4 +1,4 @@
-import { CssBaseline, ThemeProvider } from "@mui/material";
+import { Box, CssBaseline, ThemeProvider } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import React, { useEffect, useRef, Suspense, lazy } from "react";
 import { useSelector, useDispatch } from "react-redux";
@@ -151,36 +151,38 @@ const App = () => {
 
 	return (
 		<ThemeProvider theme={darkTheme}>
-			{showAutoUpdate && <AutoUpdate />}
-			<CssBaseline />
-			<SnackbarMapper drawerWidth={customAppBarProps.drawerWidth} drawerOpen={customAppBarProps.drawerOpen} />
-			<AppRouter>
-				<CustomAppBar {...customAppBarProps}>
-					{!authState.loggingIn ? (
-						<Suspense fallback={<div>Loading...</div>}>
-							<Routes>
-								<Route path="/" element={<LandingPage />} />
-								<Route path="/friends" element={<FriendPage />} />
-								<Route path="/profile" element={<ProfilePage />} />
-								<Route path="/chat" element={<ChatPage />} />
-								<Route path="/dm/:userId" element={<DirectMessagePage />} />
-								<Route path="/servers" element={<ServersPage />} />
-								<Route path="/live" element={<AvailableStreamsPage />} />
-								<Route path="/live/streams" element={<AvailableStreamsPage />} />
-								<Route path="/live/broadcast" element={<DesktopLivePage />} />
-								<Route path="/live/share/:publicToken" element={<LiveSharePage />} />
-								<Route path="/testing" element={<TestingPage />} />
-								<Route path="/security" element={<SecurityPage />} />
-								<Route path="/settings" element={<SettingsPage />} />
-								<Route path="*" element={<PageNotFoundContainer>PAGE NOT FOUND</PageNotFoundContainer>} />
-							</Routes>
-						</Suspense>
-					) : null}
-				</CustomAppBar>
-				<RegisterDialog />
-				<LoginDialog />
-				{/** <DraggableCallOverlay /> **/ <></>}
-			</AppRouter>
+			<Box data-testid="app-root" sx={{ height: "100%" }}>
+				{showAutoUpdate && <AutoUpdate />}
+				<CssBaseline />
+				<SnackbarMapper drawerWidth={customAppBarProps.drawerWidth} drawerOpen={customAppBarProps.drawerOpen} />
+				<AppRouter>
+					<CustomAppBar {...customAppBarProps}>
+						{!authState.loggingIn ? (
+							<Suspense fallback={<div data-testid="app-route-loading">Loading...</div>}>
+								<Routes>
+									<Route path="/" element={<LandingPage />} />
+									<Route path="/friends" element={<FriendPage />} />
+									<Route path="/profile" element={<ProfilePage />} />
+									<Route path="/chat" element={<ChatPage />} />
+									<Route path="/dm/:userId" element={<DirectMessagePage />} />
+									<Route path="/servers" element={<ServersPage />} />
+									<Route path="/live" element={<AvailableStreamsPage />} />
+									<Route path="/live/streams" element={<AvailableStreamsPage />} />
+									<Route path="/live/broadcast" element={<DesktopLivePage />} />
+									<Route path="/live/share/:publicToken" element={<LiveSharePage />} />
+									<Route path="/testing" element={<TestingPage />} />
+									<Route path="/security" element={<SecurityPage />} />
+									<Route path="/settings" element={<SettingsPage />} />
+									<Route path="*" element={<PageNotFoundContainer data-testid="page-not-found">PAGE NOT FOUND</PageNotFoundContainer>} />
+								</Routes>
+							</Suspense>
+						) : null}
+					</CustomAppBar>
+					<RegisterDialog />
+					<LoginDialog />
+					{/** <DraggableCallOverlay /> **/ <></>}
+				</AppRouter>
+			</Box>
 		</ThemeProvider>
 	);
 };

@@ -11,6 +11,7 @@ import { TransitionGrid } from "./utils/TransitionGrid";
 function LandingPage(_props) {
 	return (
 		<Box
+			data-testid="landing-page"
 			sx={{
 				display: "flex",
 				justifyContent: "center",
@@ -20,6 +21,7 @@ function LandingPage(_props) {
 			<Stack spacing={2} sx={{ height: "100%", width: "100%" }}>
 				<LandingHeader title="Rebound" subtitle="The social hub for gamers and friends." />
 				<ItemBox
+					data-testid="landing-feature-section"
 					sx={{
 						width: "100%",
 						flexGrow: 1,
@@ -29,7 +31,7 @@ function LandingPage(_props) {
 						...scrollbarStyles,
 					}}>
 					<Box>
-						<Grid container spacing={2} sx={{ justifyContent: "center" }}>
+						<Grid container spacing={2} sx={{ justifyContent: "center" }} data-testid="landing-feature-grid">
 							<TransitionGrid size={{ xs: 12, sm: 6, md: 4 }} alignItems="stretch" maxHeight={200} display="flex" justifyContent="center">
 								<FeatureCard title="Friend Footprints" description="Allows you to optionally share your activity trends with friends of your choosing." />
 							</TransitionGrid>

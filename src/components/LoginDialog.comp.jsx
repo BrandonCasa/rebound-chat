@@ -95,8 +95,9 @@ const LoginDialog = () => {
 	};
 
 	return (
-		<Dialog open={loginDialogState} onClose={() => dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }))}>
+		<Dialog open={loginDialogState} onClose={() => dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }))} data-testid="login-dialog">
 			<Box
+				data-testid="login-dialog-form"
 				sx={{
 					maxWidth: "500px",
 					justifyContent: "center",
@@ -115,6 +116,7 @@ const LoginDialog = () => {
 					variant="outlined"
 					value={email}
 					type="email"
+					inputProps={{ "data-testid": "login-email-input" }}
 					onChange={(e) => {
 						setEmail(e.target.value);
 					}}
@@ -125,13 +127,14 @@ const LoginDialog = () => {
 					variant="outlined"
 					type="password"
 					value={password}
+					inputProps={{ "data-testid": "login-password-input" }}
 					onChange={(e) => {
 						setPassword(e.target.value);
 					}}
 					autoComplete="current-password"
 				/>
 
-				<Box sx={{ display: "flex", justifyContent: "center", py: 1 }}>
+				<Box sx={{ display: "flex", justifyContent: "center", py: 1 }} data-testid="login-google-button-wrapper">
 					<GoogleButton onClick={handleGoogleLogin} />
 				</Box>
 			</Box>
@@ -139,6 +142,7 @@ const LoginDialog = () => {
 				<Button
 					variant="outlined"
 					fullWidth
+					data-testid="login-new-account-button"
 					onClick={() =>
 						dispatch(
 							setDialogOpened({
@@ -150,7 +154,7 @@ const LoginDialog = () => {
 					}>
 					New Account
 				</Button>
-				<Button variant="contained" onClick={handleUserLogin}>
+				<Button variant="contained" onClick={handleUserLogin} data-testid="login-submit-button">
 					Login
 				</Button>
 			</DialogActions>

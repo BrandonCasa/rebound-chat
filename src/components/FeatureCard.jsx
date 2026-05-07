@@ -5,7 +5,7 @@ const FeatureCard = ({ title, description }) => {
 	let theme = useTheme();
 
 	return (
-		<Card sx={{ pl: 2, pr: 2, width: "100%" }}>
+		<Card sx={{ pl: 2, pr: 2, width: "100%" }} data-testid="feature-card" data-feature-title={title || ""}>
 			<CardContent>
 				<Typography variant="h5" sx={{ color: `${theme.palette.text.primary}` }}>
 					{title}

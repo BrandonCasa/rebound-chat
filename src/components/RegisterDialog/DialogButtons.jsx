@@ -8,13 +8,19 @@ const DialogButtons = ({ handleStayLoggedInChange, formData, handleBackButton, h
 	const theme = useTheme();
 
 	return (
-		<Box sx={{ mt: 1, display: "flex", gap: 1 }}>
-			<Button variant="contained" onClick={handleToLogin} sx={{ height: "36px", backgroundColor: theme.palette.primary.dark }} fullWidth>
+		<Box sx={{ mt: 1, display: "flex", gap: 1 }} data-testid="register-dialog-buttons">
+			<Button
+				variant="contained"
+				onClick={handleToLogin}
+				sx={{ height: "36px", backgroundColor: theme.palette.primary.dark }}
+				fullWidth
+				data-testid="register-to-login-button">
 				Already registered?
 			</Button>
 			<Button
 				variant="contained"
 				onClick={handleBackButton}
+				data-testid="register-back-button"
 				sx={{
 					px: 0.5,
 					minWidth: "36px",
@@ -28,6 +34,7 @@ const DialogButtons = ({ handleStayLoggedInChange, formData, handleBackButton, h
 			<Button
 				variant="contained"
 				onClick={handleNextStep}
+				data-testid="register-next-button"
 				sx={{
 					minWidth: "36px",
 					height: "36px",

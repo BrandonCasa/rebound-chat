@@ -47,8 +47,8 @@ const sampleServers = [
 
 function ServerCard({ theme, server }) {
 	return (
-		<Card sx={{ maxWidth: 345 }}>
-			<CardActionArea>
+		<Card sx={{ maxWidth: 345 }} data-testid="servers-placeholder-card">
+			<CardActionArea data-testid="servers-placeholder-card-action">
 				<CardMedia component="img" height="140" alt="among us" />
 				<CardContent>
 					<Typography gutterBottom variant="h5" component="div">
@@ -68,6 +68,7 @@ function ServersPage() {
 
 	return (
 		<Box
+			data-testid="servers-page"
 			sx={{
 				display: "flex",
 				flexGrow: 1,
@@ -76,6 +77,7 @@ function ServersPage() {
 				overflow: "hidden",
 			}}>
 			<ItemBox
+				data-testid="servers-page-content"
 				sx={{
 					width: "100%",
 					flexGrow: 1,

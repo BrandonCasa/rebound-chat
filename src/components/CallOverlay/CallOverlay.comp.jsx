@@ -255,7 +255,14 @@ class Draggable extends React.Component {
 		};
 
 		return (
-			<div ref={this.nodeRef} onMouseDown={this.onMouseDown} onTouchStart={this.onTouchStart} style={mergedStyle} className={className} {...rest}>
+			<div
+				ref={this.nodeRef}
+				onMouseDown={this.onMouseDown}
+				onTouchStart={this.onTouchStart}
+				style={mergedStyle}
+				className={className}
+				data-testid="draggable-overlay"
+				{...rest}>
 				{children}
 			</div>
 		);
@@ -280,6 +287,7 @@ const DraggableCallOverlay = ({ open = true, onClose }) => {
 			zIndex={(theme?.zIndex?.modal ?? 1300) + 2}>
 			<Paper
 				elevation={8}
+				data-testid="call-overlay"
 				sx={{
 					p: 2,
 					minWidth: 220,
@@ -297,7 +305,7 @@ const DraggableCallOverlay = ({ open = true, onClose }) => {
 						</Typography>
 					</Stack>
 					{onClose && (
-						<IconButton size="small" onClick={onClose} aria-label="Close overlay">
+						<IconButton size="small" onClick={onClose} aria-label="Close overlay" data-testid="call-overlay-close-button">
 							<CloseIcon fontSize="small" />
 						</IconButton>
 					)}

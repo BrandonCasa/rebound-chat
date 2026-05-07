@@ -24,11 +24,17 @@ const getStatusColor = (status) => {
 const getStreamTitle = (stream) => stream?.label || "Live session";
 
 const StatusChip = ({ stream }) => (
-	<Chip color={getStatusColor(stream.status)} size="small" label={stream.status ? stream.status.toUpperCase() : "UNKNOWN"} sx={{ fontWeight: 700 }} />
+	<Chip
+		color={getStatusColor(stream.status)}
+		size="small"
+		label={stream.status ? stream.status.toUpperCase() : "UNKNOWN"}
+		sx={{ fontWeight: 700 }}
+		data-testid="stream-status-chip"
+	/>
 );
 
 const StreamMetric = ({ label, value }) => (
-	<Stack spacing={0.25}>
+	<Stack spacing={0.25} data-testid="stream-metric" data-stream-metric={label || ""}>
 		<Typography variant="caption" color="text.secondary">
 			{label}
 		</Typography>

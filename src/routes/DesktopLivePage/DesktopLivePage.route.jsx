@@ -276,7 +276,7 @@ const ToggleField = ({ label, name, settings, setSettings, disabled = false }) =
 );
 
 const SettingGrid = ({ children }) => (
-	<Grid container spacing={1.5}>
+	<Grid container spacing={1.5} data-testid="desktop-live-setting-grid">
 		{React.Children.map(children, (child, index) => (
 			<Grid key={index} item xs={12} sm={6} md={4}>
 				{child}

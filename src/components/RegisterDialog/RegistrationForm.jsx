@@ -10,7 +10,7 @@ import { profileMediaUrl } from "../../helpers/mediaUrl";
 const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
 	if (activeStep === 0) {
 		return (
-			<>
+			<Box data-testid="register-step-registration">
 				<RegisterTextField
 					field="username"
 					label="Login Name"
@@ -40,13 +40,13 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
 					errors={formData.passwordErrors}
 					icon={KeyRounded}
 				/>
-			</>
+			</Box>
 		);
 	}
 
 	if (activeStep === 1) {
 		return (
-			<>
+			<Box data-testid="register-step-profile">
 				<RegisterTextField
 					field="displayName"
 					label="Display Name"
@@ -65,7 +65,7 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
 					errors={formData.bioErrors}
 					icon={NoteRounded}
 				/>
-			</>
+			</Box>
 		);
 	}
 
@@ -82,7 +82,7 @@ const RegistrationForm = ({ activeStep, formData, handleFormDataChange }) => {
 			servers: [],
 		};
 		return (
-			<Box sx={{ pb: 2, display: "flex" }}>
+			<Box sx={{ pb: 2, display: "flex" }} data-testid="register-step-preview">
 				<ProfileCard forceSelf={true} type="preview" user={tempUser}></ProfileCard>
 			</Box>
 		);

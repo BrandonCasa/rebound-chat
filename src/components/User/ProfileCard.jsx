@@ -11,8 +11,8 @@ import { profileMediaUrl } from "../../helpers/mediaUrl";
 /* -------------------------------------------------- */
 
 const CameraInput = ({ onChange, sx }) => (
-	<IconButton component="label" sx={sx} size="small">
-		<input hidden type="file" accept="image/*" onChange={onChange} />
+	<IconButton component="label" sx={sx} size="small" data-testid="profile-card-camera-input">
+		<input hidden type="file" accept="image/*" onChange={onChange} data-testid="profile-card-camera-file-input" />
 		<CameraAlt fontSize="small" />
 	</IconButton>
 );
@@ -27,6 +27,7 @@ function FriendButtons({ status, friendId, profile, onAction }) {
 					variant="contained"
 					color="secondary"
 					startIcon={<PersonAdd />}
+					data-testid="profile-card-add-friend-button"
 					onClick={() => onAction("addfriend", { recipientId: profile.id }, `Sent request to ${profile.displayName}`)}>
 					Add
 				</Button>
@@ -39,22 +40,25 @@ function FriendButtons({ status, friendId, profile, onAction }) {
 					variant="outlined"
 					color="info"
 					startIcon={<PersonOff />}
+					data-testid="profile-card-cancel-friend-button"
 					onClick={() => onAction("cancelfriend", { friendId }, `Canceled request to ${profile.displayName}`, "info")}>
 					Cancel
 				</Button>
 			);
 		case "received":
 			return (
-				<ButtonGroup fullWidth size="small" variant="contained">
+				<ButtonGroup fullWidth size="small" variant="contained" data-testid="profile-card-friend-request-actions">
 					<Button
 						color="success"
 						startIcon={<PersonAdd />}
+						data-testid="profile-card-accept-friend-button"
 						onClick={() => onAction("acceptfriend", { friendId }, `Accepted request from ${profile.displayName}`)}>
 						Accept
 					</Button>
 					<Button
 						color="error"
 						startIcon={<PersonRemove />}
+						data-testid="profile-card-decline-friend-button"
 						onClick={() => onAction("declinefriend", { friendId }, `Declined request from ${profile.displayName}`, "warning")}>
 						Decline
 					</Button>
@@ -68,13 +72,14 @@ function FriendButtons({ status, friendId, profile, onAction }) {
 					variant="contained"
 					color="error"
 					startIcon={<PersonRemove />}
+					data-testid="profile-card-remove-friend-button"
 					onClick={() => onAction("removefriend", { friendId }, `Removed ${profile.displayName} from friends`)}>
 					Remove
 				</Button>
 			);
 		default:
 			return (
-				<Button fullWidth size="small" variant="contained" disabled>
+				<Button fullWidth size="small" variant="contained" disabled data-testid="profile-card-friend-action-unavailable">
 					---
 				</Button>
 			);
@@ -101,10 +106,12 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 		return <></>;
 	}
 
-	if (type === "mini") return <Paper>mini</Paper>;
+	if (type === "mini") return <Paper data-testid="profile-card-mini">mini</Paper>;
 	if (type === "preview") {
 		return (
 			<Paper
+				data-testid="profile-card-preview"
+				data-profile-id={profile.id || ""}
 				sx={{
 					width,
 					maxHeight: passStyle?.maxHeight,
@@ -168,6 +175,9 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 	/* ---------- main render ---------- */
 	return (
 		<Paper
+			data-testid="profile-card"
+			data-profile-id={profile.id || ""}
+			data-profile-self={isSelf ? "true" : "false"}
 			sx={{
 				width,
 				maxHeight: passStyle?.maxHeight,
@@ -184,6 +194,7 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 						component="img"
 						src={profileMediaUrl(banner.preview, "banner.webp")}
 						alt="banner"
+						data-testid="profile-card-banner"
 						sx={{
 							width: "100%",
 							height: 120,
@@ -208,7 +219,7 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 				{/* Avatar + Name */}
 				<Stack direction="row" spacing={2} alignItems="center">
 					<Box position="relative">
-						<Avatar src={profileMediaUrl(avatar.preview, "defaultpfp.webp")} sx={{ width: 56, height: 56 }} />
+						<Avatar src={profileMediaUrl(avatar.preview, "defaultpfp.webp")} sx={{ width: 56, height: 56 }} data-testid="profile-card-avatar" />
 						{isSelf && editMode && (
 							<CameraInput
 								onChange={avatar.onChange}
@@ -223,7 +234,14 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 					</Box>
 					<Box flex={1} minWidth={0}>
 						{editMode ? (
-							<TextField fullWidth size="small" label="Display Name" value={name} onChange={(e) => setName(e.target.value)} />
+							<TextField
+								fullWidth
+								size="small"
+								label="Display Name"
+								value={name}
+								onChange={(e) => setName(e.target.value)}
+								inputProps={{ "data-testid": "profile-card-display-name-input" }}
+							/>
 						) : (
 							<Typography variant="h6" noWrap>
 								{profile.displayName}
@@ -239,7 +257,15 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 				<Paper variant="outlined" sx={{ p: 1, flex: 1, minHeight: 80 }}>
 					<Typography variant="subtitle2">About Me</Typography>
 					{editMode ? (
-						<TextField fullWidth multiline rows={4} label="Bio" value={bio} onChange={(e) => setBio(e.target.value)} />
+						<TextField
+							fullWidth
+							multiline
+							rows={4}
+							label="Bio"
+							value={bio}
+							onChange={(e) => setBio(e.target.value)}
+							inputProps={{ "data-testid": "profile-card-bio-input" }}
+						/>
 					) : (
 						<Typography variant="body2" color="text.secondary">
 							{profile.bio || "This user hasn’t written a bio yet."}
@@ -269,15 +295,15 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 					{isSelf ? (
 						editMode ? (
 							<Stack direction="row" spacing={1}>
-								<Button fullWidth variant="contained" size="small" onClick={saveProfile}>
+								<Button fullWidth variant="contained" size="small" onClick={saveProfile} data-testid="profile-card-save-button">
 									Save
 								</Button>
-								<Button fullWidth variant="outlined" size="small" onClick={() => setEdit(false)}>
+								<Button fullWidth variant="outlined" size="small" onClick={() => setEdit(false)} data-testid="profile-card-cancel-edit-button">
 									Cancel
 								</Button>
 							</Stack>
 						) : (
-							<Button fullWidth variant="contained" size="small" onClick={() => setEdit(true)}>
+							<Button fullWidth variant="contained" size="small" onClick={() => setEdit(true)} data-testid="profile-card-edit-button">
 								Edit Profile
 							</Button>
 						)
@@ -285,7 +311,7 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 						<Stack direction="row" spacing={1} sx={{ width: "100%" }}>
 							<FriendButtons status={status} friendId={friendId} profile={profile} onAction={callApi} />
 							{location.pathname !== `/dm/${profile.id}` && (
-								<Button variant="outlined" size="small" color="info" onClick={() => navigate(`/dm/${profile.id}`)}>
+								<Button variant="outlined" size="small" color="info" onClick={() => navigate(`/dm/${profile.id}`)} data-testid="profile-card-chat-button">
 									Chat
 								</Button>
 							)}

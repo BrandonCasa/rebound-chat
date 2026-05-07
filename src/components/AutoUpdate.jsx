@@ -42,30 +42,34 @@ const AutoUpdate = () => {
 	}, []);
 
 	return (
-		<Dialog open={updateAvailable} disableEscapeKeyDown={downloading}>
+		<Dialog open={updateAvailable} disableEscapeKeyDown={downloading} data-testid="auto-update-dialog">
 			<DialogTitle>{error ? "Update Error" : checking ? "Checking for Update…" : !downloading ? "Update Available" : "Downloading..."}</DialogTitle>
 
-			<DialogContent>
-				{error && <Typography color="error">{error}</Typography>}
+			<DialogContent data-testid="auto-update-content">
+				{error && (
+					<Typography color="error" data-testid="auto-update-error">
+						{error}
+					</Typography>
+				)}
 
 				{!error && downloading ? (
-					<Box sx={{ textAlign: "center", p: 2 }}>
+					<Box sx={{ textAlign: "center", p: 2 }} data-testid="auto-update-progress">
 						<CircularProgress variant="determinate" value={progress} />
 						<Typography variant="body2" mt={1}>
 							{progress}% downloaded
 						</Typography>
 					</Box>
 				) : !error && !downloading ? (
-					<Typography>A new version is ready—install it now?</Typography>
+					<Typography data-testid="auto-update-ready-message">A new version is ready—install it now?</Typography>
 				) : null}
 			</DialogContent>
 
 			{!downloading && (
 				<DialogActions>
-					<Button onClick={() => window.electronAPI.downloadUpdate()} variant="contained" disabled={downloading}>
+					<Button onClick={() => window.electronAPI.downloadUpdate()} variant="contained" disabled={downloading} data-testid="auto-update-install-button">
 						Install Now
 					</Button>
-					<Button onClick={() => setUpdateAvailable(false)} disabled={downloading}>
+					<Button onClick={() => setUpdateAvailable(false)} disabled={downloading} data-testid="auto-update-later-button">
 						Later
 					</Button>
 				</DialogActions>
