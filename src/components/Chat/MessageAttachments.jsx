@@ -32,6 +32,7 @@ function MessageAttachments({ attachments = [] }) {
 						sx={{
 							padding: 1,
 							margin: 0,
+							marginTop: 1,
 							display: "block",
 							width: "20vw",
 							borderRadius: 1,
@@ -46,7 +47,7 @@ function MessageAttachments({ attachments = [] }) {
 							data-testid="chat-message-attachment-image"
 							loading="lazy"
 							decoding="async"
-							style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+							style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", borderRadius: 4 }}
 						/>
 					</Box>
 				);
