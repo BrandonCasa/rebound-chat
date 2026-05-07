@@ -1,5 +1,6 @@
 import React from "react";
 import { Box, ImageList, ImageListItem, useMediaQuery, useTheme } from "@mui/material";
+import { scrollbarStyles } from "../../routes/scrollbarStyles";
 
 function MessageAttachments({ attachments = [], maxHeight = 480 }) {
 	const theme = useTheme();
@@ -37,6 +38,7 @@ function MessageAttachments({ attachments = [], maxHeight = 480 }) {
 					overflowX: "hidden",
 					pr: 0.5,
 					scrollbarGutter: "stable",
+					...scrollbarStyles,
 				}}>
 				{visibleAttachments.map((attachment, index) => {
 					const key = getAttachmentKey(attachment, index);
