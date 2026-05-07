@@ -128,7 +128,11 @@ describe("buildRecommendation", () => {
 		expect(result.outputHeight).to.equal(540);
 	});
 
-	it("drops fps only when every viewer is on slow-2g/2g", () => {
+	it("never drops fps below the ceiling, even for slow-2g/2g viewers", () => {
+		// Frame-rate drops are far more visually jarring than bitrate
+		// drops, so the recommender always pins fps at the ceiling and
+		// lets the bitrate/resolution/codec heuristics do the work for
+		// bandwidth-starved viewers.
 		const viewers = [
 			buildViewer({ network: { effectiveType: "slow-2g", hlsBandwidthEstimateMbit: 0.5 } }),
 			buildViewer({ network: { effectiveType: "2g", hlsBandwidthEstimateMbit: 0.7 } }),
@@ -141,7 +145,7 @@ describe("buildRecommendation", () => {
 			viewerSnapshots: viewers,
 			ceiling,
 		});
-		expect(result.fps).to.equal(30);
+		expect(result.fps).to.equal(ceiling.fps);
 	});
 
 	it("restores ceiling when no viewers are connected", () => {
