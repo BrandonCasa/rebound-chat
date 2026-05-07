@@ -46,6 +46,10 @@
 		"electron": "electron .",
 		"predev:kill-ports": "kill-port 3000 6001 6002 27017",
 		"electron-dev": "pnpm run predev:kill-ports && concurrently -k \"cross-env BROWSER=none pnpm run start\" \"cd server && pnpm run dev\" \"wait-on http://localhost:3000 tcp:6001 tcp:6002 tcp:27017 && pnpm run electron\"",
+		"pree2e:server": "kill-port 6101 6102 27018",
+		"e2e:server": "cross-env-shell NODE_ENV=development PORT=6101 REBOUND_SOCKET_PORT=6102 MONGOMS_PORT=27018 REBOUND_DEV_DB_PATH=./dev-e2e REBOUND_RESET_DEV_DB=1 \"cd server && node ./src/app.js\"",
+		"pree2e:web": "kill-port 3100",
+		"e2e:web": "cross-env VITE_API_PROXY_TARGET=http://localhost:6101 vite --host 127.0.0.1 --port 3100",
 		"prepare:ffmpeg": "node projectscripts/fetch-ffmpeg.js",
 		"predist": "pnpm run prepare:ffmpeg && node projectscripts/clean-build.js && cd app && pnpm install --prod --no-frozen-lockfile && cd ../",
 		"dist": "electron-builder",
@@ -125,6 +129,7 @@
 		"prettier": "^3.6.2",
 		"sass": "^1.94.2",
 		"vite": "^6.4.1",
-		"wait-on": "^8.0.5"
+		"wait-on": "^8.0.5",
+		"@playwright/test": "^1.59.1"
 	}
 }

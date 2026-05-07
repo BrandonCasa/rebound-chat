@@ -104,6 +104,7 @@ test-results/
 .playwright-mcp/
 docs/testing/artifacts/
 server/dev-e2e/
+server/dev-test/
 ```
 
 `docs/testing/artifacts/` should stay ignored unless a specific screenshot or trace is intentionally committed for documentation.
@@ -114,6 +115,8 @@ The first implementation should make the app start predictably for Playwright wi
 
 ### A1. Make Vite proxy target configurable
 
+**Status:** Complete (2026-05-07).
+
 Current proxy targets are hard-coded to `http://localhost:6001`. Add environment-controlled proxy targets before E2E tests are added:
 
 ```js
@@ -123,6 +126,8 @@ const apiTarget = process.env.VITE_API_PROXY_TARGET || "http://localhost:6001";
 Use `apiTarget` for `/api`, `/live/api`, and `/live/watch`.
 
 ### A2. Make server test ports configurable
+
+**Status:** Complete (2026-05-07).
 
 The server already accepts `PORT` through `startBackend`. The E2E launch command should run with explicit ports:
 
@@ -137,31 +142,43 @@ The current server computes Socket.IO as `httpPort + 1`, so `REBOUND_SOCKET_PORT
 
 ### A3. Isolate Mongo memory storage
 
+**Status:** Complete (2026-05-07).
+
 The database helper currently uses port `27017` and `./dev` for development/test. Add env overrides:
 
 ```js
 const mongoPort = Number(process.env.MONGOMS_PORT || 27017);
-const dbPath = process.env.REBOUND_DEV_DB_PATH || "./dev";
+const dbPath = process.env.REBOUND_DEV_DB_PATH || (process.env.NODE_ENV === "test" ? "./dev-test" : "./dev");
 ```
 
 This keeps E2E runs from touching an active local dev database.
 
+E2E and Mocha test runs should reset their disposable database paths before startup. Normal development should keep `./dev` unless `REBOUND_RESET_DEV_DB=1` is explicitly set.
+
 ### A4. Add an E2E server command
+
+**Status:** Complete (2026-05-07).
 
 Add root package scripts that keep the command readable and reusable:
 
 ```json
 {
-  "e2e:server": "cross-env NODE_ENV=development PORT=6101 MONGOMS_PORT=27018 REBOUND_DEV_DB_PATH=./dev-e2e pnpm --dir server exec node ./src/app.js",
+  "pree2e:server": "kill-port 6101 6102 27018",
+  "e2e:server": "cross-env-shell NODE_ENV=development PORT=6101 REBOUND_SOCKET_PORT=6102 MONGOMS_PORT=27018 REBOUND_DEV_DB_PATH=./dev-e2e REBOUND_RESET_DEV_DB=1 \"cd server && node ./src/app.js\"",
+  "pree2e:web": "kill-port 3100",
   "e2e:web": "cross-env VITE_API_PROXY_TARGET=http://localhost:6101 vite --host 127.0.0.1 --port 3100"
 }
 ```
 
 Keep these commands internal to Playwright. Normal `pnpm run start`, `pnpm run electron-dev`, and server tests should not change behavior.
 
+The server script launches from `server/` directly so `./dev-e2e` resolves to `server/dev-e2e/` consistently on Windows and Unix-like shells.
+
 ## Phase B: Install Playwright Test
 
 ### B1. Add dependencies
+
+**Status:** Complete (2026-05-07).
 
 Use `pnpm`, matching `AGENTS.md`:
 
@@ -174,6 +191,8 @@ Install only Chromium first. Add Firefox/WebKit after the smoke suite is stable 
 
 ### B2. Add ignored artifacts
 
+**Status:** Complete (2026-05-07).
+
 Add to `.gitignore`:
 
 ```gitignore
@@ -183,6 +202,7 @@ Add to `.gitignore`:
 /.playwright-mcp/
 /docs/testing/artifacts/
 /server/dev-e2e/
+/server/dev-test/
 ```
 
 ### B3. Add scripts
@@ -191,13 +211,13 @@ Root `package.json` should get:
 
 ```json
 {
-  "test:e2e": "playwright test",
-  "test:e2e:ui": "playwright test --ui",
-  "test:e2e:headed": "playwright test --headed",
-  "test:e2e:debug": "playwright test --debug",
-  "test:e2e:report": "playwright show-report",
-  "test:e2e:install": "playwright install chromium",
-  "pw:codegen": "playwright codegen http://127.0.0.1:3100"
+	"test:e2e": "playwright test",
+	"test:e2e:ui": "playwright test --ui",
+	"test:e2e:headed": "playwright test --headed",
+	"test:e2e:debug": "playwright test --debug",
+	"test:e2e:report": "playwright show-report",
+	"test:e2e:install": "playwright install chromium",
+	"pw:codegen": "playwright codegen http://127.0.0.1:3100"
 }
 ```
 
@@ -211,37 +231,36 @@ Create `playwright.config.js` at the repo root:
 import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
-  testDir: "./tests/e2e",
-  outputDir: "./test-results",
-  fullyParallel: true,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
-  reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "html",
-  use: {
-    baseURL: "http://127.0.0.1:3100",
-    trace: "on-first-retry",
-    screenshot: "only-on-failure",
-    video: "retain-on-failure"
-  },
-  projects: [
-    {
-      name: "setup",
-      testMatch: /.*\.setup\.js/
-    },
-    {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
-      dependencies: ["setup"]
-    }
-  ],
-  webServer: {
-    command:
-      "pnpm exec concurrently -k -n server,web \"pnpm run e2e:server\" \"pnpm run e2e:web\"",
-    url: "http://127.0.0.1:3100",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120000
-  }
+	testDir: "./tests/e2e",
+	outputDir: "./test-results",
+	fullyParallel: true,
+	forbidOnly: !!process.env.CI,
+	retries: process.env.CI ? 2 : 0,
+	workers: process.env.CI ? 1 : undefined,
+	reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "html",
+	use: {
+		baseURL: "http://127.0.0.1:3100",
+		trace: "on-first-retry",
+		screenshot: "only-on-failure",
+		video: "retain-on-failure",
+	},
+	projects: [
+		{
+			name: "setup",
+			testMatch: /.*\.setup\.js/,
+		},
+		{
+			name: "chromium",
+			use: { ...devices["Desktop Chrome"] },
+			dependencies: ["setup"],
+		},
+	],
+	webServer: {
+		command: 'pnpm exec concurrently -k -n server,web "pnpm run e2e:server" "pnpm run e2e:web"',
+		url: "http://127.0.0.1:3100",
+		reuseExistingServer: !process.env.CI,
+		timeout: 120000,
+	},
 });
 ```
 
@@ -383,11 +402,11 @@ Expand Playwright projects for viewer-side stream tests after the basic multi-vi
 
 ```js
 projects: [
-  { name: "viewer-desktop-chrome", use: { ...devices["Desktop Chrome"] } },
-  { name: "viewer-desktop-firefox", use: { ...devices["Desktop Firefox"] } },
-  { name: "viewer-mobile-chrome", use: { ...devices["Pixel 5"] } },
-  { name: "viewer-mobile-safari", use: { ...devices["iPhone 13"] } }
-]
+	{ name: "viewer-desktop-chrome", use: { ...devices["Desktop Chrome"] } },
+	{ name: "viewer-desktop-firefox", use: { ...devices["Desktop Firefox"] } },
+	{ name: "viewer-mobile-chrome", use: { ...devices["Pixel 5"] } },
+	{ name: "viewer-mobile-safari", use: { ...devices["iPhone 13"] } },
+];
 ```
 
 Do not run the full matrix on every PR at first. Recommended tiers:
@@ -526,6 +545,7 @@ Field-run report template:
 ## Streaming Field Run: YYYY-MM-DD
 
 Environment:
+
 - App build:
 - Server URL:
 - Host account:
@@ -535,6 +555,7 @@ Environment:
 - Network conditions:
 
 Scenario:
+
 - Host source:
 - Codec/settings:
 - Viewers joined:
@@ -542,6 +563,7 @@ Scenario:
 - Network changes:
 
 Metrics:
+
 - startup_time_ms:
 - time_to_playable_ms:
 - live_latency_seconds p50/p95:
@@ -555,6 +577,7 @@ Metrics:
 - host_gpu_encoder_percent p50/p95:
 
 Failures:
+
 - Playback:
 - Control plane:
 - Upload:
@@ -568,10 +591,10 @@ After the first deterministic stream tests exist, add explicit scripts so people
 
 ```json
 {
-  "test:e2e:live": "playwright test live -c playwright.config.js",
-  "test:electron:live": "playwright test live -c playwright.electron.config.js",
-  "test:streaming:quality": "playwright test tests/e2e/live/quality.spec.js -c playwright.config.js",
-  "test:streaming:real-accounts": "playwright test tests/e2e/live/real-accounts.spec.js -c playwright.config.js --headed"
+	"test:e2e:live": "playwright test live -c playwright.config.js",
+	"test:electron:live": "playwright test live -c playwright.electron.config.js",
+	"test:streaming:quality": "playwright test tests/e2e/live/quality.spec.js -c playwright.config.js",
+	"test:streaming:real-accounts": "playwright test tests/e2e/live/real-accounts.spec.js -c playwright.config.js --headed"
 }
 ```
 
@@ -663,14 +686,12 @@ Electron tests need deterministic URLs, API targets, and user data. Add test-fri
 
 ```js
 if (process.env.REBOUND_ELECTRON_USER_DATA_DIR) {
-  app.setPath("userData", process.env.REBOUND_ELECTRON_USER_DATA_DIR);
+	app.setPath("userData", process.env.REBOUND_ELECTRON_USER_DATA_DIR);
 }
 
-const getElectronRendererUrl = () =>
-  process.env.REBOUND_ELECTRON_RENDERER_URL || "http://localhost:3000";
+const getElectronRendererUrl = () => process.env.REBOUND_ELECTRON_RENDERER_URL || "http://localhost:3000";
 
-const getElectronApiBase = () =>
-  process.env.REBOUND_ELECTRON_API_BASE || (isDev ? "http://localhost:6001/api" : "https://rebound.nexus/api");
+const getElectronApiBase = () => process.env.REBOUND_ELECTRON_API_BASE || (isDev ? "http://localhost:6001/api" : "https://rebound.nexus/api");
 ```
 
 The `app.setPath("userData", ...)` hook must run before `userFfmpegRoot` is derived from `app.getPath("userData")`.
@@ -691,10 +712,10 @@ Add root scripts after browser E2E is stable:
 
 ```json
 {
-  "e2e:electron:web": "cross-env VITE_API_PROXY_TARGET=http://localhost:6101 vite --host 127.0.0.1 --port 3200",
-  "test:electron": "playwright test -c playwright.electron.config.js",
-  "test:electron:debug": "cross-env PWDEBUG=1 playwright test -c playwright.electron.config.js --debug",
-  "test:electron:report": "playwright show-report playwright-report/electron"
+	"e2e:electron:web": "cross-env VITE_API_PROXY_TARGET=http://localhost:6101 vite --host 127.0.0.1 --port 3200",
+	"test:electron": "playwright test -c playwright.electron.config.js",
+	"test:electron:debug": "cross-env PWDEBUG=1 playwright test -c playwright.electron.config.js --debug",
+	"test:electron:report": "playwright show-report playwright-report/electron"
 }
 ```
 
@@ -708,27 +729,26 @@ Create `playwright.electron.config.js`:
 import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
-  testDir: "./tests/electron",
-  outputDir: "./test-results/electron",
-  fullyParallel: false,
-  workers: 1,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI
-    ? [["github"], ["html", { open: "never", outputFolder: "playwright-report/electron" }]]
-    : [["html", { outputFolder: "playwright-report/electron" }]],
-  use: {
-    trace: "on-first-retry",
-    screenshot: "only-on-failure",
-    video: "retain-on-failure"
-  },
-  webServer: {
-    command:
-      "pnpm exec concurrently -k -n server,web \"pnpm run e2e:server\" \"pnpm run e2e:electron:web\"",
-    url: "http://127.0.0.1:3200",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120000
-  }
+	testDir: "./tests/electron",
+	outputDir: "./test-results/electron",
+	fullyParallel: false,
+	workers: 1,
+	forbidOnly: !!process.env.CI,
+	retries: process.env.CI ? 1 : 0,
+	reporter: process.env.CI
+		? [["github"], ["html", { open: "never", outputFolder: "playwright-report/electron" }]]
+		: [["html", { outputFolder: "playwright-report/electron" }]],
+	use: {
+		trace: "on-first-retry",
+		screenshot: "only-on-failure",
+		video: "retain-on-failure",
+	},
+	webServer: {
+		command: 'pnpm exec concurrently -k -n server,web "pnpm run e2e:server" "pnpm run e2e:electron:web"',
+		url: "http://127.0.0.1:3200",
+		reuseExistingServer: !process.env.CI,
+		timeout: 120000,
+	},
 });
 ```
 
@@ -746,40 +766,40 @@ import { test as base, expect, _electron as electron } from "@playwright/test";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 export const test = base.extend({
-  electronApp: async ({}, use, testInfo) => {
-    const electronApp = await electron.launch({
-      args: ["public/electron.js"],
-      cwd: repoRoot,
-      env: {
-        ...process.env,
-        NODE_ENV: "development",
-        REBOUND_ELECTRON_RENDERER_URL: "http://127.0.0.1:3200",
-        REBOUND_ELECTRON_API_BASE: "http://127.0.0.1:6101/api",
-        REBOUND_ELECTRON_USER_DATA_DIR: testInfo.outputPath("user-data"),
-        REBOUND_ELECTRON_DISABLE_SOURCE_SERVICE: "1"
-      },
-      artifactsDir: testInfo.outputPath("electron-artifacts"),
-      timeout: 60000
-    });
+	electronApp: async ({}, use, testInfo) => {
+		const electronApp = await electron.launch({
+			args: ["public/electron.js"],
+			cwd: repoRoot,
+			env: {
+				...process.env,
+				NODE_ENV: "development",
+				REBOUND_ELECTRON_RENDERER_URL: "http://127.0.0.1:3200",
+				REBOUND_ELECTRON_API_BASE: "http://127.0.0.1:6101/api",
+				REBOUND_ELECTRON_USER_DATA_DIR: testInfo.outputPath("user-data"),
+				REBOUND_ELECTRON_DISABLE_SOURCE_SERVICE: "1",
+			},
+			artifactsDir: testInfo.outputPath("electron-artifacts"),
+			timeout: 60000,
+		});
 
-    electronApp.on("console", async (msg) => {
-      const values = await Promise.all(msg.args().map((arg) => arg.jsonValue().catch(() => String(arg))));
-      console.log("[electron:main]", ...values);
-    });
+		electronApp.on("console", async (msg) => {
+			const values = await Promise.all(msg.args().map((arg) => arg.jsonValue().catch(() => String(arg))));
+			console.log("[electron:main]", ...values);
+		});
 
-    try {
-      await use(electronApp);
-    } finally {
-      await electronApp.close().catch(() => {});
-    }
-  },
+		try {
+			await use(electronApp);
+		} finally {
+			await electronApp.close().catch(() => {});
+		}
+	},
 
-  electronWindow: async ({ electronApp }, use) => {
-    const window = await electronApp.firstWindow({ timeout: 60000 });
-    window.on("console", (msg) => console.log("[electron:renderer]", msg.text()));
-    await window.waitForLoadState("domcontentloaded");
-    await use(window);
-  }
+	electronWindow: async ({ electronApp }, use) => {
+		const window = await electronApp.firstWindow({ timeout: 60000 });
+		window.on("console", (msg) => console.log("[electron:renderer]", msg.text()));
+		await window.waitForLoadState("domcontentloaded");
+		await use(window);
+	},
 });
 
 export { expect };
@@ -806,11 +826,11 @@ Create `tests/electron/smoke.spec.js` with these tests:
    - Evaluate in the renderer:
      ```js
      await window.evaluate(() => ({
-       inElectron: globalThis.IN_ELECTRON_ENV === true,
-       hasElectronApi: Boolean(window.electronAPI),
-       hasSystemApi: typeof window.electronAPI?.system?.getFfmpegPath === "function",
-       hasLiveStreamApi: typeof window.electronAPI?.liveStream?.getState === "function",
-       hasSourcesApi: typeof window.electronAPI?.sources?.list === "function"
+      inElectron: globalThis.IN_ELECTRON_ENV === true,
+      hasElectronApi: Boolean(window.electronAPI),
+      hasSystemApi: typeof window.electronAPI?.system?.getFfmpegPath === "function",
+      hasLiveStreamApi: typeof window.electronAPI?.liveStream?.getState === "function",
+      hasSourcesApi: typeof window.electronAPI?.sources?.list === "function",
      }));
      ```
    - Assert all expected bridge properties are present.
@@ -909,15 +929,15 @@ Host-side desktop streaming cases:
 
 Host hardware matrix for real desktop streaming:
 
-| Host OS | GPU / encoder | Capture backend | Codecs to test | Baseline settings |
-| --- | --- | --- | --- | --- |
-| Windows 11 | NVIDIA RTX / NVENC | `gdigrab` or `gfxcapture` | `h264_nvenc`, `hevc_nvenc`, `av1_nvenc` when supported | 1080p60, 8M |
-| Windows 11 | Intel iGPU / QSV | `gdigrab` or `gfxcapture` | `h264_qsv`, `hevc_qsv`, `av1_qsv` when supported | 1080p60, 6M |
-| Windows 11 | AMD GPU / AMF | `gdigrab` or `gfxcapture` | AMF-backed H.264/HEVC if the local profile supports it | 1080p60, 6M |
-| macOS Apple Silicon | VideoToolbox | `avfoundation` / display capture path | `h264_videotoolbox`, `hevc_videotoolbox` | 1080p60, 6M |
-| Linux NVIDIA | NVENC | `x11grab` or Wayland-supported path | `h264_nvenc`, `hevc_nvenc`, `av1_nvenc` when supported | 1080p60, 8M |
-| Linux Intel | QSV/VAAPI | `x11grab` or Wayland-supported path | QSV/VAAPI-backed H.264/HEVC/AV1 if supported | 720p30, 4M |
-| CPU-only fallback | software | file source first, screen only locally | `libx264`/software codec if added to profile | 720p30, 2.5M |
+| Host OS             | GPU / encoder      | Capture backend                        | Codecs to test                                         | Baseline settings |
+| ------------------- | ------------------ | -------------------------------------- | ------------------------------------------------------ | ----------------- |
+| Windows 11          | NVIDIA RTX / NVENC | `gdigrab` or `gfxcapture`              | `h264_nvenc`, `hevc_nvenc`, `av1_nvenc` when supported | 1080p60, 8M       |
+| Windows 11          | Intel iGPU / QSV   | `gdigrab` or `gfxcapture`              | `h264_qsv`, `hevc_qsv`, `av1_qsv` when supported       | 1080p60, 6M       |
+| Windows 11          | AMD GPU / AMF      | `gdigrab` or `gfxcapture`              | AMF-backed H.264/HEVC if the local profile supports it | 1080p60, 6M       |
+| macOS Apple Silicon | VideoToolbox       | `avfoundation` / display capture path  | `h264_videotoolbox`, `hevc_videotoolbox`               | 1080p60, 6M       |
+| Linux NVIDIA        | NVENC              | `x11grab` or Wayland-supported path    | `h264_nvenc`, `hevc_nvenc`, `av1_nvenc` when supported | 1080p60, 8M       |
+| Linux Intel         | QSV/VAAPI          | `x11grab` or Wayland-supported path    | QSV/VAAPI-backed H.264/HEVC/AV1 if supported           | 720p30, 4M        |
+| CPU-only fallback   | software           | file source first, screen only locally | `libx264`/software codec if added to profile           | 720p30, 2.5M      |
 
 For each hardware row, capture:
 
@@ -1057,17 +1077,12 @@ Prefer a pnpm-native config for this repo:
 
 ```json
 {
-  "mcpServers": {
-    "playwright": {
-      "command": "pnpm",
-      "args": [
-        "dlx",
-        "@playwright/mcp@latest",
-        "--caps=testing,storage,devtools",
-        "--isolated"
-      ]
-    }
-  }
+	"mcpServers": {
+		"playwright": {
+			"command": "pnpm",
+			"args": ["dlx", "@playwright/mcp@latest", "--caps=testing,storage,devtools", "--isolated"]
+		}
+	}
 }
 ```
 
@@ -1142,10 +1157,10 @@ Use local dev dependency if the repo wants reproducible agent CLI behavior. Use 
 
 ```json
 {
-  "pwcli:help": "playwright-cli --help",
-  "pwcli:open": "playwright-cli open http://127.0.0.1:3100",
-  "pwcli:show": "playwright-cli show",
-  "pwcli:skills": "playwright-cli install --skills"
+	"pwcli:help": "playwright-cli --help",
+	"pwcli:open": "playwright-cli open http://127.0.0.1:3100",
+	"pwcli:show": "playwright-cli show",
+	"pwcli:skills": "playwright-cli install --skills"
 }
 ```
 
@@ -1231,9 +1246,9 @@ Primary source of truth. Include:
 Living coverage map. Keep one row per durable scenario:
 
 ```markdown
-| Area | Scenario | Spec | Data setup | Owner notes |
-| --- | --- | --- | --- | --- |
-| App shell | Public app renders | `tests/e2e/smoke.spec.js` | none | First smoke |
+| Area      | Scenario           | Spec                      | Data setup | Owner notes |
+| --------- | ------------------ | ------------------------- | ---------- | ----------- |
+| App shell | Public app renders | `tests/e2e/smoke.spec.js` | none       | First smoke |
 ```
 
 This prevents agents from regenerating duplicate tests.
