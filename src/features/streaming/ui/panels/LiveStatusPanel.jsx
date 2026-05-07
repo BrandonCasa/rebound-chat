@@ -131,7 +131,7 @@ const LiveStatusPanel = ({
 	}
 
 	return (
-		<Paper variant="outlined" sx={{ p: 2 }}>
+		<Paper variant="outlined" sx={{ p: 2 }} data-testid="live-status-panel">
 			<Stack spacing={1.5}>
 				<Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
 					<Stack spacing={0.25}>
@@ -150,11 +150,20 @@ const LiveStatusPanel = ({
 								label={controlConnected ? "Control link" : "Reconnecting"}
 								color={controlConnected ? "success" : "warning"}
 								variant={controlConnected ? "filled" : "outlined"}
+								data-testid="live-status-control-link-chip"
 							/>
 						</Tooltip>
 						<FormControlLabel
-							control={<Switch size="small" checked={Boolean(autoAdaptEnabled)} onChange={(event) => onToggleAutoAdapt?.(event.target.checked)} />}
+							control={
+								<Switch
+									size="small"
+									checked={Boolean(autoAdaptEnabled)}
+									onChange={(event) => onToggleAutoAdapt?.(event.target.checked)}
+									inputProps={{ "data-testid": "live-status-auto-adapt-switch" }}
+								/>
+							}
 							label={autoAdaptEnabled ? "Auto-adapt" : "Auto-adapt off"}
+							data-testid="live-status-auto-adapt-toggle"
 						/>
 						<Tooltip
 							title={
@@ -169,6 +178,7 @@ const LiveStatusPanel = ({
 										checked={Boolean(resolutionAdaptEnabled)}
 										onChange={(event) => onToggleResolutionAdapt?.(event.target.checked)}
 										disabled={!autoAdaptEnabled}
+										inputProps={{ "data-testid": "live-status-resolution-adapt-switch" }}
 									/>
 								}
 								label={resolutionAdaptEnabled ? "Adapt resolution" : "Resolution pinned"}
@@ -225,7 +235,11 @@ const LiveStatusPanel = ({
 				</Stack>
 
 				{recommendation ? (
-					<Alert severity="info" icon={<TuneRounded fontSize="inherit" />} sx={{ "& .MuiAlert-message": { width: "100%" } }}>
+					<Alert
+						severity="info"
+						icon={<TuneRounded fontSize="inherit" />}
+						sx={{ "& .MuiAlert-message": { width: "100%" } }}
+						data-testid="live-status-recommendation">
 						<Typography variant="body2" sx={{ fontWeight: 600 }}>
 							Latest recommendation
 						</Typography>
@@ -253,7 +267,7 @@ const LiveStatusPanel = ({
 				) : null}
 
 				{adaptationHistory.length ? (
-					<Stack spacing={0.75}>
+					<Stack spacing={0.75} data-testid="live-status-adaptation-log">
 						<Stack direction="row" spacing={1} alignItems="center">
 							<HistoryRounded fontSize="small" sx={{ color: "text.secondary" }} />
 							<Typography variant="subtitle2">Adaptation log</Typography>

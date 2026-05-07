@@ -215,6 +215,7 @@ const Field = ({ label, name, settings, setSettings, type = "text", disabled = f
 		size="small"
 		multiline={multiline}
 		minRows={multiline ? 2 : undefined}
+		inputProps={{ "data-testid": `desktop-live-field-${name}` }}
 		onChange={(event) => {
 			const value = event.target.value;
 			const markCustom = name !== "nvencProfile" && (name.startsWith("nvenc") || name === "encoderPreset");
@@ -233,6 +234,7 @@ const SelectField = ({ label, name, values, settings, setSettings, disabled = fa
 		<Select
 			label={label}
 			value={settings[name]}
+			inputProps={{ "data-testid": `desktop-live-select-${name}` }}
 			onChange={(event) => {
 				const value = event.target.value;
 				const markCustom = name !== "nvencProfile" && (name.startsWith("nvenc") || name === "encoderPreset");
@@ -257,6 +259,7 @@ const ToggleField = ({ label, name, settings, setSettings, disabled = false }) =
 			<Switch
 				checked={Boolean(settings[name])}
 				disabled={disabled}
+				inputProps={{ "data-testid": `desktop-live-toggle-${name}` }}
 				onChange={(event) => {
 					const checked = event.target.checked;
 					const markCustom = name !== "nvencProfile" && name.startsWith("nvenc");
@@ -291,6 +294,10 @@ const SourceTile = ({ source, thumbnail, selected, onSelect }) => {
 			role="button"
 			tabIndex={0}
 			variant="outlined"
+			data-testid="desktop-live-source-tile"
+			data-source-id={source.id || ""}
+			aria-label={`Select source ${source.name}`}
+			aria-pressed={selected}
 			onClick={() => onSelect(source.id)}
 			onKeyDown={(event) => {
 				if (event.key === "Enter" || event.key === " ") {
@@ -641,14 +648,14 @@ function DesktopLivePage() {
 
 	if (!isElectron) {
 		return (
-			<Box sx={{ width: "100%" }}>
+			<Box sx={{ width: "100%" }} data-testid="desktop-live-electron-required">
 				<Alert severity="info">Desktop streaming is only available in the Electron app.</Alert>
 			</Box>
 		);
 	}
 
 	return (
-		<Box sx={{ width: "100%", height: "100%", overflow: "hidden" }}>
+		<Box sx={{ width: "100%", height: "100%", overflow: "hidden" }} data-testid="desktop-live-page">
 			<Stack spacing={2} sx={{ height: "100%", minWidth: 0 }}>
 				<Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems={{ xs: "flex-start", sm: "center" }} justifyContent="space-between">
 					<Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
@@ -665,17 +672,23 @@ function DesktopLivePage() {
 							size="small"
 							color={streamState.status === "streaming" ? "success" : streamState.status === "error" ? "error" : "default"}
 							label={streamState.status || "idle"}
+							data-testid="desktop-live-status-chip"
 						/>
 						{detectedCapabilities?.gpu?.model ? <Chip size="small" variant="outlined" label={detectedCapabilities.gpu.model} /> : null}
 						{auth.loggedIn ? <Chip size="small" color="primary" label={auth.displayName || auth.username || "Account"} /> : null}
-						<Button size="small" variant="text" onClick={handleReprobe} disabled={isBusy}>
+						<Button size="small" variant="text" onClick={handleReprobe} disabled={isBusy} data-testid="desktop-live-reprobe-button">
 							Re-probe
 						</Button>
-						<Button size="small" variant="text" onClick={handleResetSettings} disabled={isBusy}>
+						<Button size="small" variant="text" onClick={handleResetSettings} disabled={isBusy} data-testid="desktop-live-reset-button">
 							Reset
 						</Button>
 						{sessionInfo?.shareUrl ? (
-							<Button size="small" variant="outlined" startIcon={<LaunchRounded />} onClick={() => electronLive.openUrl(sessionInfo.shareUrl)}>
+							<Button
+								size="small"
+								variant="outlined"
+								startIcon={<LaunchRounded />}
+								onClick={() => electronLive.openUrl(sessionInfo.shareUrl)}
+								data-testid="desktop-live-share-button">
 								Share
 							</Button>
 						) : null}
@@ -719,7 +732,7 @@ function DesktopLivePage() {
 							onToggleResolutionAdapt={handleToggleResolutionAdapt}
 							controlConnected={controlConnected}
 						/>
-						<Paper variant="outlined" sx={{ p: 2 }}>
+						<Paper variant="outlined" sx={{ p: 2 }} data-testid="desktop-live-source-panel">
 							<Stack spacing={1.5}>
 								<Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
 									<Stack spacing={0.25}>
@@ -731,7 +744,11 @@ function DesktopLivePage() {
 									{settings.sourceMode === "file" ? null : (
 										<Tooltip title="Refresh sources">
 											<span>
-												<IconButton onClick={loadSources} disabled={loadingSources || isBusy} aria-label="Refresh desktop sources">
+												<IconButton
+													onClick={loadSources}
+													disabled={loadingSources || isBusy}
+													aria-label="Refresh desktop sources"
+													data-testid="desktop-live-refresh-sources-button">
 													{loadingSources ? <CircularProgress size={20} /> : <RefreshRounded />}
 												</IconButton>
 											</span>
@@ -743,6 +760,7 @@ function DesktopLivePage() {
 									<RadioGroup
 										row
 										value={settings.sourceMode || "screen"}
+										data-testid="desktop-live-source-mode"
 										onChange={(event) => {
 											const mode = event.target.value;
 											setSettings((current) => ({
@@ -763,6 +781,7 @@ function DesktopLivePage() {
 											fullWidth
 											value={settings.filePath || ""}
 											disabled={isBusy}
+											inputProps={{ "data-testid": "desktop-live-field-filePath" }}
 											onChange={(event) => {
 												const next = event.target.value;
 												setSettings((current) => ({
@@ -775,6 +794,7 @@ function DesktopLivePage() {
 									</Stack>
 								) : (
 									<Box
+										data-testid="desktop-live-source-grid"
 										sx={{
 											display: "grid",
 											gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(3, minmax(0, 1fr))" },
@@ -884,6 +904,7 @@ function DesktopLivePage() {
 										fullWidth
 										size="small"
 										helperText="Applied to both capture and encoder rate."
+										inputProps={{ "data-testid": "desktop-live-field-fps" }}
 										onChange={(event) => {
 											const value = event.target.value;
 											setSettings((current) => ({
@@ -990,6 +1011,7 @@ function DesktopLivePage() {
 
 					<Paper
 						variant="outlined"
+						data-testid="desktop-live-log-panel"
 						sx={{
 							minHeight: 0,
 							overflow: "hidden",
@@ -1002,6 +1024,7 @@ function DesktopLivePage() {
 									variant="contained"
 									startIcon={streamState.status === "starting" ? <CircularProgress color="inherit" size={18} /> : <PlayArrowRounded />}
 									onClick={handleStart}
+									data-testid="desktop-live-start-button"
 									disabled={
 										isBusy ||
 										(settings.sourceMode === "file" ? !settings.filePath && !settings.manualInputArgs : !selectedSource && !settings.manualInputArgs) ||
@@ -1009,12 +1032,18 @@ function DesktopLivePage() {
 									}>
 									Start
 								</Button>
-								<Button variant="outlined" color="error" startIcon={<StopRounded />} onClick={handleStop} disabled={!isBusy}>
+								<Button
+									variant="outlined"
+									color="error"
+									startIcon={<StopRounded />}
+									onClick={handleStop}
+									disabled={!isBusy}
+									data-testid="desktop-live-stop-button">
 									Stop
 								</Button>
 							</Stack>
 							{sessionInfo ? (
-								<Stack spacing={0.75}>
+								<Stack spacing={0.75} data-testid="desktop-live-session-info">
 									<Typography variant="body2" color="text.secondary">
 										Session {sessionInfo.sessionId}
 									</Typography>
@@ -1026,7 +1055,7 @@ function DesktopLivePage() {
 						</Stack>
 						<Box sx={{ flexGrow: 1, overflowY: "auto", overflowX: "hidden", p: 1.5, ...scrollbarStyles }}>
 							{logs.length ? (
-								<Stack spacing={0.75}>
+								<Stack spacing={0.75} data-testid="desktop-live-log-list">
 									{logs.map((entry, index) => (
 										<Stack key={`${entry.timestamp}-${index}`} direction="row" spacing={1} alignItems="flex-start">
 											<Typography variant="caption" color="text.secondary" sx={{ minWidth: 72 }}>
@@ -1039,7 +1068,7 @@ function DesktopLivePage() {
 									))}
 								</Stack>
 							) : (
-								<Stack spacing={1} alignItems="center" justifyContent="center" sx={{ minHeight: 180 }}>
+								<Stack spacing={1} alignItems="center" justifyContent="center" sx={{ minHeight: 180 }} data-testid="desktop-live-empty-logs">
 									<Typography variant="body2" color="text.secondary">
 										No stream logs yet.
 									</Typography>

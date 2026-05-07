@@ -131,6 +131,7 @@ function LiveSharePage() {
 
 	return (
 		<Box
+			data-testid="live-share-page"
 			sx={{
 				display: "flex",
 				justifyContent: "center",
@@ -150,7 +151,7 @@ function LiveSharePage() {
 					}}>
 					<Stack spacing={2}>
 						{auth.loggingIn ? (
-							<Paper variant="outlined" sx={{ p: 3, minHeight: 180 }}>
+							<Paper variant="outlined" sx={{ p: 3, minHeight: 180 }} data-testid="live-share-auth-loading-state">
 								<Stack spacing={2} alignItems="center" justifyContent="center" sx={{ height: "100%" }}>
 									<CircularProgress size={28} />
 									<Typography variant="body2" color="text.secondary">
@@ -163,6 +164,7 @@ function LiveSharePage() {
 						{!auth.loggingIn && !auth.loggedIn ? (
 							<Alert
 								severity="info"
+								data-testid="live-share-login-required"
 								action={
 									<Button color="inherit" size="small" onClick={handleLogin}>
 										Log In
@@ -173,7 +175,7 @@ function LiveSharePage() {
 						) : null}
 
 						{auth.loggedIn && state.loading ? (
-							<Paper variant="outlined" sx={{ p: 3, minHeight: 180 }}>
+							<Paper variant="outlined" sx={{ p: 3, minHeight: 180 }} data-testid="live-share-loading-state">
 								<Stack spacing={2} alignItems="center" justifyContent="center" sx={{ height: "100%" }}>
 									<CircularProgress size={28} />
 									<Typography variant="body2" color="text.secondary">
@@ -183,13 +185,17 @@ function LiveSharePage() {
 							</Paper>
 						) : null}
 
-						{auth.loggedIn && !state.loading && state.error ? <Alert severity="error">{state.error}</Alert> : null}
+						{auth.loggedIn && !state.loading && state.error ? (
+							<Alert severity="error" data-testid="live-share-error">
+								{state.error}
+							</Alert>
+						) : null}
 
 						{auth.loggedIn && !state.loading && state.data ? (
 							<>
 								<LiveStreamPlayer stream={state.data} />
 
-								<Paper variant="outlined" sx={{ p: 2.5 }}>
+								<Paper variant="outlined" sx={{ p: 2.5 }} data-testid="live-share-playback-details">
 									<Stack spacing={1.5}>
 										<Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ xs: "flex-start", sm: "center" }} justifyContent="space-between">
 											<Stack spacing={0.5}>
@@ -198,9 +204,10 @@ function LiveSharePage() {
 													Direct playlist access requires your logged-in browser session.
 												</Typography>
 											</Stack>
-											<Chip color={getStatusColor(state.data.status)} label={liveStatusLabel} size="small" />
+											<Chip color={getStatusColor(state.data.status)} label={liveStatusLabel} size="small" data-testid="live-share-status-chip" />
 										</Stack>
 										<Box
+											data-testid="live-share-playback-url"
 											sx={{
 												p: 1.5,
 												border: (theme) => `1px solid ${theme.palette.divider}`,
@@ -219,10 +226,16 @@ function LiveSharePage() {
 											</Typography>
 										</Box>
 										<Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-											<Button variant="contained" startIcon={<ContentCopyRounded />} onClick={handleCopy}>
+											<Button variant="contained" startIcon={<ContentCopyRounded />} onClick={handleCopy} data-testid="live-share-copy-playlist-button">
 												Copy Playlist URL
 											</Button>
-											<Button variant="outlined" href={state.data.playbackUrl} target="_blank" rel="noreferrer" startIcon={<LaunchRounded />}>
+											<Button
+												variant="outlined"
+												href={state.data.playbackUrl}
+												target="_blank"
+												rel="noreferrer"
+												startIcon={<LaunchRounded />}
+												data-testid="live-share-open-playlist-button">
 												Open Playlist URL
 											</Button>
 										</Stack>
@@ -234,7 +247,7 @@ function LiveSharePage() {
 									</Stack>
 								</Paper>
 
-								<Paper variant="outlined" sx={{ p: 2.5 }}>
+								<Paper variant="outlined" sx={{ p: 2.5 }} data-testid="live-share-session-state">
 									<Stack spacing={1.25}>
 										<Typography variant="h6">Session State</Typography>
 										<Divider />
