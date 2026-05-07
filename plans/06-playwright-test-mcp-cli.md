@@ -207,6 +207,8 @@ Add to `.gitignore`:
 
 ### B3. Add scripts
 
+**Status:** Complete (2026-05-07).
+
 Root `package.json` should get:
 
 ```json
@@ -224,6 +226,8 @@ Root `package.json` should get:
 Use `pnpm run test:e2e` in documentation. Use `pnpm exec playwright ...` for one-off commands not covered by scripts.
 
 ## Phase C: Playwright config
+
+**Status:** Complete (2026-05-07).
 
 Create `playwright.config.js` at the repo root:
 
@@ -271,7 +275,11 @@ Notes:
 - Use `trace: "on-first-retry"` in CI. Local debugging can use `--trace=on`.
 - If the setup project is not needed for the first smoke suite, add it when authenticated flows land.
 
+The initial config keeps only the `chromium` project. Add the setup project when Phase E introduces authenticated storage state.
+
 ## Phase D: First committed tests
+
+**Status:** Complete (2026-05-07).
 
 The first specs should validate app boot, navigation, and one stable interactive behavior. They should not require account setup.
 
