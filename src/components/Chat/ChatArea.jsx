@@ -23,7 +23,7 @@ function ChatArea({ messages, previewUser, onContextMenu, editingMessageId, edit
 	);
 
 	return (
-		<Box sx={boxStyles} ref={listRef}>
+		<Box sx={boxStyles} ref={listRef} data-testid="chat-message-scroll-container">
 			<ConstructedMessages
 				relevantMsgs={messages}
 				previewUser={previewUser}
@@ -34,7 +34,7 @@ function ChatArea({ messages, previewUser, onContextMenu, editingMessageId, edit
 				commitEdit={commitEdit}
 				cancelEdit={cancelEdit}
 			/>
-			<div ref={topSentinelRef} />
+			<div ref={topSentinelRef} data-testid="chat-message-top-sentinel" />
 		</Box>
 	);
 }

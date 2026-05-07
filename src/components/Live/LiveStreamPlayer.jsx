@@ -408,6 +408,9 @@ function LiveStreamPlayer({ stream, sx }) {
 	return (
 		<Box
 			ref={playerRef}
+			data-testid="live-stream-player"
+			data-stream-session-id={stream?.sessionId || ""}
+			data-stream-playable={stream?.isPlayable ? "true" : "false"}
 			sx={{
 				position: "relative",
 				width: "100%",
@@ -428,6 +431,7 @@ function LiveStreamPlayer({ stream, sx }) {
 				ref={videoRef}
 				autoPlay
 				playsInline
+				data-testid="live-stream-video"
 				style={{
 					width: "100%",
 					height: "100%",
@@ -452,6 +456,7 @@ function LiveStreamPlayer({ stream, sx }) {
 				}}>
 				<Stack direction="row" spacing={1} alignItems="center">
 					<Chip
+						data-testid="live-stream-state-chip"
 						color={stream?.isPlayable ? "error" : "default"}
 						size="small"
 						label={stream?.isPlayable ? "LIVE" : "WAITING"}
@@ -476,6 +481,7 @@ function LiveStreamPlayer({ stream, sx }) {
 
 			{showUnavailableState ? (
 				<Box
+					data-testid="live-stream-unavailable-state"
 					sx={{
 						position: "absolute",
 						inset: 0,
@@ -500,6 +506,7 @@ function LiveStreamPlayer({ stream, sx }) {
 				<Box
 					role="status"
 					aria-live="polite"
+					data-testid="live-stream-adapting-status"
 					sx={{
 						position: "absolute",
 						top: 56,
@@ -529,6 +536,7 @@ function LiveStreamPlayer({ stream, sx }) {
 
 			{playerState.error ? (
 				<Box
+					data-testid="live-stream-error"
 					sx={{
 						position: "absolute",
 						left: 12,
@@ -545,6 +553,7 @@ function LiveStreamPlayer({ stream, sx }) {
 
 			<Box
 				className="LiveStreamPlayer-controls"
+				data-testid="live-stream-controls"
 				sx={{
 					position: "absolute",
 					left: 0,
@@ -577,6 +586,7 @@ function LiveStreamPlayer({ stream, sx }) {
 								onClick={handleTogglePlayback}
 								disabled={!stream?.isPlayable}
 								sx={{ color: "common.white" }}
+								data-testid="live-stream-playback-toggle"
 								aria-label={playerState.isPlaying ? "Pause" : "Play"}>
 								{playerState.isPlaying ? <PauseRounded /> : <PlayArrowRounded />}
 							</IconButton>
@@ -584,12 +594,18 @@ function LiveStreamPlayer({ stream, sx }) {
 					</Tooltip>
 					<Tooltip title="Sync near live">
 						<span>
-							<IconButton onClick={() => syncToLive({ force: true })} disabled={!stream?.isPlayable} sx={{ color: "common.white" }} aria-label="Sync near live">
+							<IconButton
+								onClick={() => syncToLive({ force: true })}
+								disabled={!stream?.isPlayable}
+								sx={{ color: "common.white" }}
+								data-testid="live-stream-sync-button"
+								aria-label="Sync near live">
 								<SyncRounded />
 							</IconButton>
 						</span>
 					</Tooltip>
 					<Chip
+						data-testid="live-stream-sync-label"
 						size="small"
 						label={playerState.syncLabel}
 						sx={{
@@ -601,6 +617,7 @@ function LiveStreamPlayer({ stream, sx }) {
 					{adapting ? (
 						<Tooltip title={adaptingMessage?.detail || "Host is adjusting their stream"}>
 							<Chip
+								data-testid="live-stream-host-adjusting-chip"
 								size="small"
 								icon={<AutoAwesomeMotionRounded sx={{ fontSize: 16, color: "common.white !important" }} />}
 								label="Host adjusting"
@@ -619,6 +636,7 @@ function LiveStreamPlayer({ stream, sx }) {
 								onClick={handleToggleMute}
 								disabled={!stream?.isPlayable}
 								sx={{ color: "common.white" }}
+								data-testid="live-stream-mute-toggle"
 								aria-label={playerState.isMuted ? "Unmute" : "Mute"}>
 								{playerState.isMuted || playerState.volume === 0 ? <VolumeOffRounded /> : <VolumeUpRounded />}
 							</IconButton>
@@ -630,6 +648,7 @@ function LiveStreamPlayer({ stream, sx }) {
 						onChange={handleVolumeChange}
 						disabled={!stream?.isPlayable}
 						aria-label="Volume"
+						data-testid="live-stream-volume-slider"
 						sx={{
 							width: { xs: 72, sm: 120 },
 							color: "common.white",
@@ -641,7 +660,12 @@ function LiveStreamPlayer({ stream, sx }) {
 					/>
 					<Tooltip title="Fullscreen">
 						<span>
-							<IconButton onClick={handleFullscreen} disabled={!stream} sx={{ color: "common.white" }} aria-label="Fullscreen">
+							<IconButton
+								onClick={handleFullscreen}
+								disabled={!stream}
+								sx={{ color: "common.white" }}
+								data-testid="live-stream-fullscreen-button"
+								aria-label="Fullscreen">
 								<FullscreenRounded />
 							</IconButton>
 						</span>

@@ -28,6 +28,7 @@ function MainContent({ drawerWidth, drawerOpen, iconWidth, setDrawerOpen, childr
 
 	return (
 		<MainBox
+			data-testid="main-content"
 			sx={{
 				left: `${drawerOpen ? drawerWidth : 0}px`,
 				width: `calc(100% - ${drawerOpen ? drawerWidth : 0}px)`,
@@ -40,12 +41,14 @@ function MainContent({ drawerWidth, drawerOpen, iconWidth, setDrawerOpen, childr
 			}}>
 			<Toolbar
 				variant="dense"
+				data-testid="main-content-toolbar-spacer"
 				sx={{
 					height: drawerWidth,
 					minHeight: drawerWidth,
 				}}
 			/>
 			<IconBox
+				data-testid="drawer-restore-control"
 				sx={{
 					width: `${drawerWidth}px`,
 					height: `${drawerWidth}px`,
@@ -57,6 +60,8 @@ function MainContent({ drawerWidth, drawerOpen, iconWidth, setDrawerOpen, childr
 				}}>
 				<Tooltip title="Maximize" placement="right">
 					<IconButton
+						data-testid="drawer-maximize-button"
+						aria-label="Maximize navigation drawer"
 						sx={{
 							position: "absolute",
 							top: 0,
@@ -69,6 +74,7 @@ function MainContent({ drawerWidth, drawerOpen, iconWidth, setDrawerOpen, childr
 				</Tooltip>
 			</IconBox>
 			<Box
+				data-testid="main-content-body"
 				sx={{
 					flexGrow: 1,
 					display: "flex",

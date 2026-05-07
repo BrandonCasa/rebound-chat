@@ -26,7 +26,7 @@ const drawerStyles = (drawerWidth, iconWidth) => ({
 });
 
 const ListItemWithTooltip = ({ title, placement, children }) => (
-	<ListItem disablePadding>
+	<ListItem disablePadding data-testid="drawer-tooltip-item" data-drawer-title={title || ""}>
 		<Tooltip title={title} placement={placement}>
 			<ListItemButton sx={{ p: 0 }}>{children}</ListItemButton>
 		</Tooltip>
@@ -44,10 +44,10 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
 	};
 
 	return (
-		<Drawer sx={drawerStyles(drawerWidth, iconWidth)} anchor="left" variant="persistent" open={drawerOpen}>
-			<Toolbar variant="dense" disableGutters sx={{ height: drawerWidth, minHeight: drawerWidth }}>
+		<Drawer sx={drawerStyles(drawerWidth, iconWidth)} anchor="left" variant="persistent" open={drawerOpen} data-testid="drawer-menu">
+			<Toolbar variant="dense" disableGutters sx={{ height: drawerWidth, minHeight: drawerWidth }} data-testid="drawer-home-toolbar">
 				<ListItemWithTooltip title="Home" placement="right">
-					<ListItemIcon sx={{ opacity: isActive("/") ? 0.5 : 1.0 }} onClick={() => navigate("/")}>
+					<ListItemIcon sx={{ opacity: isActive("/") ? 0.5 : 1.0 }} onClick={() => navigate("/")} data-testid="drawer-nav-home">
 						<HomeRounded sx={{ color: theme.palette.secondary.light }} />
 					</ListItemIcon>
 				</ListItemWithTooltip>
@@ -58,7 +58,8 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
 					p: 0,
 					pb: 1,
 					".MuiSvgIcon-root": { color: theme.palette.text.primary },
-				}}>
+				}}
+				data-testid="drawer-nav-list">
 				{[
 					{
 						key: "friends",
@@ -121,6 +122,8 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
 						return (
 							<ListItemWithTooltip key={key} title={title} placement="right">
 								<ListItemIcon
+									data-testid="drawer-nav-item"
+									data-nav-key={key}
 									sx={{ opacity: isActive(path) ? 0.5 : 1.0 }}
 									onClick={() => {
 										navigate(path);
@@ -145,9 +148,10 @@ function DrawerMenu({ drawerWidth, iconWidth, drawerOpen, setDrawerOpen, theme }
 						height: `${iconWidth * 1.25}px`,
 						margin: `${(drawerWidth - iconWidth * 1.25) / 2}px`,
 					},
-				}}>
+				}}
+				data-testid="drawer-bottom-list">
 				<ListItemWithTooltip key="toggle" title="Minimize" placement="right">
-					<ListItemButton sx={{ p: 0, m: 0 }} onClick={() => setDrawerOpen(!drawerOpen)}>
+					<ListItemButton sx={{ p: 0, m: 0 }} onClick={() => setDrawerOpen(!drawerOpen)} data-testid="drawer-minimize-button">
 						<ListItemIcon>
 							<ChevronLeftRounded />
 						</ListItemIcon>

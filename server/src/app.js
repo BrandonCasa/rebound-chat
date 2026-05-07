@@ -141,7 +141,8 @@ class ServerBackend {
 			await databaseServer.startServer();
 
 			if (startSockets) {
-				socketBackend.start(Number(httpPort ?? process.env.PORT ?? 6001) + 1);
+				const resolvedSocketPort = Number(process.env.REBOUND_SOCKET_PORT ?? Number(httpPort ?? process.env.PORT ?? 6001) + 1);
+				socketBackend.start(resolvedSocketPort);
 				this.socketStarted = true;
 			}
 

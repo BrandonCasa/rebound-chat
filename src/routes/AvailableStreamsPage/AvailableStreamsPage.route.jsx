@@ -24,11 +24,17 @@ const getStatusColor = (status) => {
 const getStreamTitle = (stream) => stream?.label || "Live session";
 
 const StatusChip = ({ stream }) => (
-	<Chip color={getStatusColor(stream.status)} size="small" label={stream.status ? stream.status.toUpperCase() : "UNKNOWN"} sx={{ fontWeight: 700 }} />
+	<Chip
+		color={getStatusColor(stream.status)}
+		size="small"
+		label={stream.status ? stream.status.toUpperCase() : "UNKNOWN"}
+		sx={{ fontWeight: 700 }}
+		data-testid="stream-status-chip"
+	/>
 );
 
 const StreamMetric = ({ label, value }) => (
-	<Stack spacing={0.25}>
+	<Stack spacing={0.25} data-testid="stream-metric" data-stream-metric={label || ""}>
 		<Typography variant="caption" color="text.secondary">
 			{label}
 		</Typography>
@@ -46,6 +52,11 @@ const StreamListItem = ({ stream, selected, onSelect }) => {
 			role="button"
 			tabIndex={0}
 			variant="outlined"
+			data-testid="available-stream-list-item"
+			data-stream-session-id={stream.sessionId || ""}
+			data-stream-playable={stream.isPlayable ? "true" : "false"}
+			aria-label={`Select stream ${getStreamTitle(stream)}`}
+			aria-pressed={selected}
 			onClick={() => onSelect(stream.sessionId)}
 			onKeyDown={(event) => {
 				if (event.key === "Enter" || event.key === " ") {
@@ -102,7 +113,7 @@ const SelectedStreamDetails = ({ stream }) => {
 	const latestSegment = stream.mediaInfo?.latestSegment || {};
 
 	return (
-		<Paper variant="outlined" sx={{ p: 2 }}>
+		<Paper variant="outlined" sx={{ p: 2 }} data-testid="selected-stream-details" data-stream-session-id={stream.sessionId || ""}>
 			<Stack spacing={1.5}>
 				<Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ xs: "flex-start", md: "center" }} justifyContent="space-between">
 					<Stack spacing={0.25}>
@@ -287,7 +298,7 @@ function AvailableStreamsPage() {
 
 	if (!auth.loggedIn) {
 		return (
-			<Box sx={{ width: "100%" }}>
+			<Box sx={{ width: "100%" }} data-testid="available-streams-login-required">
 				<Alert
 					severity="info"
 					action={
@@ -303,6 +314,7 @@ function AvailableStreamsPage() {
 
 	return (
 		<Box
+			data-testid="available-streams-page"
 			sx={{
 				flexGrow: 1,
 				width: "100%",
@@ -321,9 +333,9 @@ function AvailableStreamsPage() {
 						</Stack>
 					</Stack>
 					<Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-						<Chip size="small" label={`${state.streams.length} total`} />
-						<Chip size="small" color="success" label={`${activeCount} active`} />
-						<Chip size="small" color="primary" label={`${playableCount} playable`} />
+						<Chip size="small" label={`${state.streams.length} total`} data-testid="available-streams-total-count" />
+						<Chip size="small" color="success" label={`${activeCount} active`} data-testid="available-streams-active-count" />
+						<Chip size="small" color="primary" label={`${playableCount} playable`} data-testid="available-streams-playable-count" />
 						{window.isElectron ? (
 							<Button size="small" variant="contained" startIcon={<DesktopWindowsRounded />} onClick={() => navigate("/live/broadcast")}>
 								Go Live
@@ -331,7 +343,7 @@ function AvailableStreamsPage() {
 						) : null}
 						<Tooltip title="Refresh streams">
 							<span>
-								<IconButton onClick={handleRefresh} disabled={state.refreshing} aria-label="Refresh streams">
+								<IconButton onClick={handleRefresh} disabled={state.refreshing} aria-label="Refresh streams" data-testid="available-streams-refresh-button">
 									{state.refreshing ? <CircularProgress size={20} /> : <RefreshRounded />}
 								</IconButton>
 							</span>
@@ -351,6 +363,7 @@ function AvailableStreamsPage() {
 					}}>
 					<Paper
 						variant="outlined"
+						data-testid="available-streams-list-panel"
 						sx={{
 							minHeight: 0,
 							overflow: "hidden",
@@ -369,7 +382,7 @@ function AvailableStreamsPage() {
 								...scrollbarStyles,
 							}}>
 							{state.loading ? (
-								<Stack spacing={1.5} alignItems="center" justifyContent="center" sx={{ minHeight: 240 }}>
+								<Stack spacing={1.5} alignItems="center" justifyContent="center" sx={{ minHeight: 240 }} data-testid="available-streams-loading-state">
 									<CircularProgress size={26} />
 									<Typography variant="body2" color="text.secondary">
 										Loading streams
@@ -378,7 +391,7 @@ function AvailableStreamsPage() {
 							) : null}
 
 							{!state.loading && !state.streams.length ? (
-								<Stack spacing={1} alignItems="center" justifyContent="center" sx={{ minHeight: 240 }}>
+								<Stack spacing={1} alignItems="center" justifyContent="center" sx={{ minHeight: 240 }} data-testid="available-streams-empty-state">
 									<Typography variant="body1">No streams are available.</Typography>
 								</Stack>
 							) : null}
@@ -395,6 +408,7 @@ function AvailableStreamsPage() {
 							<Stack spacing={1} sx={{ p: 1.5, borderTop: (theme) => `1px solid ${theme.palette.divider}`, minHeight: "64px" }}>
 								<div style={{ textDecoration: "none", display: "block", width: "100%", height: "100%" }}>
 									<Chip
+										data-testid="available-streams-share-my-stream"
 										label="Share My Stream URL"
 										color="info"
 										clickable
@@ -437,6 +451,7 @@ function AvailableStreamsPage() {
 									rel="noopener noreferrer"
 									style={{ textDecoration: "none", display: "block", width: "100%", height: "100%" }}>
 									<Chip
+										data-testid="available-streams-download-app"
 										label="Download App to Stream!"
 										color="info"
 										clickable

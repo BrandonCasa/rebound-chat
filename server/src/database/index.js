@@ -1,4 +1,6 @@
 import fs from "fs";
+import net from "net";
+import path from "path";
 
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { GridFSBucket } from "mongodb";
@@ -24,12 +26,20 @@ class DatabaseServer {
 	}
 
 	async startDevelopmentServer() {
-		this.ensureDevDirectory();
+		const mongoPort = Number(process.env.MONGOMS_PORT || 27017);
+		const dbPath = this.resolveDevelopmentDbPath();
+
+		await this.ensurePortAvailable(mongoPort);
+		if (this.shouldResetDevelopmentDatabase()) {
+			this.resetDevelopmentDirectory(dbPath);
+		}
+
+		this.ensureDevDirectory(dbPath);
 		this.mongoServer = new MongoMemoryReplSet({
 			instanceOpts: [
 				{
-					port: 27017,
-					dbPath: "./dev",
+					port: mongoPort,
+					dbPath,
 					storageEngine: "wiredTiger",
 				},
 			],
@@ -64,11 +74,60 @@ class DatabaseServer {
 		});
 	}
 
-	ensureDevDirectory() {
-		const devPath = "./dev";
+	resolveDevelopmentDbPath() {
+		return process.env.REBOUND_DEV_DB_PATH || (process.env.NODE_ENV === "test" ? "./dev-test" : "./dev");
+	}
+
+	ensureDevDirectory(devPath = "./dev") {
 		if (!fs.existsSync(devPath)) {
-			fs.mkdirSync(devPath);
+			fs.mkdirSync(devPath, { recursive: true });
 		}
+	}
+
+	shouldResetDevelopmentDatabase() {
+		const resetValue = process.env.REBOUND_RESET_DEV_DB;
+
+		if (resetValue !== undefined) {
+			return ["1", "true", "yes"].includes(resetValue.toLowerCase());
+		}
+
+		return process.env.NODE_ENV === "test";
+	}
+
+	resetDevelopmentDirectory(devPath) {
+		const resolvedPath = path.resolve(devPath);
+		const resolvedCwd = path.resolve(process.cwd());
+
+		if (resolvedPath === resolvedCwd || !resolvedPath.startsWith(`${resolvedCwd}${path.sep}`)) {
+			throw new Error(`Refusing to reset development database path outside the server workspace: ${resolvedPath}`);
+		}
+
+		fs.rmSync(resolvedPath, { recursive: true, force: true });
+	}
+
+	async ensurePortAvailable(port) {
+		if (!Number.isInteger(port) || port < 1 || port > 65535) {
+			throw new Error(`Invalid MongoDB memory server port: ${port}`);
+		}
+
+		await new Promise((resolve, reject) => {
+			const probe = net.createServer();
+
+			probe.once("error", (err) => {
+				if (err.code === "EADDRINUSE") {
+					reject(new Error(`MongoDB memory server port ${port} is already in use. Stop that process or set MONGOMS_PORT to a free port.`));
+					return;
+				}
+
+				reject(err);
+			});
+
+			probe.once("listening", () => {
+				probe.close(resolve);
+			});
+
+			probe.listen(port, "127.0.0.1");
+		});
 	}
 
 	async stopServer() {

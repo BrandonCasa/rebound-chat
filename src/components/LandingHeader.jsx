@@ -5,7 +5,7 @@ const LandingHeader = ({ title, subtitle }) => {
 	let theme = useTheme();
 
 	return (
-		<Paper sx={{ padding: 1 }}>
+		<Paper sx={{ padding: 1 }} data-testid="landing-header" data-header-title={title || ""}>
 			<Typography variant="h4" sx={{ color: `${theme.palette.text.primary}` }}>
 				{title}
 			</Typography>

@@ -61,10 +61,11 @@
  *      ladder of common heights so we don't churn FFmpeg over a single
  *      pixel.
  *
- *   4. FPS.  Always recommend the ceiling's fps unless every viewer's
- *      `effectiveType` is "2g" or "slow-2g", in which case drop to
- *      max(15, ceilingFps/2). Frame-rate drops are far more visually
- *      jarring than bitrate drops, so we are conservative.
+ *   4. FPS.  Always recommend the ceiling's fps. Frame-rate drops are
+ *      far more visually jarring than bitrate drops, and since the rest
+ *      of the recommender already protects bandwidth-constrained
+ *      viewers via bitrate / resolution / codec moves, there is no
+ *      remaining case where a unilateral fps cut helps.
  */
 
 const RESOLUTION_LADDER = [360, 480, 540, 720, 900, 1080, 1440, 2160];
@@ -200,15 +201,9 @@ const recommendResolution = ({ maxResolution, ceiling }) => {
 	};
 };
 
-const recommendFps = ({ viewerSnapshots, ceiling }) => {
+const recommendFps = ({ ceiling }) => {
 	if (!ceiling?.fps) return null;
-	if (!Array.isArray(viewerSnapshots) || viewerSnapshots.length === 0) return ceiling.fps;
-	const allSlow = viewerSnapshots.every((viewer) => {
-		const type = viewer?.network?.effectiveType;
-		return type === "2g" || type === "slow-2g";
-	});
-	if (!allSlow) return ceiling.fps;
-	return Math.max(15, Math.round(ceiling.fps / 2));
+	return ceiling.fps;
 };
 
 const parseBitrateValueToBps = (value) => {
@@ -268,7 +263,7 @@ const buildRecommendation = ({ sessionId, summary, viewerSnapshots, ceiling, cur
 	});
 	const videoCodec = recommendCodec({ supportedCodecs: summary.supportedCodecs, ceiling });
 	const { outputWidth, outputHeight } = recommendResolution({ maxResolution: summary.maxResolution, ceiling });
-	const fps = recommendFps({ viewerSnapshots, ceiling });
+	const fps = recommendFps({ ceiling });
 
 	const reasons = [];
 	if (typeof summary.minDownlinkMbit === "number") {
@@ -285,9 +280,6 @@ const buildRecommendation = ({ sessionId, summary, viewerSnapshots, ceiling, cur
 	}
 	if (outputHeight && ceiling.outputHeight && outputHeight < ceiling.outputHeight) {
 		reasons.push(`resolution snapped to ${outputWidth}x${outputHeight} from ${ceiling.outputWidth}x${ceiling.outputHeight}`);
-	}
-	if (fps && ceiling.fps && fps < ceiling.fps) {
-		reasons.push(`fps dropped to ${fps} from ${ceiling.fps} for slow-network viewers`);
 	}
 
 	return {

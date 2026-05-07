@@ -7,6 +7,13 @@
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
+/.auth/
+/.playwright-mcp/
+/docs/testing/artifacts/
+/server/dev-e2e/
+/server/dev-test/
 
 # production
 /build

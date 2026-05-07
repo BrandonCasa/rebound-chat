@@ -39,7 +39,12 @@ const formatDuration = (value) => {
 };
 
 const InfoRow = ({ label, value }) => (
-	<Stack direction="row" spacing={1.5} justifyContent="space-between" alignItems="baseline">
+	<Stack
+		direction="row"
+		spacing={1.5}
+		justifyContent="space-between"
+		alignItems="baseline"
+		data-testid={`live-stream-info-row-${label.toLowerCase().replace(/\s+/g, "-")}`}>
 		<Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
 			{label}
 		</Typography>
@@ -56,7 +61,7 @@ const LiveStreamInfoContent = ({ stream }) => {
 	const latestSegment = mediaInfo.latestSegment || {};
 
 	return (
-		<Box sx={{ maxWidth: 340, p: 0.5 }}>
+		<Box sx={{ maxWidth: 340, p: 0.5 }} data-testid="live-stream-info-tooltip-content">
 			<Stack spacing={1}>
 				<Stack spacing={0.25}>
 					<Typography variant="subtitle2">{stream?.label || "Live session"}</Typography>
@@ -108,7 +113,7 @@ function LiveStreamInfoTooltip({ stream, size = "small", sx }) {
 					},
 				},
 			}}>
-			<IconButton size={size} sx={sx} aria-label="Show stream ingest information">
+			<IconButton size={size} sx={sx} aria-label="Show stream ingest information" data-testid="live-stream-info-button">
 				<InfoOutlined fontSize={size === "small" ? "small" : "medium"} />
 			</IconButton>
 		</Tooltip>

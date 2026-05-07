@@ -30,9 +30,13 @@ function SnackbarMapper({ drawerWidth, drawerOpen }) {
 				autoHideDuration={snackbarData.snackbarProps.autoHideDuration}
 				onClose={onCloseAction}
 				key={snackbarId}
+				data-testid="snackbar"
+				data-snackbar-id={snackbarId}
 				anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
 				style={snackbarStyle}>
-				<Alert {...snackbarData.alertProps}>{snackbarData.childText}</Alert>
+				<Alert {...snackbarData.alertProps} data-testid="snackbar-alert">
+					{snackbarData.childText}
+				</Alert>
 			</Snackbar>
 		);
 	});

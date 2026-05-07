@@ -39,24 +39,25 @@ const GetMessageBlock = ({
 		};
 
 		return (
-			<IndividualMessage
-				key={msgIndex}
-				msg={msg}
-				shouldDisplayAvatar={shouldDisplayAvatar}
-				currentBlock={blockIndex}
-				currentMsg={msgIndex}
-				hoveredBlock={hoveredBlock}
-				hoveredMessage={hoveredMessage}
-				onHoverMessage={onHoverMessage}
-				requestedTime={requestedTime}
-				onClickMessage={onClickMessage}
-				onContextMenu={onContextMenu}
-				editingMessageId={editingMessageId}
-				editingText={editingText}
-				setEditingText={setEditingText}
-				commitEdit={commitEdit}
-				cancelEdit={cancelEdit}
-			/>
+			<div key={msgIndex} data-testid="chat-message-block-item" data-message-id={msg._id || ""}>
+				<IndividualMessage
+					msg={msg}
+					shouldDisplayAvatar={shouldDisplayAvatar}
+					currentBlock={blockIndex}
+					currentMsg={msgIndex}
+					hoveredBlock={hoveredBlock}
+					hoveredMessage={hoveredMessage}
+					onHoverMessage={onHoverMessage}
+					requestedTime={requestedTime}
+					onClickMessage={onClickMessage}
+					onContextMenu={onContextMenu}
+					editingMessageId={editingMessageId}
+					editingText={editingText}
+					setEditingText={setEditingText}
+					commitEdit={commitEdit}
+					cancelEdit={cancelEdit}
+				/>
+			</div>
 		);
 	});
 };

@@ -9,11 +9,14 @@ function ChannelList({ channels, setMessages }) {
 	const dispatch = useDispatch();
 
 	return (
-		<List sx={{ display: "flex", flexDirection: "column" }}>
+		<List sx={{ display: "flex", flexDirection: "column" }} data-testid="chat-channel-list">
 			{Object.keys(channels).map((channel) => (
 				<ListItemButton
 					key={channel}
 					selected={socketState.currentRoom === channel}
+					data-testid="chat-channel-list-item"
+					data-channel-id={channel}
+					aria-label={`Select channel ${channels[channel].name}`}
 					onClick={() => {
 						if (socketState.currentRoom !== channel) {
 							setMessages([]);

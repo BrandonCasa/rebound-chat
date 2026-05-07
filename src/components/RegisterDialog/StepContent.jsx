@@ -1,7 +1,7 @@
 import { Typography, Step, StepLabel, Stepper } from "@mui/material";
 
 const StepContent = ({ activeStep }) => (
-	<Stepper sx={{ pb: 2, ml: -1, mr: -1, overflow: "hidden" }} activeStep={activeStep}>
+	<Stepper sx={{ pb: 2, ml: -1, mr: -1, overflow: "hidden" }} activeStep={activeStep} data-testid="register-stepper">
 		<Step key={0} completed={activeStep > 0}>
 			<StepLabel>
 				<Typography variant="caption">Registration</Typography>

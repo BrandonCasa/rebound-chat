@@ -25,6 +25,7 @@ function CustomAppBar({
 
 	return (
 		<Box
+			data-testid="custom-app-shell"
 			sx={{
 				display: "flex",
 				height: "100%",

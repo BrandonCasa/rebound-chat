@@ -19,6 +19,7 @@ export default function ProfilePage() {
 
 	return (
 		<Box
+			data-testid="profile-page"
 			sx={{
 				display: "flex",
 				justifyContent: "center",
@@ -26,13 +27,13 @@ export default function ProfilePage() {
 				overflow: "hidden",
 			}}>
 			<Stack spacing={2} sx={{ height: "100%", width: "100%" }}>
-				<ItemPaper>
+				<ItemPaper data-testid="profile-page-header">
 					<Typography variant="h4" color="text.primary">
 						Your Profile
 					</Typography>
 				</ItemPaper>
 
-				<Box sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
+				<Box sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }} data-testid="profile-page-card-panel">
 					<ProfileCard
 						self={true}
 						type="full"

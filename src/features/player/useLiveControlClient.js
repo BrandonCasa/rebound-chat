@@ -52,6 +52,8 @@ const DEV_DEFAULT_ORIGIN = "http://localhost:6002";
 const PROD_DEFAULT_ORIGIN = "https://rebound.nexus";
 
 const inferOrigin = ({ websiteBaseUrl }) => {
+	const configuredOrigin = import.meta.env?.VITE_LIVE_CONTROL_ORIGIN || import.meta.env?.VITE_SOCKET_URL;
+	if (configuredOrigin) return configuredOrigin;
 	if (websiteBaseUrl) return deriveLiveControlOrigin(websiteBaseUrl);
 	if (typeof process !== "undefined" && process?.env?.NODE_ENV === "development") return DEV_DEFAULT_ORIGIN;
 	if (typeof globalThis !== "undefined" && globalThis.IN_ELECTRON_ENV) return PROD_DEFAULT_ORIGIN;

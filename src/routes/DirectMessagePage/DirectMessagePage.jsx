@@ -37,12 +37,12 @@ export default function DirectMessagePage() {
 		previewUser,
 	} = useDirectMessagePage(userId);
 
-	if (!auth.loggedIn) return <Typography>Please login.</Typography>;
+	if (!auth.loggedIn) return <Typography data-testid="direct-message-login-required">Please login.</Typography>;
 
 	const pfpRef = React.useRef(null);
 
 	return (
-		<Box sx={{ display: "flex", flexGrow: 1, flexDirection: "column", overflow: "hidden" }}>
+		<Box sx={{ display: "flex", flexGrow: 1, flexDirection: "column", overflow: "hidden" }} data-testid="direct-message-page">
 			<MessageContextMenu
 				anchorPosition={msgMenuPos}
 				setAnchorPosition={closeMessageMenu}
@@ -51,6 +51,7 @@ export default function DirectMessagePage() {
 				allowEdit={selectedMessage?.sender?._id === auth.userId}
 			/>
 			<Popover
+				data-testid="direct-message-profile-preview-popover"
 				anchorOrigin={{ vertical: "top", horizontal: "right" }}
 				transformOrigin={{ vertical: "bottom", horizontal: "left" }}
 				anchorEl={userPreviewEl}
@@ -61,10 +62,12 @@ export default function DirectMessagePage() {
 				sx={{ mb: 2 }}>
 				<ProfileCard self={previewMe} user={otherUser} width="300px" passStyle={{ maxWidth: "300px" }} />
 			</Popover>
-			<Paper sx={{ position: "relative", display: "flex", flexDirection: "column", width: "100%", flexGrow: 1 }}>
-				<Box sx={{ p: 1, display: "flex", alignItems: "center", gap: 2 }}>
+			<Paper sx={{ position: "relative", display: "flex", flexDirection: "column", width: "100%", flexGrow: 1 }} data-testid="direct-message-shell">
+				<Box sx={{ p: 1, display: "flex", alignItems: "center", gap: 2 }} data-testid="direct-message-header">
 					<IconButton
 						color="secondary"
+						data-testid="direct-message-profile-button"
+						aria-label="Open direct message profile"
 						onClick={() => {
 							previewUser(pfpRef);
 						}}
@@ -83,7 +86,7 @@ export default function DirectMessagePage() {
 					</Typography>
 				</Box>
 				<Divider />
-				<Box sx={{ flexGrow: 1, position: "relative", width: "100%" }}>
+				<Box sx={{ flexGrow: 1, position: "relative", width: "100%" }} data-testid="direct-message-chat-panel">
 					<ChatArea
 						messages={messages}
 						previewUser={previewUser}
@@ -96,7 +99,7 @@ export default function DirectMessagePage() {
 						listRef={listRef}
 					/>
 				</Box>
-                                <ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} users={[otherUser].filter(Boolean)} />
+				<ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} users={[otherUser].filter(Boolean)} />
 			</Paper>
 		</Box>
 	);

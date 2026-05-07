@@ -3,13 +3,13 @@ import { Typography, Card, Box } from "@mui/material";
 const ErrorMessages = ({ errorMessages }) => {
 	if (errorMessages.length > 0) {
 		return (
-			<Card variant="outlined" sx={{ height: "72px", textAlign: "start" }}>
+			<Card variant="outlined" sx={{ height: "72px", textAlign: "start" }} data-testid="register-error-messages">
 				<Box sx={{ pl: 2, pr: 2, display: "flex", flexDirection: "column" }}>{errorMessages}</Box>
 			</Card>
 		);
 	} else {
 		return (
-			<Card variant="outlined" sx={{ height: "72px", textAlign: "start" }}>
+			<Card variant="outlined" sx={{ height: "72px", textAlign: "start" }} data-testid="register-error-messages-empty">
 				<Box sx={{ pl: 2, pr: 2, display: "flex", flexDirection: "column" }}>
 					<Typography variant="subtitle" fontWeight={900}>
 						- No Errors

@@ -10,6 +10,7 @@ import ChatInput from "components/Chat/ChatInput";
 function ChatList({ currentChatRoom, setCurrentChatRoom, setMessages }) {
 	return (
 		<Paper
+			data-testid="hub-chat-list"
 			sx={{
 				width: "100%",
 				height: "100%",
@@ -27,11 +28,13 @@ function ChatList({ currentChatRoom, setCurrentChatRoom, setMessages }) {
 				}}
 				subheader={<li />}>
 				{["Favorites", "Overwatch", "Valorant"].map((chatGroup) => (
-					<li key={`group-${chatGroup}`}>
+					<li key={`group-${chatGroup}`} data-testid="hub-chat-group" data-chat-group={chatGroup}>
 						<ul>
 							<ListSubheader>{`${chatGroup}`}</ListSubheader>
 							{["phantompigz", "future_wizard", "Ranahan"].map((chatName) => (
 								<ListItemButton
+									data-testid="hub-chat-list-item"
+									data-chat-name={chatName}
 									selected={chatName == currentChatRoom}
 									key={`chat-${chatGroup}-${chatName}`}
 									onClick={() => {
@@ -90,6 +93,7 @@ function HubPage() {
 
 	return (
 		<Box
+			data-testid="hub-page"
 			sx={{
 				display: "flex",
 				justifyContent: "center",
@@ -101,12 +105,12 @@ function HubPage() {
 					<ChatList currentChatRoom={currentChatRoom} setCurrentChatRoom={setCurrentChatRoom} setMessages={setMessages} />
 				</Grid>
 				<Grid sm={7.25} md={9}>
-					<Item sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+					<Item sx={{ height: "100%", display: "flex", flexDirection: "column" }} data-testid="hub-chat-panel">
 						<Typography align="center" variant="h5">
 							{currentChatRoom}
 						</Typography>
 						<Divider />
-						<Box sx={{ width: "100%", flexGrow: 1, position: "relative", mb: 1 }}>
+						<Box sx={{ width: "100%", flexGrow: 1, position: "relative", mb: 1 }} data-testid="hub-message-panel">
 							<ChatArea messages={messages} />
 						</Box>
 						<ChatInput message={message} setMessage={setMessage} sendMessage={sendMessage} />

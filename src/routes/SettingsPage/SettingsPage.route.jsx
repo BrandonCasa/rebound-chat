@@ -225,6 +225,7 @@ function SettingsPage() {
 
 	return (
 		<Stack
+			data-testid="settings-page"
 			direction={isSmUp ? "row" : "column"}
 			spacing={2}
 			sx={{
@@ -235,7 +236,8 @@ function SettingsPage() {
 				...scrollbarStyles,
 			}}>
 			<ItemPaper
-				sx={{ p: 1, flexGrow: isSmUp ? 1 : 0, backdropFilter: "blur(100px)", backgroundColor: "#ffffff10" }}>
+				sx={{ p: 1, flexGrow: isSmUp ? 1 : 0, backdropFilter: "blur(100px)", backgroundColor: "#ffffff10" }}
+				data-testid="settings-personalize-section">
 				<Stack spacing={2} sx={{ display: "flex" }}>
 					<ItemPaper
 						sx={{
@@ -251,7 +253,13 @@ function SettingsPage() {
 								variant="h6">
 								Personalize
 							</Typography>
-							<Button variant="contained" onClick={handleReset} sx={{ flexShrink: 1 }} size="small" style={{ margin: 0 }}>
+							<Button
+								variant="contained"
+								onClick={handleReset}
+								sx={{ flexShrink: 1 }}
+								size="small"
+								style={{ margin: 0 }}
+								data-testid="settings-reset-theme-button">
 								Reset
 							</Button>
 						</Stack>
@@ -261,7 +269,12 @@ function SettingsPage() {
 						const parts = key.split(".");
 						const label = parts.slice(-2)[0];
 						return (
-							<Stack key={key} direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ xs: "flex-start", sm: "center" }}>
+							<Stack
+								key={key}
+								direction={{ xs: "column", sm: "row" }}
+								spacing={1}
+								alignItems={{ xs: "flex-start", sm: "center" }}
+								data-testid="settings-color-row">
 								<Typography
 									sx={{
 										width: { xs: "100%", sm: 120 },
@@ -273,6 +286,8 @@ function SettingsPage() {
 									<input
 										type="color"
 										value={val}
+										data-testid="settings-color-input"
+										data-color-path={key}
 										style={{ width: "100%", height: 40 }}
 										onChange={(e) => throttledHandleColorChange(parts, e.target.value)}
 										onMouseUp={(e) => handleColorChange(parts, e.target.value)}
@@ -292,6 +307,7 @@ function SettingsPage() {
 						</Typography>
 						<Slider
 							sx={{ width: "100%" }}
+							data-testid="settings-rounding-slider"
 							min={0}
 							max={50}
 							step={1}
@@ -313,6 +329,7 @@ function SettingsPage() {
 						</Typography>
 						<Slider
 							sx={{ flexGrow: 1 }}
+							data-testid="settings-spacing-slider"
 							min={0.25}
 							max={2}
 							step={0.25}
@@ -339,7 +356,7 @@ function SettingsPage() {
 
 function PreferencesSection({ preferencesState, handlePreferencesChange, handleSavePreferences, initializedPreferences, pendingChange }) {
 	return (
-		<ItemPaper sx={{ p: 1, flexGrow: 1, backdropFilter: "blur(100px)", backgroundColor: "#ffffff10" }}>
+		<ItemPaper sx={{ p: 1, flexGrow: 1, backdropFilter: "blur(100px)", backgroundColor: "#ffffff10" }} data-testid="settings-preferences-section">
 			<Stack spacing={2} sx={{ display: "flex" }}>
 				<ItemPaper
 					sx={{
@@ -368,6 +385,7 @@ function PreferencesSection({ preferencesState, handlePreferencesChange, handleS
 									checked={preferencesState.allowNSFW}
 									onChange={handlePreferencesChange}
 									name="allowNSFW"
+									inputProps={{ "data-testid": "settings-preference-allow-nsfw" }}
 								/>
 							}
 							label="Allow NSFW"
@@ -382,6 +400,7 @@ function PreferencesSection({ preferencesState, handlePreferencesChange, handleS
 									checked={preferencesState.allowAnyNotifications}
 									onChange={handlePreferencesChange}
 									name="allowAnyNotifications"
+									inputProps={{ "data-testid": "settings-preference-any-notifications" }}
 								/>
 							}
 							label="Any Notifications"
@@ -394,6 +413,7 @@ function PreferencesSection({ preferencesState, handlePreferencesChange, handleS
 									checked={preferencesState.allowPublicChatNotifications}
 									onChange={handlePreferencesChange}
 									name="allowPublicChatNotifications"
+									inputProps={{ "data-testid": "settings-preference-public-chat-notifications" }}
 								/>
 							}
 							label="Messages (public)"
@@ -406,13 +426,19 @@ function PreferencesSection({ preferencesState, handlePreferencesChange, handleS
 									checked={preferencesState.allowPrivateChatNotifications}
 									onChange={handlePreferencesChange}
 									name="allowPrivateChatNotifications"
+									inputProps={{ "data-testid": "settings-preference-private-chat-notifications" }}
 								/>
 							}
 							label="Messages (private)"
 						/>
 					</FormGroup>
 				</FormControl>
-				<Button variant="contained" onClick={handleSavePreferences} sx={{ maxWidth: 200 }} disabled={!pendingChange}>
+				<Button
+					variant="contained"
+					onClick={handleSavePreferences}
+					sx={{ maxWidth: 200 }}
+					disabled={!pendingChange}
+					data-testid="settings-save-preferences-button">
 					Save Preferences
 				</Button>
 			</Stack>

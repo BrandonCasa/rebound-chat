@@ -35,6 +35,7 @@ export default function DeviceSessionsPanel(props) {
 	return (
 		<Card
 			elevation={0}
+			data-testid="device-sessions-panel"
 			sx={{
 				minHeight: "300px",
 				width: "100%",
@@ -77,7 +78,7 @@ export default function DeviceSessionsPanel(props) {
 
 			<Stack spacing={2} sx={{ py: 1 }}>
 				{error && (
-					<Alert severity="error" sx={{ mx: 2 }}>
+					<Alert severity="error" sx={{ mx: 2 }} data-testid="device-sessions-error">
 						{typeof error === "string" ? error : "Unable to load device sessions"}
 					</Alert>
 				)}
@@ -129,6 +130,7 @@ export default function DeviceSessionsPanel(props) {
 							size="small"
 							startIcon={<LogoutRoundedIcon />}
 							onClick={handleRevokeAllExceptCurrent}
+							data-testid="device-sessions-logout-all-button"
 							disabled={!hasOtherSessions || loading}>
 							Logout All
 						</Button>
@@ -175,6 +177,9 @@ function DeviceRow({ session, isCurrent, onRevoke, compact = false, disabled = f
 
 	return (
 		<Box
+			data-testid="device-session-row"
+			data-device-session-id={session.id || ""}
+			data-device-session-current={isCurrent ? "true" : "false"}
 			sx={{
 				px: 2,
 				py: 1.25,
@@ -247,7 +252,13 @@ function DeviceRow({ session, isCurrent, onRevoke, compact = false, disabled = f
 				{!isCurrent && onRevoke && (
 					<Tooltip title="Log out from this device" arrow>
 						<span>
-							<Button variant="contained" size="small" onClick={onRevoke} disabled={disabled} sx={{ padding: 1.5, minWidth: 0, background: "#a62929" }}>
+							<Button
+								variant="contained"
+								size="small"
+								onClick={onRevoke}
+								disabled={disabled}
+								sx={{ padding: 1.5, minWidth: 0, background: "#a62929" }}
+								data-testid="device-session-revoke-button">
 								<LogoutRoundedIcon fontSize="small" />
 							</Button>
 						</span>
@@ -260,7 +271,7 @@ function DeviceRow({ session, isCurrent, onRevoke, compact = false, disabled = f
 
 function SectionContainer({ children }) {
 	return (
-		<Stack spacing={1.25} sx={{ px: 2, py: 1 }}>
+		<Stack spacing={1.25} sx={{ px: 2, py: 1 }} data-testid="device-sessions-section">
 			{children}
 		</Stack>
 	);
@@ -270,6 +281,7 @@ function DeviceRowSkeleton() {
 	const theme = useTheme();
 	return (
 		<Box
+			data-testid="device-session-row-skeleton"
 			sx={{
 				px: 2,
 				py: 1.25,

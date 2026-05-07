@@ -299,9 +299,10 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 	}
 
 	return (
-		<Box sx={{ width: "100%", display: "flex", flexDirection: "column", gap: 1 }}>
+		<Box sx={{ width: "100%", display: "flex", flexDirection: "column", gap: 1 }} data-testid="chat-composer">
 			<ImageList
 				aria-live="polite"
+				data-testid="chat-attachment-preview-list"
 				onWheel={(e) => {
 					e.currentTarget.scrollLeft += e.deltaY;
 				}}
@@ -326,6 +327,8 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 				{attachments.map((item, index) => (
 					<ImageListItem
 						key={index}
+						data-testid="chat-attachment-preview-item"
+						data-attachment-name={item.name || ""}
 						style={{ height: `calc(max(200px, 15vh) - ${theme.spacing(0.5)})` }}
 						sx={{
 							backgroundColor: darken(theme.palette.background.paper, 0.05),
@@ -340,6 +343,7 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 							srcSet={`${previewFileURL(item)}`}
 							src={`${previewFileURL(item)}`}
 							alt={item.name}
+							data-testid="chat-attachment-preview-image"
 							loading="lazy"
 							style={{
 								borderRadius: theme.shape.borderRadius * 2,
@@ -373,6 +377,7 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 								<IconButton
 									sx={{ color: "white" }}
 									aria-label={`close ${item.title}`}
+									data-testid="chat-attachment-remove-button"
 									onClick={() => {
 										removeAttachment(item);
 									}}>
@@ -386,6 +391,7 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 			{mentionOptions.length > 0 && (
 				<Box
 					aria-live="polite"
+					data-testid="chat-mention-suggestions"
 					sx={{
 						display: "flex",
 						flexWrap: "wrap",
@@ -411,6 +417,8 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 							key={u.id || u._id || u.displayName}
 							label={`@${escapeHtml(u.displayName)}`}
 							size="small"
+							data-testid="chat-mention-suggestion"
+							data-user-id={u.id || u._id || ""}
 							sx={{
 								backgroundColor: theme.palette.warning.main,
 								":hover": {
@@ -430,14 +438,15 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 					))}
 				</Box>
 			)}
-			<ChatForm onSubmit={(e) => e.preventDefault()}>
-				<input ref={fileInputRef} type="file" accept={ALLOWED_IMAGE_TYPES} hidden onChange={handleFileChange} />
+			<ChatForm onSubmit={(e) => e.preventDefault()} data-testid="chat-composer-form">
+				<input ref={fileInputRef} type="file" accept={ALLOWED_IMAGE_TYPES} hidden onChange={handleFileChange} data-testid="chat-attachment-file-input" />
 				<Button
 					type="button"
 					variant="contained"
 					sx={{ height: "42px", width: "42px", padding: 0, minWidth: "42px" }}
 					onClick={handleFileButtonClick}
 					disabled={uploadingAttachment}
+					data-testid="chat-attachment-upload-button"
 					aria-label="Upload image">
 					{uploadingAttachment ? <CircularProgress size={24} color="text" /> : <AddIcon />}
 				</Button>
@@ -453,8 +462,17 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 					onMouseUp={handleSelectionChange}
 					onFocus={handleSelectionChange}
 					aria-label="Chat message input"
+					role="textbox"
+					data-testid="chat-message-input"
 				/>
-				<Button type="button" variant="contained" sx={{ height: "42px", width: "42px", padding: 0, minWidth: "42px" }} onClick={handleSend} disabled={canSend}>
+				<Button
+					type="button"
+					variant="contained"
+					sx={{ height: "42px", width: "42px", padding: 0, minWidth: "42px" }}
+					onClick={handleSend}
+					disabled={canSend}
+					data-testid="chat-send-button"
+					aria-label="Send message">
 					<SendIcon />
 				</Button>
 			</ChatForm>
