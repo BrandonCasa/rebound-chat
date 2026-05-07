@@ -39,6 +39,9 @@ const ConstructedMessages = React.memo(function ConstructedMessages({
 	return dividedMessages.map((messageBlock, blockIndex) => (
 		<Box
 			key={blockIndex}
+			data-testid="chat-message-block"
+			data-message-block-index={blockIndex}
+			data-message-block-sender-id={messageBlock[0]?.sender?._id || ""}
 			sx={{
 				background: hoveredBlock === blockIndex ? `${theme.palette.text.secondary}10` : "inherit",
 				borderRadius: 1,

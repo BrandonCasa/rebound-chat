@@ -60,6 +60,11 @@ function IndividualMessage({
 	return (
 		<ListItem
 			disablePadding
+			data-testid="chat-message"
+			data-message-id={msg._id || ""}
+			data-message-sender-id={msg.sender?._id || ""}
+			data-message-block-index={currentBlock}
+			data-message-index={currentMsg}
 			sx={{
 				alignItems: "flex-start",
 				display: "flex",
@@ -69,6 +74,7 @@ function IndividualMessage({
 			onContextMenu={handleContext}
 			{...longPressHandlers}>
 			<Box
+				data-testid="chat-message-header"
 				sx={{
 					display: shouldDisplayAvatar ? "inherit" : "none",
 					marginBottom: "-12px",
@@ -78,6 +84,7 @@ function IndividualMessage({
 					alt="User"
 					src={profileMediaUrl(msg.sender.avatarUrl, "defaultpfp.webp")}
 					sx={{ height: "40px", width: "40px", cursor: "pointer" }}
+					data-testid="chat-message-avatar"
 					onClick={() => onClickMessage(messageRef, msg.sender)}
 				/>
 				<Link
@@ -94,14 +101,16 @@ function IndividualMessage({
 					underline="hover"
 					variant="h6"
 					ref={messageRef}
+					data-testid="chat-message-author"
 					onClick={() => onClickMessage(messageRef, msg.sender)}>
 					{msg.sender.displayName}
 				</Link>
-				<Typography fontSize={11} sx={{ color: theme.palette.text.secondary }} variant="overline" textTransform="initial">
+				<Typography fontSize={11} sx={{ color: theme.palette.text.secondary }} variant="overline" textTransform="initial" data-testid="chat-message-time">
 					{sendTimeText}
 				</Typography>
 			</Box>
 			<Box
+				data-testid="chat-message-body"
 				sx={{
 					width: "100%",
 					paddingLeft: "48px",
@@ -122,13 +131,16 @@ function IndividualMessage({
 						flexDirection: "column",
 					}}>
 					{editingMessageId === msg._id ? (
-						<Box sx={{ display: "flex", gap: 1, width: "100%", justifyContent: "space-between", alignItems: "center", padding: 1 }}>
+						<Box
+							sx={{ display: "flex", gap: 1, width: "100%", justifyContent: "space-between", alignItems: "center", padding: 1 }}
+							data-testid="chat-message-edit-form">
 							<TextField
 								size="small"
 								fullWidth
 								multiline
 								maxRows={8}
 								value={editingText}
+								inputProps={{ "data-testid": "chat-message-edit-input" }}
 								onChange={(e) => setEditingText(e.target.value)}
 								onKeyDown={(e) => {
 									if (e.key === "Enter") commitEdit();
@@ -139,17 +151,17 @@ function IndividualMessage({
 									"& .MuiInputBase-inputMultiline": { ...scrollbarStyles },
 								}}
 							/>
-							<Button variant="contained" color="primary" onClick={commitEdit} size="small" sx={{ maxHeight: "2rem" }}>
+							<Button variant="contained" color="primary" onClick={commitEdit} size="small" sx={{ maxHeight: "2rem" }} data-testid="chat-message-edit-save">
 								Save
 							</Button>
-							<Button variant="outlined" color="secondary" onClick={cancelEdit} size="small" sx={{ maxHeight: "2rem" }}>
+							<Button variant="outlined" color="secondary" onClick={cancelEdit} size="small" sx={{ maxHeight: "2rem" }} data-testid="chat-message-edit-cancel">
 								Cancel
 							</Button>
 						</Box>
 					) : (
 						<>
 							{hasContent && (
-								<Typography variant="subtitle1" sx={{ color: theme.palette.text.secondary }}>
+								<Typography variant="subtitle1" sx={{ color: theme.palette.text.secondary }} data-testid="chat-message-content">
 									{highlightMentions(msg.content, msg.mentions || []).map((p) => (
 										<span
 											key={p.key}

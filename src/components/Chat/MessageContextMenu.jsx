@@ -31,13 +31,13 @@ const StyledMenu = styled((props) => (
 
 const ConfirmDialog = memo(function ConfirmDialog({ open, onCancel, onConfirm }) {
 	return (
-		<Dialog open={open} onClose={onCancel}>
+		<Dialog open={open} onClose={onCancel} data-testid="chat-message-delete-confirm-dialog">
 			<DialogTitle>Are you sure?</DialogTitle>
 			<DialogActions>
-				<Button variant="contained" color="error" onClick={onConfirm}>
+				<Button variant="contained" color="error" onClick={onConfirm} data-testid="chat-message-delete-confirm-button">
 					Yes
 				</Button>
-				<Button variant="outlined" color="error" onClick={onCancel}>
+				<Button variant="outlined" color="error" onClick={onCancel} data-testid="chat-message-delete-cancel-button">
 					No
 				</Button>
 			</DialogActions>
@@ -76,15 +76,16 @@ function MessageContextMenu({ anchorPosition, setAnchorPosition, onEdit, onDelet
 				anchorReference="anchorPosition"
 				anchorPosition={anchorPosition ? { top: anchorPosition.y, left: anchorPosition.x } : undefined}
 				open={open}
-				onClose={handleClose}>
-				<MenuItem disabled={!allowEdit} onClick={handleEdit}>
+				onClose={handleClose}
+				data-testid="chat-message-context-menu">
+				<MenuItem disabled={!allowEdit} onClick={handleEdit} data-testid="chat-message-context-edit">
 					<ListItemIcon>
 						<Edit fontSize="small" />
 					</ListItemIcon>
 					<ListItemText>Edit</ListItemText>
 				</MenuItem>
 
-				<MenuItem disabled={!allowEdit} onClick={handleDeleteClick}>
+				<MenuItem disabled={!allowEdit} onClick={handleDeleteClick} data-testid="chat-message-context-delete">
 					<ListItemIcon>
 						<Delete fontSize="small" />
 					</ListItemIcon>

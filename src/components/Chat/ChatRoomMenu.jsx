@@ -87,7 +87,7 @@ export default function ChatRoomMenu({ anchorEl, setAnchorEl, channels, setMessa
 
 	return (
 		<>
-			<StyledMenu id="chat-room-menu" anchorEl={anchorEl} open={open} onClose={handleClose}>
+			<StyledMenu id="chat-room-menu" anchorEl={anchorEl} open={open} onClose={handleClose} data-testid="chat-room-menu">
 				{Object.keys(channels).map((channel) => {
 					const channelData = channels[channel];
 					const isActive = socketState.currentRoom === channel;
@@ -100,6 +100,9 @@ export default function ChatRoomMenu({ anchorEl, setAnchorEl, channels, setMessa
 							key={channel}
 							onClick={() => handleChannelSelect(channel)}
 							disableRipple
+							data-testid="chat-room-menu-item"
+							data-channel-id={channel}
+							aria-label={`Select channel ${channelData.name}`}
 							sx={{
 								display: "flex",
 								alignItems: "center",
@@ -117,6 +120,7 @@ export default function ChatRoomMenu({ anchorEl, setAnchorEl, channels, setMessa
 								variant={channelData.hasUnread ? "dot" : "standard"}>
 								<Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
 									<Chip
+										data-testid="chat-room-menu-item-name"
 										label={channelData.name}
 										color={isActive ? "primary" : "default"}
 										sx={{
@@ -131,6 +135,7 @@ export default function ChatRoomMenu({ anchorEl, setAnchorEl, channels, setMessa
 
 									{isNsfw && (
 										<Chip
+											data-testid="chat-room-menu-item-nsfw"
 											label="NSFW"
 											color="error"
 											size="small"
@@ -147,6 +152,7 @@ export default function ChatRoomMenu({ anchorEl, setAnchorEl, channels, setMessa
 							<IconButton
 								size="small"
 								aria-label={`Info for ${channelData.name}`}
+								data-testid="chat-room-menu-info-button"
 								onClick={(event) => handleInfoOpen(event, channel)}
 								sx={{
 									ml: "auto",
@@ -163,7 +169,7 @@ export default function ChatRoomMenu({ anchorEl, setAnchorEl, channels, setMessa
 				})}
 			</StyledMenu>
 
-			<Dialog open={Boolean(infoChannel)} onClose={handleInfoClose} fullWidth maxWidth="xs">
+			<Dialog open={Boolean(infoChannel)} onClose={handleInfoClose} fullWidth maxWidth="xs" data-testid="chat-room-info-dialog">
 				<DialogTitle>
 					<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
 						{infoChannel?.name}
@@ -193,7 +199,9 @@ export default function ChatRoomMenu({ anchorEl, setAnchorEl, channels, setMessa
 				</DialogContent>
 
 				<DialogActions>
-					<Button onClick={handleInfoClose}>Close</Button>
+					<Button onClick={handleInfoClose} data-testid="chat-room-info-close-button">
+						Close
+					</Button>
 				</DialogActions>
 			</Dialog>
 		</>

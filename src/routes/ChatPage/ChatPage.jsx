@@ -68,6 +68,7 @@ function ChatPage() {
 
 	return (
 		<Box
+			data-testid="chat-page"
 			sx={{
 				display: "flex",
 				flexGrow: 1,
@@ -77,6 +78,7 @@ function ChatPage() {
 			}}>
 			{/* user preview popover */}
 			<Popover
+				data-testid="chat-user-preview-popover"
 				anchorOrigin={{ vertical: "top", horizontal: "right" }}
 				transformOrigin={{ vertical: "bottom", horizontal: "left" }}
 				anchorEl={userPreviewEl}
@@ -102,6 +104,7 @@ function ChatPage() {
 
 			{/* shell */}
 			<Paper
+				data-testid="chat-shell"
 				sx={{
 					position: "relative",
 					display: "flex",
@@ -116,19 +119,34 @@ function ChatPage() {
 				elevation={0}>
 				{/* header */}
 				<Box
+					data-testid="chat-header"
 					sx={{
 						display: "flex",
 						alignItems: "center",
 						p: 1,
 						height: `calc(56px * ${theme.spacing(2)})`,
 					}}>
-					<Button variant="outlined" color="secondary" startIcon={<MenuRounded />} onClick={clickRoomSelect} sx={{ textTransform: "initial" }}>
+					<Button
+						variant="outlined"
+						color="secondary"
+						startIcon={<MenuRounded />}
+						onClick={clickRoomSelect}
+						sx={{ textTransform: "initial" }}
+						data-testid="chat-room-menu-button"
+						aria-label={`Open room menu for ${channels[currentRoom]?.name || "No Room"}`}>
 						<Typography variant="h6" align="center">
 							{channels[currentRoom]?.name || "No Room"}
 						</Typography>
 					</Button>
 					<Box flexGrow={1} />
-					<Button variant="outlined" color="secondary" endIcon={<PeopleRounded />} onClick={clickUserList} sx={{ textTransform: "initial" }}>
+					<Button
+						variant="outlined"
+						color="secondary"
+						endIcon={<PeopleRounded />}
+						onClick={clickUserList}
+						sx={{ textTransform: "initial" }}
+						data-testid="chat-user-list-button"
+						aria-label={`Open user list with ${users.length} users`}>
 						<Typography variant="h6" align="center">
 							{users.length}
 						</Typography>
@@ -138,7 +156,7 @@ function ChatPage() {
 				<Divider />
 
 				{/* messages */}
-				<Box sx={{ flexGrow: 1, position: "relative", width: "100%" }}>
+				<Box sx={{ flexGrow: 1, position: "relative", width: "100%" }} data-testid="chat-area-panel">
 					<ChatArea
 						messages={messages}
 						previewUser={previewUser}

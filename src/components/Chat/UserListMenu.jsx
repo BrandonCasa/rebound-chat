@@ -51,9 +51,14 @@ export default function UserListMenu({ anchorEl, setAnchorEl, users }) {
 	};
 
 	return (
-		<StyledMenu id="user-list-menu" anchorEl={anchorEl} open={open} onClose={handleClose}>
+		<StyledMenu id="user-list-menu" anchorEl={anchorEl} open={open} onClose={handleClose} data-testid="chat-user-list-menu">
 			{Object.keys(users).map((user, index) => (
-				<MenuItem key={index} disableRipple selected={users[user].id === authState.userId}>
+				<MenuItem
+					key={index}
+					disableRipple
+					selected={users[user].id === authState.userId}
+					data-testid="chat-user-list-menu-item"
+					data-user-id={users[user].id || users[user]._id || ""}>
 					<PersonRounded />
 					{users[user].displayName}
 				</MenuItem>

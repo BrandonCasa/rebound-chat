@@ -9,6 +9,7 @@ function MessageAttachments({ attachments = [] }) {
 
 	return (
 		<Box
+			data-testid="chat-message-attachments"
 			sx={{
 				display: "grid",
 				gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
@@ -25,6 +26,9 @@ function MessageAttachments({ attachments = [] }) {
 						href={attachment.url}
 						target="_blank"
 						rel="noreferrer"
+						data-testid="chat-message-attachment"
+						data-attachment-id={attachment._id || ""}
+						aria-label={`Open attachment ${attachment.originalName || "Attachment"}`}
 						sx={{
 							padding: 1,
 							margin: 0,
@@ -39,6 +43,7 @@ function MessageAttachments({ attachments = [] }) {
 							component="img"
 							src={attachment.url}
 							alt={attachment.originalName || "Attachment"}
+							data-testid="chat-message-attachment-image"
 							loading="lazy"
 							decoding="async"
 							style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
