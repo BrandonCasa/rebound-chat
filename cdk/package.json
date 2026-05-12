@@ -6,6 +6,10 @@
 	"scripts": {
 		"build": "tsc -p tsconfig.json",
 		"cdk": "cdk",
+		"bootstrap:dev": "cdk bootstrap --context appEnv=dev",
+		"bootstrap:prod": "cdk bootstrap --context appEnv=prod",
+		"deploy:dev": "cdk deploy --context appEnv=dev",
+		"deploy:prod": "cdk deploy --context appEnv=prod",
 		"synth:dev": "cdk synth --context appEnv=dev",
 		"synth:prod": "cdk synth --context appEnv=prod",
 		"test": "vitest run"
