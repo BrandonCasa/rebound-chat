@@ -1,4 +1,4 @@
-import { Stack } from "aws-cdk-lib";
+import { CfnOutput, Stack } from "aws-cdk-lib";
 import { aws_apigatewayv2 as apigwv2, aws_logs as logs } from "aws-cdk-lib";
 import type { Construct } from "constructs";
 
@@ -68,6 +68,26 @@ export class ApiStack extends Stack {
 					status: "$context.status",
 				}),
 			},
+		});
+
+		new CfnOutput(this, "HttpApiId", {
+			value: this.httpApi.ref,
+			description: "API Gateway HTTP API ID",
+		});
+
+		new CfnOutput(this, "HttpApiEndpoint", {
+			value: this.httpApi.attrApiEndpoint,
+			description: "API Gateway HTTP API endpoint",
+		});
+
+		new CfnOutput(this, "WebSocketApiId", {
+			value: this.websocketApi.ref,
+			description: "API Gateway WebSocket API ID",
+		});
+
+		new CfnOutput(this, "WebSocketApiEndpoint", {
+			value: this.websocketApi.attrApiEndpoint,
+			description: "API Gateway WebSocket API endpoint",
 		});
 	}
 }

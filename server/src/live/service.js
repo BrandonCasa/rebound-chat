@@ -235,7 +235,76 @@ class LiveService {
 		return `${session.storagePrefix}/segments/${filename}`;
 	}
 
+	buildUrl(origin, path) {
+		return origin ? `${origin}${path}` : path;
+	}
+
+	resolveSessionTransportMode(session) {
+		const mode = String(session.transportMode || this.config.transportDefault || "hls").toLowerCase();
+		return ["hls", "webrtc", "hybrid"].includes(mode) ? mode : "hls";
+	}
+
+	createTransportEnvelope(session, ingestSecret, origin = "") {
+		const mode = this.resolveSessionTransportMode(session);
+		const playbackUrl = this.buildUrl(origin, session.playbackPath);
+		const shareUrl = this.buildUrl(origin, session.sharePath);
+		const ingestBaseUrl = this.buildUrl(origin, `/live/api/${session.sessionId}`);
+		const webrtcReason = mode === "hls" ? "hls_default" : "livekit_token_layer_not_enabled";
+
+		return {
+			transport: {
+				mode,
+				default: this.config.transportDefault || "hls",
+				hls: {
+					available: true,
+				},
+				webrtc: {
+					available: false,
+					reason: webrtcReason,
+				},
+			},
+			control: {
+				heartbeatIntervalMs: this.config.heartbeatIntervalMs,
+				endpoints: {
+					heartbeatUrl: `${ingestBaseUrl}/heartbeat`,
+					endUrl: `${ingestBaseUrl}/end`,
+				},
+			},
+			ingest: {
+				hls: {
+					available: true,
+					protocol: "hls",
+					sessionId: session.sessionId,
+					ingestSecret,
+					uploadBaseUrl: ingestBaseUrl,
+					masterPlaylistUrl: `${ingestBaseUrl}/master.m3u8`,
+					mediaPlaylistUrl: `${ingestBaseUrl}/video.m3u8`,
+					segmentBaseUrl: `${ingestBaseUrl}/segments`,
+				},
+				webrtc: {
+					available: false,
+					reason: webrtcReason,
+				},
+			},
+			playback: {
+				hls: {
+					available: true,
+					protocol: "hls",
+					url: playbackUrl,
+					path: session.playbackPath,
+				},
+				webrtc: {
+					available: false,
+					reason: webrtcReason,
+				},
+			},
+			shareUrl,
+		};
+	}
+
 	createSessionResponse(session, ingestSecret, origin = "") {
+		const envelope = this.createTransportEnvelope(session, ingestSecret, origin);
+
 		return {
 			sessionId: session.sessionId,
 			publicToken: session.publicToken,
@@ -243,8 +312,12 @@ class LiveService {
 			status: session.status,
 			heartbeatIntervalMs: this.config.heartbeatIntervalMs,
 			expiresAt: session.expiresAt,
-			playbackUrl: origin ? `${origin}${session.playbackPath}` : session.playbackPath,
-			shareUrl: origin ? `${origin}${session.sharePath}` : session.sharePath,
+			playbackUrl: envelope.playback.hls.url,
+			shareUrl: envelope.shareUrl,
+			transport: envelope.transport,
+			control: envelope.control,
+			ingest: envelope.ingest,
+			playback: envelope.playback,
 		};
 	}
 
@@ -317,8 +390,11 @@ class LiveService {
 			lastHeartbeatAt: session.lastHeartbeatAt,
 			expiresAt: session.expiresAt,
 			endedAt: session.endedAt,
-			playbackUrl: origin ? `${origin}${session.playbackPath}` : session.playbackPath,
-			shareUrl: origin ? `${origin}${session.sharePath}` : session.sharePath,
+			playbackUrl: this.buildUrl(origin, session.playbackPath),
+			shareUrl: this.buildUrl(origin, session.sharePath),
+			transport: {
+				mode: this.resolveSessionTransportMode(session),
+			},
 			recentSegmentCount: session.recentSegmentNames.length,
 			hasMasterPlaylist,
 			hasMediaPlaylist,
@@ -423,6 +499,7 @@ class LiveService {
 			expiresAt,
 			cleanupAfterAt,
 			status: "active",
+			transportMode: this.config.transportDefault || "hls",
 			playbackPath: `/live/watch/${publicToken}/master.m3u8`,
 			sharePath: `/live/share/${publicToken}`,
 			storageBackend: this.config.storageBackend,

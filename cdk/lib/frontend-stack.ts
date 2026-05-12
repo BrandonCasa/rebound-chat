@@ -1,4 +1,4 @@
-import { Duration, Stack } from "aws-cdk-lib";
+import { CfnOutput, Duration, Stack } from "aws-cdk-lib";
 import { aws_cloudfront as cloudfront, aws_cloudfront_origins as origins, aws_s3 as s3 } from "aws-cdk-lib";
 import type { Construct } from "constructs";
 
@@ -45,6 +45,16 @@ export class FrontendStack extends Stack {
 					ttl: Duration.minutes(5),
 				},
 			],
+		});
+
+		new CfnOutput(this, "FrontendBucketName", {
+			value: this.assetBucket.bucketName,
+			description: "S3 bucket backing the CloudFront-hosted frontend",
+		});
+
+		new CfnOutput(this, "CloudFrontDistributionId", {
+			value: this.distribution.distributionId,
+			description: "CloudFront distribution ID for the frontend",
 		});
 	}
 }

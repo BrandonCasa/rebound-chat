@@ -1,5 +1,8 @@
 version: 0.2
 
+env:
+  shell: bash
+
 phases:
   install:
     runtime-versions:
@@ -7,6 +10,20 @@ phases:
     commands:
       - corepack enable
       - pnpm install --frozen-lockfile
+  pre_build:
+    commands:
+      - IMAGE_TAG="${CODEBUILD_RESOLVED_SOURCE_VERSION:-local}"
+      - IMAGE_TAG="${IMAGE_TAG:0:12}"
+      - echo "Building worker image ${IMAGE_REPOSITORY_URI}:${IMAGE_TAG}"
   build:
     commands:
-      - echo "TODO: build and push the worker image to ECR."
+      - docker build -f infra/docker/worker.Dockerfile -t "${IMAGE_REPOSITORY_URI}:${IMAGE_TAG}" .
+  post_build:
+    commands:
+      - |
+        if [ "${DRY_RUN:-true}" = "true" ]; then
+          echo "DRY_RUN=true; skipping ECR login and worker image push."
+        else
+          aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          docker push "${IMAGE_REPOSITORY_URI}:${IMAGE_TAG}"
+        fi

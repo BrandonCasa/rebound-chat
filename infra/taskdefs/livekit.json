@@ -1,0 +1,32 @@
+{
+  "family": "rebound-livekit",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "<TASK_EXECUTION_ROLE_ARN>",
+  "taskRoleArn": "<LIVEKIT_TASK_ROLE_ARN>",
+  "containerDefinitions": [
+    {
+      "name": "livekit",
+      "image": "<LIVEKIT_IMAGE_URI>",
+      "essential": true,
+      "portMappings": [
+        { "containerPort": 7880, "protocol": "tcp" },
+        { "containerPort": 7881, "protocol": "tcp" },
+        { "containerPort": 7882, "protocol": "udp" }
+      ],
+      "environment": [
+        { "name": "LIVEKIT_CONFIG", "value": "/etc/livekit/livekit.yaml" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "<LIVEKIT_LOG_GROUP>",
+          "awslogs-region": "<AWS_REGION>",
+          "awslogs-stream-prefix": "livekit"
+        }
+      }
+    }
+  ]
+}

@@ -29,13 +29,6 @@ export const createReboundStacks = (app: App, config: ReboundEnvironmentConfig) 
 		appSecurityGroup: network.appSecurityGroup,
 	});
 
-	const compute = new ComputeStack(app, `${prefix}-Compute`, {
-		env,
-		config,
-		vpc: network.vpc,
-		appSecurityGroup: network.appSecurityGroup,
-	});
-
 	const api = new ApiStack(app, `${prefix}-Api`, {
 		env,
 		config,
@@ -44,6 +37,18 @@ export const createReboundStacks = (app: App, config: ReboundEnvironmentConfig) 
 	const frontend = new FrontendStack(app, `${prefix}-Frontend`, {
 		env,
 		config,
+	});
+
+	const compute = new ComputeStack(app, `${prefix}-Compute`, {
+		env,
+		config,
+		vpc: network.vpc,
+		appSecurityGroup: network.appSecurityGroup,
+		database: data.database,
+		mediaBucket: data.mediaBucket,
+		liveBucket: data.liveBucket,
+		websocketConnectionTable: data.websocketConnectionTable,
+		websocketApi: api.websocketApi,
 	});
 
 	const pipeline = new PipelineStack(app, `${prefix}-Pipeline`, {

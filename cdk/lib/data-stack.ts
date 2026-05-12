@@ -1,4 +1,4 @@
-import { Duration, Stack } from "aws-cdk-lib";
+import { CfnOutput, Duration, Stack } from "aws-cdk-lib";
 import { aws_dynamodb as dynamodb, aws_ec2 as ec2, aws_elasticache as elasticache, aws_rds as rds, aws_s3 as s3 } from "aws-cdk-lib";
 import type { Construct } from "constructs";
 
@@ -84,6 +84,36 @@ export class DataStack extends Stack {
 			numCacheNodes: 1,
 			cacheSubnetGroupName: redisSubnetGroup.ref,
 			vpcSecurityGroupIds: [this.redisSecurityGroup.securityGroupId],
+		});
+
+		new CfnOutput(this, "MediaBucketName", {
+			value: this.mediaBucket.bucketName,
+			description: "S3 bucket for media metadata and media objects",
+		});
+
+		new CfnOutput(this, "LiveBucketName", {
+			value: this.liveBucket.bucketName,
+			description: "S3 bucket for live HLS/WebRTC session artifacts",
+		});
+
+		new CfnOutput(this, "FrontendDeployBucketName", {
+			value: this.frontendBucket.bucketName,
+			description: "S3 bucket reserved for frontend deployment handoff artifacts",
+		});
+
+		new CfnOutput(this, "WebSocketConnectionTableName", {
+			value: this.websocketConnectionTable.tableName,
+			description: "DynamoDB table for API Gateway WebSocket connection records",
+		});
+
+		new CfnOutput(this, "AuroraClusterEndpoint", {
+			value: this.database.clusterEndpoint.hostname,
+			description: "Aurora PostgreSQL cluster writer endpoint",
+		});
+
+		new CfnOutput(this, "AuroraSecretArn", {
+			value: this.database.secret!.secretArn,
+			description: "Secrets Manager ARN for Aurora PostgreSQL credentials",
 		});
 	}
 

@@ -1,4 +1,4 @@
-import { Stack } from "aws-cdk-lib";
+import { CfnOutput, Fn, Stack } from "aws-cdk-lib";
 import { aws_ec2 as ec2 } from "aws-cdk-lib";
 import type { Construct } from "constructs";
 
@@ -52,5 +52,18 @@ export class NetworkStack extends Stack {
 		this.liveKitSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(7881), "LiveKit TCP fallback");
 		this.liveKitSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.udp(7882), "LiveKit UDP media");
 		this.liveKitSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.udpRange(50000, 50100), "LiveKit UDP media range");
+
+		new CfnOutput(this, "VpcId", {
+			value: this.vpc.vpcId,
+			description: "VPC ID for Rebound application resources",
+		});
+
+		new CfnOutput(this, "PrivateSubnetIds", {
+			value: Fn.join(
+				",",
+				this.vpc.privateSubnets.map((subnet) => subnet.subnetId)
+			),
+			description: "Private subnet IDs for ECS and data-plane resources",
+		});
 	}
 }

@@ -1,0 +1,29 @@
+{
+  "family": "rebound-realtime",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "<TASK_EXECUTION_ROLE_ARN>",
+  "taskRoleArn": "<REALTIME_TASK_ROLE_ARN>",
+  "containerDefinitions": [
+    {
+      "name": "realtime",
+      "image": "<REALTIME_IMAGE_URI>",
+      "essential": true,
+      "environment": [
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "SERVER_ROLE", "value": "realtime" },
+        { "name": "LIVE_TRANSPORT_DEFAULT", "value": "hls" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "<REALTIME_LOG_GROUP>",
+          "awslogs-region": "<AWS_REGION>",
+          "awslogs-stream-prefix": "realtime"
+        }
+      }
+    }
+  ]
+}

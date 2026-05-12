@@ -1,5 +1,15 @@
-import { Duration, Stack } from "aws-cdk-lib";
-import { aws_ec2 as ec2, aws_ecr as ecr, aws_ecs as ecs, aws_logs as logs } from "aws-cdk-lib";
+import { CfnOutput, Duration, Stack } from "aws-cdk-lib";
+import {
+	aws_apigatewayv2 as apigwv2,
+	aws_dynamodb as dynamodb,
+	aws_ec2 as ec2,
+	aws_ecr as ecr,
+	aws_ecs as ecs,
+	aws_iam as iam,
+	aws_logs as logs,
+	aws_rds as rds,
+	aws_s3 as s3,
+} from "aws-cdk-lib";
 import type { Construct } from "constructs";
 
 import type { ReboundStackProps } from "./stack-props";
@@ -7,6 +17,11 @@ import type { ReboundStackProps } from "./stack-props";
 interface ComputeStackProps extends ReboundStackProps {
 	vpc: ec2.IVpc;
 	appSecurityGroup: ec2.ISecurityGroup;
+	database: rds.DatabaseCluster;
+	mediaBucket: s3.IBucket;
+	liveBucket: s3.IBucket;
+	websocketConnectionTable: dynamodb.ITable;
+	websocketApi: apigwv2.CfnApi;
 }
 
 type RepositoryName = "api" | "realtime" | "worker" | "livekit" | "webBuild";
@@ -33,30 +48,49 @@ export class ComputeStack extends Stack {
 			webBuild: this.createRepository("WebBuildRepository", "web-build", config),
 		};
 
-		this.createIdleService("Api", {
+		const apiService = this.createIdleService("Api", {
 			config,
 			vpc,
 			appSecurityGroup,
 			image: ecs.ContainerImage.fromRegistry("public.ecr.aws/docker/library/node:22-alpine"),
-			command: ["node", "-e", "setInterval(() => {}, 60000)"],
+			command: [
+				"node",
+				"-e",
+				"require('http').createServer((req,res)=>{res.writeHead(req.url==='/healthz'?200:404,{'content-type':'application/json'});res.end(JSON.stringify({status:req.url==='/healthz'?'ok':'not_found',service:'api'}));}).listen(process.env.PORT||6001,'0.0.0.0')",
+			],
+			environment: {
+				SERVER_ROLE: "api",
+				PORT: "6001",
+			},
 			portMappings: [{ containerPort: 6001 }],
 		});
 
-		this.createIdleService("Realtime", {
+		const realtimeService = this.createIdleService("Realtime", {
 			config,
 			vpc,
 			appSecurityGroup,
 			image: ecs.ContainerImage.fromRegistry("public.ecr.aws/docker/library/node:22-alpine"),
-			command: ["node", "-e", "setInterval(() => {}, 60000)"],
+			command: [
+				"node",
+				"-e",
+				"require('http').createServer((req,res)=>{res.writeHead(req.url==='/healthz'?200:404,{'content-type':'application/json'});res.end(JSON.stringify({status:req.url==='/healthz'?'ok':'not_found',service:'realtime'}));}).listen(process.env.PORT||6002,'0.0.0.0')",
+			],
+			environment: {
+				SERVER_ROLE: "realtime",
+				PORT: "6002",
+			},
 			portMappings: [{ containerPort: 6002 }],
 		});
 
-		this.createIdleService("Worker", {
+		const workerService = this.createIdleService("Worker", {
 			config,
 			vpc,
 			appSecurityGroup,
 			image: ecs.ContainerImage.fromRegistry("public.ecr.aws/docker/library/node:22-alpine"),
-			command: ["node", "-e", "setInterval(() => {}, 60000)"],
+			command: ["node", "-e", "setInterval(() => console.log(JSON.stringify({status:'ok',service:'worker'})), 30000)"],
+			environment: {
+				SERVER_ROLE: "worker",
+			},
 			portMappings: [],
 		});
 
@@ -65,13 +99,51 @@ export class ComputeStack extends Stack {
 			vpc,
 			appSecurityGroup,
 			image: ecs.ContainerImage.fromRegistry(config.liveKitImage),
-			command: ["--config", "/etc/livekit.yaml"],
+			command: ["--dev", "--bind", "0.0.0.0"],
+			environment: {
+				LIVEKIT_KEYS: "devkey: devsecret",
+			},
 			portMappings: [
 				{ containerPort: 7880, protocol: ecs.Protocol.TCP },
 				{ containerPort: 7881, protocol: ecs.Protocol.TCP },
 				{ containerPort: 7882, protocol: ecs.Protocol.UDP },
 			],
 		});
+
+		props.database.secret!.grantRead(apiService.taskDefinition.taskRole);
+		props.mediaBucket.grantReadWrite(apiService.taskDefinition.taskRole);
+		props.liveBucket.grantRead(apiService.taskDefinition.taskRole);
+
+		props.database.secret!.grantRead(workerService.taskDefinition.taskRole);
+		props.mediaBucket.grantReadWrite(workerService.taskDefinition.taskRole);
+		props.liveBucket.grantReadWrite(workerService.taskDefinition.taskRole);
+		props.websocketConnectionTable.grantReadWriteData(workerService.taskDefinition.taskRole);
+
+		props.websocketConnectionTable.grantReadWriteData(realtimeService.taskDefinition.taskRole);
+		realtimeService.taskDefinition.taskRole.addToPrincipalPolicy(
+			new iam.PolicyStatement({
+				actions: ["execute-api:ManageConnections"],
+				resources: [
+					Stack.of(this).formatArn({
+						service: "execute-api",
+						resource: props.websocketApi.ref,
+						resourceName: `${config.appEnv}/POST/@connections/*`,
+					}),
+				],
+			})
+		);
+
+		new CfnOutput(this, "EcsClusterName", {
+			value: this.cluster.clusterName,
+			description: "ECS cluster name for Rebound runtime services",
+		});
+
+		for (const [name, repository] of Object.entries(this.repositories)) {
+			new CfnOutput(this, `${name}RepositoryUri`, {
+				value: repository.repositoryUri,
+				description: `ECR repository URI for ${name} images`,
+			});
+		}
 	}
 
 	private createRepository(id: string, suffix: string, config: ReboundStackProps["config"]) {
@@ -98,6 +170,7 @@ export class ComputeStack extends Stack {
 			appSecurityGroup: ec2.ISecurityGroup;
 			image: ecs.ContainerImage;
 			command: string[];
+			environment: Record<string, string>;
 			portMappings: ecs.PortMapping[];
 		}
 	) {
@@ -114,6 +187,12 @@ export class ComputeStack extends Stack {
 		task.addContainer(`${idPrefix}Container`, {
 			image: props.image,
 			command: props.command,
+			environment: {
+				APP_ENV: props.config.appEnv,
+				AWS_REGION: Stack.of(this).region,
+				LIVE_TRANSPORT_DEFAULT: "hls",
+				...props.environment,
+			},
 			logging: ecs.LogDriver.awsLogs({
 				streamPrefix: idPrefix.toLowerCase(),
 				logGroup,
