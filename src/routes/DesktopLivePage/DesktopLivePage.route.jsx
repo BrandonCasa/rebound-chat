@@ -32,11 +32,12 @@ import {
 	Typography,
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 import { getLiveBase } from "../../helpers/live";
 import LiveStatusPanel from "../../features/streaming/ui/panels/LiveStatusPanel";
+import { useStreamSettings } from "../../features/streaming/ui/hooks/useStreamSettings";
 import { setDialogOpened } from "../../slices/dialogSlice";
 import { scrollbarStyles } from "../scrollbarStyles";
 
@@ -339,7 +340,6 @@ const SourceTile = ({ source, thumbnail, selected, onSelect }) => {
 function DesktopLivePage() {
 	const dispatch = useDispatch();
 	const auth = useSelector((state) => state.auth);
-	const [settings, setSettings] = useState(defaultSettings);
 	const [sources, setSources] = useState([]);
 	const [selectedSourceId, setSelectedSourceId] = useState("");
 	const [loadingSources, setLoadingSources] = useState(false);
@@ -357,10 +357,9 @@ function DesktopLivePage() {
 	const [autoAdaptEnabled, setAutoAdaptEnabled] = useState(true);
 	const [resolutionAdaptEnabled, setResolutionAdaptEnabled] = useState(false);
 	const [controlConnected, setControlConnected] = useState(false);
-	const saveSettingsTimeoutRef = useRef(null);
-	const hydratedSettingsRef = useRef(false);
 	const electronLive = window.electronAPI?.liveStream;
 	const electronSources = window.electronAPI?.sources;
+	const { settings, setSettings, resetSettings } = useStreamSettings({ electronLive, initialSettings: defaultSettings });
 	const isElectron = Boolean(electronLive && electronSources);
 	const videoCodecOptions = capabilities?.videoCodecs?.length ? capabilities.videoCodecs : FALLBACK_VIDEO_CODEC_OPTIONS;
 	const audioCodecOptions = capabilities?.audioCodecs?.length ? capabilities.audioCodecs : FALLBACK_AUDIO_CODEC_OPTIONS;
@@ -472,32 +471,6 @@ function DesktopLivePage() {
 	}, [electronLive]);
 
 	useEffect(() => {
-		if (!electronLive?.loadSettings) return undefined;
-		let cancelled = false;
-		electronLive
-			.loadSettings()
-			.then((saved) => {
-				if (!cancelled && saved && typeof saved === "object") {
-					setSettings((current) => {
-						// Skip empty-string entries so a stale stream-settings.json
-						// (e.g. one persisted before the websiteBaseUrl default was
-						// resolvable in the main process) cannot clobber the
-						// renderer's defaults derived from `getLiveBase()`.
-						const overrides = Object.fromEntries(Object.entries(saved).filter(([_key, value]) => value !== ""));
-						return { ...current, ...overrides };
-					});
-					hydratedSettingsRef.current = true;
-				}
-			})
-			.catch(() => {
-				hydratedSettingsRef.current = true;
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [electronLive]);
-
-	useEffect(() => {
 		if (!electronLive?.getDetectedCapabilities) return undefined;
 		let cancelled = false;
 		electronLive
@@ -510,22 +483,6 @@ function DesktopLivePage() {
 			cancelled = true;
 		};
 	}, [electronLive]);
-
-	useEffect(() => {
-		if (!electronLive?.saveSettings) return undefined;
-		if (!hydratedSettingsRef.current) return undefined;
-		if (saveSettingsTimeoutRef.current) {
-			clearTimeout(saveSettingsTimeoutRef.current);
-		}
-		saveSettingsTimeoutRef.current = setTimeout(() => {
-			electronLive.saveSettings(settings).catch(() => {});
-		}, 1000);
-		return () => {
-			if (saveSettingsTimeoutRef.current) {
-				clearTimeout(saveSettingsTimeoutRef.current);
-			}
-		};
-	}, [electronLive, settings]);
 
 	// Snap settings into bounds whenever the host's capability catalog changes.
 	useEffect(() => {
@@ -616,10 +573,8 @@ function DesktopLivePage() {
 	);
 
 	const handleResetSettings = async () => {
-		if (!electronLive?.resetSettings) return;
 		try {
-			const next = await electronLive.resetSettings();
-			setSettings((current) => ({ ...current, ...next }));
+			await resetSettings();
 		} catch (_err) {
 			// Keep current settings if reset fails.
 		}
