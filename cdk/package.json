@@ -1,0 +1,24 @@
+{
+	"name": "rebound-cdk",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"cdk": "cdk",
+		"synth:dev": "cdk synth --context appEnv=dev",
+		"synth:prod": "cdk synth --context appEnv=prod",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"aws-cdk-lib": "^2.200.0",
+		"constructs": "^10.4.2"
+	},
+	"devDependencies": {
+		"@types/node": "^25.7.0",
+		"aws-cdk": "^2.200.0",
+		"tsx": "^4.20.5",
+		"typescript": "^5.8.3",
+		"vitest": "^3.2.4"
+	}
+}

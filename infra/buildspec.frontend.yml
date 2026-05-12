@@ -1,0 +1,13 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 22
+    commands:
+      - corepack enable
+      - pnpm install --frozen-lockfile
+  build:
+    commands:
+      - pnpm run build
+      - echo "TODO: sync Vite assets to the frontend S3 bucket and invalidate CloudFront."

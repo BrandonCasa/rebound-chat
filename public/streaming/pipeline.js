@@ -15,6 +15,12 @@ import { selectVideoFilter } from "./filters/videoFilter.js";
 import { selectInputBackend, usesGfxCapture } from "./capture/index.js";
 import { buildHwDeviceArgs } from "./hwcontexts.js";
 import * as hls from "./output/hls.js";
+import * as whip from "./output/whip.js";
+
+const outputBuilders = {
+	hls,
+	whip,
+};
 
 /**
  * @param {NodeJS.Platform} [platform]
@@ -90,8 +96,21 @@ const buildAudioCodecArgs = (config) => {
 	const args = ["-c:a", config.audioCodec, "-b:a", config.audioBitrate];
 	if (config.audioCodec === "aac") {
 		args.push("-ac", "2", "-ar", "48000");
+	} else if (config.audioCodec === "opus" || config.audioCodec === "libopus") {
+		args.push("-ac", "2", "-ar", "48000");
 	}
 	return args;
+};
+
+const buildOutputArgs = (config, options) => {
+	const output = options.output || { type: "hls", options: options.respawn || {} };
+	const type = output.type || "hls";
+	const builder = outputBuilders[type];
+	if (!builder) {
+		throw new TypeError(`Unsupported streaming output type: ${type}`);
+	}
+	const outputOptions = type === "hls" ? output.options || options.respawn || {} : output.options || {};
+	return builder.buildArgs(config, outputOptions);
 };
 
 /**
@@ -105,7 +124,10 @@ const buildAudioCodecArgs = (config) => {
  *
  * @param {StreamConfig} config
  * @param {Capabilities} [capabilities]
- * @param {{ respawn?: { discontStart?: boolean, startNumber?: number } }} [options]
+ * @param {{
+ *   respawn?: { discontStart?: boolean, startNumber?: number },
+ *   output?: { type?: "hls"|"whip", options?: Record<string, unknown> }
+ * }} [options]
  * @returns {{ command: string, args: string[] }}
  */
 const buildArgs = (config, capabilities = defaultCapabilities(), options = {}) => {
@@ -150,7 +172,7 @@ const buildArgs = (config, capabilities = defaultCapabilities(), options = {}) =
 
 	argv.push(...buildCfrOutputArgs(config));
 
-	argv.push(...hls.buildArgs(config, options.respawn || {}));
+	argv.push(...buildOutputArgs(config, options));
 
 	return {
 		command: config.ffmpegPath,

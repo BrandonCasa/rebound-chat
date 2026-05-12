@@ -1,0 +1,12 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 22
+    commands:
+      - corepack enable
+      - pnpm install --frozen-lockfile
+  build:
+    commands:
+      - echo "TODO: build and push the worker image to ECR."

@@ -1,0 +1,6 @@
+version: 0.2
+
+phases:
+  build:
+    commands:
+      - echo "TODO: validate LiveKit config and publish the LiveKit task artifact."

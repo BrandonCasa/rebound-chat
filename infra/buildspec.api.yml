@@ -1,0 +1,15 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 22
+    commands:
+      - corepack enable
+      - pnpm install --frozen-lockfile
+  pre_build:
+    commands:
+      - pnpm --prefix server test
+  build:
+    commands:
+      - echo "TODO: build and push the API image to ECR."

@@ -68,6 +68,12 @@
  *   2-second window used for VOD.
  * @property {string} hlsTime
  * @property {number} hlsListSize
+ * @property {string=} whipEndpoint
+ * @property {string=} whipAuthorization
+ * @property {string=} whipToken
+ * @property {number=} whipHandshakeTimeoutMs
+ * @property {number=} whipPacketSize
+ * @property {string[]=} whipFlags
  * @property {"off" | "convert" | "passthrough"} hdrMode
  *   - "off"         — SDR source. `gfxcapture` emits an 8-bit BGRA D3D11
  *                     hwframe; NVENC consumes it directly.

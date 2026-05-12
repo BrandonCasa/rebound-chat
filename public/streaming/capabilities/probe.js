@@ -35,6 +35,17 @@ const parseEncoderOrFilterList = (output, heading) =>
 		.map((tokens) => tokens[1])
 		.filter(Boolean);
 
+const parseMuxers = (output) => parseEncoderOrFilterList(output, "Muxers:");
+
+const parseWhipMuxerHelp = (output) => {
+	const normalized = output.toLowerCase();
+	return {
+		available: /\bmuxer\s+whip\b/.test(normalized) || /\bwhip\s+muxer\b/.test(normalized),
+		authorizationOption: /\bauthorization\b/.test(normalized),
+		experimental: /\bexperimental\b/.test(normalized),
+	};
+};
+
 const parseEncoderAvailability = (encoders) => {
 	const set = new Set(encoders);
 	return {
@@ -57,6 +68,10 @@ const parseEncoderAvailability = (encoders) => {
 			h264: set.has("h264_videotoolbox"),
 			hevc: set.has("hevc_videotoolbox"),
 			av1: false,
+		},
+		audio: {
+			aac: set.has("aac"),
+			opus: set.has("opus") || set.has("libopus"),
 		},
 	};
 };
@@ -96,6 +111,8 @@ const createCapabilitySnapshot = ({ ffmpegPath, getDisplays = () => [] }) => {
 	const hwaccels = parseHwaccels(readCommandOutput(ffmpegPath, ["-hide_banner", "-hwaccels"]));
 	const encoders = parseEncoderOrFilterList(readCommandOutput(ffmpegPath, ["-hide_banner", "-encoders"]), "Encoders:");
 	const filters = parseEncoderOrFilterList(readCommandOutput(ffmpegPath, ["-hide_banner", "-filters"]), "Filters:");
+	const muxers = parseMuxers(readCommandOutput(ffmpegPath, ["-hide_banner", "-muxers"]));
+	const whipMuxerHelp = parseWhipMuxerHelp(readCommandOutput(ffmpegPath, ["-hide_banner", "-h", "muxer=whip"]));
 	const displays = getDisplays();
 	const gpu = detectWindowsGpu();
 	return {
@@ -107,6 +124,13 @@ const createCapabilitySnapshot = ({ ffmpegPath, getDisplays = () => [] }) => {
 		encoders: parseEncoderAvailability(encoders),
 		hwaccels,
 		filters,
+		muxers,
+		webrtc: {
+			whipMuxer: muxers.includes("whip"),
+			whipMuxerHelp: whipMuxerHelp.available,
+			whipAuthorizationOption: whipMuxerHelp.authorizationOption,
+			whipExperimental: whipMuxerHelp.experimental,
+		},
 		captureBackends: detectCaptureBackends(process.platform, filters),
 		audioDevices: [],
 		displays,
@@ -157,4 +181,4 @@ const createCapabilityStore = ({ app, ffmpegPath, getDisplays }) => {
 	};
 };
 
-export { createCapabilityStore };
+export { createCapabilityStore, parseMuxers, parseWhipMuxerHelp };

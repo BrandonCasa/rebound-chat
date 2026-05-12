@@ -1,0 +1,27 @@
+{
+	"app": "tsx bin/rebound-cdk.ts",
+	"context": {
+		"environments": {
+			"dev": {
+				"region": "us-east-2",
+				"domainName": "dev.rebound.nexus",
+				"githubOwner": "BrandonCasa",
+				"githubRepo": "rebound-electron",
+				"natGateways": 1,
+				"auroraMinAcu": 0.5,
+				"auroraMaxAcu": 2,
+				"liveKitImage": "livekit/livekit-server:v1.9"
+			},
+			"prod": {
+				"region": "us-east-1",
+				"domainName": "rebound.nexus",
+				"githubOwner": "BrandonCasa",
+				"githubRepo": "rebound-electron",
+				"natGateways": 2,
+				"auroraMinAcu": 1,
+				"auroraMaxAcu": 8,
+				"liveKitImage": "livekit/livekit-server:v1.9"
+			}
+		}
+	}
+}
