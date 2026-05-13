@@ -12,7 +12,7 @@ phases:
       - pnpm install --frozen-lockfile
   pre_build:
     commands:
-      - pnpm run build
+      - pnpm --filter rebound-web build
       - IMAGE_TAG="${CODEBUILD_RESOLVED_SOURCE_VERSION:-local}"
       - IMAGE_TAG="${IMAGE_TAG:0:12}"
       - echo "Building web-build image ${IMAGE_REPOSITORY_URI}:${IMAGE_TAG}"
@@ -27,5 +27,5 @@ phases:
         else
           aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
           docker push "${IMAGE_REPOSITORY_URI}:${IMAGE_TAG}"
-          aws s3 sync dist/ "s3://${FRONTEND_BUCKET_NAME}/" --delete
+          aws s3 sync client/frontend/build/ "s3://${FRONTEND_BUCKET_NAME}/" --delete
         fi

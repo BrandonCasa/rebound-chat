@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => ({
 	resolve: {
 		alias: {
 			slices: path.resolve(__dirname, "./src/slices"),
-			shared: path.resolve(__dirname, "./shared"),
+			shared: path.resolve(__dirname, "../../shared"),
 		},
 	},
 	plugins: [react()],

@@ -2,14 +2,15 @@ import fs from "fs";
 import path, { dirname } from "path";
 import { fileURLToPath } from "url";
 
-import packageJson from "../package.json" with { type: "json" };
+import packageJson from "../../frontend/package.json" with { type: "json" };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const buildDir = path.join(__dirname, "..", "build");
-const sharedDir = path.join(__dirname, "..", "shared");
-const appDir = path.join(__dirname, "..", "app");
+const buildDir = path.join(__dirname, "..", "..", "frontend", "build");
+const sharedDir = path.join(__dirname, "..", "..", "..", "shared");
+const electronDir = path.join(__dirname, "..");
+const appDir = path.join(__dirname, "..", "..", "frontend", "app");
 
 try {
 	// 1) ensure/clear appDir
@@ -34,21 +35,35 @@ try {
 		fs.cpSync(sharedDir, path.join(appDir, "shared"), { recursive: true });
 	}
 
+	// 2c) copy electron runtime tree → app/electron
+	if (fs.existsSync(path.join(electronDir, "main"))) {
+		fs.cpSync(path.join(electronDir, "main"), path.join(appDir, "electron", "main"), { recursive: true });
+	}
+	if (fs.existsSync(path.join(electronDir, "preload"))) {
+		fs.cpSync(path.join(electronDir, "preload"), path.join(appDir, "electron", "preload"), { recursive: true });
+	}
+	if (fs.existsSync(path.join(electronDir, "streaming"))) {
+		fs.cpSync(path.join(electronDir, "streaming"), path.join(appDir, "electron", "streaming"), { recursive: true });
+	}
+	if (fs.existsSync(path.join(electronDir, "sources"))) {
+		fs.cpSync(path.join(electronDir, "sources"), path.join(appDir, "electron", "sources"), { recursive: true });
+	}
+
 	// 3) write new package.json
 	const { version, author, dependencies } = packageJson;
 	const newPkg = {
 		name: "rebound-desktop",
 		version,
 		private: false,
-		main: "build/electron.js",
+		main: "electron/main/electron.js",
 		description: "Rebound Nexus official desktop client.",
 		author,
 		dependencies,
 	};
 	fs.writeFileSync(path.join(appDir, "package.json"), JSON.stringify(newPkg, null, 2));
 
-	const lockfile = path.join(__dirname, "..", "pnpm-lock.yaml");
-	const workspace = path.join(__dirname, "..", "pnpm-workspace.yaml");
+	const lockfile = path.join(__dirname, "..", "..", "..", "pnpm-lock.yaml");
+	const workspace = path.join(__dirname, "..", "..", "..", "pnpm-workspace.yaml");
 	if (fs.existsSync(lockfile)) fs.copyFileSync(lockfile, path.join(appDir, "pnpm-lock.yaml"));
 	if (fs.existsSync(workspace)) fs.copyFileSync(workspace, path.join(appDir, "pnpm-workspace.yaml"));
 

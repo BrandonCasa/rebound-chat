@@ -4,11 +4,12 @@ import { existsSync } from "fs";
 import { resolve } from "path";
 import { fileURLToPath } from "url";
 
-import { createCapabilityStore } from "../public/streaming/capabilities/probe.js";
+import { createCapabilityStore } from "../streaming/capabilities/probe.js";
 
-const repoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const electronRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const workspaceRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 const binName = process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
-const bundledFfmpeg = resolve(repoRoot, "native", "ffmpeg", "bin", binName);
+const bundledFfmpeg = resolve(electronRoot, "native", "ffmpeg", "bin", binName);
 const ffmpegPath = process.argv[2] || process.env.FFMPEG_PATH || (existsSync(bundledFfmpeg) ? bundledFfmpeg : binName);
 
 const app = {
@@ -16,7 +17,7 @@ const app = {
 		if (name !== "userData") {
 			throw new Error(`Unsupported app path requested by probe: ${name}`);
 		}
-		return resolve(repoRoot, ".codex", "ffmpeg-capabilities");
+		return resolve(workspaceRoot, ".codex", "ffmpeg-capabilities");
 	},
 };
 

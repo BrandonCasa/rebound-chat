@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import { afterEach, describe, it } from "node:test";
 
 import { buildDefaultSettings } from "../defaults.js";
-import { getLiveBase } from "../../../src/helpers/live.js";
+import { getLiveBase } from "../../../frontend/src/helpers/live.js";
 
 const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
 const ORIGINAL_IN_ELECTRON_ENV = globalThis.IN_ELECTRON_ENV;

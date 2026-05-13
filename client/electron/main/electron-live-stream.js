@@ -3,7 +3,7 @@ import { mkdir, rm, stat, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 
-import { codecFamily, codecString, lower, parseBitrateToBps } from "./streaming/codecs.js";
+import { codecFamily, codecString, lower, parseBitrateToBps } from "../streaming/codecs.js";
 import {
 	ENCODER_PRESETS,
 	NVENC_B_REF_MODE_OPTIONS,
@@ -12,21 +12,21 @@ import {
 	NVENC_TUNE_OPTIONS,
 	normalizeChoice,
 	normalizeEncoderPreset,
-} from "./streaming/presets.js";
-import { parseOptionalPositiveInt, parsePositiveFloat, parsePositiveInt } from "./streaming/numbers.js";
-import { splitCommandLine } from "./streaming/strings.js";
-import { normalizeAudioCodec } from "./streaming/audio/codec.js";
-import { DEFAULT_SETTINGS } from "./streaming/defaults.js";
-import { availableEncoderPresets, currentPlatformProfile, defaultEncoderPresets } from "./streaming/platform/index.js";
-import { buildArgs as buildPipelineArgs, defaultCapabilities } from "./streaming/pipeline.js";
-import { uploadAgent } from "./streaming/uploader/httpClient.js";
-import { createUploader } from "./streaming/uploader/index.js";
-import { createCapabilityStore } from "./streaming/capabilities/probe.js";
-import { createSettingsStore } from "./streaming/settings/store.js";
-import { applyRecommendation, summarizeDiff } from "./streaming/server-control/adapter.js";
-import { buildInitialCeiling } from "./streaming/server-control/initialCeiling.js";
-import { readPlaylistCursor } from "./streaming/server-control/segmentCursor.js";
-import { createServerControlClient } from "./streaming/server-control/socket.js";
+} from "../streaming/presets.js";
+import { parseOptionalPositiveInt, parsePositiveFloat, parsePositiveInt } from "../streaming/numbers.js";
+import { splitCommandLine } from "../streaming/strings.js";
+import { normalizeAudioCodec } from "../streaming/audio/codec.js";
+import { DEFAULT_SETTINGS } from "../streaming/defaults.js";
+import { availableEncoderPresets, currentPlatformProfile, defaultEncoderPresets } from "../streaming/platform/index.js";
+import { buildArgs as buildPipelineArgs, defaultCapabilities } from "../streaming/pipeline.js";
+import { uploadAgent } from "../streaming/uploader/httpClient.js";
+import { createUploader } from "../streaming/uploader/index.js";
+import { createCapabilityStore } from "../streaming/capabilities/probe.js";
+import { createSettingsStore } from "../streaming/settings/store.js";
+import { applyRecommendation, summarizeDiff } from "../streaming/server-control/adapter.js";
+import { buildInitialCeiling } from "../streaming/server-control/initialCeiling.js";
+import { readPlaylistCursor } from "../streaming/server-control/segmentCursor.js";
+import { createServerControlClient } from "../streaming/server-control/socket.js";
 
 const UPLOAD_POLL_INTERVAL_MS = 750;
 

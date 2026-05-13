@@ -10,7 +10,7 @@ import updater from "electron-updater";
 const { autoUpdater } = updater;
 import isDev from "electron-is-dev";
 import { registerLiveStreamIpc } from "./electron-live-stream.js";
-import { SourceService, registerSourceServiceIpc } from "./sources/index.js";
+import { SourceService, registerSourceServiceIpc } from "../sources/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -159,7 +159,7 @@ async function createWindow() {
 		webPreferences: {
 			nodeIntegration: false,
 			contextIsolation: true,
-			preload: join(__dirname, "preload.js"),
+			preload: join(__dirname, "..", "preload", "preload.js"),
 		},
 	});
 
@@ -414,7 +414,7 @@ app.whenReady().then(async () => {
 		if (pathname === "/" || pathname === "") pathname = "/index.html";
 
 		// Resolve to disk
-		const filePath = join(__dirname, pathname);
+		const filePath = join(__dirname, "..", "..", "build", pathname);
 
 		try {
 			const data = await readFile(filePath);
