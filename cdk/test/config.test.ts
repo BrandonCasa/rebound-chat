@@ -17,6 +17,7 @@ describe("environment config", () => {
 			livekit: 0,
 		});
 		expect(config.codeBuildDryRun).toBe(true);
+		expect(config.runtimeSmokeMode).toBe(false);
 		expect(config.autoDeleteObjects).toBe(true);
 	});
 
@@ -34,6 +35,7 @@ describe("environment config", () => {
 			context: {
 				appEnv: "dev",
 				codeBuildDryRun: "false",
+				runtimeSmokeMode: "true",
 				"serviceDesiredCounts.api": "1",
 				"serviceDesiredCounts.worker": 1,
 			},
@@ -41,11 +43,18 @@ describe("environment config", () => {
 		const config = getEnvironmentConfig(app);
 
 		expect(config.codeBuildDryRun).toBe(false);
+		expect(config.runtimeSmokeMode).toBe(true);
 		expect(config.serviceDesiredCounts).toEqual({
 			api: 1,
 			realtime: 0,
 			worker: 1,
 			livekit: 0,
 		});
+	});
+
+	it("rejects runtime smoke mode outside dev", () => {
+		const app = new App({ context: { appEnv: "prod", runtimeSmokeMode: "true" } });
+
+		expect(() => getEnvironmentConfig(app)).toThrow(/appEnv=dev/);
 	});
 });

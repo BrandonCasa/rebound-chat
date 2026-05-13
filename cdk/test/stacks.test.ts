@@ -196,6 +196,26 @@ describe("rebound aws stacks", () => {
 		expect(desiredCounts.filter((desiredCount) => desiredCount === 0)).toHaveLength(2);
 	});
 
+	it("can enable Plan D runtime smoke mode only on API and worker tasks", () => {
+		const stacks = synthStacks("dev", { runtimeSmokeMode: true });
+		const template = Template.fromStack(stacks.compute);
+		const apiTaskDefinition = getTaskDefinitionForRole(template, "api");
+		const workerTaskDefinition = getTaskDefinitionForRole(template, "worker");
+		const realtimeTaskDefinition = getTaskDefinitionForRole(template, "realtime");
+
+		expect(apiTaskDefinition).toBeDefined();
+		expect(workerTaskDefinition).toBeDefined();
+		expect(realtimeTaskDefinition).toBeDefined();
+
+		const apiEnv = apiTaskDefinition!.Properties.ContainerDefinitions[0].Environment;
+		const workerEnv = workerTaskDefinition!.Properties.ContainerDefinitions[0].Environment;
+		const realtimeEnv = realtimeTaskDefinition!.Properties.ContainerDefinitions[0].Environment;
+
+		expect(apiEnv).toEqual(expect.arrayContaining([expect.objectContaining({ Name: "REBOUND_ECS_SMOKE_MODE", Value: "1" })]));
+		expect(workerEnv).toEqual(expect.arrayContaining([expect.objectContaining({ Name: "REBOUND_ECS_SMOKE_MODE", Value: "1" })]));
+		expect(realtimeEnv.some((entry: { Name: string }) => entry.Name === "REBOUND_ECS_SMOKE_MODE")).toBe(false);
+	});
+
 	it("passes CloudFront distribution id to the frontend build project", () => {
 		const stacks = synthStacks();
 		const projects = Template.fromStack(stacks.pipeline).findResources("AWS::CodeBuild::Project");

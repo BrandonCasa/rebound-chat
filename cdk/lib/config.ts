@@ -31,6 +31,7 @@ export interface ReboundEnvironmentConfig {
 	imageTags?: ImageTagOverrides;
 	serviceDesiredCounts: Required<ServiceDesiredCounts>;
 	codeBuildDryRun: boolean;
+	runtimeSmokeMode: boolean;
 	removalPolicy: RemovalPolicy;
 	autoDeleteObjects: boolean;
 }
@@ -47,9 +48,10 @@ interface RawEnvironmentConfig {
 	liveKitImage?: string;
 	serviceDesiredCounts?: ServiceDesiredCounts;
 	codeBuildDryRun?: boolean;
+	runtimeSmokeMode?: boolean;
 }
 
-type EnvironmentDefaults = Required<Omit<RawEnvironmentConfig, "account" | "serviceDesiredCounts" | "codeBuildDryRun">>;
+type EnvironmentDefaults = Required<Omit<RawEnvironmentConfig, "account" | "serviceDesiredCounts" | "codeBuildDryRun" | "runtimeSmokeMode">>;
 
 const defaults: Record<AppEnvironment, EnvironmentDefaults> = {
 	dev: {
@@ -215,6 +217,13 @@ export const getEnvironmentConfig = (app: App): ReboundEnvironmentConfig => {
 		parseBoolean(app.node.tryGetContext("codeBuildDryRun"), "codeBuildDryRun") ??
 		parseBoolean(contextConfig.codeBuildDryRun, "codeBuildDryRun") ??
 		true;
+	const runtimeSmokeMode =
+		parseBoolean(app.node.tryGetContext("runtimeSmokeMode"), "runtimeSmokeMode") ??
+		parseBoolean(contextConfig.runtimeSmokeMode, "runtimeSmokeMode") ??
+		false;
+	if (runtimeSmokeMode && requested !== "dev") {
+		throw new Error("runtimeSmokeMode can only be enabled for appEnv=dev.");
+	}
 	const merged = {
 		...defaults[requested],
 		...contextConfig,
@@ -234,6 +243,7 @@ export const getEnvironmentConfig = (app: App): ReboundEnvironmentConfig => {
 		imageTags,
 		serviceDesiredCounts,
 		codeBuildDryRun,
+		runtimeSmokeMode,
 		removalPolicy: requested === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
 		autoDeleteObjects: requested !== "prod",
 	};

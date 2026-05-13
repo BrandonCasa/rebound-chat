@@ -10,6 +10,10 @@ import socketBackend from "./socketio/index.js";
 configDotenv();
 
 const SERVER_ROLES = new Set(["api", "worker", "combined", "realtime"]);
+const ECS_SMOKE_MODE_ENV = "REBOUND_ECS_SMOKE_MODE";
+const ECS_SMOKE_MODE_ROLES = new Set(["api", "worker"]);
+const TRUTHY_ENV_VALUES = new Set(["1", "true", "yes"]);
+const FALSEY_ENV_VALUES = new Set(["0", "false", "no"]);
 
 const resolveServerRole = (value = process.env.SERVER_ROLE) => {
 	const normalized = String(value || "")
@@ -18,24 +22,57 @@ const resolveServerRole = (value = process.env.SERVER_ROLE) => {
 	return SERVER_ROLES.has(normalized) ? normalized : "combined";
 };
 
+const resolveEcsSmokeMode = (env = process.env) => {
+	const rawValue = env[ECS_SMOKE_MODE_ENV];
+
+	if (rawValue === undefined || rawValue === null || rawValue === "") {
+		return false;
+	}
+
+	const normalized = String(rawValue).trim().toLowerCase();
+	if (FALSEY_ENV_VALUES.has(normalized)) {
+		return false;
+	}
+
+	if (!TRUTHY_ENV_VALUES.has(normalized)) {
+		throw new Error(`Invalid ${ECS_SMOKE_MODE_ENV}. Expected one of: 1, true, yes, 0, false, no.`);
+	}
+
+	const appEnv = String(env.APP_ENV || "")
+		.trim()
+		.toLowerCase();
+	if (appEnv !== "dev") {
+		throw new Error(`${ECS_SMOKE_MODE_ENV} can only be enabled with APP_ENV=dev.`);
+	}
+
+	return true;
+};
+
 class ServerBackend {
 	constructor({
 		role = process.env.SERVER_ROLE,
+		env = process.env,
+		ecsSmokeMode = resolveEcsSmokeMode(env),
 		app = null,
 		liveRuntime: liveRuntimeDependency = liveRuntime,
 		databaseServer: databaseServerDependency = databaseServer,
 		socketBackend: socketBackendDependency = socketBackend,
 	} = {}) {
 		this.role = resolveServerRole(role);
+		this.ecsSmokeMode = Boolean(ecsSmokeMode);
+		if (this.ecsSmokeMode && !ECS_SMOKE_MODE_ROLES.has(this.role)) {
+			throw new Error(`${ECS_SMOKE_MODE_ENV} is only supported for api and worker roles.`);
+		}
 		this.liveRuntime = liveRuntimeDependency;
 		this.databaseServer = databaseServerDependency;
 		this.socketBackend = socketBackendDependency;
-		this.app = app || createApp({ role: this.role });
+		this.app = app || createApp({ role: this.role, ecsSmokeMode: this.ecsSmokeMode });
 		this.server = http.createServer(this.app);
 		this.socketStarted = false;
 		this.databaseStarted = false;
 		this.cleanupStarted = false;
 		this.realtimeStubTimer = null;
+		this.smokeKeepAliveTimer = null;
 		this.started = false;
 	}
 
@@ -44,10 +81,12 @@ class ServerBackend {
 	}
 
 	_shouldStartCleanup() {
+		if (this.ecsSmokeMode) return false;
 		return this.role === "worker" || this.role === "combined";
 	}
 
 	_shouldStartDatabase() {
+		if (this.ecsSmokeMode) return false;
 		return this.role !== "realtime";
 	}
 
@@ -63,6 +102,14 @@ class ServerBackend {
 		}, 60_000);
 	}
 
+	_startSmokeKeepAlive() {
+		if (this.smokeKeepAliveTimer || this.role !== "worker") return;
+
+		this.smokeKeepAliveTimer = setInterval(() => {
+			logger.debug?.("Worker ECS smoke mode alive; product cleanup and database startup are intentionally disabled");
+		}, 60_000);
+	}
+
 	async startBackend({ httpPort, startSockets = true } = {}) {
 		if (this.started) {
 			logger.warn("Backend is already started");
@@ -70,6 +117,11 @@ class ServerBackend {
 		}
 
 		try {
+			if (this.ecsSmokeMode) {
+				logger.warn(`${ECS_SMOKE_MODE_ENV} enabled for role=${this.role}; skipping database and product worker startup`);
+				this._startSmokeKeepAlive();
+			}
+
 			if (this._shouldStartCleanup()) {
 				this.liveRuntime.start();
 				this.cleanupStarted = true;
@@ -132,6 +184,11 @@ class ServerBackend {
 		if (this.realtimeStubTimer) {
 			clearInterval(this.realtimeStubTimer);
 			this.realtimeStubTimer = null;
+		}
+
+		if (this.smokeKeepAliveTimer) {
+			clearInterval(this.smokeKeepAliveTimer);
+			this.smokeKeepAliveTimer = null;
 		}
 
 		if (this.server.listening) {
@@ -224,5 +281,5 @@ if (process.env.NODE_ENV !== "test") {
 	})();
 }
 
-export { ServerBackend, resolveServerRole, serverBackend };
+export { ECS_SMOKE_MODE_ENV, ServerBackend, resolveEcsSmokeMode, resolveServerRole, serverBackend };
 export default serverBackend;

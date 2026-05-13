@@ -158,7 +158,8 @@ Implementation notes:
   - `imageTags.worker=<tag>`
   - `serviceDesiredCounts.api=1`
   - `serviceDesiredCounts.worker=1`
-- Current blocker: real API/worker production startup still initializes MongoDB/Mongoose before the API listener starts. Do not promote desired counts for real images until that startup path is Aurora-ready or an explicit smoke-only startup mode is approved.
+  - `runtimeSmokeMode=true` for the temporary dev-only ECS health smoke while MongoDB/Mongoose startup removal is still pending.
+- Current blocker: real API/worker production startup still initializes MongoDB/Mongoose before the API listener starts. The repo now has an explicit dev-only smoke mode for Plan D health checks, but do not treat desired-count smoke success as product readiness until that startup path is Aurora-ready.
 
 Execution record, May 13, 2026:
 

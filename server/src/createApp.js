@@ -77,11 +77,12 @@ const csrfTokenEndpoint = (req, res) => {
 };
 
 const createHealthEndpoint =
-	({ role }) =>
+	({ role, ecsSmokeMode = false }) =>
 	(_req, res) =>
 		res.json({
 			status: "ok",
 			role,
+			mode: ecsSmokeMode ? "ecs-smoke" : "runtime",
 			pid: process.pid,
 			uptimeSeconds: Math.round(process.uptime()),
 		});
@@ -120,13 +121,13 @@ const applyMiddleware = (app) => {
 	app.use(csrfProtectionMiddleware);
 };
 
-const createApp = ({ role = "combined", routeHandler = routes } = {}) => {
+const createApp = ({ role = "combined", routeHandler = routes, ecsSmokeMode = false } = {}) => {
 	const app = express();
 
 	customPassport.setupPassport();
 	applyMiddleware(app);
 
-	app.get("/healthz", createHealthEndpoint({ role }));
+	app.get("/healthz", createHealthEndpoint({ role, ecsSmokeMode }));
 	app.get("/api/csrf", csrfTokenEndpoint);
 	app.use(routeHandler);
 

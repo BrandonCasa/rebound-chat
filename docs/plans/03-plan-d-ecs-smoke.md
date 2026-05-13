@@ -15,6 +15,7 @@ The CDK keeps dev services idle and CodeBuild dry-run safe by default. Plan D us
 - `--context imageTags.worker=<tag>` makes the worker task definition use `rebound-dev-worker:<tag>`.
 - `--context serviceDesiredCounts.api=1` starts one API task.
 - `--context serviceDesiredCounts.worker=1` starts one worker task.
+- `--context runtimeSmokeMode=true` injects the dev-only `REBOUND_ECS_SMOKE_MODE=1` runtime guard into API and worker tasks. This skips MongoDB/Mongoose startup for Plan D health checks only and is rejected outside `APP_ENV=dev`.
 
 Keep `realtime` and `livekit` at `0` until their own smoke gates are ready.
 
@@ -44,7 +45,7 @@ Keep `realtime` and `livekit` at `0` until their own smoke gates are ready.
 3. Redeploy CDK with the image tags and desired counts:
 
    ```powershell
-   pnpm --filter rebound-cdk exec cdk deploy Rebound-dev-Compute --require-approval never --context appEnv=dev --context imageTags.api=$tag --context imageTags.worker=$tag --context serviceDesiredCounts.api=1 --context serviceDesiredCounts.worker=1
+   pnpm --filter rebound-cdk exec cdk deploy Rebound-dev-Compute --require-approval never --context appEnv=dev --context imageTags.api=$tag --context imageTags.worker=$tag --context serviceDesiredCounts.api=1 --context serviceDesiredCounts.worker=1 --context runtimeSmokeMode=true
    ```
 
 4. Smoke ECS:
@@ -57,9 +58,9 @@ Keep `realtime` and `livekit` at `0` until their own smoke gates are ready.
 
 ## Current Risk
 
-The current server production startup still initializes MongoDB/Mongoose before the API listener starts. Do not raise `api` or `worker` desired counts with real images until the task startup path either uses Aurora-backed runtime wiring or has an explicit, temporary smoke-only startup mode that is not treated as a production fallback.
+The current server production startup still initializes MongoDB/Mongoose before the API listener starts. The repo now includes an explicit dev-only `REBOUND_ECS_SMOKE_MODE` guard that can unblock Plan D container health checks, but it is not production readiness: product API routes and worker cleanup still require the Aurora/S3 cutover before this mode can be removed.
 
-For now, a CDK deploy with `codeBuildDryRun=false` prepares the build projects and ECR push path. The final Plan D smoke remains blocked until the real image startup path will not crash-loop in ECS.
+For now, use `runtimeSmokeMode=true` only with dev API/worker desired-count smoke deploys. The final Plan D promotion remains blocked until the real image startup path runs without MongoDB/Mongoose.
 
 ## Execution Record
 
@@ -78,3 +79,9 @@ Build issue found and fixed:
 
 - Server Dockerfiles did not copy `server/pnpm-workspace.yaml`, so frozen pnpm installs could not match lockfile overrides.
 - Node Dockerfiles and Node-based CodeBuild buildspecs now pin pnpm `10.32.1` through Corepack for repeatable local and CodeBuild installs.
+
+Repository update, May 13, 2026:
+
+- Added a dev-only `runtimeSmokeMode` CDK context flag that sets `REBOUND_ECS_SMOKE_MODE=1` on API and worker task definitions only.
+- Added server startup handling so API smoke mode serves `/healthz` without MongoDB and worker smoke mode stays alive without starting MongoDB or live cleanup.
+- Added local tests covering the smoke-mode runtime guard and CDK task-definition wiring.

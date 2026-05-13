@@ -40,6 +40,7 @@ export class ComputeStack extends Stack {
 		const { config, vpc, appSecurityGroup } = props;
 		this.imageTags = config.imageTags;
 		const websocketManagementEndpoint = `https://${props.websocketApi.ref}.execute-api.${Stack.of(this).region}.amazonaws.com/${config.appEnv}`;
+		const planDSmokeEnvironment: Record<string, string> = config.runtimeSmokeMode ? { REBOUND_ECS_SMOKE_MODE: "1" } : {};
 
 		this.cluster = new ecs.Cluster(this, "Cluster", {
 			vpc,
@@ -68,6 +69,7 @@ export class ComputeStack extends Stack {
 			environment: {
 				SERVER_ROLE: "api",
 				PORT: "6001",
+				...planDSmokeEnvironment,
 				S3_MEDIA_BUCKET: props.mediaBucket.bucketName,
 				S3_LIVE_BUCKET: props.liveBucket.bucketName,
 				AURORA_SECRET_ARN: props.database.secret!.secretArn,
@@ -111,6 +113,7 @@ export class ComputeStack extends Stack {
 			command: workerContainer.command,
 			environment: {
 				SERVER_ROLE: "worker",
+				...planDSmokeEnvironment,
 				S3_MEDIA_BUCKET: props.mediaBucket.bucketName,
 				S3_LIVE_BUCKET: props.liveBucket.bucketName,
 				AURORA_SECRET_ARN: props.database.secret!.secretArn,
