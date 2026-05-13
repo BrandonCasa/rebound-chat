@@ -1,0 +1,32 @@
+version: 0.2
+
+env:
+  shell: bash
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 22
+    commands:
+      - corepack enable
+      - pnpm install --frozen-lockfile
+  pre_build:
+    commands:
+      - pnpm --filter rebound-web build
+      - IMAGE_TAG="${CODEBUILD_RESOLVED_SOURCE_VERSION:-local}"
+      - IMAGE_TAG="${IMAGE_TAG:0:12}"
+      - echo "Building web-build image ${IMAGE_REPOSITORY_URI}:${IMAGE_TAG}"
+  build:
+    commands:
+      - docker build -f infra/docker/web-build.Dockerfile -t "${IMAGE_REPOSITORY_URI}:${IMAGE_TAG}" .
+  post_build:
+    commands:
+      - |
+        if [ "${DRY_RUN:-true}" = "true" ]; then
+          echo "DRY_RUN=true; skipping ECR push and frontend S3 upload to ${FRONTEND_BUCKET_NAME}."
+        else
+          aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          docker push "${IMAGE_REPOSITORY_URI}:${IMAGE_TAG}"
+          aws s3 sync client/frontend/build/ "s3://${FRONTEND_BUCKET_NAME}/" --delete
+          aws cloudfront create-invalidation --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" --paths "/*"
+        fi

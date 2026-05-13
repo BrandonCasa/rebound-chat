@@ -48,13 +48,13 @@ jobs:
         if: ${{ inputs.bumpVersion }}
         run: |
           echo "Bumping version in package.json"
-          pnpm version patch --no-git-tag-version
-          NEW_VERSION=$(node -p "require('./package.json').version")
+          pnpm -C client/frontend version patch --no-git-tag-version
+          NEW_VERSION=$(node -p "require('./client/frontend/package.json').version")
           echo "New version: $NEW_VERSION"
           jq --arg v "$NEW_VERSION" '.version = $v' server/package.json > server/package.tmp && mv server/package.tmp server/package.json
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add package.json server/package.json
+          git add client/frontend/package.json server/package.json
           git commit -m "Bump version to $NEW_VERSION [skip ci]" || echo "No changes to commit"
           git push origin HEAD:${{ github.ref }}
 
@@ -110,8 +110,8 @@ jobs:
       - name: Cache bundled FFmpeg
         uses: actions/cache@v5.0.5
         with:
-          path: native/ffmpeg
-          key: ffmpeg-${{ matrix.platform }}-${{ hashFiles('projectscripts/fetch-ffmpeg.js') }}
+          path: client/electron/native/ffmpeg
+          key: ffmpeg-${{ matrix.platform }}-${{ hashFiles('client/electron/scripts/fetch-ffmpeg.js') }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6.0.5
@@ -127,5 +127,5 @@ jobs:
       - name: Install Packages, Build App, Dist for ${{ matrix.platform }}
         run: |
           pnpm install --no-frozen-lockfile
-          pnpm run build
-          pnpm run dist ${{ matrix.builderFlag }} ${{ matrix.archFlag }} --publish always
+          pnpm --filter rebound-web build
+          pnpm -C client/frontend dist ${{ matrix.builderFlag }} ${{ matrix.archFlag }} --publish always

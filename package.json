@@ -1,142 +1,22 @@
 {
-	"name": "rebound-web",
-	"version": "1.0.90",
-	"private": true,
-	"type": "module",
-	"main": "public/electron.js",
-	"description": "Rebound Nexus official web and user client.",
-	"author": {
-		"name": "Brandon Casamichana",
-		"email": "brandoncasawork8@gmail.com",
-		"url": "https://github.com/BrandonCasa"
-	},
-	"dependencies": {
-		"@emotion/react": "^11.14.0",
-		"@emotion/styled": "^11.14.1",
-		"@fontsource/roboto": "^5.2.9",
-		"@mui/icons-material": "^7.3.5",
-		"@mui/material": "^7.3.5",
-		"@mui/styled-engine-sc": "^7.3.5",
-		"@reduxjs/toolkit": "^2.10.1",
-		"axios": "^1.15.0",
-		"dompurify": "^3.4.0",
-		"electron-is-dev": "^3.0.1",
-		"electron-log": "^5.4.3",
-		"electron-updater": "^6.6.2",
-		"hls.js": "^1.6.16",
-		"lodash": "^4.17.21",
-		"react": "^19.2.0",
-		"react-device-detect": "^2.2.3",
-		"react-dom": "^19.2.0",
-		"react-google-button": "^0.8.0",
-		"react-intersection-observer": "^10.0.0",
-		"react-redux": "^9.2.0",
-		"react-router-dom": "^7.9.6",
-		"socket.io-client": "^4.8.1",
-		"styled-components": "^6.1.19",
-		"validator": "^13.15.23",
-		"web-vitals": "^5.1.0",
-		"@electron/remote": "^2.1.3"
-	},
-	"scripts": {
-		"start": "vite",
-		"build": "vite build",
-		"test:streaming": "node --test public/streaming/__tests__/*.test.js public/streaming/__tests__/**/*.test.js public/streaming/uploader/__tests__/*.test.js",
-		"test:sources": "node --test public/sources/__tests__/*.test.js",
-		"electron": "electron .",
-		"predev:kill-ports": "kill-port 3000 6001 6002 27017",
-		"electron-dev": "pnpm run predev:kill-ports && concurrently -k \"cross-env BROWSER=none pnpm run start\" \"cd server && pnpm run dev\" \"wait-on http://localhost:3000 tcp:6001 tcp:6002 tcp:27017 && pnpm run electron\"",
-		"pree2e:server": "kill-port 6101 6102 27018",
-		"e2e:server": "cross-env-shell NODE_ENV=development PORT=6101 REBOUND_SOCKET_PORT=6102 MONGOMS_PORT=27018 REBOUND_DEV_DB_PATH=./dev-e2e REBOUND_RESET_DEV_DB=1 \"cd server && node ./src/app.js\"",
-		"pree2e:web": "kill-port 3100",
-		"e2e:web": "cross-env VITE_API_PROXY_TARGET=http://localhost:6101 vite --host 127.0.0.1 --port 3100",
-		"test:e2e": "playwright test",
-		"test:e2e:ui": "playwright test --ui",
-		"test:e2e:headed": "playwright test --headed",
-		"test:e2e:debug": "playwright test --debug",
-		"test:e2e:report": "playwright show-report",
-		"test:e2e:install": "playwright install chromium",
-		"pw:codegen": "playwright codegen http://127.0.0.1:3100",
-		"prepare:ffmpeg": "node projectscripts/fetch-ffmpeg.js",
-		"predist": "pnpm run prepare:ffmpeg && node projectscripts/clean-build.js && cd app && pnpm install --prod --no-frozen-lockfile && cd ../",
-		"dist": "electron-builder",
-		"postinstall": "cd server && pnpm install && cd ../ && node projectscripts/clean-build.js",
-		"ssh-win": "icacls ./keys/rebound_server.pem /inheritance:r & icacls ./keys/rebound_server.pem /grant:r \"%username%\":\"(R)\" & ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@100.26.232.245",
-		"ssh-mac": "chmod 400 ./keys/rebound_server.pem && ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@100.26.232.245"
-	},
-	"build": {
-		"appId": "com.brandoncasa.rebound",
-		"productName": "ReboundNexus",
-		"directories": {
-			"output": "dist",
-			"app": "app"
-		},
-		"extraResources": [
-			{
-				"from": "native/ffmpeg",
-				"to": "ffmpeg",
-				"filter": [
-					"bin/**",
-					"lib/**",
-					"LICENSE.txt",
-					".version"
-				]
-			}
-		],
-		"win": {
-			"target": [
-				"nsis"
-			],
-			"publish": [
-				"github"
-			]
-		},
-		"mac": {
-			"target": "dmg",
-			"publish": [
-				"github"
-			]
-		},
-		"linux": {
-			"target": "AppImage",
-			"publish": [
-				"github"
-			]
-		},
-		"nsis": {
-			"oneClick": true,
-			"perMachine": true
-		}
-	},
-	"browserslist": {
-		"production": [
-			">0.2%",
-			"not dead",
-			"not op_mini all"
-		],
-		"development": [
-			"last 1 chrome version",
-			"last 1 firefox version",
-			"last 1 safari version"
-		]
-	},
-	"devDependencies": {
-		"@testing-library/jest-dom": "^6.9.1",
-		"@testing-library/react": "^16.3.0",
-		"@testing-library/user-event": "^14.6.1",
-		"@vitejs/plugin-react": "^4.7.0",
-		"concurrently": "^9.2.1",
-		"cross-env": "^7.0.3",
-		"electron": "^36.9.5",
-		"electron-builder": "^26.0.12",
-		"globals": "^16.5.0",
-		"jsdom": "^26.1.0",
-		"kill-port": "^2.0.1",
-		"nodemon": "^3.1.11",
-		"prettier": "^3.6.2",
-		"sass": "^1.94.2",
-		"vite": "^6.4.1",
-		"wait-on": "^8.0.5",
-		"@playwright/test": "^1.59.1"
-	}
+  "name": "rebound-chat-workspace",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter rebound-web start",
+    "build": "pnpm --filter rebound-web build",
+    "electron": "pnpm --filter rebound-web electron",
+    "dist": "pnpm --filter rebound-web dist",
+    "test:e2e": "pnpm --filter rebound-web test:e2e",
+    "test:streaming": "pnpm --filter rebound-web test:streaming",
+    "test:sources": "pnpm --filter rebound-web test:sources",
+    "livekit:local": "pnpm --filter rebound-web livekit:local",
+    "probe:ffmpeg-webrtc": "pnpm --filter rebound-web probe:ffmpeg-webrtc",
+    "prepare:ffmpeg": "pnpm --filter rebound-web prepare:ffmpeg",
+    "cdk:synth:dev": "pnpm --filter rebound-cdk synth:dev",
+    "cdk:synth:prod": "pnpm --filter rebound-cdk synth:prod",
+    "cdk:test": "pnpm --filter rebound-cdk test",
+    "postinstall": "node client/electron/scripts/clean-build.js",
+    "ssh-win": "icacls ./keys/rebound_server.pem /inheritance:r & icacls ./keys/rebound_server.pem /grant:r \"%username%\":\"(R)\" & ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@100.26.232.245",
+    "ssh-mac": "chmod 400 ./keys/rebound_server.pem && ssh -i ./keys/rebound_server.pem -L 27017:127.0.0.1:27017 ubuntu@100.26.232.245"
+  }
 }

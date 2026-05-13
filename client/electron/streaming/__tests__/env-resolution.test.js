@@ -1,0 +1,116 @@
+import { strict as assert } from "node:assert";
+import { afterEach, describe, it } from "node:test";
+
+import { buildDefaultSettings } from "../defaults.js";
+import { getLiveBase } from "../../../frontend/src/helpers/live.js";
+
+const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
+const ORIGINAL_IN_ELECTRON_ENV = globalThis.IN_ELECTRON_ENV;
+
+const setNodeEnv = (value) => {
+	if (value === undefined) {
+		delete process.env.NODE_ENV;
+		return;
+	}
+	process.env.NODE_ENV = value;
+};
+
+const setInElectronEnv = (value) => {
+	if (value === undefined) {
+		delete globalThis.IN_ELECTRON_ENV;
+		return;
+	}
+	globalThis.IN_ELECTRON_ENV = value;
+};
+
+afterEach(() => {
+	setNodeEnv(ORIGINAL_NODE_ENV);
+	setInElectronEnv(ORIGINAL_IN_ELECTRON_ENV);
+});
+
+describe("helpers/live.getLiveBase env matrix", () => {
+	const cases = [
+		{ nodeEnv: undefined, inElectron: false, expected: "" },
+		{ nodeEnv: undefined, inElectron: true, expected: "http://localhost:6001" },
+		{ nodeEnv: "development", inElectron: false, expected: "" },
+		{ nodeEnv: "development", inElectron: true, expected: "http://localhost:6001" },
+		{ nodeEnv: "production", inElectron: false, expected: "" },
+		{ nodeEnv: "production", inElectron: true, expected: "https://rebound.nexus" },
+		{ nodeEnv: "test", inElectron: false, expected: "" },
+		{ nodeEnv: "test", inElectron: true, expected: "" },
+	];
+
+	for (const { nodeEnv, inElectron, expected } of cases) {
+		const nodeEnvLabel = nodeEnv ?? "undefined";
+		const testName = `NODE_ENV=${nodeEnvLabel}, IN_ELECTRON_ENV=${String(inElectron)} -> ${expected || '""'}`;
+		it(testName, () => {
+			setNodeEnv(nodeEnv);
+			setInElectronEnv(inElectron);
+			assert.equal(getLiveBase(), expected);
+		});
+	}
+});
+
+describe("streaming defaults websiteBaseUrl env matrix", () => {
+	const cases = [
+		{ nodeEnv: undefined, inElectron: false, expected: "" },
+		{ nodeEnv: undefined, inElectron: true, expected: "http://localhost:6001" },
+		{ nodeEnv: "development", inElectron: false, expected: "" },
+		{ nodeEnv: "development", inElectron: true, expected: "http://localhost:6001" },
+		{ nodeEnv: "production", inElectron: false, expected: "" },
+		{ nodeEnv: "production", inElectron: true, expected: "https://rebound.nexus" },
+		{ nodeEnv: "test", inElectron: false, expected: "" },
+		{ nodeEnv: "test", inElectron: true, expected: "" },
+	];
+
+	for (const { nodeEnv, inElectron, expected } of cases) {
+		const nodeEnvLabel = nodeEnv ?? "undefined";
+		const testName = `NODE_ENV=${nodeEnvLabel}, IN_ELECTRON_ENV=${String(inElectron)} -> ${expected || '""'}`;
+		it(testName, () => {
+			setNodeEnv(nodeEnv);
+			setInElectronEnv(inElectron);
+			const defaults = buildDefaultSettings();
+			assert.equal(defaults.websiteBaseUrl, expected);
+		});
+	}
+});
+
+// Regression: in the Electron main process we never see
+// `globalThis.IN_ELECTRON_ENV` (that flag is set only by the renderer's
+// preload script). We must therefore fall back to `process.versions.electron`
+// so `DEFAULT_SETTINGS.websiteBaseUrl` resolves to a usable URL — otherwise
+// the empty string gets persisted to `stream-settings.json`, hydrated back
+// into the renderer, and `createSession` ends up calling
+// `fetch("/live/api/session")` with `ERR_INVALID_URL`.
+describe("streaming defaults websiteBaseUrl when main process simulates Electron via process.versions", () => {
+	const ORIGINAL_PROCESS_VERSIONS_ELECTRON = process.versions.electron;
+
+	const setProcessVersionsElectron = (value) => {
+		if (value === undefined) {
+			delete process.versions.electron;
+			return;
+		}
+		Object.defineProperty(process.versions, "electron", { value, configurable: true });
+	};
+
+	afterEach(() => {
+		setProcessVersionsElectron(ORIGINAL_PROCESS_VERSIONS_ELECTRON);
+	});
+
+	const cases = [
+		{ nodeEnv: undefined, expected: "http://localhost:6001" },
+		{ nodeEnv: "development", expected: "http://localhost:6001" },
+		{ nodeEnv: "production", expected: "https://rebound.nexus" },
+	];
+
+	for (const { nodeEnv, expected } of cases) {
+		const nodeEnvLabel = nodeEnv ?? "undefined";
+		it(`NODE_ENV=${nodeEnvLabel}, no IN_ELECTRON_ENV but process.versions.electron set -> ${expected}`, () => {
+			setNodeEnv(nodeEnv);
+			setInElectronEnv(undefined);
+			setProcessVersionsElectron("36.9.5");
+			const defaults = buildDefaultSettings();
+			assert.equal(defaults.websiteBaseUrl, expected);
+		});
+	}
+});

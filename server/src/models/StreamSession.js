@@ -103,6 +103,12 @@ const StreamSessionSchema = new Schema(
 			default: "active",
 			index: true,
 		},
+		transportMode: {
+			type: String,
+			enum: ["hls", "webrtc", "hybrid"],
+			default: "hls",
+			index: true,
+		},
 		playbackPath: {
 			type: String,
 			required: true,

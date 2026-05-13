@@ -1,5 +1,6 @@
 packages:
-  - .
+  - ./client/frontend
+  - ./cdk
   - ./server
 
 onlyBuiltDependencies:

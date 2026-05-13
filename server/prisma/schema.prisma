@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum StreamSessionStatus {
+  ACTIVE  @map("active")
+  ENDED   @map("ended")
+  EXPIRED @map("expired")
+}
+
+enum StreamTransportMode {
+  HLS    @map("hls")
+  WEBRTC @map("webrtc")
+  HYBRID @map("hybrid")
+}
+
+enum StreamAssetKind {
+  MASTER         @map("master")
+  MEDIA_PLAYLIST @map("media-playlist")
+  SEGMENT        @map("segment")
+}
+
+model StreamSession {
+  id                  String              @id @default(cuid())
+  sessionId           String              @unique @map("session_id")
+  label               String              @default("")
+  publicToken         String              @unique @map("public_token")
+  ingestSecretHash    String              @map("ingest_secret_hash")
+  createdByIp         String              @default("") @map("created_by_ip")
+  createdByUserId     String?             @map("created_by_user_id")
+  createdByUsername   String              @default("") @map("created_by_username")
+  status              StreamSessionStatus @default(ACTIVE)
+  transportMode       StreamTransportMode @default(HLS) @map("transport_mode")
+  playbackPath        String              @map("playback_path")
+  sharePath           String              @map("share_path")
+  storageBackend      String              @map("storage_backend")
+  storagePrefix       String              @map("storage_prefix")
+  maxRetainedSegments Int                 @default(5) @map("max_retained_segments")
+  recentSegmentNames  String[]            @default([]) @map("recent_segment_names")
+  lastHeartbeatAt     DateTime            @map("last_heartbeat_at")
+  expiresAt           DateTime            @map("expires_at")
+  cleanupAfterAt      DateTime            @map("cleanup_after_at")
+  endedAt             DateTime?           @map("ended_at")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+  assets              StreamAsset[]
+  telemetrySummaries  StreamParticipantTelemetry[]
+
+  @@index([createdByUserId, status])
+  @@index([status, expiresAt])
+  @@index([cleanupAfterAt])
+  @@map("stream_sessions")
+}
+
+model StreamAsset {
+  id            String        @id @default(cuid())
+  sessionId     String        @map("session_id")
+  session       StreamSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  filename      String
+  storageKey    String        @map("storage_key")
+  assetKind     StreamAssetKind @map("asset_kind")
+  contentType   String        @map("content_type")
+  byteSize      Int           @map("byte_size")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  lastServedAt  DateTime?     @map("last_served_at")
+
+  @@unique([sessionId, filename])
+  @@index([assetKind])
+  @@map("stream_assets")
+}
+
+model StreamParticipantTelemetry {
+  id                  String        @id @default(cuid())
+  sessionId           String        @map("session_id")
+  session             StreamSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  participantIdentity String        @map("participant_identity")
+  role                String
+  joinedAt            DateTime?     @map("joined_at")
+  leftAt              DateTime?     @map("left_at")
+  packetsLost         Int?          @map("packets_lost")
+  averageBitrateKbps  Int?          @map("average_bitrate_kbps")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  @@index([participantIdentity])
+  @@map("stream_participant_telemetry")
+}
