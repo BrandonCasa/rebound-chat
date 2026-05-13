@@ -10,8 +10,8 @@
 		"bootstrap:prod": "cdk bootstrap --context appEnv=prod",
 		"deploy:dev": "cdk deploy --all --require-approval never --context appEnv=dev",
 		"deploy:prod": "cdk deploy --all --require-approval never --context appEnv=prod",
-		"synth:dev": "cdk synth --context appEnv=dev",
-		"synth:prod": "cdk synth --context appEnv=prod",
+		"synth:dev": "cdk synth --all --context appEnv=dev",
+		"synth:prod": "cdk synth --all --context appEnv=prod",
 		"test": "vitest run"
 	},
 	"dependencies": {

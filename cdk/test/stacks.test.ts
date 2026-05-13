@@ -5,10 +5,22 @@ import { describe, expect, it } from "vitest";
 import { createReboundStacks } from "../lib/app";
 import { getEnvironmentConfig } from "../lib/config";
 
-const synthStacks = (appEnv = "dev") => {
-	const app = new App({ context: { appEnv } });
+const synthStacks = (appEnv = "dev", extraContext: Record<string, unknown> = {}) => {
+	const app = new App({ context: { appEnv, ...extraContext } });
 	const config = getEnvironmentConfig(app);
 	return createReboundStacks(app, config);
+};
+
+const getTaskDefinitionForRole = (template: Template, role: string) => {
+	const taskDefinitions = template.findResources("AWS::ECS::TaskDefinition");
+	for (const taskDefinition of Object.values(taskDefinitions)) {
+		const container = taskDefinition.Properties.ContainerDefinitions?.[0];
+		const envVars = container?.Environment ?? [];
+		if (envVars.some((entry: { Name: string; Value: string }) => entry.Name === "SERVER_ROLE" && entry.Value === role)) {
+			return taskDefinition;
+		}
+	}
+	return undefined;
 };
 
 describe("rebound aws stacks", () => {
@@ -89,7 +101,7 @@ describe("rebound aws stacks", () => {
 								"token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
 							},
 							StringLike: {
-								"token.actions.githubusercontent.com:sub": "repo:BrandonCasa/rebound-electron:*",
+								"token.actions.githubusercontent.com:sub": "repo:BrandonCasa/rebound-chat:*",
 							},
 						},
 					}),
@@ -155,6 +167,108 @@ describe("rebound aws stacks", () => {
 			const dryRun = envVars.find((v: { Name: string }) => v.Name === "DRY_RUN");
 			expect(dryRun?.Value).toBe("true");
 		}
+	});
+
+	it("passes CloudFront distribution id to the frontend build project", () => {
+		const stacks = synthStacks();
+		const projects = Template.fromStack(stacks.pipeline).findResources("AWS::CodeBuild::Project");
+		const projectList = Object.values(projects);
+		expect(projectList.some((project) =>
+			project.Properties.Environment.EnvironmentVariables.some(
+				(v: { Name: string }) => v.Name === "CLOUDFRONT_DISTRIBUTION_ID"
+			)
+		)).toBe(true);
+	});
+
+	it("scopes CloudFront invalidation permission to a distribution", () => {
+		const stacks = synthStacks();
+		const policies = Template.fromStack(stacks.pipeline).findResources("AWS::IAM::Policy");
+		const allStatements = Object.values(policies).flatMap((policy) =>
+			Array.isArray(policy.Properties.PolicyDocument.Statement)
+				? policy.Properties.PolicyDocument.Statement
+				: [policy.Properties.PolicyDocument.Statement]
+		);
+
+		const cloudFrontStatement = allStatements.find((statement) => statement.Action === "cloudfront:CreateInvalidation");
+		expect(cloudFrontStatement).toBeDefined();
+		expect(JSON.stringify(cloudFrontStatement.Resource)).toContain("distribution/");
+	});
+
+	it("allows GitHubActionsRole to assume CDK bootstrap roles", () => {
+		const stacks = synthStacks();
+		const policies = Template.fromStack(stacks.pipeline).findResources("AWS::IAM::Policy");
+		const allStatements = Object.values(policies).flatMap((policy) =>
+			Array.isArray(policy.Properties.PolicyDocument.Statement)
+				? policy.Properties.PolicyDocument.Statement
+				: [policy.Properties.PolicyDocument.Statement]
+		);
+
+		const assumeRoleStatement = allStatements.find((statement) => statement.Action === "sts:AssumeRole");
+		expect(assumeRoleStatement).toBeDefined();
+		const serializedResources = JSON.stringify(assumeRoleStatement.Resource);
+		expect(serializedResources).toContain("cdk-hnb659fds-deploy-role");
+		expect(serializedResources).toContain("cdk-hnb659fds-file-publishing-role");
+		expect(serializedResources).toContain("cdk-hnb659fds-image-publishing-role");
+		expect(serializedResources).toContain("cdk-hnb659fds-lookup-role");
+	});
+
+	it("injects aws integration env vars into api/worker/realtime task definitions", () => {
+		const stacks = synthStacks();
+		const template = Template.fromStack(stacks.compute);
+
+		template.hasResourceProperties("AWS::ECS::TaskDefinition", {
+			ContainerDefinitions: Match.arrayWith([
+				Match.objectLike({
+					Environment: Match.arrayWith([
+						Match.objectLike({ Name: "SERVER_ROLE", Value: "api" }),
+						Match.objectLike({ Name: "S3_MEDIA_BUCKET" }),
+						Match.objectLike({ Name: "S3_LIVE_BUCKET" }),
+						Match.objectLike({ Name: "AURORA_SECRET_ARN" }),
+						Match.objectLike({ Name: "AURORA_CLUSTER_ENDPOINT" }),
+					]),
+				}),
+			]),
+		});
+
+		template.hasResourceProperties("AWS::ECS::TaskDefinition", {
+			ContainerDefinitions: Match.arrayWith([
+				Match.objectLike({
+					Environment: Match.arrayWith([
+						Match.objectLike({ Name: "SERVER_ROLE", Value: "worker" }),
+						Match.objectLike({ Name: "S3_MEDIA_BUCKET" }),
+						Match.objectLike({ Name: "S3_LIVE_BUCKET" }),
+						Match.objectLike({ Name: "AURORA_SECRET_ARN" }),
+						Match.objectLike({ Name: "AURORA_CLUSTER_ENDPOINT" }),
+						Match.objectLike({ Name: "WS_CONNECTION_TABLE" }),
+					]),
+				}),
+			]),
+		});
+
+		template.hasResourceProperties("AWS::ECS::TaskDefinition", {
+			ContainerDefinitions: Match.arrayWith([
+				Match.objectLike({
+					Environment: Match.arrayWith([
+						Match.objectLike({ Name: "SERVER_ROLE", Value: "realtime" }),
+						Match.objectLike({ Name: "WS_CONNECTION_TABLE" }),
+						Match.objectLike({ Name: "WEBSOCKET_API_ID" }),
+						Match.objectLike({ Name: "WEBSOCKET_API_STAGE" }),
+						Match.objectLike({ Name: "WEBSOCKET_API_ENDPOINT" }),
+					]),
+				}),
+			]),
+		});
+	});
+
+	it("uses ECR image wiring when imageTags context is provided", () => {
+		const stacks = synthStacks("dev", { imageTags: { api: "deadbeefcafe" } });
+		const template = Template.fromStack(stacks.compute);
+		const apiTaskDefinition = getTaskDefinitionForRole(template, "api");
+		expect(apiTaskDefinition).toBeDefined();
+
+		const image = apiTaskDefinition!.Properties.ContainerDefinitions[0].Image;
+		expect(typeof image).toBe("object");
+		expect(image["Fn::Join"]).toBeDefined();
 	});
 
 	it("attaches the LiveKit security group to the LiveKit ECS service", () => {

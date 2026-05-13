@@ -28,4 +28,5 @@ phases:
           aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
           docker push "${IMAGE_REPOSITORY_URI}:${IMAGE_TAG}"
           aws s3 sync client/frontend/build/ "s3://${FRONTEND_BUCKET_NAME}/" --delete
+          aws cloudfront create-invalidation --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" --paths "/*"
         fi

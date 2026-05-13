@@ -12,6 +12,7 @@ import {
 } from "aws-cdk-lib";
 import type { Construct } from "constructs";
 
+import type { ImageTagOverrides } from "./config";
 import type { ReboundStackProps } from "./stack-props";
 
 interface ComputeStackProps extends ReboundStackProps {
@@ -26,15 +27,19 @@ interface ComputeStackProps extends ReboundStackProps {
 }
 
 type RepositoryName = "api" | "realtime" | "worker" | "livekit" | "webBuild";
+type ServiceImageName = "api" | "realtime" | "worker";
 
 export class ComputeStack extends Stack {
 	readonly cluster: ecs.Cluster;
 	readonly repositories: Record<RepositoryName, ecr.Repository>;
+	private readonly imageTags?: ImageTagOverrides;
 
 	constructor(scope: Construct, id: string, props: ComputeStackProps) {
 		super(scope, id, props);
 
 		const { config, vpc, appSecurityGroup } = props;
+		this.imageTags = config.imageTags;
+		const websocketManagementEndpoint = `https://${props.websocketApi.ref}.execute-api.${Stack.of(this).region}.amazonaws.com/${config.appEnv}`;
 
 		this.cluster = new ecs.Cluster(this, "Cluster", {
 			vpc,
@@ -49,48 +54,65 @@ export class ComputeStack extends Stack {
 			webBuild: this.createRepository("WebBuildRepository", "web-build", config),
 		};
 
+		const apiContainer = this.resolveServiceContainer("api", {
+			port: 6001,
+			serviceName: "api",
+		});
 		const apiService = this.createIdleService("Api", {
 			config,
 			vpc,
 			appSecurityGroup,
-			image: ecs.ContainerImage.fromRegistry("public.ecr.aws/docker/library/node:22-alpine"),
-			command: [
-				"node",
-				"-e",
-				"require('http').createServer((req,res)=>{res.writeHead(req.url==='/healthz'?200:404,{'content-type':'application/json'});res.end(JSON.stringify({status:req.url==='/healthz'?'ok':'not_found',service:'api'}));}).listen(process.env.PORT||6001,'0.0.0.0')",
-			],
+			image: apiContainer.image,
+			command: apiContainer.command,
 			environment: {
 				SERVER_ROLE: "api",
 				PORT: "6001",
+				S3_MEDIA_BUCKET: props.mediaBucket.bucketName,
+				S3_LIVE_BUCKET: props.liveBucket.bucketName,
+				AURORA_SECRET_ARN: props.database.secret!.secretArn,
+				AURORA_CLUSTER_ENDPOINT: props.database.clusterEndpoint.socketAddress,
 			},
 			portMappings: [{ containerPort: 6001 }],
 		});
 
+		const realtimeContainer = this.resolveServiceContainer("realtime", {
+			port: 6002,
+			serviceName: "realtime",
+		});
 		const realtimeService = this.createIdleService("Realtime", {
 			config,
 			vpc,
 			appSecurityGroup,
-			image: ecs.ContainerImage.fromRegistry("public.ecr.aws/docker/library/node:22-alpine"),
-			command: [
-				"node",
-				"-e",
-				"require('http').createServer((req,res)=>{res.writeHead(req.url==='/healthz'?200:404,{'content-type':'application/json'});res.end(JSON.stringify({status:req.url==='/healthz'?'ok':'not_found',service:'realtime'}));}).listen(process.env.PORT||6002,'0.0.0.0')",
-			],
+			image: realtimeContainer.image,
+			command: realtimeContainer.command,
 			environment: {
 				SERVER_ROLE: "realtime",
 				PORT: "6002",
+				WS_CONNECTION_TABLE: props.websocketConnectionTable.tableName,
+				WEBSOCKET_API_ID: props.websocketApi.ref,
+				WEBSOCKET_API_STAGE: config.appEnv,
+				WEBSOCKET_API_ENDPOINT: websocketManagementEndpoint,
 			},
 			portMappings: [{ containerPort: 6002 }],
 		});
 
+		const workerContainer = this.resolveServiceContainer("worker", {
+			port: 6003,
+			serviceName: "worker",
+		});
 		const workerService = this.createIdleService("Worker", {
 			config,
 			vpc,
 			appSecurityGroup,
-			image: ecs.ContainerImage.fromRegistry("public.ecr.aws/docker/library/node:22-alpine"),
-			command: ["node", "-e", "setInterval(() => console.log(JSON.stringify({status:'ok',service:'worker'})), 30000)"],
+			image: workerContainer.image,
+			command: workerContainer.command,
 			environment: {
 				SERVER_ROLE: "worker",
+				S3_MEDIA_BUCKET: props.mediaBucket.bucketName,
+				S3_LIVE_BUCKET: props.liveBucket.bucketName,
+				AURORA_SECRET_ARN: props.database.secret!.secretArn,
+				AURORA_CLUSTER_ENDPOINT: props.database.clusterEndpoint.socketAddress,
+				WS_CONNECTION_TABLE: props.websocketConnectionTable.tableName,
 			},
 			portMappings: [],
 		});
@@ -164,6 +186,38 @@ export class ComputeStack extends Stack {
 		});
 	}
 
+	private resolveServiceContainer(
+		serviceName: ServiceImageName,
+		placeholder: { port: number; serviceName: string }
+	): { image: ecs.ContainerImage; command?: string[] } {
+		const configuredTag = this.resolveImageTag(serviceName);
+		if (configuredTag) {
+			return {
+				image: ecs.ContainerImage.fromEcrRepository(this.repositories[serviceName], configuredTag),
+			};
+		}
+
+		if (serviceName === "worker") {
+			return {
+				image: ecs.ContainerImage.fromRegistry("public.ecr.aws/docker/library/node:22-alpine"),
+				command: ["node", "-e", "setInterval(() => console.log(JSON.stringify({status:'ok',service:'worker'})), 30000)"],
+			};
+		}
+
+		return {
+			image: ecs.ContainerImage.fromRegistry("public.ecr.aws/docker/library/node:22-alpine"),
+			command: [
+				"node",
+				"-e",
+				`require('http').createServer((req,res)=>{res.writeHead(req.url==='/healthz'?200:404,{'content-type':'application/json'});res.end(JSON.stringify({status:req.url==='/healthz'?'ok':'not_found',service:'${placeholder.serviceName}'}));}).listen(process.env.PORT||${placeholder.port},'0.0.0.0')`,
+			],
+		};
+	}
+
+	private resolveImageTag(serviceName: ServiceImageName) {
+		return this.imageTags?.[serviceName];
+	}
+
 	private createIdleService(
 		idPrefix: string,
 		props: {
@@ -172,7 +226,7 @@ export class ComputeStack extends Stack {
 			appSecurityGroup: ec2.ISecurityGroup;
 			additionalSecurityGroups?: ec2.ISecurityGroup[];
 			image: ecs.ContainerImage;
-			command: string[];
+			command?: string[];
 			environment: Record<string, string>;
 			portMappings: ecs.PortMapping[];
 		}

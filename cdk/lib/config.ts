@@ -3,6 +3,13 @@ import type { App } from "aws-cdk-lib";
 
 export type AppEnvironment = "dev" | "prod";
 
+export interface ImageTagOverrides {
+	api?: string;
+	realtime?: string;
+	worker?: string;
+	livekit?: string;
+}
+
 export interface ReboundEnvironmentConfig {
 	appEnv: AppEnvironment;
 	account?: string;
@@ -14,6 +21,7 @@ export interface ReboundEnvironmentConfig {
 	auroraMinAcu: number;
 	auroraMaxAcu: number;
 	liveKitImage: string;
+	imageTags?: ImageTagOverrides;
 	removalPolicy: RemovalPolicy;
 	autoDeleteObjects: boolean;
 }
@@ -35,7 +43,7 @@ const defaults: Record<AppEnvironment, Required<Omit<RawEnvironmentConfig, "acco
 		region: "us-east-2",
 		domainName: "dev.rebound.nexus",
 		githubOwner: "BrandonCasa",
-		githubRepo: "rebound-electron",
+		githubRepo: "rebound-chat",
 		natGateways: 1,
 		auroraMinAcu: 0.5,
 		auroraMaxAcu: 2,
@@ -45,7 +53,7 @@ const defaults: Record<AppEnvironment, Required<Omit<RawEnvironmentConfig, "acco
 		region: "us-east-1",
 		domainName: "rebound.nexus",
 		githubOwner: "BrandonCasa",
-		githubRepo: "rebound-electron",
+		githubRepo: "rebound-chat",
 		natGateways: 2,
 		auroraMinAcu: 1,
 		auroraMaxAcu: 8,
@@ -54,6 +62,44 @@ const defaults: Record<AppEnvironment, Required<Omit<RawEnvironmentConfig, "acco
 };
 
 const isAppEnvironment = (value: unknown): value is AppEnvironment => value === "dev" || value === "prod";
+
+const parseImageTags = (value: unknown): ImageTagOverrides | undefined => {
+	let parsed: unknown = value;
+
+	if (typeof value === "string") {
+		try {
+			parsed = JSON.parse(value);
+		} catch {
+			throw new Error("Invalid imageTags context. Expected a JSON object.");
+		}
+	}
+
+	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+		return undefined;
+	}
+
+	const imageTags: ImageTagOverrides = {};
+	for (const key of ["api", "realtime", "worker", "livekit"] as const) {
+		const candidate = (parsed as Record<string, unknown>)[key];
+		if (typeof candidate === "string" && candidate.trim().length > 0) {
+			imageTags[key] = candidate.trim();
+		}
+	}
+
+	return Object.keys(imageTags).length > 0 ? imageTags : undefined;
+};
+
+const parseImageTagsFromFlatContext = (app: App): ImageTagOverrides | undefined => {
+	const imageTags: ImageTagOverrides = {};
+	for (const key of ["api", "realtime", "worker", "livekit"] as const) {
+		const candidate = app.node.tryGetContext(`imageTags.${key}`);
+		if (typeof candidate === "string" && candidate.trim().length > 0) {
+			imageTags[key] = candidate.trim();
+		}
+	}
+
+	return Object.keys(imageTags).length > 0 ? imageTags : undefined;
+};
 
 export const getEnvironmentConfig = (app: App): ReboundEnvironmentConfig => {
 	const requested = app.node.tryGetContext("appEnv") || app.node.tryGetContext("env") || process.env.APP_ENV || "dev";
@@ -64,6 +110,7 @@ export const getEnvironmentConfig = (app: App): ReboundEnvironmentConfig => {
 
 	const environments = (app.node.tryGetContext("environments") || {}) as Record<string, RawEnvironmentConfig>;
 	const contextConfig = environments[requested] || {};
+	const imageTags = parseImageTags(app.node.tryGetContext("imageTags")) ?? parseImageTagsFromFlatContext(app);
 	const merged = {
 		...defaults[requested],
 		...contextConfig,
@@ -80,6 +127,7 @@ export const getEnvironmentConfig = (app: App): ReboundEnvironmentConfig => {
 		auroraMinAcu: merged.auroraMinAcu,
 		auroraMaxAcu: merged.auroraMaxAcu,
 		liveKitImage: merged.liveKitImage,
+		imageTags,
 		removalPolicy: requested === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
 		autoDeleteObjects: requested !== "prod",
 	};

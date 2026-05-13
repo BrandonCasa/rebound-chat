@@ -57,6 +57,7 @@ export const createReboundStacks = (app: App, config: ReboundEnvironmentConfig) 
 		config,
 		repositories: compute.repositories,
 		frontendBucket: frontend.assetBucket,
+		distribution: frontend.distribution,
 	});
 
 	return {

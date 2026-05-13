@@ -42,3 +42,24 @@ Local WebRTC compatibility starts with Docker Compose for LiveKit and Redis. Pos
 - Live cleanup work must leave the API process before ECS service scaling is enabled.
 - LiveKit-on-Fargate needs explicit work for UDP/TCP load balancing, advertised hostnames, TLS, autoscaling, and observability.
 - The existing EC2 deployment remains intact until the AWS dev environment can deploy and roll back repeatably.
+
+## Status as of Dev Provisioning (2026-05-12)
+
+Provisioning status snapshot:
+
+- AWS account: `722347332210`.
+- Dev region: `us-east-2`.
+- Deployed dev stacks: `Rebound-dev-Network`, `Rebound-dev-Data`, `Rebound-dev-Api`, `Rebound-dev-Frontend`, `Rebound-dev-Compute`, `Rebound-dev-Pipeline`.
+
+Current ECS services in dev compute stack (placeholder runtime, `desiredCount: 0`):
+
+- `arn:aws:ecs:us-east-2:722347332210:service/Rebound-dev-Compute-ClusterEB0386A7-NAcQbrnV7FaR/Rebound-dev-Compute-ApiServiceC9037CF0-PXPqzY4cnw2W`
+- `arn:aws:ecs:us-east-2:722347332210:service/Rebound-dev-Compute-ClusterEB0386A7-NAcQbrnV7FaR/Rebound-dev-Compute-WorkerService99815FA9-ZDCpXeMRtH1Z`
+- `arn:aws:ecs:us-east-2:722347332210:service/Rebound-dev-Compute-ClusterEB0386A7-NAcQbrnV7FaR/Rebound-dev-Compute-RealtimeService1D365EDB-a8UWjTNBrQE4`
+- `arn:aws:ecs:us-east-2:722347332210:service/Rebound-dev-Compute-ClusterEB0386A7-NAcQbrnV7FaR/Rebound-dev-Compute-LiveKitServiceDDC98619-ij30POw12oEV`
+
+Still-open implementation gates:
+
+- LiveKit server SDK is not yet integrated into the server token/webhook flow.
+- API Gateway WebSocket handler runtime (`server/src/realtime/`) is not yet implemented.
+- Custom domain wiring (Route53 + ACM + per-service hostnames) is not yet complete.

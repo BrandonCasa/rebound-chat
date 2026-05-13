@@ -1,5 +1,11 @@
-import { Stack } from "aws-cdk-lib";
-import { aws_codebuild as codebuild, aws_ecr as ecr, aws_iam as iam, aws_s3 as s3 } from "aws-cdk-lib";
+import { CfnOutput, Stack } from "aws-cdk-lib";
+import {
+	aws_cloudfront as cloudfront,
+	aws_codebuild as codebuild,
+	aws_ecr as ecr,
+	aws_iam as iam,
+	aws_s3 as s3,
+} from "aws-cdk-lib";
 import type { Construct } from "constructs";
 
 import type { ReboundStackProps } from "./stack-props";
@@ -7,6 +13,7 @@ import type { ReboundStackProps } from "./stack-props";
 interface PipelineStackProps extends ReboundStackProps {
 	repositories: Record<"api" | "realtime" | "worker" | "livekit" | "webBuild", ecr.IRepository>;
 	frontendBucket: s3.IBucket;
+	distribution: cloudfront.IDistribution;
 }
 
 export class PipelineStack extends Stack {
@@ -17,6 +24,7 @@ export class PipelineStack extends Stack {
 
 		const { config } = props;
 		const repositorySubject = `repo:${config.githubOwner}/${config.githubRepo}:*`;
+		const cdkQualifier = "hnb659fds";
 
 		const provider = new iam.OpenIdConnectProvider(this, "GitHubOidcProvider", {
 			url: "https://token.actions.githubusercontent.com",
@@ -45,6 +53,7 @@ export class PipelineStack extends Stack {
 			frontend: this.createProject("FrontendBuild", "frontend", "infra/buildspec.frontend.yml", config, {
 				IMAGE_REPOSITORY_URI: props.repositories.webBuild.repositoryUri,
 				FRONTEND_BUCKET_NAME: props.frontendBucket.bucketName,
+				CLOUDFRONT_DISTRIBUTION_ID: props.distribution.distributionId,
 			}),
 			livekit: this.createProject("LiveKitBuild", "livekit", "infra/buildspec.livekit.yml", config, {
 				IMAGE_REPOSITORY_URI: props.repositories.livekit.repositoryUri,
@@ -57,12 +66,34 @@ export class PipelineStack extends Stack {
 				resources: Object.values(projects).map((project) => project.projectArn),
 			})
 		);
+		this.githubActionsRole.addToPolicy(
+			new iam.PolicyStatement({
+				actions: ["sts:AssumeRole"],
+				resources: [
+					`arn:aws:iam::${Stack.of(this).account}:role/cdk-${cdkQualifier}-deploy-role-${Stack.of(this).account}-${Stack.of(this).region}`,
+					`arn:aws:iam::${Stack.of(this).account}:role/cdk-${cdkQualifier}-file-publishing-role-${Stack.of(this).account}-${Stack.of(this).region}`,
+					`arn:aws:iam::${Stack.of(this).account}:role/cdk-${cdkQualifier}-image-publishing-role-${Stack.of(this).account}-${Stack.of(this).region}`,
+					`arn:aws:iam::${Stack.of(this).account}:role/cdk-${cdkQualifier}-lookup-role-${Stack.of(this).account}-${Stack.of(this).region}`,
+				],
+			})
+		);
 
 		props.repositories.api.grantPullPush(projects.api);
 		props.repositories.worker.grantPullPush(projects.worker);
 		props.repositories.webBuild.grantPullPush(projects.frontend);
 		props.repositories.livekit.grantPullPush(projects.livekit);
 		props.frontendBucket.grantWrite(projects.frontend);
+		projects.frontend.role?.addToPrincipalPolicy(
+			new iam.PolicyStatement({
+				actions: ["cloudfront:CreateInvalidation"],
+				resources: [`arn:aws:cloudfront::${Stack.of(this).account}:distribution/${props.distribution.distributionId}`],
+			})
+		);
+
+		new CfnOutput(this, "GitHubActionsRoleArn", {
+			value: this.githubActionsRole.roleArn,
+			description: "IAM role ARN for GitHub Actions OIDC deployments",
+		});
 	}
 
 	private createProject(
