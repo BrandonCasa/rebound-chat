@@ -128,7 +128,7 @@
 		"@vitejs/plugin-react": "^4.7.0",
 		"concurrently": "^9.2.1",
 		"cross-env": "^7.0.3",
-		"electron": "^36.9.5",
+		"electron": "^39.8.5",
 		"electron-builder": "^26.0.12",
 		"globals": "^16.5.0",
 		"jsdom": "^26.1.0",
@@ -136,7 +136,7 @@
 		"nodemon": "^3.1.11",
 		"prettier": "^3.6.2",
 		"sass": "^1.94.2",
-		"vite": "^6.4.1",
+		"vite": "^6.4.2",
 		"wait-on": "^8.0.5",
 		"@playwright/test": "^1.59.1"
 	}
