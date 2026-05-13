@@ -85,3 +85,11 @@ Repository update, May 13, 2026:
 - Added a dev-only `runtimeSmokeMode` CDK context flag that sets `REBOUND_ECS_SMOKE_MODE=1` on API and worker task definitions only.
 - Added server startup handling so API smoke mode serves `/healthz` without MongoDB and worker smoke mode stays alive without starting MongoDB or live cleanup.
 - Added local tests covering the smoke-mode runtime guard and CDK task-definition wiring.
+
+Repository update, May 13, 2026:
+
+- Smoke Test was done successfully for `rebound-dev-api` and `rebound-dev-worker`. `rebound-dev-api` logged nothing, and was running. `rebound-dev-worker` logged:
+
+```powershell
+{"status":"ok","service":"worker"}
+```
