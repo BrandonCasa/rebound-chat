@@ -18,7 +18,8 @@
 	},
 	"dependencies": {
 		"aws-cdk-lib": "^2.200.0",
-		"constructs": "^10.4.2"
+		"constructs": "^10.4.2",
+		"rebound-cdk": "link:"
 	},
 	"devDependencies": {
 		"@types/node": "^25.7.0",

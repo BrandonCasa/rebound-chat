@@ -1,6 +1,8 @@
-overrides:
-  tough-cookie@<4.1.3: ">=4.1.3"
 
 onlyBuiltDependencies:
+  - '@prisma/engines'
   - esbuild
   - mongodb-memory-server
+  - prisma
+overrides:
+  tough-cookie@<4.1.3: ">=4.1.3"
