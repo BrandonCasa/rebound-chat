@@ -64,20 +64,20 @@ Reference ADR: `docs/adr/0001-aws-native-webrtc-platform.md`.
 ### Deployment state
 
 - Legacy production deploy workflow still exists in `.github/workflows/deploy-new.yml` (EC2 + PM2 + Nginx).
-- AWS pipeline scaffolding exists, but dev runtime is not yet serving live traffic.
+- AWS pipeline scaffolding exists in repo, but the deployed dev pipeline was destroyed externally and dev runtime is not yet serving live traffic.
 
 ## Verified AWS Dev Estate (`us-east-2`)
 
 Account: `722347332210`
 
-Stacks (all `CREATE_COMPLETE`):
+Stacks last verified during dev provisioning:
 
 - `Rebound-dev-Network`
 - `Rebound-dev-Data`
 - `Rebound-dev-Api`
 - `Rebound-dev-Frontend`
 - `Rebound-dev-Compute`
-- `Rebound-dev-Pipeline`
+- `Rebound-dev-Pipeline` was also provisioned, then destroyed externally; it must be recreated and reverified before pipeline-dependent deployment work resumes.
 
 Key observed outputs/resources:
 
@@ -91,6 +91,7 @@ Key observed outputs/resources:
 ## Known Gaps to Resolve During Remaining Phases
 
 - Compute services in `cdk/lib/compute-stack.ts` default to placeholder runtime; ECR image-tag overrides are now wired, but real image promotion is still pending.
+- Deployed pipeline rehydration is pending after external teardown.
 - No full API Gateway WebSocket route-handler runtime is in place yet.
 - LiveKit tokening/webhook path is scaffolded but not fully integrated.
 - Custom domains/ACM/Route53 wiring for dev hostnames is not complete.

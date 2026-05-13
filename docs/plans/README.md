@@ -9,8 +9,9 @@ This folder contains the active AWS-aligned planning set for the WebRTC migratio
 
 ## Current Execution Status
 
-- PR A ("CDK + Pipeline Correctness") is implemented in-repo and locally verified.
-- Next execution target is PR B ("Server Runtime Dependencies + S3 Promotion").
+- PR A ("CDK + Pipeline Correctness") remains implemented in-repo, but the deployed CDK pipeline was destroyed externally and should be treated as parked until rehydration.
+- PR B ("Server Runtime Dependencies + S3 Promotion") is implemented in-repo and locally verified.
+- Next execution target is PR C ("LiveKit Token/Webhook Integration").
 
 ## Baseline and Supporting Docs
 

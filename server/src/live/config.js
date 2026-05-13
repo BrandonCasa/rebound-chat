@@ -13,6 +13,8 @@ const resolveStorageBackend = (value) => {
 	return value === "s3" ? "s3" : "local";
 };
 
+const resolveLiveS3Bucket = (env = process.env) => env.S3_LIVE_BUCKET || env.LIVE_S3_BUCKET || "";
+
 const resolveLiveTransportDefault = (value, { logger: warningLogger = logger } = {}) => {
 	const normalized = String(value || "")
 		.trim()
@@ -50,7 +52,7 @@ const createLiveConfig = (env = process.env, options = {}) =>
 		maxSegmentBytes: parsePositiveInt(env.LIVE_MAX_SEGMENT_BYTES, 64 * 1024 * 1024),
 		segmentCacheSeconds: parsePositiveInt(env.LIVE_SEGMENT_CACHE_SECONDS, 300),
 		requireHttps: env.NODE_ENV === "production",
-		s3Bucket: env.LIVE_S3_BUCKET || env.S3_LIVE_BUCKET || "",
+		s3Bucket: resolveLiveS3Bucket(env),
 		s3Region: env.LIVE_S3_REGION || env.AWS_REGION || "us-east-1",
 		s3Prefix: (env.LIVE_S3_PREFIX || "live").replace(/^\/+|\/+$/g, ""),
 		s3Endpoint: env.LIVE_S3_ENDPOINT || "",
@@ -59,7 +61,7 @@ const createLiveConfig = (env = process.env, options = {}) =>
 		liveKitApiKey: env.LIVEKIT_API_KEY || "",
 		liveKitApiSecret: env.LIVEKIT_API_SECRET || "",
 		liveKitWebhookSecret: env.LIVEKIT_WEBHOOK_SECRET || "",
-		s3LiveBucket: env.S3_LIVE_BUCKET || env.LIVE_S3_BUCKET || "",
+		s3LiveBucket: resolveLiveS3Bucket(env),
 		s3MediaBucket: env.S3_MEDIA_BUCKET || "",
 	});
 

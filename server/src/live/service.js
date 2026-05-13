@@ -614,7 +614,7 @@ class LiveService {
 		const storageKey = this.buildStorageKey(session, "master.m3u8");
 		const playlistBuffer = Buffer.from(playlistText, "utf8");
 
-		await this.storage.writeBuffer(storageKey, playlistBuffer);
+		await this.storage.writeBuffer(storageKey, playlistBuffer, { contentType: PLAYLIST_CONTENT_TYPE });
 
 		this.upsertAssetMetadata(session, {
 			filename: "master.m3u8",
@@ -640,7 +640,7 @@ class LiveService {
 		const storageKey = this.buildStorageKey(session, "video.m3u8");
 		const playlistBuffer = Buffer.from(playlistText, "utf8");
 
-		await this.storage.writeBuffer(storageKey, playlistBuffer);
+		await this.storage.writeBuffer(storageKey, playlistBuffer, { contentType: PLAYLIST_CONTENT_TYPE });
 
 		session.recentSegmentNames = mergeRecentSegmentNames(session.recentSegmentNames, referencedSegmentNames, retentionCount);
 
@@ -675,7 +675,7 @@ class LiveService {
 		const contentType = resolveHlsContentType(filename);
 		const storageKey = this.buildStorageKey(session, filename);
 
-		await this.storage.writeBuffer(storageKey, body);
+		await this.storage.writeBuffer(storageKey, body, { contentType });
 
 		session.recentSegmentNames = mergeRecentSegmentNames(
 			session.recentSegmentNames,

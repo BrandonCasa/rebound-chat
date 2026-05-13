@@ -4,6 +4,8 @@ This plan is the active next slice for reaching a working AWS dev environment th
 
 It assumes the baseline in `docs/plans/00-master-plan.md` and the ADR in `docs/adr/0001-aws-native-webrtc-platform.md`.
 
+Current tactical note: the deployed CDK pipeline was destroyed externally after the first scaffolding work. Until it is recreated, prioritize codebase runtime slices that make the server, live media, and client paths AWS-ready without requiring the pipeline to be live.
+
 ## Scope and Constraints
 
 In scope:
@@ -20,7 +22,8 @@ Out of scope:
 
 ## Starting State (Required Assumptions)
 
-- `Rebound-dev-{Network,Data,Api,Frontend,Compute,Pipeline}` stacks exist.
+- `Rebound-dev-{Network,Data,Api,Frontend,Compute}` stacks were provisioned and validated.
+- `Rebound-dev-Pipeline` exists in repo/CDK shape but was destroyed externally and must be recreated before pipeline-dependent acceptance checks.
 - ECR repos exist but are empty.
 - ECS services exist with `desiredCount: 0`.
 - API Gateway HTTP and WebSocket APIs exist.
@@ -31,7 +34,7 @@ Out of scope:
 
 Goal: make CDK/Pipeline configuration internally consistent and ready for real deployments.
 
-Status: Implemented in-repo, local verification complete, dev-stack deploy verification pending via GitHub Actions.
+Status: Implemented in-repo, local verification complete, deployed pipeline rehydration pending.
 
 Changes:
 
@@ -62,6 +65,8 @@ Acceptance:
 
 Goal: make server runtime AWS integrations explicit and production-like in dev.
 
+Status: Implemented in-repo, local verification complete.
+
 Changes:
 
 - Add explicit server dependencies required for target integrations:
@@ -76,6 +81,19 @@ Acceptance:
 - Server starts cleanly with and without WebRTC transport enabled.
 - S3-backed live/media writes and reads pass integration checks in dev config.
 - Existing HLS route behavior remains intact.
+
+Implementation notes:
+
+- `server/package.json`, root `pnpm-lock.yaml`, and `server/pnpm-lock.yaml` include explicit `@aws-sdk/client-s3` and `livekit-server-sdk` dependencies.
+- `server/src/live/config.js` resolves the CDK-provided `S3_LIVE_BUCKET` first while preserving legacy `LIVE_S3_BUCKET` fallback and keeping `S3_MEDIA_BUCKET` visible for later media migration work.
+- `server/src/live/storage.js` has a first-class S3 adapter with configured key prefixes, clear missing-bucket errors, content-type propagation, batched deletes, and local-storage path escape protection.
+- `server/test/live.storage.test.js` covers S3 env resolution, S3 write/read/delete/prefix cleanup behavior, and local path safety without reaching AWS.
+
+Local verification:
+
+- `pnpm --prefix server exec mocha test/live.storage.test.js --timeout 20000`
+- `pnpm --prefix server exec cross-env NODE_ENV=test MONGOMS_PORT=27019 REBOUND_DEV_DB_PATH=./dev-test REBOUND_RESET_DEV_DB=1 mocha test/live.storage.test.js test/live.transport.test.js test/live.routes.test.js --timeout 20000`
+- `pnpm --prefix server test`
 
 ## PR C: LiveKit Token/Webhook Integration
 
@@ -210,7 +228,7 @@ Acceptance:
 
 ## PR J: Dev Deployment Workflow Cutover
 
-Goal: make dev deploys go through AWS pipeline path rather than SSH/PM2 flow.
+Goal: recreate the dev pipeline and make dev deploys go through AWS pipeline path rather than SSH/PM2 flow.
 
 Changes:
 
