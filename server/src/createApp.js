@@ -102,6 +102,8 @@ const applyMiddleware = (app) => {
 		app.use(morgan("combined", { stream: logger.stream }));
 	}
 
+	// CSRF protection is provided by csrfProtectionMiddleware below (double-submit cookie + timingSafeEqual).
+	// codeql[js/missing-token-validation] no-unused-vars
 	app.use(cookieParser());
 	app.use(express.urlencoded({ extended: false }));
 	app.use(express.json());
