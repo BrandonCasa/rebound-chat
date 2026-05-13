@@ -16,5 +16,6 @@ ENV SERVER_ROLE=worker
 RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
 COPY --from=deps /app/server/node_modules ./node_modules
 COPY server ./
+COPY shared /app/shared
 
 CMD ["node", "./src/app.js"]

@@ -17,6 +17,7 @@ ENV PORT=6001
 RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
 COPY --from=deps /app/server/node_modules ./node_modules
 COPY server ./
+COPY shared /app/shared
 
 EXPOSE 6001
 CMD ["node", "./src/app.js"]
