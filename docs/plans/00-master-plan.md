@@ -1,25 +1,29 @@
 # Master Plan 00: AWS-Native WebRTC Migration Baseline (Dev-First)
 
-This is the source-of-truth migration plan for moving Rebound to an AWS-native, WebRTC-first architecture while keeping HLS fallback available during rollout.
+This is the source-of-truth migration plan for moving Rebound to an AWS-native, WebRTC-first architecture while removing the legacy MongoDB/GridFS/Socket.IO/EC2 deployment stack.
+
+HLS may exist during migration as a short-lived compatibility path, but it is no longer treated as a permanent rollback architecture. The final target is AWS-native runtime, Aurora PostgreSQL persistence, S3 object/media storage, API Gateway WebSockets, ECS/Fargate services, CloudFront frontend delivery, and LiveKit/WebRTC live media.
 
 Scope for this document:
 
 - Align all plan paths with the current monorepo layout (`client/electron`, `client/frontend`, `server`, `shared`).
 - Record what is already complete versus what remains.
 - Focus on finishing a working dev environment in `us-east-2`.
-- Keep production cutover (`us-east-1`) and EC2 retirement out of scope for this plan revision.
+- Include explicit removal gates for MongoDB, GridFS, Socket.IO, EC2/PM2/Nginx deploys, and other legacy runtime assumptions.
+- Keep production cutover (`us-east-1`) as a later environment rollout, but do not preserve legacy systems as long-term product architecture.
 
 ## Locked Architecture Baseline
 
 The platform baseline remains:
 
 - Live transport primary: WebRTC via LiveKit.
-- Fallback and rollback path: HLS.
+- Temporary migration compatibility path: HLS, behind explicit cutover controls until WebRTC health gates pass.
 - Infra as code: CDK v2 TypeScript in `cdk/`.
 - Runtime: ECS Fargate.
 - Database target: Aurora PostgreSQL.
 - Object storage target: S3 for media/live assets/artifacts.
 - Realtime target: API Gateway WebSocket APIs replacing Socket.IO.
+- Legacy removal target: no MongoDB, Mongoose, GridFS, Socket.IO, EC2/PM2/Nginx app hosting, or SSH deploy workflow remains in supported runtime paths.
 
 Reference ADR: `docs/adr/0001-aws-native-webrtc-platform.md`.
 
@@ -36,18 +40,18 @@ Reference ADR: `docs/adr/0001-aws-native-webrtc-platform.md`.
 ### Server state
 
 - `server/src/app.js` supports `SERVER_ROLE=api|worker|combined|realtime`.
-- `server/src/socketio/` is still active and used.
-- `server/src/live/control/socket.js` still drives live control over Socket.IO.
-- `server/src/live/webrtc/` exists as scaffolding modules.
-- `server/src/live/service.js` already returns transport-aware session envelopes.
+- `server/src/socketio/` is still active and used, but is now a removal target.
+- `server/src/live/control/socket.js` still drives live control over Socket.IO and must move to API Gateway WebSockets.
+- `server/src/live/webrtc/` now contains LiveKit token/webhook integration helpers.
+- `server/src/live/service.js` returns transport-aware session envelopes and can advertise WebRTC when LiveKit config is valid.
 - `LIVE_TRANSPORT_DEFAULT` is already handled in `server/src/live/config.js`.
-- WebRTC availability is currently stubbed (not enabled end-to-end).
+- WebRTC is not yet enabled end-to-end across broadcaster and frontend.
 
 ### Data layer state
 
-- MongoDB/Mongoose remains canonical for most product data.
-- Prisma exists only for stream-session related models in `server/prisma/schema.prisma`.
-- GridFS is still active for existing media flows.
+- MongoDB/Mongoose remains canonical for most product data today, but is no longer acceptable as a target runtime dependency.
+- Prisma exists for stream-session related models in `server/prisma/schema.prisma` and must expand to all persisted product domains.
+- GridFS is still active for existing media flows and must be exported to S3, then deleted from runtime.
 
 ### AWS/CDK/infra state
 
@@ -63,7 +67,7 @@ Reference ADR: `docs/adr/0001-aws-native-webrtc-platform.md`.
 
 ### Deployment state
 
-- Legacy production deploy workflow still exists in `.github/workflows/deploy-new.yml` (EC2 + PM2 + Nginx).
+- Legacy production deploy workflow still exists in `.github/workflows/deploy-new.yml` (EC2 + PM2 + Nginx) and must be removed after AWS deployment parity.
 - AWS pipeline scaffolding exists in repo, but the deployed dev pipeline was destroyed externally and dev runtime is not yet serving live traffic.
 
 ## Verified AWS Dev Estate (`us-east-2`)
@@ -93,9 +97,10 @@ Key observed outputs/resources:
 - Compute services in `cdk/lib/compute-stack.ts` default to placeholder runtime; ECR image-tag overrides are now wired, but real image promotion is still pending.
 - Deployed pipeline rehydration is pending after external teardown.
 - No full API Gateway WebSocket route-handler runtime is in place yet.
-- LiveKit tokening/webhook path is scaffolded but not fully integrated.
+- LiveKit tokening/webhook path is implemented in-repo; broadcaster/frontend WebRTC integration remains pending.
 - Custom domains/ACM/Route53 wiring for dev hostnames is not complete.
-- Existing EC2 workflow still serves as production path.
+- Existing EC2 workflow still serves as production path today, but is a removal target rather than a future fallback.
+- MongoDB/Mongoose/GridFS remain in runtime code and must be replaced by Aurora/S3-backed repositories.
 
 ## Phase Status and Forward Plan
 
@@ -107,7 +112,7 @@ Completed outcomes:
 
 - AWS-native WebRTC baseline recorded in ADR.
 - LiveKit selected as SFU baseline.
-- HLS retained as fallback/rollback path.
+- HLS retained only as a temporary compatibility path during WebRTC validation.
 
 ### Phase 1 - CDK Foundation
 
@@ -137,7 +142,7 @@ Remaining in this phase:
 - Replace placeholder ECS task containers with real runtime images.
 - Bring selected services from `desiredCount: 0` to live smoke counts in dev.
 
-### Phase 3 - Aurora + S3 Migration
+### Phase 3 - Aurora + S3 Full Cutover
 
 Status: In progress (split)
 
@@ -159,15 +164,17 @@ Status: Pending
 
 Status: Pending
 
-- Introduce repository boundaries and migration strategy for users/auth/chat domains.
-- Keep production behavior stable while dual-write/read strategies are introduced.
+- Expand Prisma/Aurora schema and repositories for users, auth/session metadata, chat, stream sessions, media metadata, and remaining product data.
+- Replace direct Mongoose access with Aurora-backed repositories.
+- Use temporary dual-read/export checks only as migration tooling; do not keep MongoDB as a runtime fallback.
 
-#### Phase 3d - GridFS to S3 export and cutover
+#### Phase 3d - MongoDB/GridFS export and deletion
 
 Status: Pending
 
-- Build export tooling and metadata reconciliation.
-- Feature-flag the serving path switch.
+- Build one-way MongoDB/GridFS export tooling into Aurora/S3 with idempotent verification.
+- Cut media serving/upload paths to S3-backed metadata and objects.
+- Delete GridFS reads/writes, Mongoose models, MongoDB boot code, Mongo memory server tests, and Mongo-specific dependencies after verification passes.
 
 ### Phase 4 - API Gateway WebSocket Migration
 
@@ -179,16 +186,17 @@ Required outcomes:
 - Implement `$connect`, `$disconnect`, and routed product message handling.
 - Store and manage connection state in DynamoDB table.
 - Migrate live-control and chat/presence/watchers behavior off Socket.IO.
+- Remove Socket.IO runtime startup and dependencies after route parity is verified.
 
 ### Phase 5 - LiveKit Session/Token/Webhook Integration
 
-Status: Pending
+Status: Implemented in-repo, local verification complete
 
 Required outcomes:
 
-- Implement real token minting and role scoping in `server/src/live/webrtc`.
-- Wire signed webhook ingestion and room/session lifecycle mapping.
-- Advertise true WebRTC availability in session responses when configured.
+- Keep real token minting and role scoping covered in `server/src/live/webrtc`.
+- Keep signed webhook ingestion and room/session lifecycle mapping covered in tests.
+- Continue wiring broadcaster/frontend paths so WebRTC can become the default live transport.
 
 ### Phase 6 - Electron Broadcaster Transport Split
 
@@ -208,7 +216,7 @@ Required outcomes:
 
 - Add transport-aware player structure under `client/frontend/src/features/player/transports`.
 - Integrate LiveKit SDK playback path.
-- Preserve HLS fallback behavior and UX.
+- Preserve HLS fallback behavior only behind an explicit temporary migration flag.
 
 ### Phase 8 - WebRTC Stats and Control Alignment
 
@@ -220,15 +228,15 @@ Required outcomes:
 - Add transport-aware recommendation logic.
 - Surface meaningful streamer/viewer health signals in UI.
 
-### Phase 9 - HLS Fallback, Recording, Cleanup
+### Phase 9 - Legacy Live Cleanup
 
 Status: Pending
 
 Required outcomes:
 
-- Keep robust HLS fallback while WebRTC matures.
+- Move HLS fallback behind an explicit temporary compatibility flag or remove it from default session creation once WebRTC health gates pass.
 - Ensure cleanup for LiveKit rooms, S3 prefixes, stale session rows, and stale realtime connections.
-- Keep feature-flag rollback path fast and documented.
+- Delete HLS-only assumptions, legacy env names, and local-only live relay behavior that no longer maps to the AWS target.
 
 ### Phase 10 - Dev CI/CD Cutover (`us-east-2`)
 
@@ -239,14 +247,26 @@ Required outcomes:
 - Use AWS pipeline path to build/push/deploy dev services.
 - Replace placeholder ECS runtime with real images.
 - Deploy frontend assets + invalidation through CloudFront flow.
-- Keep `.github/workflows/deploy-new.yml` as production-only fallback until future production plan.
+- Remove or disable `.github/workflows/deploy-new.yml` after AWS deployment parity is verified.
+
+### Phase 11 - Legacy System Deletion
+
+Status: Pending
+
+Required outcomes:
+
+- Remove MongoDB, Mongoose, GridFS, and Mongo memory server dependencies and configuration.
+- Remove Socket.IO runtime and client dependencies after API Gateway WebSocket migration.
+- Remove EC2/PM2/Nginx deployment workflows, scripts, docs, and environment assumptions.
+- Update developer setup so local and CI use Aurora/PostgreSQL-compatible services plus S3/LocalStack-compatible object storage.
+- Add static checks or tests that fail if legacy runtime dependencies are reintroduced.
 
 ## Non-Goals for This Revision
 
-- Production cutover in `us-east-1`.
-- Retirement of EC2/PM2/Nginx.
+- Running production traffic in `us-east-1` before dev AWS parity is proven.
 - Reintroducing old deferred HLS-only plan set.
 - Building a custom SFU.
+- Keeping MongoDB/GridFS/Socket.IO/EC2 deployment paths as permanent fallbacks.
 
 ## Exit Criteria for This Master Plan Revision
 
@@ -256,3 +276,5 @@ This plan revision is considered aligned when:
 - All path references match current repo layout.
 - Completed vs pending statuses reflect actual code and deployed dev estate.
 - Remaining work is organized around reaching a real dev AWS live path before any production cutover.
+- Aurora/S3/API Gateway/ECS/LiveKit are the only supported target systems.
+- MongoDB, Mongoose, GridFS, Socket.IO, EC2/PM2/Nginx app hosting, SSH deploys, and HLS-only assumptions have explicit removal gates.

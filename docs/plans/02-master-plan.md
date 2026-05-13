@@ -1,6 +1,8 @@
 # Master Plan 02: Dev Cutover Execution Slice (`us-east-2`)
 
-This plan is the active next slice for reaching a working AWS dev environment that serves Rebound traffic with WebRTC primary and HLS fallback available.
+This plan is the active next slice for reaching a working AWS dev environment that serves Rebound traffic from the AWS-native platform only.
+
+The target state is explicit: Aurora PostgreSQL is the only application database, S3 is the only media/object store, API Gateway WebSockets replace Socket.IO, ECS/Fargate replaces EC2/PM2/Nginx runtime hosting, and LiveKit/WebRTC is the primary live media path. MongoDB, Mongoose, GridFS, Socket.IO runtime paths, SSH/PM2 deploys, and legacy HLS-only assumptions are removal targets, not long-term fallbacks.
 
 It assumes the baseline in `docs/plans/00-master-plan.md` and the ADR in `docs/adr/0001-aws-native-webrtc-platform.md`.
 
@@ -13,12 +15,16 @@ In scope:
 - Dev environment (`us-east-2`) only.
 - Converting already-provisioned AWS resources into running services.
 - Replacing stubs/placeholders with working runtime behavior.
+- Migrating all runtime data access away from MongoDB/Mongoose/GridFS to Aurora PostgreSQL and S3.
+- Removing legacy runtime and deployment paths as soon as their AWS replacements are verified.
+- Keeping short-lived compatibility shims only when needed to export data, compare behavior, or avoid data loss during cutover.
 
 Out of scope:
 
 - Production cutover in `us-east-1`.
-- EC2/PM2/Nginx retirement.
-- Removing HLS fallback.
+- Indefinite rollback to MongoDB, GridFS, Socket.IO, EC2, PM2, Nginx, or SSH-based deploys.
+- Adding new features on top of legacy persistence or deployment systems.
+- Treating HLS as a permanent primary live transport.
 
 ## Starting State (Required Assumptions)
 
@@ -29,6 +35,8 @@ Out of scope:
 - API Gateway HTTP and WebSocket APIs exist.
 - CloudFront distribution exists but frontend bucket is not serving the full app flow yet.
 - Legacy deployment workflow `.github/workflows/deploy-new.yml` still exists.
+- MongoDB/Mongoose/GridFS paths still exist in the app and must be migrated or deleted before this plan is complete.
+- Socket.IO live-control/chat paths still exist and must be replaced by API Gateway WebSocket routes before this plan is complete.
 
 ## PR A: CDK + Pipeline Correctness
 
@@ -74,7 +82,7 @@ Changes:
   - S3 client package
 - Promote `server/src/live/storage.js` S3 path from optional to first-class and tested.
 - Wire env-based bucket config (`S3_LIVE_BUCKET`, `S3_MEDIA_BUCKET`) consistently.
-- Keep behavior backward-compatible under `LIVE_TRANSPORT_DEFAULT=hls`.
+- Keep behavior compatible under `LIVE_TRANSPORT_DEFAULT=hls` only as a temporary migration aid while WebRTC is being verified.
 
 Acceptance:
 
@@ -85,7 +93,7 @@ Acceptance:
 Implementation notes:
 
 - `server/package.json`, root `pnpm-lock.yaml`, and `server/pnpm-lock.yaml` include explicit `@aws-sdk/client-s3` and `livekit-server-sdk` dependencies.
-- `server/src/live/config.js` resolves the CDK-provided `S3_LIVE_BUCKET` first while preserving legacy `LIVE_S3_BUCKET` fallback and keeping `S3_MEDIA_BUCKET` visible for later media migration work.
+- `server/src/live/config.js` resolves the CDK-provided `S3_LIVE_BUCKET` first. Legacy `LIVE_S3_BUCKET` compatibility is temporary and must be removed in the legacy cleanup slice.
 - `server/src/live/storage.js` has a first-class S3 adapter with configured key prefixes, clear missing-bucket errors, content-type propagation, batched deletes, and local-storage path escape protection.
 - `server/test/live.storage.test.js` covers S3 env resolution, S3 write/read/delete/prefix cleanup behavior, and local path safety without reaching AWS.
 
@@ -99,6 +107,8 @@ Local verification:
 
 Goal: make WebRTC session paths real at the API layer.
 
+Status: Implemented in-repo, local verification complete.
+
 Changes:
 
 - Implement actual tokening in `server/src/live/webrtc/{tokens,config,sessionMapper}.js`.
@@ -111,7 +121,18 @@ Acceptance:
 
 - Publisher/viewer token scopes are enforced by tests.
 - Missing LiveKit config fails gracefully when WebRTC is requested.
-- `LIVE_TRANSPORT_DEFAULT=hls` remains fully compatible.
+- `LIVE_TRANSPORT_DEFAULT=hls` remains compatible only as a temporary migration mode.
+
+Implementation notes:
+
+- `server/src/live/webrtc/{tokens,config,sessionMapper,webhooks}.js` now mint scoped LiveKit JWTs, normalize LiveKit config, map rooms to sessions, and verify signed webhook callbacks.
+- `server/src/live/service.js` advertises WebRTC only when LiveKit token config is valid and keeps HLS fields present for hybrid compatibility.
+- `server/src/routes/live.js` exposes signed LiveKit webhook ingestion at `/live/api/webhooks/livekit`.
+
+Local verification:
+
+- `pnpm --prefix server exec cross-env NODE_ENV=test MONGOMS_PORT=27019 REBOUND_DEV_DB_PATH=./dev-test REBOUND_RESET_DEV_DB=1 mocha test/live.webrtc.tokens.test.js test/live.storage.test.js test/live.transport.test.js test/live.routes.test.js --timeout 20000`
+- `pnpm --prefix server test`
 
 ## PR D: First Real Image Push + ECS Smoke (API/Worker)
 
@@ -134,7 +155,7 @@ Acceptance:
 
 ## PR E: API Gateway WebSocket Runtime (`server/src/realtime`)
 
-Goal: replace Socket.IO runtime path for dev with API Gateway WebSocket handlers.
+Goal: replace Socket.IO runtime path with API Gateway WebSocket handlers and make Socket.IO removable.
 
 Changes:
 
@@ -145,16 +166,18 @@ Changes:
   - DynamoDB connection state access
 - Implement baseline routes for chat/presence/watchers/live-control.
 - Deploy as the `realtime` ECS service.
+- Remove Socket.IO server startup from AWS roles after route parity is verified.
 
 Acceptance:
 
 - Connect/disconnect lifecycle persisted in connection table.
 - Fanout reaches connected clients for migrated routes.
 - Runtime degrades gracefully on stale connection IDs.
+- No dev AWS runtime path depends on `server/src/socketio/`.
 
 ## PR F: Frontend LiveKit Player + Transport Picker
 
-Goal: make viewer playback transport-aware in frontend.
+Goal: make viewer playback WebRTC-first in frontend while retaining temporary HLS compatibility during cutover.
 
 Changes:
 
@@ -162,18 +185,18 @@ Changes:
   - `client/frontend/src/features/player/transports/`
   - `client/frontend/src/features/player/hooks/` updates as needed
 - Integrate LiveKit SDK playback path.
-- Preserve HLS fallback selection path.
+- Preserve HLS fallback selection path only behind an explicit temporary compatibility flag.
 - Update stream/share pages so they do not assume HLS-only `playbackUrl`.
 
 Acceptance:
 
 - Browser connects to WebRTC playback in dev where available.
 - WebRTC failure paths fall back to HLS when configured.
-- Existing HLS-only sessions remain playable.
+- Existing HLS-only sessions remain playable until the legacy live cleanup slice removes HLS-only session creation.
 
 ## PR G: Electron Broadcaster Transport Split
 
-Goal: separate broadcaster transport orchestration from monolithic manager code.
+Goal: separate broadcaster transport orchestration from monolithic manager code and make WebRTC publishing the target path.
 
 Changes:
 
@@ -182,13 +205,14 @@ Changes:
   - `client/electron/streaming/transports/hlsTransport.js`
   - `client/electron/streaming/transports/transportState.js`
 - Wire `client/electron/streaming/output/whip.js` as selectable output.
-- Keep current HLS pipeline operational.
+- Keep current HLS pipeline operational only as temporary compatibility during WebRTC validation.
 
 Acceptance:
 
-- Broadcaster can run HLS-only, WebRTC-only, and hybrid mode in dev (feature-gated as needed).
+- Broadcaster can run WebRTC-only and hybrid mode in dev, with HLS-only limited to temporary migration tests.
 - Stop/teardown semantics are stable in each mode.
 - Existing streaming tests remain green or updated with equivalent coverage.
+- WebRTC publishing has a clear promotion gate after which HLS-only broadcast code can be removed.
 
 ## PR H: Dev Domains, TLS, and Frontend Delivery Hardening
 
@@ -209,31 +233,36 @@ Acceptance:
 - TLS is valid across frontend/api/ws/rtc endpoints.
 - Frontend deploy + invalidate flow is repeatable.
 
-## PR I: GridFS -> S3 Export and Feature-Flagged Media Switch
+## PR I: Aurora + S3 Data Cutover and MongoDB/GridFS Removal
 
-Goal: begin media storage migration without breaking existing behavior.
+Goal: remove MongoDB/Mongoose/GridFS from runtime by moving all persisted application data to Aurora PostgreSQL and all media/object data to S3.
 
 Changes:
 
-- Build export tooling for GridFS objects to S3 buckets.
-- Store and verify mapping metadata.
-- Add feature flag to route media serving between GridFS and S3.
-- Keep rollback path to GridFS while migration validates.
+- Expand Prisma/Aurora schema and repository coverage for users, auth/session metadata, chat, stream sessions, media metadata, and any remaining product data.
+- Replace direct Mongoose model access with repository interfaces backed by Aurora.
+- Build one-way export tooling from MongoDB/GridFS into Aurora/S3 with idempotent verification reports.
+- Move media serving and upload paths to S3-backed metadata and object access.
+- Remove GridFS reads/writes after migrated data verification passes.
+- Delete Mongoose models, MongoDB connection boot, GridFS bucket initialization, Mongo memory server test dependencies, and Mongo-specific env/config.
+- Remove `MONGOMS_*`, `REBOUND_DEV_DB_PATH`, Mongo URI, GridFS, and Mongoose setup from tests and local scripts.
 
 Acceptance:
 
-- Exported sample set is readable from S3 via app routes.
-- Existing media URLs remain compatible or redirect cleanly.
-- No auth regressions on media access.
+- Full server test suite runs without MongoDB, Mongo memory server, Mongoose, or GridFS.
+- Runtime starts in API/worker/realtime roles with Aurora and S3 configured, and fails fast if legacy MongoDB config is supplied as the active store.
+- Exported data has count/checksum verification for each migrated collection/object family.
+- Existing public media URLs either resolve through Aurora/S3 metadata or redirect cleanly without reading GridFS.
+- `server/package.json` no longer includes MongoDB, Mongoose, GridFS, or Mongo memory server packages.
 
 ## PR J: Dev Deployment Workflow Cutover
 
-Goal: recreate the dev pipeline and make dev deploys go through AWS pipeline path rather than SSH/PM2 flow.
+Goal: recreate the dev pipeline and make dev deploys go through AWS pipeline path only.
 
 Changes:
 
 - Add/update GitHub workflow for dev that triggers AWS build/deploy pipeline.
-- Keep `.github/workflows/deploy-new.yml` intact for production fallback.
+- Remove or disable `.github/workflows/deploy-new.yml` once the AWS dev deployment path is repeatable.
 - Document release runbook for dev deployments.
 
 Acceptance:
@@ -241,6 +270,24 @@ Acceptance:
 - A single GitHub-triggered dev deployment builds, pushes, and updates ECS services.
 - Frontend artifacts publish and invalidate CloudFront.
 - Rollback to prior dev task definition revision is documented and tested.
+- No dev deployment path uses SSH, PM2, Nginx, or EC2-hosted application processes.
+
+## PR K: Legacy Runtime Removal
+
+Goal: delete legacy runtime code and configuration after AWS replacements are verified.
+
+Changes:
+
+- Remove Socket.IO server/runtime code after API Gateway WebSocket route parity is accepted.
+- Remove HLS-only live session assumptions after WebRTC publish/playback is the default and hybrid fallback gates are complete.
+- Remove legacy env variables, scripts, docs, task assumptions, and tests tied to EC2/PM2/Nginx, MongoDB/GridFS, Socket.IO, or local-only HLS relay behavior.
+- Update user-facing and developer docs to describe Aurora/S3/API Gateway/ECS/LiveKit as the only supported architecture.
+
+Acceptance:
+
+- Static searches for `mongoose`, `mongodb`, `GridFS`, `gridfs`, `socket.io`, `PM2`, `Nginx`, and `.github/workflows/deploy-new.yml` show no runtime or deployment dependencies.
+- Any remaining mentions are explicitly historical docs or migration notes.
+- Dev AWS smoke validates API, worker, realtime, frontend, and LiveKit without legacy services running.
 
 ## Cross-PR Verification Checklist
 
@@ -251,6 +298,8 @@ Run as applicable per PR:
 - `pnpm --filter rebound-cdk synth:dev`
 - `pnpm --prefix server test`
 - `pnpm --filter rebound-web build`
+- Prisma/Aurora migration and seed checks for migrated domains
+- S3 media/live object read/write checks without GridFS
 - `aws ecs describe-services` for desired/running counts
 - `aws ecr list-images` for pushed artifacts
 - `aws cloudformation describe-stacks` for expected outputs
@@ -261,6 +310,9 @@ Master Plan 02 is complete when:
 
 - Dev API, worker, realtime, and livekit services run as real ECS tasks.
 - WebRTC session tokening and playback paths are functional in dev.
-- HLS fallback remains available.
+- HLS fallback is either explicitly temporary behind a cutover flag or removed from default session creation.
 - Dev deployments run through AWS pipeline path.
+- Aurora PostgreSQL is the only application database used at runtime.
+- S3 is the only media/live object store used at runtime.
+- MongoDB, Mongoose, GridFS, Socket.IO, SSH deploys, PM2, and Nginx are absent from dev runtime and deployment paths.
 - Remaining production cutover work is clearly isolated for the next master plan.

@@ -11,7 +11,9 @@ This folder contains the active AWS-aligned planning set for the WebRTC migratio
 
 - PR A ("CDK + Pipeline Correctness") remains implemented in-repo, but the deployed CDK pipeline was destroyed externally and should be treated as parked until rehydration.
 - PR B ("Server Runtime Dependencies + S3 Promotion") is implemented in-repo and locally verified.
-- Next execution target is PR C ("LiveKit Token/Webhook Integration").
+- PR C ("LiveKit Token/Webhook Integration") is implemented in-repo and locally verified.
+- Current plan direction requires full removal of MongoDB/Mongoose/GridFS, Socket.IO runtime paths, EC2/PM2/Nginx deployment paths, and other legacy fallbacks as AWS-native replacements land.
+- Next execution target is PR D ("First Real Image Push + ECS Smoke") unless data-cutover sequencing is pulled forward.
 
 ## Baseline and Supporting Docs
 
