@@ -29,8 +29,8 @@ Out of scope:
 ## Starting State (Required Assumptions)
 
 - `Rebound-dev-{Network,Data,Api,Frontend,Compute}` stacks were provisioned and validated.
-- `Rebound-dev-Pipeline` exists in repo/CDK shape but was destroyed externally and must be recreated before pipeline-dependent acceptance checks.
-- ECR repos exist but are empty.
+- `Rebound-dev-Pipeline` has been recreated in `us-east-2` and CodeBuild projects are deployed with `DRY_RUN=false` for Plan D image pushes.
+- ECR repos exist; `rebound-dev-api` and `rebound-dev-worker` contain the first Plan D image tag.
 - ECS services exist with `desiredCount: 0`.
 - API Gateway HTTP and WebSocket APIs exist.
 - CloudFront distribution exists but frontend bucket is not serving the full app flow yet.
@@ -138,7 +138,7 @@ Local verification:
 
 Goal: run real API and worker containers on ECS in dev.
 
-Status: In progress; CDK deploy controls are being added and the tactical runbook is tracked in `docs/plans/03-plan-d-ecs-smoke.md`.
+Status: In progress; CDK deploy controls are implemented, the dev pipeline is rehydrated, API/worker images are pushed, and task definitions reference the pushed tags. ECS desired counts remain `0` until the production startup blocker is removed.
 
 Changes:
 
@@ -159,6 +159,15 @@ Implementation notes:
   - `serviceDesiredCounts.api=1`
   - `serviceDesiredCounts.worker=1`
 - Current blocker: real API/worker production startup still initializes MongoDB/Mongoose before the API listener starts. Do not promote desired counts for real images until that startup path is Aurora-ready or an explicit smoke-only startup mode is approved.
+
+Execution record, May 13, 2026:
+
+- Recreated `Rebound-dev-Pipeline` in `us-east-2`.
+- Set CodeBuild `DRY_RUN=false` through CDK context.
+- Pushed API/worker image tag `plan-d-bd49300ddfe1-20260513-003749`.
+- Updated API task definition to `722347332210.dkr.ecr.us-east-2.amazonaws.com/rebound-dev-api:plan-d-bd49300ddfe1-20260513-003749`.
+- Updated worker task definition to `722347332210.dkr.ecr.us-east-2.amazonaws.com/rebound-dev-worker:plan-d-bd49300ddfe1-20260513-003749`.
+- Left API/worker desired counts at `0` to avoid a known MongoDB-dependent startup crash loop.
 
 Acceptance:
 

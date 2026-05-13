@@ -81,7 +81,7 @@ Stacks last verified during dev provisioning:
 - `Rebound-dev-Api`
 - `Rebound-dev-Frontend`
 - `Rebound-dev-Compute`
-- `Rebound-dev-Pipeline` was also provisioned, then destroyed externally; it must be recreated and reverified before pipeline-dependent deployment work resumes.
+- `Rebound-dev-Pipeline` was recreated and reverified on May 13, 2026; CodeBuild projects are deployed with Plan D push mode enabled.
 
 Key observed outputs/resources:
 
@@ -90,12 +90,13 @@ Key observed outputs/resources:
 - HTTP API endpoint and WebSocket API endpoint present from `Rebound-dev-Api`.
 - CloudFront distribution and frontend bucket present from `Rebound-dev-Frontend`.
 - ECR repos present: `rebound-dev-api`, `rebound-dev-worker`, `rebound-dev-realtime`, `rebound-dev-livekit`, `rebound-dev-web-build`.
+- First Plan D API/worker images are pushed with tag `plan-d-bd49300ddfe1-20260513-003749`.
 - ECS services exist for api/worker/realtime/livekit with `desiredCount: 0`.
 
 ## Known Gaps to Resolve During Remaining Phases
 
-- Compute services in `cdk/lib/compute-stack.ts` default to placeholder runtime; ECR image-tag overrides are now wired, but real image promotion is still pending.
-- Deployed pipeline rehydration is pending after external teardown.
+- Compute services in `cdk/lib/compute-stack.ts` default to idle desired counts; ECR image-tag overrides are wired and API/worker task definitions now reference the first pushed Plan D images.
+- API/worker desired counts are still held at `0` because current production server startup initializes MongoDB/Mongoose before the API listener starts.
 - No full API Gateway WebSocket route-handler runtime is in place yet.
 - LiveKit tokening/webhook path is implemented in-repo; broadcaster/frontend WebRTC integration remains pending.
 - Custom domains/ACM/Route53 wiring for dev hostnames is not complete.

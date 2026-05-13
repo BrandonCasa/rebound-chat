@@ -8,7 +8,7 @@ phases:
     runtime-versions:
       nodejs: 22
     commands:
-      - corepack enable
+      - corepack enable && corepack prepare pnpm@10.32.1 --activate
       - pnpm install --frozen-lockfile
   pre_build:
     commands:

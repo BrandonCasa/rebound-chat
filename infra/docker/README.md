@@ -12,4 +12,4 @@ docker build -f infra/docker/livekit.Dockerfile -t rebound-livekit:local .
 docker build -f infra/docker/web-build.Dockerfile -t rebound-web-build:local .
 ```
 
-The Node images use Node 22 and pnpm through Corepack. Runtime role selection is controlled by `SERVER_ROLE`.
+The Node images use Node 22 and pnpm 10.32.1 through Corepack. Runtime role selection is controlled by `SERVER_ROLE`.

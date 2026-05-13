@@ -59,4 +59,22 @@ Keep `realtime` and `livekit` at `0` until their own smoke gates are ready.
 
 The current server production startup still initializes MongoDB/Mongoose before the API listener starts. Do not raise `api` or `worker` desired counts with real images until the task startup path either uses Aurora-backed runtime wiring or has an explicit, temporary smoke-only startup mode that is not treated as a production fallback.
 
-For now, a CDK deploy with `codeBuildDryRun=false` is useful to prepare the build projects and ECR push path. The final Plan D smoke remains blocked until the real image startup path will not crash-loop in ECS.
+For now, a CDK deploy with `codeBuildDryRun=false` prepares the build projects and ECR push path. The final Plan D smoke remains blocked until the real image startup path will not crash-loop in ECS.
+
+## Execution Record
+
+May 13, 2026:
+
+- Recreated `Rebound-dev-Pipeline` in `us-east-2`.
+- Verified `rebound-dev-api`, `rebound-dev-worker`, `rebound-dev-frontend`, and `rebound-dev-livekit` CodeBuild projects have `DRY_RUN=false`.
+- Built and pushed API image `722347332210.dkr.ecr.us-east-2.amazonaws.com/rebound-dev-api:plan-d-bd49300ddfe1-20260513-003749`.
+- Built and pushed worker image `722347332210.dkr.ecr.us-east-2.amazonaws.com/rebound-dev-worker:plan-d-bd49300ddfe1-20260513-003749`.
+- API digest: `sha256:458ca0d7c7e46eb9eb1fc754ff212a4d87e479445a080a13b6df523ddd6fd512`.
+- Worker digest: `sha256:aae0cd5cb5794b7ffafb1f9da2141c5ab43c390a3f46c483cd8f0da0770b2d56`.
+- Redeployed `Rebound-dev-Compute` so API and worker task definitions reference those image tags.
+- Verified API and worker ECS services are active with desired/running/pending counts at `0/0/0`.
+
+Build issue found and fixed:
+
+- Server Dockerfiles did not copy `server/pnpm-workspace.yaml`, so frozen pnpm installs could not match lockfile overrides.
+- Node Dockerfiles and Node-based CodeBuild buildspecs now pin pnpm `10.32.1` through Corepack for repeatable local and CodeBuild installs.
