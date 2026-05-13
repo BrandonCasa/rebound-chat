@@ -3,31 +3,63 @@ const parsePositiveInt = (value, fallback) => {
 	return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
-const createWebrtcConfig = (env = process.env) => ({
-	liveKitUrl: env.LIVEKIT_URL || "",
-	apiKey: env.LIVEKIT_API_KEY || "",
-	apiSecret: env.LIVEKIT_API_SECRET || "",
-	webhookSecret: env.LIVEKIT_WEBHOOK_SECRET || "",
-	roomPrefix: env.LIVEKIT_ROOM_PREFIX || "rebound-live",
-	tokenTtlSeconds: parsePositiveInt(env.LIVEKIT_TOKEN_TTL_SECONDS, 10 * 60),
+const firstValue = (source, keys, fallback = "") => {
+	for (const key of keys) {
+		const value = source?.[key];
+		if (value !== undefined && value !== null && value !== "") {
+			return value;
+		}
+	}
+
+	return fallback;
+};
+
+const createWebrtcConfig = (source = process.env) => ({
+	liveKitUrl: firstValue(source, ["LIVEKIT_URL", "liveKitUrl"]),
+	apiKey: firstValue(source, ["LIVEKIT_API_KEY", "liveKitApiKey", "apiKey"]),
+	apiSecret: firstValue(source, ["LIVEKIT_API_SECRET", "liveKitApiSecret", "apiSecret"]),
+	webhookSecret: firstValue(source, ["LIVEKIT_WEBHOOK_SECRET", "liveKitWebhookSecret", "webhookSecret"]),
+	roomPrefix: firstValue(source, ["LIVEKIT_ROOM_PREFIX", "liveKitRoomPrefix", "roomPrefix"], "rebound-live"),
+	tokenTtlSeconds: parsePositiveInt(firstValue(source, ["LIVEKIT_TOKEN_TTL_SECONDS", "liveKitTokenTtlSeconds", "tokenTtlSeconds"]), 10 * 60),
 });
 
 const getMissingLiveKitTokenConfig = (config = createWebrtcConfig()) => {
+	const resolvedConfig = createWebrtcConfig(config);
 	const missing = [];
-	if (!config.liveKitUrl) missing.push("LIVEKIT_URL");
-	if (!config.apiKey) missing.push("LIVEKIT_API_KEY");
-	if (!config.apiSecret) missing.push("LIVEKIT_API_SECRET");
+	if (!resolvedConfig.liveKitUrl) missing.push("LIVEKIT_URL");
+	if (!resolvedConfig.apiKey) missing.push("LIVEKIT_API_KEY");
+	if (!resolvedConfig.apiSecret) missing.push("LIVEKIT_API_SECRET");
+	return missing;
+};
+
+const getMissingLiveKitWebhookConfig = (config = createWebrtcConfig()) => {
+	const resolvedConfig = createWebrtcConfig(config);
+	const missing = [];
+	if (!resolvedConfig.apiKey) missing.push("LIVEKIT_API_KEY");
+	if (!resolvedConfig.apiSecret) missing.push("LIVEKIT_API_SECRET");
 	return missing;
 };
 
 const assertLiveKitTokenConfig = (config = createWebrtcConfig()) => {
-	const missing = getMissingLiveKitTokenConfig(config);
+	const resolvedConfig = createWebrtcConfig(config);
+	const missing = getMissingLiveKitTokenConfig(resolvedConfig);
 
 	if (missing.length > 0) {
 		throw new Error(`Missing LiveKit token configuration: ${missing.join(", ")}`);
 	}
 
-	return config;
+	return resolvedConfig;
 };
 
-export { assertLiveKitTokenConfig, createWebrtcConfig, getMissingLiveKitTokenConfig };
+const assertLiveKitWebhookConfig = (config = createWebrtcConfig()) => {
+	const resolvedConfig = createWebrtcConfig(config);
+	const missing = getMissingLiveKitWebhookConfig(resolvedConfig);
+
+	if (missing.length > 0) {
+		throw new Error(`Missing LiveKit webhook configuration: ${missing.join(", ")}`);
+	}
+
+	return resolvedConfig;
+};
+
+export { assertLiveKitTokenConfig, assertLiveKitWebhookConfig, createWebrtcConfig, getMissingLiveKitTokenConfig, getMissingLiveKitWebhookConfig };

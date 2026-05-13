@@ -25,9 +25,9 @@ const createConfig = (overrides = {}) =>
 	);
 
 describe("live transport-aware session responses", () => {
-	it("defaults missing transport config to HLS while preserving legacy fields", () => {
+	it("defaults missing transport config to HLS while preserving legacy fields", async () => {
 		const service = new LiveService(createConfig());
-		const response = service.createSessionResponse(createSession(), "ingest-secret", "https://example.test");
+		const response = await service.createSessionResponse(createSession(), "ingest-secret", "https://example.test");
 
 		expect(response.sessionId).to.equal("session-123");
 		expect(response.ingestSecret).to.equal("ingest-secret");
@@ -56,18 +56,44 @@ describe("live transport-aware session responses", () => {
 		expect(warnings[0]).to.include("invalid LIVE_TRANSPORT_DEFAULT");
 	});
 
-	it("advertises hybrid and WebRTC modes as unavailable until LiveKit tokens are wired", () => {
+	it("fails gracefully when WebRTC is requested without LiveKit config", async () => {
 		for (const mode of ["hybrid", "webrtc"]) {
 			const service = new LiveService(createConfig({ LIVE_TRANSPORT_DEFAULT: mode }));
-			const response = service.createSessionResponse(createSession({ transportMode: mode }), "ingest-secret");
+			const response = await service.createSessionResponse(createSession({ transportMode: mode }), "ingest-secret");
 
 			expect(response.transport.mode).to.equal(mode);
 			expect(response.transport.webrtc.available).to.equal(false);
-			expect(response.transport.webrtc.reason).to.equal("livekit_token_layer_not_enabled");
+			expect(response.transport.webrtc.reason).to.equal("missing_livekit_config");
+			expect(response.transport.webrtc.missingConfig).to.deep.equal(["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"]);
 			expect(response.ingest.webrtc).to.not.have.property("token");
 			expect(response.playback.webrtc).to.not.have.property("token");
 			expect(response.ingest.hls.available).to.equal(true);
 			expect(response.playback.hls.available).to.equal(true);
 		}
+	});
+
+	it("advertises WebRTC tokens only when LiveKit config is valid", async () => {
+		const service = new LiveService(
+			createConfig({
+				LIVE_TRANSPORT_DEFAULT: "hybrid",
+				LIVEKIT_URL: "wss://livekit.example.test",
+				LIVEKIT_API_KEY: "test-key",
+				LIVEKIT_API_SECRET: "test-secret",
+				LIVEKIT_TOKEN_TTL_SECONDS: "300",
+			})
+		);
+		const response = await service.createSessionResponse(createSession({ transportMode: "hybrid" }), "ingest-secret");
+
+		expect(response.transport.mode).to.equal("hybrid");
+		expect(response.transport.webrtc.available).to.equal(true);
+		expect(response.transport.webrtc.roomName).to.equal("rebound-live-session-123");
+		expect(response.ingest.hls.available).to.equal(true);
+		expect(response.playback.hls.available).to.equal(true);
+		expect(response.ingest.webrtc.available).to.equal(true);
+		expect(response.ingest.webrtc.role).to.equal("publisher");
+		expect(response.ingest.webrtc.token).to.be.a("string");
+		expect(response.playback.webrtc.available).to.equal(true);
+		expect(response.playback.webrtc.role).to.equal("viewer");
+		expect(response.playback.webrtc.token).to.be.a("string");
 	});
 });

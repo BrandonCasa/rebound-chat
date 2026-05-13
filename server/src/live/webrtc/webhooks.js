@@ -1,12 +1,7 @@
-import { createWebrtcConfig } from "./config.js";
+import { WebhookReceiver } from "livekit-server-sdk";
 
-const assertWebhookConfig = (config = createWebrtcConfig()) => {
-	if (!config.webhookSecret) {
-		throw new Error("LIVEKIT_WEBHOOK_SECRET is required to verify LiveKit webhooks.");
-	}
-
-	return config;
-};
+import { assertLiveKitWebhookConfig, createWebrtcConfig } from "./config.js";
+import { mapLiveKitWebhookEventToSession } from "./sessionMapper.js";
 
 const parseLiveKitWebhookEvent = (payload) => {
 	if (Buffer.isBuffer(payload)) {
@@ -20,15 +15,32 @@ const parseLiveKitWebhookEvent = (payload) => {
 	return payload;
 };
 
-const verifyLiveKitWebhook = ({ payload, signature, config = createWebrtcConfig() }) => {
-	assertWebhookConfig(config);
+const normalizeWebhookBody = (payload) => {
+	if (Buffer.isBuffer(payload)) {
+		return payload.toString("utf8");
+	}
+
+	if (typeof payload === "string") {
+		return payload;
+	}
+
+	return JSON.stringify(payload);
+};
+
+const verifyLiveKitWebhook = async ({ payload, authorization, signature, config = createWebrtcConfig() }) => {
+	const resolvedConfig = assertLiveKitWebhookConfig(config);
+	const body = normalizeWebhookBody(payload);
+	const authHeader = authorization || signature || "";
+	const receiver = new WebhookReceiver(resolvedConfig.apiKey, resolvedConfig.apiSecret);
+	const event = await receiver.receive(body, authHeader);
+	const mappedSession = mapLiveKitWebhookEventToSession(event, { roomPrefix: resolvedConfig.roomPrefix });
 
 	return {
-		verified: false,
-		signaturePresent: Boolean(signature),
-		event: parseLiveKitWebhookEvent(payload),
-		reason: "livekit_webhook_signature_verification_not_wired",
+		verified: true,
+		signaturePresent: Boolean(authHeader),
+		event,
+		...mappedSession,
 	};
 };
 
-export { assertWebhookConfig, parseLiveKitWebhookEvent, verifyLiveKitWebhook };
+export { normalizeWebhookBody, parseLiveKitWebhookEvent, verifyLiveKitWebhook };

@@ -23,6 +23,11 @@ import {
 
 const isLiveRequest = (req) => req.path === "/live" || req.path.startsWith("/live/");
 
+const skipLiveRequest = (middleware) => (req, res, next) => {
+	if (isLiveRequest(req)) return next();
+	return middleware(req, res, next);
+};
+
 const csrfTokenMiddleware = (req, res, next) => {
 	if (isLiveRequest(req)) return next();
 
@@ -105,8 +110,8 @@ const applyMiddleware = (app) => {
 	// CSRF protection is provided by csrfProtectionMiddleware below (double-submit cookie + timingSafeEqual).
 	// codeql[js/missing-token-validation] no-unused-vars
 	app.use(cookieParser());
-	app.use(express.urlencoded({ extended: false }));
-	app.use(express.json());
+	app.use(skipLiveRequest(express.urlencoded({ extended: false })));
+	app.use(skipLiveRequest(express.json()));
 
 	// Apply method override before CSRF checks so overridden methods are protected correctly.
 	app.use(methodOverride());

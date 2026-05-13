@@ -61,6 +61,8 @@ const createLiveConfig = (env = process.env, options = {}) =>
 		liveKitApiKey: env.LIVEKIT_API_KEY || "",
 		liveKitApiSecret: env.LIVEKIT_API_SECRET || "",
 		liveKitWebhookSecret: env.LIVEKIT_WEBHOOK_SECRET || "",
+		liveKitRoomPrefix: env.LIVEKIT_ROOM_PREFIX || "rebound-live",
+		liveKitTokenTtlSeconds: parsePositiveInt(env.LIVEKIT_TOKEN_TTL_SECONDS, 10 * 60),
 		s3LiveBucket: resolveLiveS3Bucket(env),
 		s3MediaBucket: env.S3_MEDIA_BUCKET || "",
 	});

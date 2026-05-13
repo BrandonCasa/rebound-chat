@@ -1,10 +1,33 @@
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { AccessToken } from "livekit-server-sdk";
+
 import { expect, request, createBackend, stopBackend, resetUsers, registerUser, resetLiveSessions } from "./helpers/authTestUtils.js";
+
+import { createLiveConfig } from "../src/live/config.js";
+import { LiveService } from "../src/live/service.js";
+import { buildLiveKitRoomName } from "../src/live/webrtc/sessionMapper.js";
 
 const StreamSessionModel = (await import("../src/models/StreamSession.js")).default;
 const liveRuntime = (await import("../src/live/runtime.js")).default;
+
+const liveKitEnv = {
+	NODE_ENV: "test",
+	LIVE_STORAGE_DIR: process.env.LIVE_STORAGE_DIR,
+	LIVE_TRANSPORT_DEFAULT: "hybrid",
+	LIVEKIT_URL: "wss://livekit.example.test",
+	LIVEKIT_API_KEY: "test-key",
+	LIVEKIT_API_SECRET: "test-secret",
+	LIVEKIT_ROOM_PREFIX: "rebound-live",
+};
+
+const createWebhookAuthorization = async (body) => {
+	const accessToken = new AccessToken(liveKitEnv.LIVEKIT_API_KEY, liveKitEnv.LIVEKIT_API_SECRET);
+	accessToken.sha256 = crypto.createHash("sha256").update(body).digest("base64");
+	return accessToken.toJwt();
+};
 
 const createSession = async (agent, overrides = {}) => {
 	const response = await agent
@@ -290,6 +313,48 @@ describe("Live HLS relay routes", () => {
 		expect(segmentResponse.header["access-control-allow-origin"]).to.equal(origin);
 
 		agent.close();
+	});
+
+	it("accepts signed LiveKit webhook callbacks as raw bodies", async () => {
+		const originalConfig = liveRuntime.config;
+		const originalService = liveRuntime.service;
+		const config = createLiveConfig(liveKitEnv, { logger: { warn() {} } });
+		liveRuntime.config = config;
+		liveRuntime.service = new LiveService(config);
+
+		const agent = request.agent(backend.server);
+		try {
+			const { sessionId } = await createSession(agent, { label: "WebRTC room" });
+			const roomName = buildLiveKitRoomName(sessionId, { roomPrefix: liveKitEnv.LIVEKIT_ROOM_PREFIX });
+			const payload = JSON.stringify({
+				event: "room_started",
+				room: {
+					name: roomName,
+				},
+			});
+			const authorization = await createWebhookAuthorization(payload);
+
+			const webhookResponse = await agent
+				.post("/live/api/webhooks/livekit")
+				.set("Authorization", authorization)
+				.set("Content-Type", "application/webhook+json")
+				.send(payload);
+
+			expect(webhookResponse.status).to.equal(202);
+			expect(webhookResponse.body).to.include({
+				received: true,
+				verified: true,
+				event: "room_started",
+				roomName,
+				sessionId,
+				handled: true,
+				sessionFound: true,
+			});
+		} finally {
+			liveRuntime.config = originalConfig;
+			liveRuntime.service = originalService;
+			agent.close();
+		}
 	});
 
 	it("keeps only a rolling segment window from the latest media playlist", async () => {

@@ -43,6 +43,11 @@ const rawSegmentParser = express.raw({
 	limit: liveRuntime.config.maxSegmentBytes,
 });
 
+const liveKitWebhookParser = express.raw({
+	type: ["application/webhook+json", "application/json"],
+	limit: "256kb",
+});
+
 const jsonParser = express.json({ limit: "32kb" });
 
 const isHttpsRequest = (req) => {
@@ -162,7 +167,29 @@ router.post("/api/session", createLimiter, authorizeCreateSession, jsonParser, a
 			enforceSingleUserActive: Boolean(accountUser),
 		});
 
-		return res.status(201).json(liveRuntime.service.createSessionResponse(session, ingestSecret, getRequestOrigin(req)));
+		return res.status(201).json(await liveRuntime.service.createSessionResponse(session, ingestSecret, getRequestOrigin(req)));
+	} catch (err) {
+		return sendLiveError(res, err);
+	}
+});
+
+router.post("/api/webhooks/livekit", createLimiter, liveKitWebhookParser, async (req, res) => {
+	try {
+		const webhook = await liveRuntime.service.ingestLiveKitWebhook({
+			payload: req.body,
+			authorization: req.get("Authorization") || req.get("Authorize"),
+		});
+
+		return res.status(202).json({
+			received: true,
+			verified: webhook.verified,
+			event: webhook.eventName,
+			roomName: webhook.roomName,
+			sessionId: webhook.sessionId || null,
+			handled: webhook.handled,
+			sessionFound: webhook.sessionFound,
+			reason: webhook.reason || null,
+		});
 	} catch (err) {
 		return sendLiveError(res, err);
 	}

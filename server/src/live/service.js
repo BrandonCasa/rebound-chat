@@ -6,6 +6,10 @@ import { liveConfig } from "./config.js";
 import { PLAYLIST_CONTENT_TYPE, resolveHlsContentType } from "./mime.js";
 import { normalizeMasterPlaylist, normalizeMediaPlaylist, sanitizeUploadedFilename } from "./playlist.js";
 import { createLiveStorage } from "./storage.js";
+import { createWebrtcConfig, getMissingLiveKitTokenConfig } from "./webrtc/config.js";
+import { mapSessionToLiveKitRoom } from "./webrtc/sessionMapper.js";
+import { createPublisherToken, createViewerToken } from "./webrtc/tokens.js";
+import { verifyLiveKitWebhook } from "./webrtc/webhooks.js";
 
 class LiveServiceError extends Error {
 	constructor(status, message, code = "live_error") {
@@ -18,6 +22,38 @@ class LiveServiceError extends Error {
 const hashSecret = (value) => crypto.createHash("sha256").update(String(value)).digest("hex");
 
 const generateToken = (bytes = 24) => crypto.randomBytes(bytes).toString("base64url");
+
+const createParticipantIdentity = (role, session, seed = "") => {
+	const baseSeed = seed || session.createdByUser || session.createdByUsername || session.publicToken || session.sessionId;
+	return `${role}:${session.sessionId}:${hashSecret(baseSeed).slice(0, 16)}`;
+};
+
+const createUnavailableWebrtcResponse = (reason, missingConfig = []) => {
+	const response = {
+		available: false,
+		reason,
+	};
+
+	if (missingConfig.length > 0) {
+		response.missingConfig = missingConfig;
+	}
+
+	return response;
+};
+
+const serializeLiveKitTokenResponse = (tokenDetails, extra = {}) => ({
+	available: true,
+	provider: tokenDetails.provider,
+	protocol: "webrtc",
+	role: tokenDetails.role,
+	liveKitUrl: tokenDetails.liveKitUrl,
+	roomName: tokenDetails.roomName,
+	identity: tokenDetails.identity,
+	token: tokenDetails.token,
+	tokenExpiresAt: tokenDetails.expiresAt,
+	tokenTtlSeconds: tokenDetails.ttlSeconds,
+	...extra,
+});
 
 const mergeRecentSegmentNames = (existingNames, incomingNames, maxCount) => {
 	const orderedNames = [];
@@ -244,25 +280,105 @@ class LiveService {
 		return ["hls", "webrtc", "hybrid"].includes(mode) ? mode : "hls";
 	}
 
-	createTransportEnvelope(session, ingestSecret, origin = "") {
+	resolveWebrtcSessionStatus(session, mode = this.resolveSessionTransportMode(session)) {
+		if (mode === "hls") {
+			return {
+				available: false,
+				reason: "hls_default",
+				config: createWebrtcConfig(this.config),
+				missingConfig: [],
+				room: null,
+			};
+		}
+
+		const config = createWebrtcConfig(this.config);
+		const missingConfig = getMissingLiveKitTokenConfig(config);
+
+		if (missingConfig.length > 0) {
+			return {
+				available: false,
+				reason: "missing_livekit_config",
+				config,
+				missingConfig,
+				room: null,
+			};
+		}
+
+		return {
+			available: true,
+			config,
+			missingConfig: [],
+			room: mapSessionToLiveKitRoom(session, { roomPrefix: config.roomPrefix }),
+		};
+	}
+
+	createTransportSummary(session) {
 		const mode = this.resolveSessionTransportMode(session);
+		const webrtcStatus = this.resolveWebrtcSessionStatus(session, mode);
+		const webrtc = webrtcStatus.available
+			? {
+					available: true,
+					provider: "livekit",
+					liveKitUrl: webrtcStatus.config.liveKitUrl,
+					roomName: webrtcStatus.room.roomName,
+				}
+			: createUnavailableWebrtcResponse(webrtcStatus.reason, webrtcStatus.missingConfig);
+
+		return {
+			mode,
+			default: this.config.transportDefault || "hls",
+			hls: {
+				available: true,
+			},
+			webrtc,
+		};
+	}
+
+	async createTransportEnvelope(session, ingestSecret, origin = "", options = {}) {
 		const playbackUrl = this.buildUrl(origin, session.playbackPath);
 		const shareUrl = this.buildUrl(origin, session.sharePath);
 		const ingestBaseUrl = this.buildUrl(origin, `/live/api/${session.sessionId}`);
-		const webrtcReason = mode === "hls" ? "hls_default" : "livekit_token_layer_not_enabled";
+		const transport = this.createTransportSummary(session);
+		let ingestWebrtc = transport.webrtc.available ? null : createUnavailableWebrtcResponse(transport.webrtc.reason, transport.webrtc.missingConfig || []);
+		let playbackWebrtc = transport.webrtc.available ? null : createUnavailableWebrtcResponse(transport.webrtc.reason, transport.webrtc.missingConfig || []);
+
+		if (transport.webrtc.available) {
+			const webrtcConfig = createWebrtcConfig(this.config);
+			const publisherIdentity = options.publisherIdentity || createParticipantIdentity("publisher", session, session.createdByUser || "ingest");
+			const viewerIdentity = options.viewerIdentity || createParticipantIdentity("viewer", session, options.viewerSeed || session.publicToken);
+			const [publisherToken, viewerToken] = await Promise.all([
+				createPublisherToken({
+					sessionId: session.sessionId,
+					identity: publisherIdentity,
+					name: options.publisherName || session.createdByUsername || session.label || "Live publisher",
+					metadata: {
+						sessionId: session.sessionId,
+						publicToken: session.publicToken,
+						role: "publisher",
+					},
+					config: webrtcConfig,
+				}),
+				createViewerToken({
+					sessionId: session.sessionId,
+					identity: viewerIdentity,
+					name: options.viewerName || "Live viewer",
+					metadata: {
+						sessionId: session.sessionId,
+						publicToken: session.publicToken,
+						role: "viewer",
+					},
+					config: webrtcConfig,
+				}),
+			]);
+
+			ingestWebrtc = serializeLiveKitTokenResponse(publisherToken);
+			playbackWebrtc = serializeLiveKitTokenResponse(viewerToken, {
+				path: session.sharePath,
+			});
+		}
 
 		return {
-			transport: {
-				mode,
-				default: this.config.transportDefault || "hls",
-				hls: {
-					available: true,
-				},
-				webrtc: {
-					available: false,
-					reason: webrtcReason,
-				},
-			},
+			transport,
 			control: {
 				heartbeatIntervalMs: this.config.heartbeatIntervalMs,
 				endpoints: {
@@ -282,8 +398,7 @@ class LiveService {
 					segmentBaseUrl: `${ingestBaseUrl}/segments`,
 				},
 				webrtc: {
-					available: false,
-					reason: webrtcReason,
+					...ingestWebrtc,
 				},
 			},
 			playback: {
@@ -294,16 +409,15 @@ class LiveService {
 					path: session.playbackPath,
 				},
 				webrtc: {
-					available: false,
-					reason: webrtcReason,
+					...playbackWebrtc,
 				},
 			},
 			shareUrl,
 		};
 	}
 
-	createSessionResponse(session, ingestSecret, origin = "") {
-		const envelope = this.createTransportEnvelope(session, ingestSecret, origin);
+	async createSessionResponse(session, ingestSecret, origin = "", options = {}) {
+		const envelope = await this.createTransportEnvelope(session, ingestSecret, origin, options);
 
 		return {
 			sessionId: session.sessionId,
@@ -392,9 +506,7 @@ class LiveService {
 			endedAt: session.endedAt,
 			playbackUrl: this.buildUrl(origin, session.playbackPath),
 			shareUrl: this.buildUrl(origin, session.sharePath),
-			transport: {
-				mode: this.resolveSessionTransportMode(session),
-			},
+			transport: this.createTransportSummary(session),
 			recentSegmentCount: session.recentSegmentNames.length,
 			hasMasterPlaylist,
 			hasMediaPlaylist,
@@ -762,6 +874,51 @@ class LiveService {
 		} catch (err) {
 			throw new LiveServiceError(404, "Live asset storage object not found.", "live_storage_object_not_found");
 		}
+	}
+
+	async ingestLiveKitWebhook({ payload, authorization }) {
+		let webhook;
+		try {
+			webhook = await verifyLiveKitWebhook({ payload, authorization, config: this.config });
+		} catch (err) {
+			if (err?.message?.startsWith("Missing LiveKit webhook configuration")) {
+				throw new LiveServiceError(503, err.message, "missing_livekit_webhook_config");
+			}
+
+			throw new LiveServiceError(401, "Invalid LiveKit webhook signature.", "invalid_livekit_webhook_signature");
+		}
+
+		if (!webhook.sessionId) {
+			return {
+				...webhook,
+				handled: false,
+				sessionFound: false,
+				reason: "unmapped_livekit_room",
+			};
+		}
+
+		const session = await StreamSessionModel.findOne({ sessionId: webhook.sessionId });
+		if (!session) {
+			return {
+				...webhook,
+				handled: false,
+				sessionFound: false,
+				reason: "live_session_not_found",
+			};
+		}
+
+		if (session.status === "active" && ["room_started", "participant_joined", "track_published", "ingress_started"].includes(webhook.eventName)) {
+			await this.touchSession(session);
+			await session.save();
+		}
+
+		logger.info(`[live] LiveKit webhook event=${webhook.eventName || "unknown"} room=${webhook.roomName || "unknown"} sessionId=${webhook.sessionId}`);
+
+		return {
+			...webhook,
+			handled: true,
+			sessionFound: true,
+		};
 	}
 
 	async runCleanup() {

@@ -15,6 +15,18 @@ const buildLiveKitRoomName = (sessionId, { roomPrefix = "rebound-live" } = {}) =
 	return `${safePrefix}-${safeSessionId}`;
 };
 
+const parseSessionIdFromLiveKitRoomName = (roomName, { roomPrefix = "rebound-live" } = {}) => {
+	const safeRoomName = normalizeRoomComponent(roomName);
+	const safePrefix = normalizeRoomComponent(roomPrefix) || "rebound-live";
+	const prefix = `${safePrefix}-`;
+
+	if (!safeRoomName.startsWith(prefix)) {
+		return "";
+	}
+
+	return safeRoomName.slice(prefix.length);
+};
+
 const mapSessionToLiveKitRoom = (session, options = {}) => ({
 	sessionId: session.sessionId,
 	publicToken: session.publicToken,
@@ -25,4 +37,18 @@ const mapSessionToLiveKitRoom = (session, options = {}) => ({
 	},
 });
 
-export { buildLiveKitRoomName, mapSessionToLiveKitRoom };
+const getLiveKitWebhookRoomName = (event) => event?.room?.name || event?.roomName || "";
+
+const mapLiveKitWebhookEventToSession = (event, options = {}) => {
+	const roomName = getLiveKitWebhookRoomName(event);
+	const sessionId = roomName ? parseSessionIdFromLiveKitRoomName(roomName, options) : "";
+
+	return {
+		provider: "livekit",
+		eventName: event?.event || "",
+		roomName,
+		sessionId,
+	};
+};
+
+export { buildLiveKitRoomName, mapLiveKitWebhookEventToSession, mapSessionToLiveKitRoom, parseSessionIdFromLiveKitRoomName };
