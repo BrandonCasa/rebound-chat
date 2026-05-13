@@ -40,12 +40,16 @@ describe("rebound aws stacks", () => {
 		Template.fromStack(stacks.network).hasOutput("PrivateSubnetIds", {});
 		Template.fromStack(stacks.data).hasOutput("MediaBucketName", {});
 		Template.fromStack(stacks.data).hasOutput("LiveBucketName", {});
+		Template.fromStack(stacks.data).hasOutput("FrontendDeployBucketName", {});
 		Template.fromStack(stacks.data).hasOutput("WebSocketConnectionTableName", {});
 		Template.fromStack(stacks.data).hasOutput("AuroraClusterEndpoint", {});
 		Template.fromStack(stacks.data).hasOutput("AuroraSecretArn", {});
 		Template.fromStack(stacks.compute).hasOutput("EcsClusterName", {});
 		Template.fromStack(stacks.api).hasOutput("HttpApiId", {});
+		Template.fromStack(stacks.api).hasOutput("HttpApiEndpoint", {});
+		Template.fromStack(stacks.api).hasOutput("WebSocketApiId", {});
 		Template.fromStack(stacks.api).hasOutput("WebSocketApiEndpoint", {});
+		Template.fromStack(stacks.frontend).hasOutput("FrontendBucketName", {});
 		Template.fromStack(stacks.frontend).hasOutput("CloudFrontDistributionId", {});
 	});
 
@@ -112,6 +116,58 @@ describe("rebound aws stacks", () => {
 		dataTemplate.hasResource("AWS::S3::Bucket", {
 			DeletionPolicy: "Retain",
 		});
+	});
+
+	it("registers an API Gateway account-wide CloudWatch Logs role for access logging", () => {
+		const stacks = synthStacks();
+		const template = Template.fromStack(stacks.api);
+
+		template.resourceCountIs("AWS::ApiGateway::Account", 1);
+
+		template.hasResourceProperties("AWS::IAM::Role", {
+			AssumeRolePolicyDocument: {
+				Statement: Match.arrayWith([
+					Match.objectLike({
+						Principal: { Service: "apigateway.amazonaws.com" },
+					}),
+				]),
+			},
+			ManagedPolicyArns: Match.arrayWith([
+				Match.objectLike({
+					"Fn::Join": Match.arrayWith([
+						Match.arrayWith([
+							Match.stringLikeRegexp("AmazonAPIGatewayPushToCloudWatchLogs"),
+						]),
+					]),
+				}),
+			]),
+		});
+	});
+
+	it("creates CodeBuild projects in dry-run mode by default", () => {
+		const stacks = synthStacks();
+		const projects = Template.fromStack(stacks.pipeline).findResources("AWS::CodeBuild::Project");
+
+		expect(Object.keys(projects)).toHaveLength(4);
+
+		for (const project of Object.values(projects)) {
+			const envVars = project.Properties.Environment.EnvironmentVariables;
+			const dryRun = envVars.find((v: { Name: string }) => v.Name === "DRY_RUN");
+			expect(dryRun?.Value).toBe("true");
+		}
+	});
+
+	it("attaches the LiveKit security group to the LiveKit ECS service", () => {
+		const stacks = synthStacks();
+		const services = Template.fromStack(stacks.compute).findResources("AWS::ECS::Service");
+
+		const securityGroupCounts = Object.values(services).map(
+			(service) => service.Properties.NetworkConfiguration.AwsvpcConfiguration.SecurityGroups.length
+		);
+
+		// Three services use only the app SG (1 each); LiveKit uses app + livekit SGs (2).
+		expect(securityGroupCounts.filter((n) => n === 1)).toHaveLength(3);
+		expect(securityGroupCounts.filter((n) => n === 2)).toHaveLength(1);
 	});
 
 	it("does not attach wildcard admin permissions to service task roles", () => {

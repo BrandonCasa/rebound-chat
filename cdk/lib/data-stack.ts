@@ -98,7 +98,7 @@ export class DataStack extends Stack {
 
 		new CfnOutput(this, "FrontendDeployBucketName", {
 			value: this.frontendBucket.bucketName,
-			description: "S3 bucket reserved for frontend deployment handoff artifacts",
+			description: "S3 bucket reserved for frontend build artifacts and deployment handoff",
 		});
 
 		new CfnOutput(this, "WebSocketConnectionTableName", {

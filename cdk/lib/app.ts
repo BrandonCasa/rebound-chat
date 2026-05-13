@@ -44,6 +44,7 @@ export const createReboundStacks = (app: App, config: ReboundEnvironmentConfig) 
 		config,
 		vpc: network.vpc,
 		appSecurityGroup: network.appSecurityGroup,
+		liveKitSecurityGroup: network.liveKitSecurityGroup,
 		database: data.database,
 		mediaBucket: data.mediaBucket,
 		liveBucket: data.liveBucket,
@@ -56,8 +57,6 @@ export const createReboundStacks = (app: App, config: ReboundEnvironmentConfig) 
 		config,
 		repositories: compute.repositories,
 		frontendBucket: frontend.assetBucket,
-		mediaBucket: data.mediaBucket,
-		liveBucket: data.liveBucket,
 	});
 
 	return {

@@ -17,6 +17,7 @@ import type { ReboundStackProps } from "./stack-props";
 interface ComputeStackProps extends ReboundStackProps {
 	vpc: ec2.IVpc;
 	appSecurityGroup: ec2.ISecurityGroup;
+	liveKitSecurityGroup: ec2.ISecurityGroup;
 	database: rds.DatabaseCluster;
 	mediaBucket: s3.IBucket;
 	liveBucket: s3.IBucket;
@@ -98,6 +99,7 @@ export class ComputeStack extends Stack {
 			config,
 			vpc,
 			appSecurityGroup,
+			additionalSecurityGroups: [props.liveKitSecurityGroup],
 			image: ecs.ContainerImage.fromRegistry(config.liveKitImage),
 			command: ["--dev", "--bind", "0.0.0.0"],
 			environment: {
@@ -168,6 +170,7 @@ export class ComputeStack extends Stack {
 			config: ReboundStackProps["config"];
 			vpc: ec2.IVpc;
 			appSecurityGroup: ec2.ISecurityGroup;
+			additionalSecurityGroups?: ec2.ISecurityGroup[];
 			image: ecs.ContainerImage;
 			command: string[];
 			environment: Record<string, string>;
@@ -211,7 +214,7 @@ export class ComputeStack extends Stack {
 			},
 			minHealthyPercent: 100,
 			maxHealthyPercent: 200,
-			securityGroups: [props.appSecurityGroup],
+			securityGroups: [props.appSecurityGroup, ...(props.additionalSecurityGroups ?? [])],
 			vpcSubnets: {
 				subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
 			},

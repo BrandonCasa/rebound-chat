@@ -1,5 +1,10 @@
 import { CfnOutput, Stack } from "aws-cdk-lib";
-import { aws_apigatewayv2 as apigwv2, aws_logs as logs } from "aws-cdk-lib";
+import {
+	aws_apigateway as apigw,
+	aws_apigatewayv2 as apigwv2,
+	aws_iam as iam,
+	aws_logs as logs,
+} from "aws-cdk-lib";
 import type { Construct } from "constructs";
 
 import type { ReboundStackProps } from "./stack-props";
@@ -12,6 +17,19 @@ export class ApiStack extends Stack {
 		super(scope, id, props);
 
 		const { config } = props;
+		
+		const apiGatewayCloudWatchRole = new iam.Role(this, "ApiGatewayCloudWatchRole", {
+			assumedBy: new iam.ServicePrincipal("apigateway.amazonaws.com"),
+			managedPolicies: [
+				iam.ManagedPolicy.fromAwsManagedPolicyName(
+					"service-role/AmazonAPIGatewayPushToCloudWatchLogs",
+				),
+			],
+		});
+
+		const apiGatewayAccount = new apigw.CfnAccount(this, "ApiGatewayAccount", {
+			cloudWatchRoleArn: apiGatewayCloudWatchRole.roleArn,
+		});
 
 		this.httpApi = new apigwv2.CfnApi(this, "HttpApi", {
 			name: `rebound-${config.appEnv}-http`,
@@ -29,7 +47,7 @@ export class ApiStack extends Stack {
 			removalPolicy: config.removalPolicy,
 		});
 
-		new apigwv2.CfnStage(this, "HttpApiStage", {
+		const httpStage = new apigwv2.CfnStage(this, "HttpApiStage", {
 			apiId: this.httpApi.ref,
 			stageName: config.appEnv,
 			autoDeploy: true,
@@ -43,6 +61,7 @@ export class ApiStack extends Stack {
 				}),
 			},
 		});
+		httpStage.addDependency(apiGatewayAccount);
 
 		this.websocketApi = new apigwv2.CfnApi(this, "WebSocketApi", {
 			name: `rebound-${config.appEnv}-websocket`,
@@ -55,7 +74,7 @@ export class ApiStack extends Stack {
 			removalPolicy: config.removalPolicy,
 		});
 
-		new apigwv2.CfnStage(this, "WebSocketApiStage", {
+		const websocketStage = new apigwv2.CfnStage(this, "WebSocketApiStage", {
 			apiId: this.websocketApi.ref,
 			stageName: config.appEnv,
 			autoDeploy: true,
@@ -69,6 +88,7 @@ export class ApiStack extends Stack {
 				}),
 			},
 		});
+		websocketStage.addDependency(apiGatewayAccount);
 
 		new CfnOutput(this, "HttpApiId", {
 			value: this.httpApi.ref,

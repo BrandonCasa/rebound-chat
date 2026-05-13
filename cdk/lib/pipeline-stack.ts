@@ -7,8 +7,6 @@ import type { ReboundStackProps } from "./stack-props";
 interface PipelineStackProps extends ReboundStackProps {
 	repositories: Record<"api" | "realtime" | "worker" | "livekit" | "webBuild", ecr.IRepository>;
 	frontendBucket: s3.IBucket;
-	mediaBucket: s3.IBucket;
-	liveBucket: s3.IBucket;
 }
 
 export class PipelineStack extends Stack {
