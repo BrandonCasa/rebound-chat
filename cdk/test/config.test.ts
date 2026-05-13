@@ -10,6 +10,13 @@ describe("environment config", () => {
 
 		expect(config.appEnv).toBe("dev");
 		expect(config.region).toBe("us-east-2");
+		expect(config.serviceDesiredCounts).toEqual({
+			api: 0,
+			realtime: 0,
+			worker: 0,
+			livekit: 0,
+		});
+		expect(config.codeBuildDryRun).toBe(true);
 		expect(config.autoDeleteObjects).toBe(true);
 	});
 
@@ -20,5 +27,25 @@ describe("environment config", () => {
 		expect(config.appEnv).toBe("prod");
 		expect(config.region).toBe("us-east-1");
 		expect(config.autoDeleteObjects).toBe(false);
+	});
+
+	it("accepts Plan D deploy context overrides", () => {
+		const app = new App({
+			context: {
+				appEnv: "dev",
+				codeBuildDryRun: "false",
+				"serviceDesiredCounts.api": "1",
+				"serviceDesiredCounts.worker": 1,
+			},
+		});
+		const config = getEnvironmentConfig(app);
+
+		expect(config.codeBuildDryRun).toBe(false);
+		expect(config.serviceDesiredCounts).toEqual({
+			api: 1,
+			realtime: 0,
+			worker: 1,
+			livekit: 0,
+		});
 	});
 });

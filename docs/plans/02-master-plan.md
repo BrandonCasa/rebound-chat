@@ -138,6 +138,8 @@ Local verification:
 
 Goal: run real API and worker containers on ECS in dev.
 
+Status: In progress; CDK deploy controls are being added and the tactical runbook is tracked in `docs/plans/03-plan-d-ecs-smoke.md`.
+
 Changes:
 
 - Build and push `api` and `worker` images to:
@@ -146,6 +148,17 @@ Changes:
 - Update task defs/service wiring to use pushed image tags/digests.
 - Set `desiredCount: 1` for api/worker in dev.
 - Verify health checks and CloudWatch logs.
+
+Implementation notes:
+
+- Dev ECS services remain idle by default.
+- Plan D uses explicit CDK context for real image deployment:
+  - `codeBuildDryRun=false`
+  - `imageTags.api=<tag>`
+  - `imageTags.worker=<tag>`
+  - `serviceDesiredCounts.api=1`
+  - `serviceDesiredCounts.worker=1`
+- Current blocker: real API/worker production startup still initializes MongoDB/Mongoose before the API listener starts. Do not promote desired counts for real images until that startup path is Aurora-ready or an explicit smoke-only startup mode is approved.
 
 Acceptance:
 

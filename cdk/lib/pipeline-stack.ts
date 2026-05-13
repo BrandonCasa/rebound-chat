@@ -119,7 +119,7 @@ export class PipelineStack extends Stack {
 				APP_ENV: { value: config.appEnv },
 				AWS_ACCOUNT_ID: { value: Stack.of(this).account },
 				AWS_REGION: { value: config.region },
-				DRY_RUN: { value: "true" },
+				DRY_RUN: { value: config.codeBuildDryRun ? "true" : "false" },
 				...Object.fromEntries(Object.entries(environmentVariables).map(([name, value]) => [name, { value }])),
 			},
 		});

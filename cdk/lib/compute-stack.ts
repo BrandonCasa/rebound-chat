@@ -62,6 +62,7 @@ export class ComputeStack extends Stack {
 			config,
 			vpc,
 			appSecurityGroup,
+			desiredCount: config.serviceDesiredCounts.api,
 			image: apiContainer.image,
 			command: apiContainer.command,
 			environment: {
@@ -83,6 +84,7 @@ export class ComputeStack extends Stack {
 			config,
 			vpc,
 			appSecurityGroup,
+			desiredCount: config.serviceDesiredCounts.realtime,
 			image: realtimeContainer.image,
 			command: realtimeContainer.command,
 			environment: {
@@ -104,6 +106,7 @@ export class ComputeStack extends Stack {
 			config,
 			vpc,
 			appSecurityGroup,
+			desiredCount: config.serviceDesiredCounts.worker,
 			image: workerContainer.image,
 			command: workerContainer.command,
 			environment: {
@@ -122,6 +125,7 @@ export class ComputeStack extends Stack {
 			vpc,
 			appSecurityGroup,
 			additionalSecurityGroups: [props.liveKitSecurityGroup],
+			desiredCount: config.serviceDesiredCounts.livekit,
 			image: ecs.ContainerImage.fromRegistry(config.liveKitImage),
 			command: ["--dev", "--bind", "0.0.0.0"],
 			environment: {
@@ -225,6 +229,7 @@ export class ComputeStack extends Stack {
 			vpc: ec2.IVpc;
 			appSecurityGroup: ec2.ISecurityGroup;
 			additionalSecurityGroups?: ec2.ISecurityGroup[];
+			desiredCount: number;
 			image: ecs.ContainerImage;
 			command?: string[];
 			environment: Record<string, string>;
@@ -261,7 +266,7 @@ export class ComputeStack extends Stack {
 		return new ecs.FargateService(this, `${idPrefix}Service`, {
 			cluster: this.cluster,
 			taskDefinition: task,
-			desiredCount: 0,
+			desiredCount: props.desiredCount,
 			assignPublicIp: false,
 			circuitBreaker: {
 				rollback: true,

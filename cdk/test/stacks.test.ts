@@ -169,6 +169,33 @@ describe("rebound aws stacks", () => {
 		}
 	});
 
+	it("can enable real CodeBuild pushes for the Plan D image cutover", () => {
+		const stacks = synthStacks("dev", { codeBuildDryRun: false });
+		const projects = Template.fromStack(stacks.pipeline).findResources("AWS::CodeBuild::Project");
+
+		for (const project of Object.values(projects)) {
+			const envVars = project.Properties.Environment.EnvironmentVariables;
+			const dryRun = envVars.find((v: { Name: string }) => v.Name === "DRY_RUN");
+			expect(dryRun?.Value).toBe("false");
+		}
+	});
+
+	it("keeps ECS services idle by default", () => {
+		const stacks = synthStacks();
+		const services = Template.fromStack(stacks.compute).findResources("AWS::ECS::Service");
+
+		expect(Object.values(services).map((service) => service.Properties.DesiredCount)).toEqual([0, 0, 0, 0]);
+	});
+
+	it("can raise API and worker desired counts for the Plan D ECS smoke", () => {
+		const stacks = synthStacks("dev", { serviceDesiredCounts: { api: 1, worker: 1 } });
+		const services = Template.fromStack(stacks.compute).findResources("AWS::ECS::Service");
+		const desiredCounts = Object.values(services).map((service) => service.Properties.DesiredCount);
+
+		expect(desiredCounts.filter((desiredCount) => desiredCount === 1)).toHaveLength(2);
+		expect(desiredCounts.filter((desiredCount) => desiredCount === 0)).toHaveLength(2);
+	});
+
 	it("passes CloudFront distribution id to the frontend build project", () => {
 		const stacks = synthStacks();
 		const projects = Template.fromStack(stacks.pipeline).findResources("AWS::CodeBuild::Project");
