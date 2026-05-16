@@ -5,6 +5,7 @@ import createApp from "./createApp.js";
 import databaseServer from "./database/index.js";
 import liveRuntime from "./live/runtime.js";
 import logger from "./logger.js";
+import { isDevCutoverRole } from "./runtime/dependencies.js";
 import socketBackend from "./socketio/index.js";
 
 configDotenv();
@@ -58,6 +59,7 @@ class ServerBackend {
 		databaseServer: databaseServerDependency = databaseServer,
 		socketBackend: socketBackendDependency = socketBackend,
 	} = {}) {
+		this.env = env;
 		this.role = resolveServerRole(role);
 		this.ecsSmokeMode = Boolean(ecsSmokeMode);
 		if (this.ecsSmokeMode && !ECS_SMOKE_MODE_ROLES.has(this.role)) {
@@ -66,7 +68,7 @@ class ServerBackend {
 		this.liveRuntime = liveRuntimeDependency;
 		this.databaseServer = databaseServerDependency;
 		this.socketBackend = socketBackendDependency;
-		this.app = app || createApp({ role: this.role, ecsSmokeMode: this.ecsSmokeMode });
+		this.app = app || createApp({ role: this.role, ecsSmokeMode: this.ecsSmokeMode, env: this.env });
 		this.server = http.createServer(this.app);
 		this.socketStarted = false;
 		this.databaseStarted = false;
@@ -87,6 +89,7 @@ class ServerBackend {
 
 	_shouldStartDatabase() {
 		if (this.ecsSmokeMode) return false;
+		if (isDevCutoverRole({ role: this.role, env: this.env })) return false;
 		return this.role !== "realtime";
 	}
 

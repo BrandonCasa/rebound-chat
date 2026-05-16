@@ -9,6 +9,7 @@ import morgan from "morgan";
 import customPassport from "./config/passport.js";
 import logger from "./logger.js";
 import routes from "./routes/index.js";
+import { buildDependencyHealth } from "./runtime/dependencies.js";
 
 import { buildCorsOptions } from "./config/cors.js";
 import {
@@ -77,15 +78,20 @@ const csrfTokenEndpoint = (req, res) => {
 };
 
 const createHealthEndpoint =
-	({ role, ecsSmokeMode = false }) =>
-	(_req, res) =>
-		res.json({
-			status: "ok",
+	({ role, ecsSmokeMode = false, env = process.env }) =>
+	(_req, res) => {
+		const dependencyHealth = buildDependencyHealth({ role, env });
+		const status = ecsSmokeMode ? "ok" : dependencyHealth.status;
+
+		return res.status(status === "ok" ? 200 : 503).json({
+			status,
 			role,
-			mode: ecsSmokeMode ? "ecs-smoke" : "runtime",
+			mode: ecsSmokeMode ? "ecs-smoke" : dependencyHealth.mode,
 			pid: process.pid,
 			uptimeSeconds: Math.round(process.uptime()),
+			dependencies: dependencyHealth.checks,
 		});
+	};
 
 const applyMiddleware = (app) => {
 	app.set("trust proxy", 1);
@@ -121,13 +127,13 @@ const applyMiddleware = (app) => {
 	app.use(csrfProtectionMiddleware);
 };
 
-const createApp = ({ role = "combined", routeHandler = routes, ecsSmokeMode = false } = {}) => {
+const createApp = ({ role = "combined", routeHandler = routes, ecsSmokeMode = false, env = process.env } = {}) => {
 	const app = express();
 
 	customPassport.setupPassport();
 	applyMiddleware(app);
 
-	app.get("/healthz", createHealthEndpoint({ role, ecsSmokeMode }));
+	app.get("/healthz", createHealthEndpoint({ role, ecsSmokeMode, env }));
 	app.get("/api/csrf", csrfTokenEndpoint);
 	app.use(routeHandler);
 

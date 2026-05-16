@@ -13,6 +13,7 @@ import {
 import type { Construct } from "constructs";
 
 import type { ImageTagOverrides } from "./config";
+import type { RuntimeParameterKey, RuntimeParameters } from "./runtime-config";
 import type { ReboundStackProps } from "./stack-props";
 
 interface ComputeStackProps extends ReboundStackProps {
@@ -24,6 +25,7 @@ interface ComputeStackProps extends ReboundStackProps {
 	liveBucket: s3.IBucket;
 	websocketConnectionTable: dynamodb.ITable;
 	websocketApi: apigwv2.CfnApi;
+	runtimeParameters: RuntimeParameters;
 }
 
 type RepositoryName = "api" | "realtime" | "worker" | "livekit" | "webBuild";
@@ -70,10 +72,17 @@ export class ComputeStack extends Stack {
 				SERVER_ROLE: "api",
 				PORT: "6001",
 				...planDSmokeEnvironment,
-				S3_MEDIA_BUCKET: props.mediaBucket.bucketName,
-				S3_LIVE_BUCKET: props.liveBucket.bucketName,
-				AURORA_SECRET_ARN: props.database.secret!.secretArn,
-				AURORA_CLUSTER_ENDPOINT: props.database.clusterEndpoint.socketAddress,
+			},
+			secrets: {
+				DATABASE_URL: this.resolveRuntimeSecret(props.runtimeParameters, "databaseUrl"),
+				S3_MEDIA_BUCKET: this.resolveRuntimeSecret(props.runtimeParameters, "storageMediaBucket"),
+				S3_LIVE_BUCKET: this.resolveRuntimeSecret(props.runtimeParameters, "storageLiveBucket"),
+				AURORA_SECRET_ARN: this.resolveRuntimeSecret(props.runtimeParameters, "databaseCredentialsSecretArn"),
+				AURORA_CLUSTER_ENDPOINT: this.resolveRuntimeSecret(props.runtimeParameters, "databaseHost"),
+				LIVEKIT_URL: this.resolveRuntimeSecret(props.runtimeParameters, "liveKitUrl"),
+				LIVEKIT_API_KEY: this.resolveRuntimeSecret(props.runtimeParameters, "liveKitApiKey"),
+				LIVEKIT_API_SECRET: this.resolveRuntimeSecret(props.runtimeParameters, "liveKitApiSecret"),
+				LIVEKIT_WEBHOOK_SECRET: this.resolveRuntimeSecret(props.runtimeParameters, "liveKitWebhookSecret"),
 			},
 			portMappings: [{ containerPort: 6001 }],
 		});
@@ -114,11 +123,18 @@ export class ComputeStack extends Stack {
 			environment: {
 				SERVER_ROLE: "worker",
 				...planDSmokeEnvironment,
-				S3_MEDIA_BUCKET: props.mediaBucket.bucketName,
-				S3_LIVE_BUCKET: props.liveBucket.bucketName,
-				AURORA_SECRET_ARN: props.database.secret!.secretArn,
-				AURORA_CLUSTER_ENDPOINT: props.database.clusterEndpoint.socketAddress,
 				WS_CONNECTION_TABLE: props.websocketConnectionTable.tableName,
+			},
+			secrets: {
+				DATABASE_URL: this.resolveRuntimeSecret(props.runtimeParameters, "databaseUrl"),
+				S3_MEDIA_BUCKET: this.resolveRuntimeSecret(props.runtimeParameters, "storageMediaBucket"),
+				S3_LIVE_BUCKET: this.resolveRuntimeSecret(props.runtimeParameters, "storageLiveBucket"),
+				AURORA_SECRET_ARN: this.resolveRuntimeSecret(props.runtimeParameters, "databaseCredentialsSecretArn"),
+				AURORA_CLUSTER_ENDPOINT: this.resolveRuntimeSecret(props.runtimeParameters, "databaseHost"),
+				LIVEKIT_URL: this.resolveRuntimeSecret(props.runtimeParameters, "liveKitUrl"),
+				LIVEKIT_API_KEY: this.resolveRuntimeSecret(props.runtimeParameters, "liveKitApiKey"),
+				LIVEKIT_API_SECRET: this.resolveRuntimeSecret(props.runtimeParameters, "liveKitApiSecret"),
+				LIVEKIT_WEBHOOK_SECRET: this.resolveRuntimeSecret(props.runtimeParameters, "liveKitWebhookSecret"),
 			},
 			portMappings: [],
 		});
@@ -132,7 +148,10 @@ export class ComputeStack extends Stack {
 			image: ecs.ContainerImage.fromRegistry(config.liveKitImage),
 			command: ["--dev", "--bind", "0.0.0.0"],
 			environment: {
-				LIVEKIT_KEYS: "devkey: devsecret",
+			},
+			secrets: {
+				LIVEKIT_API_KEY: this.resolveRuntimeSecret(props.runtimeParameters, "liveKitApiKey"),
+				LIVEKIT_API_SECRET: this.resolveRuntimeSecret(props.runtimeParameters, "liveKitApiSecret"),
 			},
 			portMappings: [
 				{ containerPort: 7880, protocol: ecs.Protocol.TCP },
@@ -169,8 +188,16 @@ export class ComputeStack extends Stack {
 			description: "ECS cluster name for Rebound runtime services",
 		});
 
-		for (const [name, repository] of Object.entries(this.repositories)) {
-			new CfnOutput(this, `${name}RepositoryUri`, {
+		const repositoryOutputNames: Record<RepositoryName, string> = {
+			api: "ApiRepositoryUri",
+			realtime: "RealtimeRepositoryUri",
+			worker: "WorkerRepositoryUri",
+			livekit: "LiveKitRepositoryUri",
+			webBuild: "WebBuildRepositoryUri",
+		};
+
+		for (const [name, repository] of Object.entries(this.repositories) as [RepositoryName, ecr.Repository][]) {
+			new CfnOutput(this, repositoryOutputNames[name], {
 				value: repository.repositoryUri,
 				description: `ECR repository URI for ${name} images`,
 			});
@@ -225,6 +252,15 @@ export class ComputeStack extends Stack {
 		return this.imageTags?.[serviceName];
 	}
 
+	private resolveRuntimeSecret(parameters: RuntimeParameters, key: RuntimeParameterKey) {
+		const parameter = parameters[key];
+		if (!parameter) {
+			throw new Error(`Missing runtime parameter for ${key}.`);
+		}
+
+		return ecs.Secret.fromSsmParameter(parameter);
+	}
+
 	private createIdleService(
 		idPrefix: string,
 		props: {
@@ -236,6 +272,7 @@ export class ComputeStack extends Stack {
 			image: ecs.ContainerImage;
 			command?: string[];
 			environment: Record<string, string>;
+			secrets?: Record<string, ecs.Secret>;
 			portMappings: ecs.PortMapping[];
 		}
 	) {
@@ -258,6 +295,7 @@ export class ComputeStack extends Stack {
 				LIVE_TRANSPORT_DEFAULT: "hls",
 				...props.environment,
 			},
+			secrets: props.secrets,
 			logging: ecs.LogDriver.awsLogs({
 				streamPrefix: idPrefix.toLowerCase(),
 				logGroup,

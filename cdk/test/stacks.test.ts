@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { createReboundStacks } from "../lib/app";
 import { getEnvironmentConfig } from "../lib/config";
+import { runtimeParameterNames } from "../lib/runtime-config";
 
 const synthStacks = (appEnv = "dev", extraContext: Record<string, unknown> = {}) => {
 	const app = new App({ context: { appEnv, ...extraContext } });
@@ -54,15 +55,84 @@ describe("rebound aws stacks", () => {
 		Template.fromStack(stacks.data).hasOutput("LiveBucketName", {});
 		Template.fromStack(stacks.data).hasOutput("FrontendDeployBucketName", {});
 		Template.fromStack(stacks.data).hasOutput("WebSocketConnectionTableName", {});
-		Template.fromStack(stacks.data).hasOutput("AuroraClusterEndpoint", {});
-		Template.fromStack(stacks.data).hasOutput("AuroraSecretArn", {});
+		Template.fromStack(stacks.data).hasOutput("AuroraEndpoint", {});
+		Template.fromStack(stacks.data).hasOutput("AuroraPort", {});
+		Template.fromStack(stacks.data).hasOutput("AuroraDatabaseName", {});
+		Template.fromStack(stacks.data).hasOutput("AuroraCredentialsSecretArn", {});
 		Template.fromStack(stacks.compute).hasOutput("EcsClusterName", {});
+		Template.fromStack(stacks.compute).hasOutput("ApiRepositoryUri", {});
+		Template.fromStack(stacks.compute).hasOutput("WorkerRepositoryUri", {});
+		Template.fromStack(stacks.compute).hasOutput("RealtimeRepositoryUri", {});
+		Template.fromStack(stacks.compute).hasOutput("LiveKitRepositoryUri", {});
 		Template.fromStack(stacks.api).hasOutput("HttpApiId", {});
-		Template.fromStack(stacks.api).hasOutput("HttpApiEndpoint", {});
+		Template.fromStack(stacks.api).hasOutput("HttpApiUrl", {});
 		Template.fromStack(stacks.api).hasOutput("WebSocketApiId", {});
-		Template.fromStack(stacks.api).hasOutput("WebSocketApiEndpoint", {});
+		Template.fromStack(stacks.api).hasOutput("WebSocketApiUrl", {});
 		Template.fromStack(stacks.frontend).hasOutput("FrontendBucketName", {});
 		Template.fromStack(stacks.frontend).hasOutput("CloudFrontDistributionId", {});
+		Template.fromStack(stacks.frontend).hasOutput("CloudFrontDistributionDomainName", {});
+		Template.fromStack(stacks.pipeline).hasOutput("GitHubActionsRoleArn", {});
+	});
+
+	it("creates the environment-scoped runtime parameter contract", () => {
+		const stacks = synthStacks();
+		const parameterNames = runtimeParameterNames("dev");
+		const dataTemplate = Template.fromStack(stacks.data);
+		const pipelineTemplate = Template.fromStack(stacks.pipeline);
+
+		for (const name of [
+			parameterNames.databaseUrl,
+			parameterNames.databaseHost,
+			parameterNames.databasePort,
+			parameterNames.databaseName,
+			parameterNames.databaseCredentialsSecretArn,
+			parameterNames.storageMediaBucket,
+			parameterNames.storageLiveBucket,
+			parameterNames.liveKitUrl,
+			parameterNames.liveKitApiKey,
+			parameterNames.liveKitApiSecret,
+			parameterNames.liveKitWebhookSecret,
+		]) {
+			dataTemplate.hasResourceProperties("AWS::SSM::Parameter", {
+				Name: name,
+				Type: "String",
+			});
+		}
+
+		pipelineTemplate.hasResourceProperties("AWS::SSM::Parameter", {
+			Name: parameterNames.deployGitHubActionsRoleArn,
+			Type: "String",
+		});
+	});
+
+	it("mirrors the runtime parameter contract for prod", () => {
+		const stacks = synthStacks("prod");
+		const parameterNames = runtimeParameterNames("prod");
+		const dataTemplate = Template.fromStack(stacks.data);
+
+		for (const name of [
+			parameterNames.databaseUrl,
+			parameterNames.databaseHost,
+			parameterNames.databasePort,
+			parameterNames.databaseName,
+			parameterNames.databaseCredentialsSecretArn,
+			parameterNames.storageMediaBucket,
+			parameterNames.storageLiveBucket,
+			parameterNames.liveKitUrl,
+			parameterNames.liveKitApiKey,
+			parameterNames.liveKitApiSecret,
+			parameterNames.liveKitWebhookSecret,
+		]) {
+			dataTemplate.hasResourceProperties("AWS::SSM::Parameter", {
+				Name: name,
+				Type: "String",
+			});
+		}
+
+		Template.fromStack(stacks.pipeline).hasResourceProperties("AWS::SSM::Parameter", {
+			Name: parameterNames.deployGitHubActionsRoleArn,
+			Type: "String",
+		});
 	});
 
 	it("enables DynamoDB TTL for WebSocket connection cleanup", () => {
@@ -259,7 +329,7 @@ describe("rebound aws stacks", () => {
 		expect(serializedResources).toContain("cdk-hnb659fds-lookup-role");
 	});
 
-	it("injects aws integration env vars into api/worker/realtime task definitions", () => {
+	it("wires runtime config through SSM parameter references in task definitions", () => {
 		const stacks = synthStacks();
 		const template = Template.fromStack(stacks.compute);
 
@@ -268,10 +338,17 @@ describe("rebound aws stacks", () => {
 				Match.objectLike({
 					Environment: Match.arrayWith([
 						Match.objectLike({ Name: "SERVER_ROLE", Value: "api" }),
+					]),
+					Secrets: Match.arrayWith([
+						Match.objectLike({ Name: "DATABASE_URL" }),
 						Match.objectLike({ Name: "S3_MEDIA_BUCKET" }),
 						Match.objectLike({ Name: "S3_LIVE_BUCKET" }),
 						Match.objectLike({ Name: "AURORA_SECRET_ARN" }),
 						Match.objectLike({ Name: "AURORA_CLUSTER_ENDPOINT" }),
+						Match.objectLike({ Name: "LIVEKIT_URL" }),
+						Match.objectLike({ Name: "LIVEKIT_API_KEY" }),
+						Match.objectLike({ Name: "LIVEKIT_API_SECRET" }),
+						Match.objectLike({ Name: "LIVEKIT_WEBHOOK_SECRET" }),
 					]),
 				}),
 			]),
@@ -282,11 +359,18 @@ describe("rebound aws stacks", () => {
 				Match.objectLike({
 					Environment: Match.arrayWith([
 						Match.objectLike({ Name: "SERVER_ROLE", Value: "worker" }),
+						Match.objectLike({ Name: "WS_CONNECTION_TABLE" }),
+					]),
+					Secrets: Match.arrayWith([
+						Match.objectLike({ Name: "DATABASE_URL" }),
 						Match.objectLike({ Name: "S3_MEDIA_BUCKET" }),
 						Match.objectLike({ Name: "S3_LIVE_BUCKET" }),
 						Match.objectLike({ Name: "AURORA_SECRET_ARN" }),
 						Match.objectLike({ Name: "AURORA_CLUSTER_ENDPOINT" }),
-						Match.objectLike({ Name: "WS_CONNECTION_TABLE" }),
+						Match.objectLike({ Name: "LIVEKIT_URL" }),
+						Match.objectLike({ Name: "LIVEKIT_API_KEY" }),
+						Match.objectLike({ Name: "LIVEKIT_API_SECRET" }),
+						Match.objectLike({ Name: "LIVEKIT_WEBHOOK_SECRET" }),
 					]),
 				}),
 			]),

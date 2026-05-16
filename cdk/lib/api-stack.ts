@@ -95,7 +95,7 @@ export class ApiStack extends Stack {
 			description: "API Gateway HTTP API ID",
 		});
 
-		new CfnOutput(this, "HttpApiEndpoint", {
+		new CfnOutput(this, "HttpApiUrl", {
 			value: this.httpApi.attrApiEndpoint,
 			description: "API Gateway HTTP API endpoint",
 		});
@@ -105,9 +105,19 @@ export class ApiStack extends Stack {
 			description: "API Gateway WebSocket API ID",
 		});
 
-		new CfnOutput(this, "WebSocketApiEndpoint", {
+		new CfnOutput(this, "WebSocketApiUrl", {
 			value: this.websocketApi.attrApiEndpoint,
 			description: "API Gateway WebSocket API endpoint",
+		});
+
+		new CfnOutput(this, "HttpApiEndpoint", {
+			value: this.httpApi.attrApiEndpoint,
+			description: "Deprecated compatibility alias for HttpApiUrl",
+		});
+
+		new CfnOutput(this, "WebSocketApiEndpoint", {
+			value: this.websocketApi.attrApiEndpoint,
+			description: "Deprecated compatibility alias for WebSocketApiUrl",
 		});
 	}
 }

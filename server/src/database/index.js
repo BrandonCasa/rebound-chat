@@ -140,6 +140,10 @@ class DatabaseServer {
 	getMongoServer() {
 		return this.mongoServer;
 	}
+
+	isReady() {
+		return mongoose.connection.readyState === 1 && Boolean(this.gridfsBucket);
+	}
 }
 
 const databaseServer = new DatabaseServer();

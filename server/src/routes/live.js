@@ -101,7 +101,7 @@ const authorizeCreateSession = async (req, res, next) => {
 	}
 
 	try {
-		req.authContext = await validateAccessTokenFromRequest(req);
+		req.authContext = await validateAccessTokenFromRequest(req, { allowStateless: true });
 		req.liveCreateMode = "account";
 		return next();
 	} catch (_err) {
@@ -124,7 +124,7 @@ const requireIngestSession = async (req, res, next) => {
 
 const requirePlaybackAuth = async (req, res, next) => {
 	try {
-		req.authContext = await validateAccessTokenFromRequest(req);
+		req.authContext = await validateAccessTokenFromRequest(req, { allowStateless: true });
 		return next();
 	} catch (err) {
 		return res.status(err.status || 401).json({ error: "Login required to view live streams." });

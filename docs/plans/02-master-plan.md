@@ -8,6 +8,48 @@ It assumes the baseline in `docs/plans/00-master-plan.md` and the ADR in `docs/a
 
 Current tactical note: the deployed CDK pipeline was destroyed externally after the first scaffolding work. Until it is recreated, prioritize codebase runtime slices that make the server, live media, and client paths AWS-ready without requiring the pipeline to be live.
 
+## Configuration Contract
+
+Use this contract across every remaining task in this plan:
+
+- Runtime configuration must be referenced by AWS parameter name, not by copied literal secret values or one-off environment notes.
+- Infrastructure discovery values must be referenced by CloudFormation/CDK output name when they are not secrets.
+- CDK is responsible for automatically creating the environment-scoped parameter set for both `dev` and `prod`.
+- Parameter names must be deterministic and environment-scoped under `/rebound/<env>/<domain>/<name>`.
+- Tasks in this document should name the parameters and outputs they require.
+
+Baseline parameter families:
+
+- `/rebound/<env>/database/url`
+- `/rebound/<env>/database/host`
+- `/rebound/<env>/database/port`
+- `/rebound/<env>/database/name`
+- `/rebound/<env>/database/credentials-secret-arn`
+- `/rebound/<env>/storage/media-bucket`
+- `/rebound/<env>/storage/live-bucket`
+- `/rebound/<env>/livekit/url`
+- `/rebound/<env>/livekit/api-key`
+- `/rebound/<env>/livekit/api-secret`
+- `/rebound/<env>/livekit/webhook-secret`
+- `/rebound/<env>/deploy/github-actions-role-arn`
+
+Baseline output families:
+
+- `AuroraEndpoint`
+- `AuroraPort`
+- `AuroraDatabaseName`
+- `AuroraCredentialsSecretArn`
+- `MediaBucketName`
+- `LiveBucketName`
+- `HttpApiUrl`
+- `WebSocketApiUrl`
+- `CloudFrontDistributionDomainName`
+- `GitHubActionsRoleArn`
+- `ApiRepositoryUri`
+- `WorkerRepositoryUri`
+- `RealtimeRepositoryUri`
+- `LiveKitRepositoryUri`
+
 ## Scope and Constraints
 
 In scope:
@@ -55,12 +97,15 @@ Changes:
 - Add/confirm CloudFront invalidation integration path in stack/pipeline wiring.
 - Keep controlled switch for CodeBuild dry-run to real mode.
 - Add `.github/workflows/cdk-deploy-dev.yml` for branch-driven CDK deploys (`workflow_dispatch`).
+- Automatically create the required `/rebound/dev/...` and `/rebound/prod/...` Parameter Store names in CDK.
+- Publish stable output names for database, bucket, API, CDN, and repository discovery.
 
 Implementation notes:
 
 - `synth:dev` now synthesizes all stacks in `cdk/package.json` (`cdk synth --all --context appEnv=dev`).
 - ECR image overrides are available via CDK context keys such as `--context imageTags.api=<tag>`.
 - The deploy workflow expects the repository variable `REBOUND_DEV_GITHUB_ACTIONS_ROLE_ARN` to be set to the stack output `GitHubActionsRoleArn`.
+- New tasks in this plan should cite the exact parameter names or output names they require instead of embedding account-specific values directly in the task text.
 
 Acceptance:
 
@@ -68,6 +113,8 @@ Acceptance:
 - `pnpm --filter rebound-cdk test`
 - `pnpm --filter rebound-cdk synth:dev`
 - No wildcard-admin IAM regressions in stack tests.
+- Required `dev` and `prod` configuration parameters are created automatically with deterministic names.
+- Required runtime and deploy discovery values are available by stable output name.
 
 ## PR B: Server Runtime Dependencies + S3 Promotion
 
@@ -96,6 +143,7 @@ Implementation notes:
 - `server/src/live/config.js` resolves the CDK-provided `S3_LIVE_BUCKET` first. Legacy `LIVE_S3_BUCKET` compatibility is temporary and must be removed in the legacy cleanup slice.
 - `server/src/live/storage.js` has a first-class S3 adapter with configured key prefixes, clear missing-bucket errors, content-type propagation, batched deletes, and local-storage path escape protection.
 - `server/test/live.storage.test.js` covers S3 env resolution, S3 write/read/delete/prefix cleanup behavior, and local path safety without reaching AWS.
+- Task-level config references for this slice should use names such as `/rebound/<env>/storage/live-bucket`, `/rebound/<env>/storage/media-bucket`, and `/rebound/<env>/database/url`.
 
 Local verification:
 
@@ -138,7 +186,7 @@ Local verification:
 
 Goal: run real API and worker containers on ECS in dev.
 
-Status: In progress; CDK deploy controls are implemented, the dev pipeline is rehydrated, API/worker images are pushed, and task definitions reference the pushed tags. ECS desired counts remain `0` until the production startup blocker is removed.
+Status: In progress; CDK deploy controls are implemented, the dev pipeline is rehydrated, API/worker images are pushed, task definitions reference the pushed tags, and the repo startup blocker has been removed locally. The remaining Plan D work is ECS desired-count verification in dev.
 
 Changes:
 
@@ -158,8 +206,9 @@ Implementation notes:
   - `imageTags.worker=<tag>`
   - `serviceDesiredCounts.api=1`
   - `serviceDesiredCounts.worker=1`
-  - `runtimeSmokeMode=true` for the temporary dev-only ECS health smoke while MongoDB/Mongoose startup removal is still pending.
-- Current blocker: real API/worker production startup still initializes MongoDB/Mongoose before the API listener starts. The repo now has an explicit dev-only smoke mode for Plan D health checks, but do not treat desired-count smoke success as product readiness until that startup path is Aurora-ready.
+  - `runtimeSmokeMode=true` only as an optional dev-only compatibility guard for health-only smoke checks.
+- Repository gate cleared: `SERVER_ROLE=api|worker` no longer hard-requires MongoDB/Mongoose during dev cutover startup. `/healthz` now treats Aurora and S3 as required dependencies for API/worker dev cutover mode, while Mongo-backed product routes fail with controlled dependency errors until those domains are migrated.
+- Plan D execution should consume repository URIs, bucket names, and database/livekit config through the declared parameter/output names rather than manually copied console values.
 
 Execution record, May 13, 2026:
 
@@ -168,7 +217,7 @@ Execution record, May 13, 2026:
 - Pushed API/worker image tag `plan-d-bd49300ddfe1-20260513-003749`.
 - Updated API task definition to `722347332210.dkr.ecr.us-east-2.amazonaws.com/rebound-dev-api:plan-d-bd49300ddfe1-20260513-003749`.
 - Updated worker task definition to `722347332210.dkr.ecr.us-east-2.amazonaws.com/rebound-dev-worker:plan-d-bd49300ddfe1-20260513-003749`.
-- Left API/worker desired counts at `0` to avoid a known MongoDB-dependent startup crash loop.
+- Left API/worker desired counts at `0` pending the follow-up ECS desired-count deploy and runtime verification after the startup decoupling change landed.
 
 Acceptance:
 
@@ -287,6 +336,7 @@ Changes:
 - Add/update GitHub workflow for dev that triggers AWS build/deploy pipeline.
 - Remove or disable `.github/workflows/deploy-new.yml` once the AWS dev deployment path is repeatable.
 - Document release runbook for dev deployments.
+- Ensure deployment automation resolves environment-specific configuration from `/rebound/dev/...` and `/rebound/prod/...` parameter names and stable stack outputs.
 
 Acceptance:
 
@@ -294,6 +344,7 @@ Acceptance:
 - Frontend artifacts publish and invalidate CloudFront.
 - Rollback to prior dev task definition revision is documented and tested.
 - No dev deployment path uses SSH, PM2, Nginx, or EC2-hosted application processes.
+- Runbooks and automation consume config by parameter/output name only.
 
 ## PR K: Legacy Runtime Removal
 
@@ -326,6 +377,8 @@ Run as applicable per PR:
 - `aws ecs describe-services` for desired/running counts
 - `aws ecr list-images` for pushed artifacts
 - `aws cloudformation describe-stacks` for expected outputs
+- `aws ssm get-parameters-by-path --path /rebound/dev/ --recursive`
+- `aws ssm get-parameters-by-path --path /rebound/prod/ --recursive`
 
 ## Completion Criteria
 
@@ -339,3 +392,4 @@ Master Plan 02 is complete when:
 - S3 is the only media/live object store used at runtime.
 - MongoDB, Mongoose, GridFS, Socket.IO, SSH deploys, PM2, and Nginx are absent from dev runtime and deployment paths.
 - Remaining production cutover work is clearly isolated for the next master plan.
+- Required dev/prod parameters and outputs are automatically created and all plan tasks consume them by name.

@@ -7,21 +7,36 @@ import chatApi from "./chat.js";
 import dmApi from "./dms.js";
 import contentRoutes from "../content.js";
 import mediaApi from "./media.js";
+import databaseServer from "../../database/index.js";
 import multer from "multer";
 
 const router = Router();
+const mongoBackedRoutes = Router();
 
-router.use("/", usersApi);
+const requireMongoDependency = (_req, res, next) => {
+	if (databaseServer.isReady()) {
+		return next();
+	}
 
-router.use("/", devApi);
+	return res.status(503).json({
+		error: "This endpoint is temporarily unavailable until the Mongo-backed domain is migrated.",
+		code: "mongo_dependency_unavailable",
+	});
+};
 
-router.use("/", adminApi);
+mongoBackedRoutes.use("/", usersApi);
 
-router.use("/", chatApi);
-router.use("/", dmApi);
-router.use("/", mediaApi);
+mongoBackedRoutes.use("/", devApi);
 
-router.use("/", contentRoutes);
+mongoBackedRoutes.use("/", adminApi);
+
+mongoBackedRoutes.use("/", chatApi);
+mongoBackedRoutes.use("/", dmApi);
+mongoBackedRoutes.use("/", mediaApi);
+
+mongoBackedRoutes.use("/", contentRoutes);
+
+router.use(requireMongoDependency, mongoBackedRoutes);
 
 router.use(function (err, req, res, next) {
 	if (err.name === "ValidationError") {

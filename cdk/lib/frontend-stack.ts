@@ -56,5 +56,10 @@ export class FrontendStack extends Stack {
 			value: this.distribution.distributionId,
 			description: "CloudFront distribution ID for the frontend",
 		});
+
+		new CfnOutput(this, "CloudFrontDistributionDomainName", {
+			value: this.distribution.distributionDomainName,
+			description: "CloudFront distribution domain name for the frontend",
+		});
 	}
 }

@@ -1,7 +1,7 @@
 import crypto from "crypto";
 
+import { createStreamSessionRepository } from "../data/streamSessionRepository.js";
 import logger from "../logger.js";
-import StreamSessionModel from "../models/StreamSession.js";
 import { liveConfig } from "./config.js";
 import { PLAYLIST_CONTENT_TYPE, resolveHlsContentType } from "./mime.js";
 import { normalizeMasterPlaylist, normalizeMediaPlaylist, sanitizeUploadedFilename } from "./playlist.js";
@@ -250,9 +250,10 @@ const serializeAsset = (asset) => {
 };
 
 class LiveService {
-	constructor(config = liveConfig) {
+	constructor(config = liveConfig, options = {}) {
 		this.config = config;
 		this.storage = createLiveStorage(config);
+		this.repository = options.repository || createStreamSessionRepository();
 	}
 
 	buildOrigin(req) {
@@ -521,7 +522,7 @@ class LiveService {
 
 	async listShareSummaries(origin = "", { limit = 100 } = {}) {
 		const resolvedLimit = Math.min(200, Math.max(1, Number.parseInt(limit, 10) || 100));
-		const sessions = await StreamSessionModel.find({}).sort({ updatedAt: -1 }).limit(resolvedLimit);
+		const sessions = await this.repository.listRecent({ limit: resolvedLimit });
 		const summaries = [];
 
 		for (const session of sessions) {
@@ -548,10 +549,7 @@ class LiveService {
 	async expireInactiveAccountSessions(userId, now = new Date()) {
 		if (!userId) return [];
 
-		const activeSessions = await StreamSessionModel.find({
-			createdByUser: userId,
-			status: "active",
-		});
+		const activeSessions = await this.repository.findActiveByCreatedByUser(userId);
 
 		const stillActive = [];
 		for (const session of activeSessions) {
@@ -599,7 +597,7 @@ class LiveService {
 			Math.max(1, Number.parseInt(requestedRetainedSegments, 10) || this.config.maxRetainedSegments)
 		);
 
-		const session = await StreamSessionModel.create({
+		const session = await this.repository.create({
 			sessionId,
 			label: normalizedAccountLabel || normalizedLabel,
 			publicToken,
@@ -634,11 +632,8 @@ class LiveService {
 		session.endedAt = session.endedAt || now;
 		session.expiresAt = now;
 		session.cleanupAfterAt = new Date(now.getTime() + this.config.endedSessionRetentionMs);
-		await session.save();
-
 		logger.info(`[live] session expired sessionId=${session.sessionId} reason=${reason}`);
-
-		return session;
+		return this.repository.save(session);
 	}
 
 	async ensureSessionIsActive(session, reason = "session_inactive") {
@@ -662,7 +657,7 @@ class LiveService {
 			throw new LiveServiceError(401, "Missing ingest secret.", "missing_ingest_secret");
 		}
 
-		const session = await StreamSessionModel.findOne({ sessionId });
+		const session = await this.repository.findBySessionId(sessionId);
 		await this.ensureSessionIsActive(session, "authenticate_ingest_session");
 
 		const expectedHash = Buffer.from(session.ingestSecretHash, "hex");
@@ -737,7 +732,7 @@ class LiveService {
 		});
 
 		await this.touchSession(session);
-		await session.save();
+		return this.repository.save(session);
 	}
 
 	async uploadMediaPlaylist(session, rawPlaylist) {
@@ -766,7 +761,7 @@ class LiveService {
 
 		await this.pruneSegments(session);
 		await this.touchSession(session);
-		await session.save();
+		return this.repository.save(session);
 	}
 
 	async uploadSegment(session, rawFilename, rawBody) {
@@ -804,13 +799,12 @@ class LiveService {
 		});
 
 		await this.touchSession(session);
-		await session.save();
+		return this.repository.save(session);
 	}
 
 	async heartbeat(session) {
 		await this.touchSession(session);
-		await session.save();
-		return session;
+		return this.repository.save(session);
 	}
 
 	async endSession(session) {
@@ -821,15 +815,12 @@ class LiveService {
 		session.endedAt = now;
 		session.expiresAt = now;
 		session.cleanupAfterAt = new Date(now.getTime() + this.config.endedSessionRetentionMs);
-		await session.save();
-
 		logger.info(`[live] session ended sessionId=${session.sessionId}`);
-
-		return session;
+		return this.repository.save(session);
 	}
 
 	async getShareSummary(publicToken) {
-		const session = await StreamSessionModel.findOne({ publicToken });
+		const session = await this.repository.findByPublicToken(publicToken);
 		if (!session) {
 			throw new LiveServiceError(404, "Live session not found.", "live_session_not_found");
 		}
@@ -848,7 +839,7 @@ class LiveService {
 		} catch (err) {
 			throw new LiveServiceError(400, err?.message || "Invalid live asset filename.", "invalid_live_asset_filename");
 		}
-		const session = await StreamSessionModel.findOne({ publicToken });
+		const session = await this.repository.findByPublicToken(publicToken);
 		await this.ensureSessionIsActive(session, "public_asset_lookup");
 
 		const asset = session.assets.find((candidate) => candidate.filename === filename && (!expectedAssetKind || candidate.assetKind === expectedAssetKind));
@@ -859,10 +850,7 @@ class LiveService {
 		try {
 			const storedObject = await this.storage.readObject(asset.storageKey);
 
-			void StreamSessionModel.updateOne(
-				{ sessionId: session.sessionId, "assets.filename": asset.filename },
-				{ $set: { "assets.$.lastServedAt": new Date() } }
-			).catch((err) => {
+			void this.repository.updateAssetServedAt(session.sessionId, asset.filename, new Date()).catch((err) => {
 				logger.error(`Failed to update live asset serve time: ${err.message}`);
 			});
 
@@ -897,7 +885,7 @@ class LiveService {
 			};
 		}
 
-		const session = await StreamSessionModel.findOne({ sessionId: webhook.sessionId });
+		const session = await this.repository.findBySessionId(webhook.sessionId);
 		if (!session) {
 			return {
 				...webhook,
@@ -909,7 +897,7 @@ class LiveService {
 
 		if (session.status === "active" && ["room_started", "participant_joined", "track_published", "ingress_started"].includes(webhook.eventName)) {
 			await this.touchSession(session);
-			await session.save();
+			await this.repository.save(session);
 		}
 
 		logger.info(`[live] LiveKit webhook event=${webhook.eventName || "unknown"} room=${webhook.roomName || "unknown"} sessionId=${webhook.sessionId}`);
@@ -923,23 +911,17 @@ class LiveService {
 
 	async runCleanup() {
 		const now = new Date();
-		const expiredSessions = await StreamSessionModel.find({
-			status: "active",
-			expiresAt: { $lte: now },
-		});
+		const expiredSessions = await this.repository.findExpiredActive(now);
 
 		for (const session of expiredSessions) {
 			await this.markSessionExpired(session, "cleanup_pass");
 		}
 
-		const staleSessions = await StreamSessionModel.find({
-			status: { $in: ["ended", "expired"] },
-			cleanupAfterAt: { $lte: now },
-		});
+		const staleSessions = await this.repository.findStaleFinished(now);
 
 		for (const session of staleSessions) {
 			await this.storage.deletePrefix(session.storagePrefix);
-			await StreamSessionModel.deleteOne({ _id: session._id });
+			await this.repository.deleteById(session.id);
 			logger.info(`[live] session deleted sessionId=${session.sessionId} status=${session.status}`);
 		}
 	}

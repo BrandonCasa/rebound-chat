@@ -2,6 +2,7 @@ import { CfnOutput, Duration, Stack } from "aws-cdk-lib";
 import { aws_dynamodb as dynamodb, aws_ec2 as ec2, aws_elasticache as elasticache, aws_rds as rds, aws_s3 as s3 } from "aws-cdk-lib";
 import type { Construct } from "constructs";
 
+import { createRuntimeParameter, runtimeParameterNames, type RuntimeParameters } from "./runtime-config";
 import type { ReboundStackProps } from "./stack-props";
 
 interface DataStackProps extends ReboundStackProps {
@@ -16,11 +17,13 @@ export class DataStack extends Stack {
 	readonly frontendBucket: s3.Bucket;
 	readonly websocketConnectionTable: dynamodb.Table;
 	readonly redisSecurityGroup: ec2.SecurityGroup;
+	readonly runtimeParameters: RuntimeParameters;
 
 	constructor(scope: Construct, id: string, props: DataStackProps) {
 		super(scope, id, props);
 
 		const { config, vpc, appSecurityGroup } = props;
+		const databaseName = "rebound";
 
 		this.mediaBucket = this.createApplicationBucket("MediaBucket", "media", config);
 		this.liveBucket = this.createApplicationBucket("LiveBucket", "live", config);
@@ -48,7 +51,7 @@ export class DataStack extends Stack {
 				version: rds.AuroraPostgresEngineVersion.of("16.4", "16"),
 			}),
 			credentials: rds.Credentials.fromGeneratedSecret("rebound"),
-			defaultDatabaseName: "rebound",
+			defaultDatabaseName: databaseName,
 			writer: rds.ClusterInstance.serverlessV2("writer", {
 				publiclyAccessible: false,
 			}),
@@ -65,6 +68,74 @@ export class DataStack extends Stack {
 			deletionProtection: config.appEnv === "prod",
 			removalPolicy: config.removalPolicy,
 		});
+		const parameterNames = runtimeParameterNames(config.appEnv);
+		this.runtimeParameters = {
+			databaseUrl: createRuntimeParameter(
+				this,
+				"DatabaseUrlParameter",
+				config,
+				parameterNames.databaseUrl,
+				`postgresql://rebound@${this.database.clusterEndpoint.hostname}:5432/${databaseName}`
+			),
+			databaseHost: createRuntimeParameter(
+				this,
+				"DatabaseHostParameter",
+				config,
+				parameterNames.databaseHost,
+				this.database.clusterEndpoint.hostname
+			),
+			databasePort: createRuntimeParameter(this, "DatabasePortParameter", config, parameterNames.databasePort, "5432"),
+			databaseName: createRuntimeParameter(this, "DatabaseNameParameter", config, parameterNames.databaseName, databaseName),
+			databaseCredentialsSecretArn: createRuntimeParameter(
+				this,
+				"DatabaseCredentialsSecretArnParameter",
+				config,
+				parameterNames.databaseCredentialsSecretArn,
+				this.database.secret!.secretArn
+			),
+			storageMediaBucket: createRuntimeParameter(
+				this,
+				"StorageMediaBucketParameter",
+				config,
+				parameterNames.storageMediaBucket,
+				this.mediaBucket.bucketName
+			),
+			storageLiveBucket: createRuntimeParameter(
+				this,
+				"StorageLiveBucketParameter",
+				config,
+				parameterNames.storageLiveBucket,
+				this.liveBucket.bucketName
+			),
+			liveKitUrl: createRuntimeParameter(
+				this,
+				"LiveKitUrlParameter",
+				config,
+				parameterNames.liveKitUrl,
+				`wss://livekit.${config.domainName}`
+			),
+			liveKitApiKey: createRuntimeParameter(
+				this,
+				"LiveKitApiKeyParameter",
+				config,
+				parameterNames.liveKitApiKey,
+				config.appEnv === "dev" ? "devkey" : "replace-me"
+			),
+			liveKitApiSecret: createRuntimeParameter(
+				this,
+				"LiveKitApiSecretParameter",
+				config,
+				parameterNames.liveKitApiSecret,
+				config.appEnv === "dev" ? "devsecret" : "replace-me"
+			),
+			liveKitWebhookSecret: createRuntimeParameter(
+				this,
+				"LiveKitWebhookSecretParameter",
+				config,
+				parameterNames.liveKitWebhookSecret,
+				"replace-me"
+			),
+		};
 
 		this.redisSecurityGroup = new ec2.SecurityGroup(this, "RedisSecurityGroup", {
 			vpc,
@@ -106,14 +177,34 @@ export class DataStack extends Stack {
 			description: "DynamoDB table for API Gateway WebSocket connection records",
 		});
 
-		new CfnOutput(this, "AuroraClusterEndpoint", {
+		new CfnOutput(this, "AuroraEndpoint", {
 			value: this.database.clusterEndpoint.hostname,
 			description: "Aurora PostgreSQL cluster writer endpoint",
 		});
 
-		new CfnOutput(this, "AuroraSecretArn", {
+		new CfnOutput(this, "AuroraPort", {
+			value: "5432",
+			description: "Aurora PostgreSQL port",
+		});
+
+		new CfnOutput(this, "AuroraDatabaseName", {
+			value: databaseName,
+			description: "Aurora PostgreSQL database name",
+		});
+
+		new CfnOutput(this, "AuroraCredentialsSecretArn", {
 			value: this.database.secret!.secretArn,
 			description: "Secrets Manager ARN for Aurora PostgreSQL credentials",
+		});
+
+		new CfnOutput(this, "AuroraClusterEndpoint", {
+			value: this.database.clusterEndpoint.hostname,
+			description: "Deprecated compatibility alias for AuroraEndpoint",
+		});
+
+		new CfnOutput(this, "AuroraSecretArn", {
+			value: this.database.secret!.secretArn,
+			description: "Deprecated compatibility alias for AuroraCredentialsSecretArn",
 		});
 	}
 

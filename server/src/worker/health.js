@@ -1,31 +1,34 @@
 import { pathToFileURL } from "node:url";
 
-const cleanupOwnerRoles = new Set(["worker", "combined"]);
-const truthyEnvValues = new Set(["1", "true", "yes"]);
+import { buildDependencyHealth, resolveAppEnv } from "../runtime/dependencies.js";
 
-const isEcsSmokeModeEnabled = (env = process.env) =>
-	truthyEnvValues.has(
-		String(env.REBOUND_ECS_SMOKE_MODE || "")
-			.trim()
-			.toLowerCase()
-	);
+const cleanupOwnerRoles = new Set(["worker", "combined"]);
 
 const getWorkerHealth = (env = process.env) => {
 	const role = String(env.SERVER_ROLE || "combined").toLowerCase();
 	const ownsCleanup = cleanupOwnerRoles.has(role);
-	const ecsSmokeMode = isEcsSmokeModeEnabled(env);
-	const appEnv = String(env.APP_ENV || "")
-		.trim()
-		.toLowerCase();
-	const smokeModeAllowed = !ecsSmokeMode || appEnv === "dev";
+	const dependencyHealth = buildDependencyHealth({ role, env });
+	const ecsSmokeMode =
+		String(env.REBOUND_ECS_SMOKE_MODE || "")
+			.trim()
+			.toLowerCase() === "1";
+	const smokeModeAllowed = !ecsSmokeMode || resolveAppEnv(env) === "dev";
+	const status = ecsSmokeMode
+		? ownsCleanup && smokeModeAllowed
+			? "ok"
+			: "degraded"
+		: ownsCleanup && smokeModeAllowed && dependencyHealth.status === "ok"
+			? "ok"
+			: "degraded";
 
 	return {
-		status: ownsCleanup && smokeModeAllowed ? "ok" : "degraded",
+		status,
 		role,
-		mode: ecsSmokeMode ? "ecs-smoke" : "runtime",
+		mode: ecsSmokeMode ? "ecs-smoke" : dependencyHealth.mode,
 		checks: {
 			liveCleanupOwner: ownsCleanup,
 			ecsSmokeModeDevOnly: smokeModeAllowed,
+			...dependencyHealth.checks,
 		},
 	};
 };

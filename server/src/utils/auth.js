@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import net from "node:net";
 import { UAParser } from "ua-parser-js";
 
+import databaseServer from "../database/index.js";
 import UserModel from "../models/User.js";
 
 const parseCookieHeader = (header = "") => {
@@ -49,7 +50,16 @@ const hasPasswordChangedAfterTokenIssue = (user, decoded) => {
 	return issuedAtMs + 1000 < passwordChangedAt;
 };
 
-const validateAccessToken = async (token) => {
+const buildStatelessUser = (decoded) => ({
+	_id: decoded.id,
+	username: decoded.username || "",
+	displayName: decoded.username || "",
+	active: true,
+	tokenVersion: decoded.tokenVersion,
+});
+
+const validateAccessToken = async (token, options = {}) => {
+	const { allowStateless = false } = options;
 	if (!token) throw buildAuthError("Missing access token.");
 
 	let decoded;
@@ -57,6 +67,10 @@ const validateAccessToken = async (token) => {
 		decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
 	} catch (err) {
 		throw buildAuthError("Invalid access token.");
+	}
+
+	if (allowStateless && !databaseServer.isReady()) {
+		return { user: buildStatelessUser(decoded), decoded, stateless: true };
 	}
 
 	const user = await UserModel.findById(decoded.id);
@@ -75,9 +89,9 @@ const validateAccessToken = async (token) => {
 	return { user, decoded };
 };
 
-const validateAccessTokenFromRequest = async (req) => {
+const validateAccessTokenFromRequest = async (req, options = {}) => {
 	const token = getAccessToken(req);
-	const result = await validateAccessToken(token);
+	const result = await validateAccessToken(token, options);
 	return { ...result, token };
 };
 

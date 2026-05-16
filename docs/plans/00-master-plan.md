@@ -25,6 +25,14 @@ The platform baseline remains:
 - Realtime target: API Gateway WebSocket APIs replacing Socket.IO.
 - Legacy removal target: no MongoDB, Mongoose, GridFS, Socket.IO, EC2/PM2/Nginx app hosting, or SSH deploy workflow remains in supported runtime paths.
 
+Configuration baseline:
+
+- Environment-scoped AWS Systems Manager Parameter Store names are the canonical contract for runtime and pipeline configuration.
+- CloudFormation/CDK stack outputs are the canonical contract for discoverable infrastructure values such as endpoints, ARNs, bucket names, repository URIs, and service URLs.
+- Tasks must reference configuration by parameter/output name, not by manually copied literal values.
+- CDK must automatically create the required parameter names for both `dev` and `prod`.
+- Parameter naming must be deterministic by environment, under the pattern `/rebound/<env>/<domain>/<name>`.
+
 Reference ADR: `docs/adr/0001-aws-native-webrtc-platform.md`.
 
 ## Current Repository Reality (Verified)
@@ -58,6 +66,7 @@ Reference ADR: `docs/adr/0001-aws-native-webrtc-platform.md`.
 - CDK stacks exist and synth/deploy for dev/prod environments.
 - `cdk/lib/network-stack.ts`, `data-stack.ts`, `api-stack.ts`, `frontend-stack.ts`, and `pipeline-stack.ts` are real infrastructure.
 - `cdk/lib/compute-stack.ts` creates ECS services with placeholder tasks and `desiredCount: 0`.
+- Parameter/output discipline is not fully standardized yet and must be normalized as part of the remaining infra and deployment slices.
 - Infra artifacts exist and are concrete:
   - `infra/docker/*.Dockerfile`
   - `infra/buildspec.*.yml`
@@ -92,6 +101,12 @@ Key observed outputs/resources:
 - ECR repos present: `rebound-dev-api`, `rebound-dev-worker`, `rebound-dev-realtime`, `rebound-dev-livekit`, `rebound-dev-web-build`.
 - First Plan D API/worker images are pushed with tag `plan-d-bd49300ddfe1-20260513-003749`.
 - ECS services exist for api/worker/realtime/livekit with `desiredCount: 0`.
+
+Required config contract from this point forward:
+
+- Every environment must expose database connection discovery, runtime secret references, bucket names, repository URIs, service endpoints, and deployment role ARNs through named AWS parameters and/or stack outputs.
+- Any new task in these plans that needs configuration must specify the parameter names or output names it depends on.
+- No task should depend on a manual console copy step for long-lived configuration values.
 
 ## Known Gaps to Resolve During Remaining Phases
 
@@ -128,6 +143,7 @@ Completed outcomes:
 Remaining in this phase:
 
 - None for the baseline PR A slice; additional permission tightening remains ongoing as part of later PRs.
+- Normalize environment-scoped Parameter Store creation and output naming so downstream runtime and deploy slices consume names instead of ad hoc literals.
 
 ### Phase 2 - Container and Runtime Split
 
@@ -279,3 +295,4 @@ This plan revision is considered aligned when:
 - Remaining work is organized around reaching a real dev AWS live path before any production cutover.
 - Aurora/S3/API Gateway/ECS/LiveKit are the only supported target systems.
 - MongoDB, Mongoose, GridFS, Socket.IO, EC2/PM2/Nginx app hosting, SSH deploys, and HLS-only assumptions have explicit removal gates.
+- Required dev/prod configuration values are automatically created under stable AWS parameter names and exposed through predictable stack outputs.

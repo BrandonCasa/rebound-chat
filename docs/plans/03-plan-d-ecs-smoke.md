@@ -6,6 +6,26 @@ This is the tactical runbook for PR D in `docs/plans/02-master-plan.md`.
 
 Run real `api` and `worker` containers in the dev ECS cluster in `us-east-2`.
 
+## Required Config Names
+
+Plan D tasks must reference these values by name:
+
+- Parameters:
+  - `/rebound/dev/database/url`
+  - `/rebound/dev/storage/media-bucket`
+  - `/rebound/dev/storage/live-bucket`
+  - `/rebound/dev/livekit/url`
+  - `/rebound/dev/livekit/api-key`
+  - `/rebound/dev/livekit/api-secret`
+  - `/rebound/dev/livekit/webhook-secret`
+- Outputs:
+  - `ApiRepositoryUri`
+  - `WorkerRepositoryUri`
+  - `HttpApiUrl`
+  - `GitHubActionsRoleArn`
+
+These names should be created automatically by CDK for `dev` and mirrored under `/rebound/prod/...` for `prod`.
+
 ## CDK Controls
 
 The CDK keeps dev services idle and CodeBuild dry-run safe by default. Plan D uses explicit context flags so the switch to real image push and running tasks is visible in each deploy command.
@@ -15,7 +35,7 @@ The CDK keeps dev services idle and CodeBuild dry-run safe by default. Plan D us
 - `--context imageTags.worker=<tag>` makes the worker task definition use `rebound-dev-worker:<tag>`.
 - `--context serviceDesiredCounts.api=1` starts one API task.
 - `--context serviceDesiredCounts.worker=1` starts one worker task.
-- `--context runtimeSmokeMode=true` injects the dev-only `REBOUND_ECS_SMOKE_MODE=1` runtime guard into API and worker tasks. This skips MongoDB/Mongoose startup for Plan D health checks only and is rejected outside `APP_ENV=dev`.
+- `--context runtimeSmokeMode=true` injects the dev-only `REBOUND_ECS_SMOKE_MODE=1` runtime guard into API and worker tasks. This is now an optional compatibility guard for health-only smoke checks and is rejected outside `APP_ENV=dev`.
 
 Keep `realtime` and `livekit` at `0` until their own smoke gates are ready.
 
@@ -27,7 +47,7 @@ Keep `realtime` and `livekit` at `0` until their own smoke gates are ready.
    pnpm --filter rebound-cdk exec cdk deploy --all --require-approval never --context appEnv=dev --context codeBuildDryRun=false
    ```
 
-2. Build and push API and worker images to ECR. Use one immutable tag for both services so the ECS task definitions point at a matching source snapshot.
+2. Build and push API and worker images to ECR. Resolve repository URIs from the named outputs instead of manually managed literals. Use one immutable tag for both services so the ECS task definitions point at a matching source snapshot.
 
    ```powershell
    $tag = "<unique-tag>"
@@ -54,13 +74,14 @@ Keep `realtime` and `livekit` at `0` until their own smoke gates are ready.
    aws ecs describe-services --region us-east-2 --cluster <cluster-name> --services <api-service-name> <worker-service-name>
    aws logs tail /aws/ecs/<api-log-group> --region us-east-2 --since 30m
    aws logs tail /aws/ecs/<worker-log-group> --region us-east-2 --since 30m
+   aws ssm get-parameters-by-path --region us-east-2 --path /rebound/dev/ --recursive
    ```
 
 ## Current Risk
 
-The current server production startup still initializes MongoDB/Mongoose before the API listener starts. The repo now includes an explicit dev-only `REBOUND_ECS_SMOKE_MODE` guard that can unblock Plan D container health checks, but it is not production readiness: product API routes and worker cleanup still require the Aurora/S3 cutover before this mode can be removed.
+The repo startup coupling gate is now cleared: `SERVER_ROLE=api|worker` can start in dev cutover mode without initializing MongoDB/Mongoose, `/healthz` reports Aurora + S3 as the required dependencies for those roles, and Mongo-only product routes fail with controlled dependency errors instead of crashing the process.
 
-For now, use `runtimeSmokeMode=true` only with dev API/worker desired-count smoke deploys. The final Plan D promotion remains blocked until the real image startup path runs without MongoDB/Mongoose.
+`runtimeSmokeMode=true` can still be used for narrow health-only smoke runs, but it is no longer required for API/worker startup in dev. The remaining Plan D promotion work is the actual ECS desired-count deploy and runtime verification in `us-east-2`.
 
 ## Execution Record
 
@@ -85,6 +106,14 @@ Repository update, May 13, 2026:
 - Added a dev-only `runtimeSmokeMode` CDK context flag that sets `REBOUND_ECS_SMOKE_MODE=1` on API and worker task definitions only.
 - Added server startup handling so API smoke mode serves `/healthz` without MongoDB and worker smoke mode stays alive without starting MongoDB or live cleanup.
 - Added local tests covering the smoke-mode runtime guard and CDK task-definition wiring.
+
+Repository update, May 15, 2026:
+
+- Removed the default MongoDB/Mongoose startup requirement for `SERVER_ROLE=api|worker` in dev cutover mode.
+- Kept live/session persistence on the stream-session repository boundary so API and worker paths can use Prisma/Aurora-backed storage when `DATABASE_URL` is present.
+- Added dependency-aware `/healthz` behavior for API/worker dev cutover mode: Aurora + S3 required, Mongo not required.
+- Added controlled `503 mongo_dependency_unavailable` responses for Mongo-backed `/api` routes when Mongo is intentionally not bootstrapped.
+- Verified locally with `pnpm --prefix server test`.
 
 Repository update, May 13, 2026:
 

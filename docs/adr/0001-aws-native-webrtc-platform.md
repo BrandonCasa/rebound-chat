@@ -26,6 +26,7 @@ The target platform baseline is:
 - LiveKit is the selected SFU and runs on ECS Fargate with Redis.
 - WebRTC live media uses LiveKit directly; Express, API Gateway, CloudFront, and Nginx do not proxy RTP/SRTP media.
 - HLS remains available only as a temporary compatibility path until WebRTC health and cutover behavior are proven.
+- Environment-specific runtime configuration is exposed through deterministic AWS Parameter Store names under `/rebound/<env>/...`, and infrastructure discovery values are exposed through stable stack outputs.
 
 ## Media Compatibility Gates
 
@@ -44,6 +45,7 @@ Local WebRTC compatibility starts with Docker Compose for LiveKit and Redis. Pos
 - Live cleanup work must leave the API process before ECS service scaling is enabled.
 - LiveKit-on-Fargate needs explicit work for UDP/TCP load balancing, advertised hostnames, TLS, autoscaling, and observability.
 - The existing EC2 deployment remains intact only until the AWS dev environment can deploy and roll back repeatably; after that, EC2/PM2/Nginx deployment paths are removed from supported architecture.
+- Infra tasks and runbooks must reference configuration by AWS parameter name or stack output name, not by manually copied endpoint or secret values.
 
 ## Status as of Dev Provisioning (2026-05-12)
 

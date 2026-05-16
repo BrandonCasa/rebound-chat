@@ -8,6 +8,7 @@ import {
 } from "aws-cdk-lib";
 import type { Construct } from "constructs";
 
+import { createRuntimeParameter, runtimeParameterNames } from "./runtime-config";
 import type { ReboundStackProps } from "./stack-props";
 
 interface PipelineStackProps extends ReboundStackProps {
@@ -94,6 +95,14 @@ export class PipelineStack extends Stack {
 			value: this.githubActionsRole.roleArn,
 			description: "IAM role ARN for GitHub Actions OIDC deployments",
 		});
+
+		createRuntimeParameter(
+			this,
+			"GitHubActionsRoleArnParameter",
+			config,
+			runtimeParameterNames(config.appEnv).deployGitHubActionsRoleArn,
+			this.githubActionsRole.roleArn
+		);
 	}
 
 	private createProject(

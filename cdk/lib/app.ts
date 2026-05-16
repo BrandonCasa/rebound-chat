@@ -50,6 +50,7 @@ export const createReboundStacks = (app: App, config: ReboundEnvironmentConfig) 
 		liveBucket: data.liveBucket,
 		websocketConnectionTable: data.websocketConnectionTable,
 		websocketApi: api.websocketApi,
+		runtimeParameters: data.runtimeParameters,
 	});
 
 	const pipeline = new PipelineStack(app, `${prefix}-Pipeline`, {
