@@ -1,11 +1,12 @@
 import fs from "node:fs/promises";
 import { createRequire } from "node:module";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-process.env.NODE_ENV = "test";
-process.env.ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || "test-access-secret";
-process.env.REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "test-refresh-secret";
-process.env.LIVE_INGEST_CREATE_TOKEN = process.env.LIVE_INGEST_CREATE_TOKEN || "test-live-create-token";
-process.env.LIVE_STORAGE_DIR = process.env.LIVE_STORAGE_DIR || "./test-live-storage";
+import { config as configDotenv } from "dotenv";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+configDotenv({ path: path.resolve(__dirname, "../../.env.test") });
 
 const require = createRequire(import.meta.url);
 const chai = require("chai");

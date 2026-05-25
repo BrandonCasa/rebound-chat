@@ -212,6 +212,9 @@ importers:
       multer-gridfs-storage:
         specifier: ^5.0.2
         version: 5.0.2(multer@2.0.2)
+      nodemailer:
+        specifier: ^8.0.8
+        version: 8.0.8
       nodemon:
         specifier: ^3.1.10
         version: 3.1.10
@@ -2901,6 +2904,10 @@ packages:
 
   node-releases@2.0.27:
     resolution: {integrity: sha512-nmh3lCkYZ3grZvqcCH+fjmQ7X+H0OeZgP40OierEaAptX4XofMh5kwNbWh7lBduUzCcV/8kZ+NDLCwm2iorIlA==}
+
+  nodemailer@8.0.8:
+    resolution: {integrity: sha512-p+XsnzXGdtIHXUu2ugxdfG+eX2nehsGhMjW9h0CWj1BhE30hrFz0kh0yIM0/VjUgVsRrDj+80ZO+I1nSkGE4tA==}
+    engines: {node: '>=6.0.0'}
 
   nodemon@3.1.10:
     resolution: {integrity: sha512-WDjw3pJ0/0jMFmyNDp3gvY2YizjLmmOUQo6DEBY+JgdvW/yQ9mEeSw6H5ythl5Ny2ytb7f9C2nIbjSxMNzbJXw==}
@@ -6840,6 +6847,8 @@ snapshots:
 
   node-releases@2.0.27: {}
 
+  nodemailer@8.0.8: {}
+
   nodemon@3.1.10:
     dependencies:
       chokidar: 3.6.0
@@ -7221,6 +7230,7 @@ snapshots:
       morgan: 1.10.1
       multer: 2.0.2
       multer-gridfs-storage: 5.0.2(multer@2.0.2)
+      nodemailer: 8.0.8
       nodemon: 3.1.11
       passport: 0.7.0
       passport-google-oauth20: 2.0.0

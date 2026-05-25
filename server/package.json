@@ -11,7 +11,7 @@
     "dev": "npx kill-port 6001 && npx kill-port 27017 && cross-env NODE_ENV=development nodemon ./src/app.js",
     "live:upload": "node ./scripts/live-uploader.js",
     "pretest": "npx kill-port 27019",
-    "test": "cross-env NODE_ENV=test MONGOMS_PORT=27019 REBOUND_DEV_DB_PATH=./dev-test REBOUND_RESET_DEV_DB=1 mocha \"test/**/*.test.js\" --timeout 20000"
+    "test": "mocha \"test/**/*.test.js\" --timeout 20000 --exit"
   },
   "author": {
     "name": "Brandon Casamichana",
@@ -42,6 +42,7 @@
     "morgan": "^1.10.0",
     "multer": "^2.0.1",
     "multer-gridfs-storage": "^5.0.2",
+    "nodemailer": "^8.0.8",
     "nodemon": "^3.1.10",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",

@@ -1,7 +1,6 @@
 import { Box, Stack, Typography } from "@mui/material";
-import { styled, useTheme } from "@mui/material/styles";
+import { styled } from "@mui/material/styles";
 import React from "react";
-import { useSelector } from "react-redux";
 
 import DeviceSessionsPanel from "../../components/DeviceSessionManager/DeviceSessionManager.jsx";
 import PasswordResetCard from "../../components/Security/PasswordResetCard.jsx";
@@ -16,9 +15,6 @@ const ItemPaper = styled(Box)(({ theme }) => ({
 }));
 
 export default function SecurityPage() {
-	const theme = useTheme();
-	const authState = useSelector((state) => state.auth);
-
 	return (
 		<Box
 			data-testid="security-page"
@@ -34,8 +30,10 @@ export default function SecurityPage() {
 				</Typography>
 			</ItemPaper>
 			<Box sx={{ overflowY: "scroll", flexGrow: 1, ...scrollbarStyles }} data-testid="security-page-content">
-				<DeviceSessionsPanel sx={{ mb: 2 }} />
-				<PasswordResetCard />
+				<Stack spacing={2}>
+					<DeviceSessionsPanel />
+					<PasswordResetCard />
+				</Stack>
 			</Box>
 		</Box>
 	);

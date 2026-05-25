@@ -7,6 +7,7 @@ import mongooseUniqueValidator from "mongoose-unique-validator";
 import serverWatchers from "../socketio/watchers.js";
 
 const hashRefreshToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
+const hashPasswordResetToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
 const normalizeFingerprintValue = (value) => {
 	if (!value) return null;
 	const trimmed = String(value).trim().toLowerCase();
@@ -14,6 +15,8 @@ const normalizeFingerprintValue = (value) => {
 };
 
 const REFRESH_TOKEN_LIFETIME_DAYS = 60;
+const PASSWORD_RESET_TOKEN_BYTES = 32;
+const PASSWORD_RESET_TOKEN_LIFETIME_MS = 60 * 60 * 1000;
 
 const UserSchema = new Schema(
 	{
@@ -61,6 +64,13 @@ const UserSchema = new Schema(
 		passwordChangedAt: {
 			type: Date,
 		},
+		passwordResetTokenHash: {
+			type: String,
+			default: "",
+		},
+		passwordResetTokenExpiresAt: {
+			type: Date,
+		},
 		refreshTokens: [
 			{
 				tokenHash: { type: String, required: true },
@@ -100,6 +110,30 @@ UserSchema.methods.setPassword = function (password) {
 	this.passwordChangedAt = new Date();
 	this.tokenVersion += 1;
 	this.refreshTokens = [];
+	this.clearPasswordResetToken();
+};
+
+UserSchema.methods.createPasswordResetToken = function () {
+	const token = crypto.randomBytes(PASSWORD_RESET_TOKEN_BYTES).toString("hex");
+	this.passwordResetTokenHash = hashPasswordResetToken(token);
+	this.passwordResetTokenExpiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_LIFETIME_MS);
+	return token;
+};
+
+UserSchema.methods.clearPasswordResetToken = function () {
+	this.passwordResetTokenHash = "";
+	this.passwordResetTokenExpiresAt = undefined;
+};
+
+UserSchema.methods.validPasswordResetToken = function (token) {
+	if (!token || !this.passwordResetTokenHash || !this.passwordResetTokenExpiresAt) return false;
+	if (this.passwordResetTokenExpiresAt <= new Date()) return false;
+
+	const suppliedHash = hashPasswordResetToken(token);
+	const storedBuffer = Buffer.from(this.passwordResetTokenHash, "hex");
+	const suppliedBuffer = Buffer.from(suppliedHash, "hex");
+
+	return storedBuffer.length === suppliedBuffer.length && crypto.timingSafeEqual(storedBuffer, suppliedBuffer);
 };
 
 UserSchema.methods.generateAccessToken = function () {
@@ -344,5 +378,5 @@ UserSchema.post("save", function (doc) {
 });
 
 const UserModel = mongoose.model("User", UserSchema);
-export { hashRefreshToken };
+export { hashRefreshToken, hashPasswordResetToken };
 export default UserModel;

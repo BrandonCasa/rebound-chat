@@ -1,9 +1,10 @@
 import { Router } from "express";
 
-import UserModel, { hashRefreshToken } from "../../models/User.js";
+import UserModel, { hashPasswordResetToken, hashRefreshToken } from "../../models/User.js";
 import { auth } from "../auth.js";
 
 import jwt from "jsonwebtoken";
+import nodemailer from "nodemailer";
 import passport from "passport";
 
 import logger from "../../logger.js";
@@ -75,6 +76,80 @@ const AUTH_SESSION_COOKIE_OPTIONS = {
 	secure: process.env.NODE_ENV === "production",
 	sameSite: "strict",
 	path: "/",
+};
+
+const PASSWORD_RESET_RESPONSE = {
+	success: true,
+	message: "If an account exists for that email, a password reset link has been sent.",
+};
+
+const PASSWORD_RESET_TOKEN_PATTERN = /^[a-f0-9]{64}$/i;
+
+const shouldExposePasswordResetToken = () => process.env.NODE_ENV !== "production" || process.env.EXPOSE_PASSWORD_RESET_TOKEN === "true";
+
+const normalizeEmail = (email) => (typeof email === "string" ? email.trim().toLowerCase() : "");
+
+const resolvePasswordResetBaseUrl = (req) => {
+	if (process.env.PASSWORD_RESET_URL_BASE) return process.env.PASSWORD_RESET_URL_BASE;
+	const clientTarget = resolveClientRedirectTarget(req);
+	return clientTarget || "/";
+};
+
+const buildPasswordResetUrl = (req, token) => {
+	const base = resolvePasswordResetBaseUrl(req);
+	const separator = base.includes("?") ? "&" : "?";
+	return `${base}${separator}resetToken=${encodeURIComponent(token)}`;
+};
+
+const createPasswordResetTransport = () => {
+	if (!process.env.SMTP_HOST) return null;
+
+	return nodemailer.createTransport({
+		host: process.env.SMTP_HOST,
+		port: Number(process.env.SMTP_PORT || 587),
+		secure: process.env.SMTP_SECURE === "true",
+		auth:
+			process.env.SMTP_USER && process.env.SMTP_PASS
+				? {
+						user: process.env.SMTP_USER,
+						pass: process.env.SMTP_PASS,
+					}
+				: undefined,
+	});
+};
+
+const escapeHtml = (value) => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+const buildPasswordResetEmail = (user, resetUrl) => ({
+	from: process.env.PASSWORD_RESET_FROM || process.env.SMTP_FROM || "Rebound <no-reply@rebound.nexus>",
+	to: user.email,
+	subject: "Reset your Rebound password",
+	text: [
+		"We received a request to reset your Rebound password.",
+		"",
+		`Use this secure link within one hour: ${resetUrl}`,
+		"",
+		"If you did not request this, you can ignore this email.",
+	].join("\n"),
+	html: `
+		<p>We received a request to reset your Rebound password.</p>
+		<p><a href="${escapeHtml(resetUrl)}">Reset your password</a></p>
+		<p>This link expires in one hour. If you did not request this, you can ignore this email.</p>
+	`,
+});
+
+const deliverPasswordResetToken = async (req, user, token) => {
+	const resetUrl = buildPasswordResetUrl(req, token);
+	const transport = createPasswordResetTransport();
+
+	if (!transport) {
+		logger.warn(`SMTP is not configured. Password reset URL for ${user.email}: ${resetUrl}`);
+		return resetUrl;
+	}
+
+	await transport.sendMail(buildPasswordResetEmail(user, resetUrl));
+	logger.info(`Password reset email sent to ${user.email}.`);
+	return resetUrl;
 };
 
 const normalizeRedirectTarget = (rawValue) => {
@@ -430,6 +505,81 @@ router.post("/users/register", authLimiter, async (req, res, next) => {
 		return res.json({ user: user.toAuthJSON(accessToken), csrfToken });
 	} catch (err) {
 		logger.error(`Registration error: ${err.message}`);
+		return next(err);
+	}
+});
+
+router.post("/users/password-reset/request", authLimiter, async (req, res, next) => {
+	try {
+		const email = normalizeEmail(req.body?.email);
+		const responseBody = { ...PASSWORD_RESET_RESPONSE };
+
+		if (!email) {
+			return res.status(422).json({ errors: { email: "is required" } });
+		}
+
+		const user = await UserModel.findOne({ email });
+		if (!user || !user.active) {
+			return res.json(responseBody);
+		}
+
+		const resetToken = user.createPasswordResetToken();
+		await user.save();
+
+		let resetUrl = null;
+		try {
+			resetUrl = await deliverPasswordResetToken(req, user, resetToken);
+		} catch (deliveryErr) {
+			logger.error(`Password reset email delivery failed for ${user.email}: ${deliveryErr.message}`);
+			user.clearPasswordResetToken();
+			await user.save();
+		}
+
+		if (resetUrl && shouldExposePasswordResetToken()) {
+			responseBody.resetToken = resetToken;
+			responseBody.resetUrl = resetUrl;
+		}
+
+		return res.json(responseBody);
+	} catch (err) {
+		logger.error(`Password reset request error: ${err.message}`);
+		return next(err);
+	}
+});
+
+router.post("/users/password-reset/confirm", authLimiter, async (req, res, next) => {
+	try {
+		const token = typeof req.body?.token === "string" ? req.body.token.trim() : "";
+		const newPassword = typeof req.body?.newPassword === "string" ? req.body.newPassword : "";
+
+		if (!PASSWORD_RESET_TOKEN_PATTERN.test(token)) {
+			return res.status(422).json({ errors: { token: "is invalid" } });
+		}
+
+		if (!newPassword) {
+			return res.status(422).json({ errors: { newPassword: "is required" } });
+		}
+
+		if (newPassword.trim().length < 8) {
+			return res.status(422).json({ errors: { newPassword: "is invalid" } });
+		}
+
+		const user = await UserModel.findOne({
+			passwordResetTokenHash: hashPasswordResetToken(token),
+			passwordResetTokenExpiresAt: { $gt: new Date() },
+		});
+
+		if (!user || !user.validPasswordResetToken(token)) {
+			return res.status(422).json({ errors: { token: "is invalid or expired" } });
+		}
+
+		user.setPassword(newPassword);
+		await user.save();
+
+		clearAuthCookies(res);
+		return res.json({ success: true });
+	} catch (err) {
+		logger.error(`Password reset confirm error: ${err.message}`);
 		return next(err);
 	}
 });

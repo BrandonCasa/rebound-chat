@@ -11,6 +11,8 @@ import {
 	setCsrfTokenCookie,
 } from "../helpers/api";
 import { profileMediaUrl } from "../helpers/mediaUrl";
+import { setDialogOpened } from "./dialogSlice";
+import { addSnackbar } from "./snackbarSlice";
 
 const AUTO_LOGIN_BLOCK_KEY = "disable-auto-login";
 const AUTH_SESSION_MARKER = "auth-session-present";
@@ -39,6 +41,7 @@ const resetAuthFields = (state) => {
 	state.authToken = null;
 	state.userId = null;
 	state.username = "";
+	state.email = "";
 	state.displayName = "";
 	state.bio = "";
 	state.friends = [];
@@ -74,6 +77,7 @@ const initialState = {
 	loggedIn: false,
 	userId: null,
 	username: "",
+	email: "",
 	displayName: "",
 	bio: "",
 	createdAt: null,
@@ -85,6 +89,9 @@ const initialState = {
 	avatarUrl: null,
 	passwordChanging: false,
 	passwordChangeError: null,
+	passwordResetRequestPending: false,
+	passwordResetConfirmPending: false,
+	passwordResetError: null,
 	allowNSFW: false,
 	allowAnyNotifications: true,
 	allowPublicChatNotifications: true,
@@ -103,6 +110,7 @@ export const verifyUser = createAsyncThunk("auth/verifyUser", async (token, { ge
 			authToken,
 			userId: u.id,
 			username: u.username,
+			email: u.email,
 			displayName: u.displayName,
 			bio: u.bio,
 			friends: u.friends,
@@ -166,6 +174,7 @@ export const loginUser = createAsyncThunk("auth/loginUser", async ({ email, pass
 			authToken: u.token,
 			userId: u.id,
 			username: u.username,
+			email: u.email,
 			displayName: u.displayName,
 			bio: u.bio,
 			friends: u.friends,
@@ -195,6 +204,95 @@ export const changePassword = createAsyncThunk("auth/changePassword", async ({ c
 			`${base}/users/password`,
 			{ currentPassword, newPassword },
 			await buildCsrfApiConfig(authToken, { headers: { "Content-Type": "application/json" } })
+		);
+		return data;
+	} catch (err) {
+		return rejectWithValue(err.response?.data || err.message);
+	}
+});
+
+const dispatchLoginErrorSnackbars = (dispatch, error) => {
+	const loginErrors = error?.errors;
+	if (!loginErrors) {
+		dispatch(
+			addSnackbar({
+				snackbarMsg: `Login failed, ${JSON.stringify(error) || "Unknown error."}!`,
+				snackbarSeverity: "error",
+				autoHideDuration: 4000,
+			})
+		);
+		return;
+	}
+
+	Object.entries(loginErrors).forEach(([field, msg]) => {
+		if (!msg) return;
+		const message = Array.isArray(msg) ? msg.join(", ") : msg;
+		dispatch(
+			addSnackbar({
+				snackbarMsg: `Login failed, ${field.charAt(0).toUpperCase() + field.slice(1)} ${message}!`,
+				snackbarSeverity: "error",
+				autoHideDuration: 4000,
+			})
+		);
+	});
+};
+
+export const loginWithPassword =
+	({ email, password }) =>
+	async (dispatch) => {
+		const trimmedEmail = typeof email === "string" ? email.trim() : "";
+		const trimmedPassword = typeof password === "string" ? password.trim() : "";
+
+		if (!trimmedEmail || !trimmedPassword) {
+			const validationError = { errors: { "email or password": "is required" } };
+			dispatch(
+				addSnackbar({
+					snackbarMsg: "Please enter both email and password.",
+					snackbarSeverity: "error",
+					autoHideDuration: 3000,
+				})
+			);
+			throw validationError;
+		}
+
+		try {
+			const user = await dispatch(loginUser({ email: trimmedEmail, password: trimmedPassword })).unwrap();
+			dispatch(setDialogOpened({ dialogName: "loginDialogOpen", newState: false }));
+			dispatch(
+				addSnackbar({
+					snackbarMsg: `Login Successful. Hello ${user.displayName}`,
+					snackbarSeverity: "success",
+					autoHideDuration: 2000,
+				})
+			);
+			return user;
+		} catch (error) {
+			dispatchLoginErrorSnackbars(dispatch, error);
+			throw error;
+		}
+	};
+
+export const requestPasswordReset = createAsyncThunk("auth/requestPasswordReset", async ({ email }, { rejectWithValue }) => {
+	const base = getApiBase();
+	try {
+		const { data } = await axios.post(
+			`${base}/users/password-reset/request`,
+			{ email },
+			await buildCsrfApiConfig(null, { headers: { "Content-Type": "application/json" } })
+		);
+		return data;
+	} catch (err) {
+		return rejectWithValue(err.response?.data || err.message);
+	}
+});
+
+export const confirmPasswordReset = createAsyncThunk("auth/confirmPasswordReset", async ({ token, newPassword }, { rejectWithValue }) => {
+	const base = getApiBase();
+	try {
+		const { data } = await axios.post(
+			`${base}/users/password-reset/confirm`,
+			{ token, newPassword },
+			await buildCsrfApiConfig(null, { headers: { "Content-Type": "application/json" } })
 		);
 		return data;
 	} catch (err) {
@@ -237,6 +335,7 @@ export const registerUser = createAsyncThunk("auth/registerUser", async ({ usern
 			authToken: u.token,
 			userId: u.id,
 			username: u.username,
+			email: u.email,
 			displayName: u.displayName,
 			bio: u.bio,
 			friends: u.friends,
@@ -288,6 +387,9 @@ const authSlice = createSlice({
 			if ("username" in action.payload) {
 				state.username = action.payload.username;
 			}
+			if ("email" in action.payload) {
+				state.email = action.payload.email;
+			}
 			if ("displayName" in action.payload) {
 				state.displayName = action.payload.displayName;
 			}
@@ -337,6 +439,7 @@ const authSlice = createSlice({
 				state.authToken = action.payload.authToken;
 				state.userId = action.payload.userId;
 				state.username = action.payload.username;
+				state.email = action.payload.email;
 				state.displayName = action.payload.displayName;
 				state.bio = action.payload.bio;
 				state.friends = action.payload.friends;
@@ -393,6 +496,7 @@ const authSlice = createSlice({
 				state.authToken = action.payload.authToken;
 				state.userId = action.payload.userId;
 				state.username = action.payload.username;
+				state.email = action.payload.email;
 				state.displayName = action.payload.displayName;
 				state.bio = action.payload.bio;
 				state.friends = action.payload.friends;
@@ -422,6 +526,7 @@ const authSlice = createSlice({
 				state.authToken = action.payload.authToken;
 				state.userId = action.payload.userId;
 				state.username = action.payload.username;
+				state.email = action.payload.email;
 				state.displayName = action.payload.displayName;
 				state.bio = action.payload.bio;
 				state.friends = action.payload.friends;
@@ -450,6 +555,31 @@ const authSlice = createSlice({
 			.addCase(changePassword.rejected, (state, action) => {
 				state.passwordChanging = false;
 				state.passwordChangeError = action.payload || "Failed to update password";
+			})
+			.addCase(requestPasswordReset.pending, (state) => {
+				state.passwordResetRequestPending = true;
+				state.passwordResetError = null;
+			})
+			.addCase(requestPasswordReset.fulfilled, (state) => {
+				state.passwordResetRequestPending = false;
+				state.passwordResetError = null;
+			})
+			.addCase(requestPasswordReset.rejected, (state, action) => {
+				state.passwordResetRequestPending = false;
+				state.passwordResetError = action.payload || "Failed to request password reset";
+			})
+			.addCase(confirmPasswordReset.pending, (state) => {
+				state.passwordResetConfirmPending = true;
+				state.passwordResetError = null;
+			})
+			.addCase(confirmPasswordReset.fulfilled, (state) => {
+				state.passwordResetConfirmPending = false;
+				state.passwordResetError = null;
+				applyLoggedOutState(state, true);
+			})
+			.addCase(confirmPasswordReset.rejected, (state, action) => {
+				state.passwordResetConfirmPending = false;
+				state.passwordResetError = action.payload || "Failed to reset password";
 			})
 			.addCase(logoutUser.fulfilled, (state, action) => {
 				applyLoggedOutState(state, action.payload?.disableAutoLogin);
