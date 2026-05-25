@@ -133,7 +133,7 @@ const LoginDialog = () => {
 							variant="outlined"
 							value={email}
 							type="email"
-							inputProps={{ "data-testid": "login-email-input" }}
+							slotProps={{ htmlInput: { "data-testid": "login-email-input" } }}
 							onChange={(e) => {
 								setEmail(e.target.value);
 							}}
@@ -144,7 +144,7 @@ const LoginDialog = () => {
 							variant="outlined"
 							type="password"
 							value={password}
-							inputProps={{ "data-testid": "login-password-input" }}
+							slotProps={{ htmlInput: { "data-testid": "login-password-input" } }}
 							onChange={(e) => {
 								setPassword(e.target.value);
 							}}
@@ -170,7 +170,7 @@ const LoginDialog = () => {
 							variant="outlined"
 							value={resetFlow.form.email}
 							type="email"
-							inputProps={{ "data-testid": "password-reset-email-input" }}
+							slotProps={{ htmlInput: { "data-testid": "password-reset-email-input" } }}
 							onChange={(e) => {
 								resetFlow.updateField("email", e.target.value);
 							}}
@@ -188,7 +188,7 @@ const LoginDialog = () => {
 							label="Reset token"
 							variant="outlined"
 							value={resetFlow.form.token}
-							inputProps={{ "data-testid": "password-reset-token-input" }}
+							slotProps={{ htmlInput: { "data-testid": "password-reset-token-input" } }}
 							onChange={(e) => {
 								resetFlow.updateField("token", e.target.value);
 							}}
@@ -201,7 +201,7 @@ const LoginDialog = () => {
 							variant="outlined"
 							type="password"
 							value={resetFlow.form.newPassword}
-							inputProps={{ "data-testid": "password-reset-new-password-input" }}
+							slotProps={{ htmlInput: { "data-testid": "password-reset-new-password-input" } }}
 							onChange={(e) => {
 								resetFlow.updateField("newPassword", e.target.value);
 							}}
@@ -214,7 +214,7 @@ const LoginDialog = () => {
 							variant="outlined"
 							type="password"
 							value={resetFlow.form.confirmPassword}
-							inputProps={{ "data-testid": "password-reset-confirm-password-input" }}
+							slotProps={{ htmlInput: { "data-testid": "password-reset-confirm-password-input" } }}
 							onChange={(e) => {
 								resetFlow.updateField("confirmPassword", e.target.value);
 							}}

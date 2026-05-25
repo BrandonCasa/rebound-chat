@@ -189,7 +189,7 @@ export default function PasswordResetCard() {
 						error={Boolean(errors.currentPassword)}
 						helperText={errors.currentPassword}
 						fullWidth
-						inputProps={{ "data-testid": "password-reset-current-input" }}
+						slotProps={{ htmlInput: { "data-testid": "password-reset-current-input" } }}
 					/>
 					<TextField
 						label="New password"
@@ -201,7 +201,7 @@ export default function PasswordResetCard() {
 						error={Boolean(errors.newPassword)}
 						helperText={errors.newPassword || `At least ${MIN_PASSWORD_LENGTH} characters`}
 						fullWidth
-						inputProps={{ "data-testid": "password-reset-new-input" }}
+						slotProps={{ htmlInput: { "data-testid": "password-reset-new-input" } }}
 					/>
 					<TextField
 						label="Confirm new password"
@@ -213,7 +213,7 @@ export default function PasswordResetCard() {
 						error={Boolean(errors.confirmPassword)}
 						helperText={errors.confirmPassword}
 						fullWidth
-						inputProps={{ "data-testid": "password-reset-confirm-input" }}
+						slotProps={{ htmlInput: { "data-testid": "password-reset-confirm-input" } }}
 					/>
 
 					<Box sx={{ display: "flex", justifyContent: "flex-end" }}>
@@ -254,7 +254,7 @@ export default function PasswordResetCard() {
 							error={Boolean(resetFlow.errors.email)}
 							helperText={resetFlow.errors.email || "Enter the email address on your account."}
 							fullWidth
-							inputProps={{ "data-testid": "password-recovery-email-input" }}
+							slotProps={{ htmlInput: { "data-testid": "password-recovery-email-input" } }}
 						/>
 					)}
 
@@ -269,7 +269,7 @@ export default function PasswordResetCard() {
 								error={Boolean(resetFlow.errors.token)}
 								helperText={resetFlow.errors.token || "Paste the token from your recovery email."}
 								fullWidth
-								inputProps={{ "data-testid": "password-recovery-token-input" }}
+								slotProps={{ htmlInput: { "data-testid": "password-recovery-token-input" } }}
 							/>
 							<TextField
 								label="New password"
@@ -281,7 +281,7 @@ export default function PasswordResetCard() {
 								error={Boolean(resetFlow.errors.newPassword)}
 								helperText={resetFlow.errors.newPassword || `At least ${MIN_PASSWORD_LENGTH} characters`}
 								fullWidth
-								inputProps={{ "data-testid": "password-recovery-new-password-input" }}
+								slotProps={{ htmlInput: { "data-testid": "password-recovery-new-password-input" } }}
 							/>
 							<TextField
 								label="Confirm new password"
@@ -293,7 +293,7 @@ export default function PasswordResetCard() {
 								error={Boolean(resetFlow.errors.confirmPassword)}
 								helperText={resetFlow.errors.confirmPassword}
 								fullWidth
-								inputProps={{ "data-testid": "password-recovery-confirm-password-input" }}
+								slotProps={{ htmlInput: { "data-testid": "password-recovery-confirm-password-input" } }}
 							/>
 						</>
 					)}

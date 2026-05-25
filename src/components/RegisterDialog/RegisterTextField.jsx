@@ -58,7 +58,7 @@ const RegisterTextField = ({ field, value, label, helperText, onChange, errors =
 		<TextField
 			id={`current-${field}`}
 			data-testid="register-text-field"
-			inputProps={{ "data-testid": `register-${field}-input` }}
+			slotProps={{ htmlInput: { "data-testid": `register-${field}-input` } }}
 			sx={{ pb: 2 }}
 			label={label}
 			variant="outlined"

@@ -159,7 +159,7 @@ const LiveStatusPanel = ({
 									size="small"
 									checked={Boolean(autoAdaptEnabled)}
 									onChange={(event) => onToggleAutoAdapt?.(event.target.checked)}
-									inputProps={{ "data-testid": "live-status-auto-adapt-switch" }}
+									slotProps={{ input: { "data-testid": "live-status-auto-adapt-switch" } }}
 								/>
 							}
 							label={autoAdaptEnabled ? "Auto-adapt" : "Auto-adapt off"}
@@ -178,7 +178,7 @@ const LiveStatusPanel = ({
 										checked={Boolean(resolutionAdaptEnabled)}
 										onChange={(event) => onToggleResolutionAdapt?.(event.target.checked)}
 										disabled={!autoAdaptEnabled}
-										inputProps={{ "data-testid": "live-status-resolution-adapt-switch" }}
+										slotProps={{ input: { "data-testid": "live-status-resolution-adapt-switch" } }}
 									/>
 								}
 								label={resolutionAdaptEnabled ? "Adapt resolution" : "Resolution pinned"}

@@ -240,7 +240,7 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 								label="Display Name"
 								value={name}
 								onChange={(e) => setName(e.target.value)}
-								inputProps={{ "data-testid": "profile-card-display-name-input" }}
+								slotProps={{ htmlInput: { "data-testid": "profile-card-display-name-input" } }}
 							/>
 						) : (
 							<Typography variant="h6" noWrap>
@@ -264,7 +264,7 @@ export default function ProfileCard({ user, self: forceSelf = false, type = "ful
 							label="Bio"
 							value={bio}
 							onChange={(e) => setBio(e.target.value)}
-							inputProps={{ "data-testid": "profile-card-bio-input" }}
+							slotProps={{ htmlInput: { "data-testid": "profile-card-bio-input" } }}
 						/>
 					) : (
 						<Typography variant="body2" color="text.secondary">

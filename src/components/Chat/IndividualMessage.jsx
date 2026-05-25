@@ -140,7 +140,7 @@ function IndividualMessage({
 								multiline
 								maxRows={8}
 								value={editingText}
-								inputProps={{ "data-testid": "chat-message-edit-input" }}
+								slotProps={{ htmlInput: { "data-testid": "chat-message-edit-input" } }}
 								onChange={(e) => setEditingText(e.target.value)}
 								onKeyDown={(e) => {
 									if (e.key === "Enter") commitEdit();

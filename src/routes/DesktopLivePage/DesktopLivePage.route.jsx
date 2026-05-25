@@ -215,7 +215,7 @@ const Field = ({ label, name, settings, setSettings, type = "text", disabled = f
 		size="small"
 		multiline={multiline}
 		minRows={multiline ? 2 : undefined}
-		inputProps={{ "data-testid": `desktop-live-field-${name}` }}
+		slotProps={{ htmlInput: { "data-testid": `desktop-live-field-${name}` } }}
 		onChange={(event) => {
 			const value = event.target.value;
 			const markCustom = name !== "nvencProfile" && (name.startsWith("nvenc") || name === "encoderPreset");
@@ -234,7 +234,7 @@ const SelectField = ({ label, name, values, settings, setSettings, disabled = fa
 		<Select
 			label={label}
 			value={settings[name]}
-			inputProps={{ "data-testid": `desktop-live-select-${name}` }}
+			data-testid={`desktop-live-select-${name}`}
 			onChange={(event) => {
 				const value = event.target.value;
 				const markCustom = name !== "nvencProfile" && (name.startsWith("nvenc") || name === "encoderPreset");
@@ -259,7 +259,7 @@ const ToggleField = ({ label, name, settings, setSettings, disabled = false }) =
 			<Switch
 				checked={Boolean(settings[name])}
 				disabled={disabled}
-				inputProps={{ "data-testid": `desktop-live-toggle-${name}` }}
+				slotProps={{ input: { "data-testid": `desktop-live-toggle-${name}` } }}
 				onChange={(event) => {
 					const checked = event.target.checked;
 					const markCustom = name !== "nvencProfile" && name.startsWith("nvenc");
@@ -781,7 +781,7 @@ function DesktopLivePage() {
 											fullWidth
 											value={settings.filePath || ""}
 											disabled={isBusy}
-											inputProps={{ "data-testid": "desktop-live-field-filePath" }}
+											slotProps={{ htmlInput: { "data-testid": "desktop-live-field-filePath" } }}
 											onChange={(event) => {
 												const next = event.target.value;
 												setSettings((current) => ({
@@ -904,7 +904,7 @@ function DesktopLivePage() {
 										fullWidth
 										size="small"
 										helperText="Applied to both capture and encoder rate."
-										inputProps={{ "data-testid": "desktop-live-field-fps" }}
+										slotProps={{ htmlInput: { "data-testid": "desktop-live-field-fps" } }}
 										onChange={(event) => {
 											const value = event.target.value;
 											setSettings((current) => ({

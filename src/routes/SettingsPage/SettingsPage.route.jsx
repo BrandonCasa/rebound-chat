@@ -385,7 +385,7 @@ function PreferencesSection({ preferencesState, handlePreferencesChange, handleS
 									checked={preferencesState.allowNSFW}
 									onChange={handlePreferencesChange}
 									name="allowNSFW"
-									inputProps={{ "data-testid": "settings-preference-allow-nsfw" }}
+									slotProps={{ input: { "data-testid": "settings-preference-allow-nsfw" } }}
 								/>
 							}
 							label="Allow NSFW"
@@ -400,7 +400,7 @@ function PreferencesSection({ preferencesState, handlePreferencesChange, handleS
 									checked={preferencesState.allowAnyNotifications}
 									onChange={handlePreferencesChange}
 									name="allowAnyNotifications"
-									inputProps={{ "data-testid": "settings-preference-any-notifications" }}
+									slotProps={{ input: { "data-testid": "settings-preference-any-notifications" } }}
 								/>
 							}
 							label="Any Notifications"
@@ -413,7 +413,7 @@ function PreferencesSection({ preferencesState, handlePreferencesChange, handleS
 									checked={preferencesState.allowPublicChatNotifications}
 									onChange={handlePreferencesChange}
 									name="allowPublicChatNotifications"
-									inputProps={{ "data-testid": "settings-preference-public-chat-notifications" }}
+									slotProps={{ input: { "data-testid": "settings-preference-public-chat-notifications" } }}
 								/>
 							}
 							label="Messages (public)"
@@ -426,7 +426,7 @@ function PreferencesSection({ preferencesState, handlePreferencesChange, handleS
 									checked={preferencesState.allowPrivateChatNotifications}
 									onChange={handlePreferencesChange}
 									name="allowPrivateChatNotifications"
-									inputProps={{ "data-testid": "settings-preference-private-chat-notifications" }}
+									slotProps={{ input: { "data-testid": "settings-preference-private-chat-notifications" } }}
 								/>
 							}
 							label="Messages (private)"
