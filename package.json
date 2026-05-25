@@ -128,7 +128,7 @@
 		"concurrently": "^9.2.1",
 		"cross-env": "^7.0.3",
 		"electron": "^36.9.5",
-		"electron-builder": "^26.0.12",
+		"electron-builder": "^26.8.1",
 		"globals": "^16.5.0",
 		"jsdom": "^26.1.0",
 		"kill-port": "^2.0.1",

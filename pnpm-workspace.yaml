@@ -2,6 +2,13 @@ packages:
   - .
   - ./server
 
+allowBuilds:
+  '@parcel/watcher': true
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+  mongodb-memory-server: true
+
 onlyBuiltDependencies:
   - '@parcel/watcher'
   - electron

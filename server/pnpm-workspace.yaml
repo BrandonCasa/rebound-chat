@@ -4,3 +4,6 @@ overrides:
 onlyBuiltDependencies:
   - esbuild
   - mongodb-memory-server
+
+allowBuilds:
+  mongodb-memory-server: true
