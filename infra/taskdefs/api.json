@@ -1,0 +1,42 @@
+{
+  "family": "rebound-api",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "<TASK_EXECUTION_ROLE_ARN>",
+  "taskRoleArn": "<API_TASK_ROLE_ARN>",
+  "containerDefinitions": [
+    {
+      "name": "api",
+      "image": "<API_IMAGE_URI>",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 6001,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "SERVER_ROLE", "value": "api" },
+        { "name": "LIVE_TRANSPORT_DEFAULT", "value": "hls" }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "wget -q -O - http://127.0.0.1:6001/healthz || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 30
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "<API_LOG_GROUP>",
+          "awslogs-region": "<AWS_REGION>",
+          "awslogs-stream-prefix": "api"
+        }
+      }
+    }
+  ]
+}

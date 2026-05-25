@@ -1,13 +1,16 @@
 packages:
-  - .
+  - ./client/frontend
+  - ./cdk
   - ./server
 
 onlyBuiltDependencies:
   - '@parcel/watcher'
+  - '@prisma/engines'
   - electron
   - electron-winstaller
   - esbuild
   - mongodb-memory-server
+  - prisma
 
 overrides:
   glob@>=10.2.0 <10.5.0: '>=10.5.0'

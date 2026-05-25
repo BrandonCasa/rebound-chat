@@ -1,0 +1,36 @@
+{
+  "family": "rebound-worker",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "<TASK_EXECUTION_ROLE_ARN>",
+  "taskRoleArn": "<WORKER_TASK_ROLE_ARN>",
+  "containerDefinitions": [
+    {
+      "name": "worker",
+      "image": "<WORKER_IMAGE_URI>",
+      "essential": true,
+      "environment": [
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "SERVER_ROLE", "value": "worker" },
+        { "name": "LIVE_TRANSPORT_DEFAULT", "value": "hls" }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "node ./src/worker/health.js"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 30
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "<WORKER_LOG_GROUP>",
+          "awslogs-region": "<AWS_REGION>",
+          "awslogs-stream-prefix": "worker"
+        }
+      }
+    }
+  ]
+}

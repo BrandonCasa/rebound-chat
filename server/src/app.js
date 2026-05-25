@@ -1,133 +1,66 @@
 import http from "http";
-import cors from "cors";
 import { config as configDotenv } from "dotenv";
-import crypto from "crypto";
-import express from "express";
-import cookieParser from "cookie-parser";
-import rateLimit from "express-rate-limit";
-import methodOverride from "method-override";
-import morgan from "morgan";
 
-import customPassport from "./config/passport.js";
+import createApp from "./createApp.js";
 import databaseServer from "./database/index.js";
 import liveRuntime from "./live/runtime.js";
 import logger from "./logger.js";
-import routes from "./routes/index.js";
 import socketBackend from "./socketio/index.js";
-
-import { buildCorsOptions } from "./config/cors.js";
-import {
-	CSRF_COOKIE_NAME,
-	CSRF_COOKIE_OPTIONS,
-	CSRF_HEADER_NAME,
-	CSRF_PROTECTED_METHODS,
-	createCsrfToken,
-	isValidCsrfToken,
-	setCsrfResponseHeaders,
-} from "./utils/csrf.js";
 
 configDotenv();
 
+const SERVER_ROLES = new Set(["api", "worker", "combined", "realtime"]);
+
+const resolveServerRole = (value = process.env.SERVER_ROLE) => {
+	const normalized = String(value || "")
+		.trim()
+		.toLowerCase();
+	return SERVER_ROLES.has(normalized) ? normalized : "combined";
+};
+
 class ServerBackend {
-	constructor() {
-		this.app = express();
+	constructor({
+		role = process.env.SERVER_ROLE,
+		app = null,
+		liveRuntime: liveRuntimeDependency = liveRuntime,
+		databaseServer: databaseServerDependency = databaseServer,
+		socketBackend: socketBackendDependency = socketBackend,
+	} = {}) {
+		this.role = resolveServerRole(role);
+		this.liveRuntime = liveRuntimeDependency;
+		this.databaseServer = databaseServerDependency;
+		this.socketBackend = socketBackendDependency;
+		this.app = app || createApp({ role: this.role });
 		this.server = http.createServer(this.app);
 		this.socketStarted = false;
+		this.databaseStarted = false;
+		this.cleanupStarted = false;
+		this.realtimeStubTimer = null;
 		this.started = false;
-
-		customPassport.setupPassport();
-
-		this._initMiddleware();
-		this._initRoutes();
 	}
 
-	_initMiddleware() {
-		this.app.set("trust proxy", 1);
-
-		this.app.use(cors(buildCorsOptions));
-		this.app.options(/.*/, cors(buildCorsOptions));
-
-		const globalLimiter = rateLimit({
-			windowMs: 5 * 60 * 1000,
-			max: 5000,
-			standardHeaders: true,
-			legacyHeaders: false,
-			message: { error: "Too many requests, please try again later." },
-			skip: (req) => req.path.startsWith("/live/"),
-		});
-
-		this.app.use(globalLimiter);
-
-		if (logger.stream) {
-			this.app.use(morgan("combined", { stream: logger.stream }));
-		}
-
-		this.app.use(cookieParser());
-		this.app.use(express.urlencoded({ extended: false }));
-		this.app.use(express.json());
-
-		// Apply method override before CSRF checks so overridden methods are protected correctly.
-		this.app.use(methodOverride());
-
-		this.app.use(this._csrfTokenMiddleware.bind(this));
-		this.app.use(this._csrfProtectionMiddleware.bind(this));
+	_shouldStartHttp() {
+		return this.role === "api" || this.role === "combined";
 	}
 
-	_csrfTokenMiddleware(req, res, next) {
-		if (this._isLiveRequest(req)) return next();
-
-		let csrfToken = req.cookies?.[CSRF_COOKIE_NAME];
-
-		if (!isValidCsrfToken(csrfToken)) {
-			csrfToken = createCsrfToken();
-			res.cookie(CSRF_COOKIE_NAME, csrfToken, CSRF_COOKIE_OPTIONS);
-		}
-
-		req.csrfToken = csrfToken;
-		setCsrfResponseHeaders(res, csrfToken);
-
-		next();
+	_shouldStartCleanup() {
+		return this.role === "worker" || this.role === "combined";
 	}
 
-	_csrfProtectionMiddleware(req, res, next) {
-		if (this._isLiveRequest(req)) return next();
-		if (!CSRF_PROTECTED_METHODS.has(req.method)) return next();
-
-		const csrfTokenCookie = req.cookies?.[CSRF_COOKIE_NAME];
-		const csrfTokenHeader = req.get(CSRF_HEADER_NAME);
-
-		if (!csrfTokenCookie || !csrfTokenHeader) {
-			return res.status(403).json({ error: "Missing CSRF token" });
-		}
-
-		if (!isValidCsrfToken(csrfTokenCookie) || !isValidCsrfToken(csrfTokenHeader) || csrfTokenCookie.length !== csrfTokenHeader.length) {
-			return res.status(403).json({ error: "Invalid CSRF token" });
-		}
-
-		const cookieBuffer = Buffer.from(csrfTokenCookie, "hex");
-		const headerBuffer = Buffer.from(csrfTokenHeader, "hex");
-
-		if (!crypto.timingSafeEqual(cookieBuffer, headerBuffer)) {
-			return res.status(403).json({ error: "Invalid CSRF token" });
-		}
-
-		req.csrfToken = csrfTokenCookie;
-
-		next();
+	_shouldStartDatabase() {
+		return this.role !== "realtime";
 	}
 
-	_isLiveRequest(req) {
-		return req.path === "/live" || req.path.startsWith("/live/");
+	_shouldStartSockets(startSockets) {
+		return this.role === "combined" && startSockets;
 	}
 
-	_csrfTokenEndpoint(req, res) {
-		res.set("Cache-Control", "no-store");
-		return res.json({ csrfToken: req.csrfToken });
-	}
+	_startRealtimeStub() {
+		if (this.realtimeStubTimer) return;
 
-	_initRoutes() {
-		this.app.get("/api/csrf", this._csrfTokenEndpoint.bind(this));
-		this.app.use(routes);
+		this.realtimeStubTimer = setInterval(() => {
+			logger.debug?.("Realtime role waiting for API Gateway WebSocket handler wiring");
+		}, 60_000);
 	}
 
 	async startBackend({ httpPort, startSockets = true } = {}) {
@@ -137,32 +70,47 @@ class ServerBackend {
 		}
 
 		try {
-			liveRuntime.start();
-			await databaseServer.startServer();
+			if (this._shouldStartCleanup()) {
+				this.liveRuntime.start();
+				this.cleanupStarted = true;
+			}
 
-			if (startSockets) {
+			if (this._shouldStartDatabase()) {
+				await this.databaseServer.startServer();
+				this.databaseStarted = true;
+			}
+
+			if (this._shouldStartSockets(startSockets)) {
 				const resolvedSocketPort = Number(process.env.REBOUND_SOCKET_PORT ?? Number(httpPort ?? process.env.PORT ?? 6001) + 1);
-				socketBackend.start(resolvedSocketPort);
+				this.socketBackend.start(resolvedSocketPort);
 				this.socketStarted = true;
 			}
 
-			const resolvedPort = Number(httpPort ?? process.env.PORT ?? 6001);
+			if (this.role === "realtime") {
+				this._startRealtimeStub();
+			}
 
-			await new Promise((resolve, reject) => {
-				const onError = (err) => {
-					this.server.off("error", onError);
-					logger.error("HTTP server error:", err);
-					reject(err);
-				};
+			if (this._shouldStartHttp()) {
+				const resolvedPort = Number(httpPort ?? process.env.PORT ?? 6001);
 
-				this.server.once("error", onError);
+				await new Promise((resolve, reject) => {
+					const onError = (err) => {
+						this.server.off("error", onError);
+						logger.error("HTTP server error:", err);
+						reject(err);
+					};
 
-				this.server.listen(resolvedPort, () => {
-					this.server.off("error", onError);
-					logger.info(`HTTP server listening on port ${resolvedPort}`);
-					resolve();
+					this.server.once("error", onError);
+
+					this.server.listen(resolvedPort, () => {
+						this.server.off("error", onError);
+						logger.info(`HTTP server listening on port ${resolvedPort} role=${this.role}`);
+						resolve();
+					});
 				});
-			});
+			} else {
+				logger.info(`Backend role ${this.role} started without product HTTP listener`);
+			}
 
 			this.started = true;
 		} catch (err) {
@@ -181,6 +129,11 @@ class ServerBackend {
 	async stopBackend() {
 		const errors = [];
 
+		if (this.realtimeStubTimer) {
+			clearInterval(this.realtimeStubTimer);
+			this.realtimeStubTimer = null;
+		}
+
 		if (this.server.listening) {
 			try {
 				await new Promise((resolve, reject) => {
@@ -195,10 +148,10 @@ class ServerBackend {
 			}
 		}
 
-		if (this.socketStarted && socketBackend.io) {
+		if (this.socketStarted && this.socketBackend.io) {
 			try {
 				await new Promise((resolve) => {
-					socketBackend.io.close(() => {
+					this.socketBackend.io.close(() => {
 						logger.info("Socket.IO server stopped");
 						resolve();
 					});
@@ -210,16 +163,22 @@ class ServerBackend {
 			}
 		}
 
-		try {
-			liveRuntime.stop();
-		} catch (err) {
-			errors.push(err);
+		if (this.cleanupStarted) {
+			try {
+				this.liveRuntime.stop();
+				this.cleanupStarted = false;
+			} catch (err) {
+				errors.push(err);
+			}
 		}
 
-		try {
-			await databaseServer.stopServer();
-		} catch (err) {
-			errors.push(err);
+		if (this.databaseStarted) {
+			try {
+				await this.databaseServer.stopServer();
+				this.databaseStarted = false;
+			} catch (err) {
+				errors.push(err);
+			}
 		}
 
 		this.started = false;
@@ -265,5 +224,5 @@ if (process.env.NODE_ENV !== "test") {
 	})();
 }
 
-export { ServerBackend, serverBackend };
+export { ServerBackend, resolveServerRole, serverBackend };
 export default serverBackend;

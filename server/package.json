@@ -1,6 +1,6 @@
 {
   "name": "rebound-server",
-  "version": "1.0.89",
+  "version": "1.0.90",
   "description": "Rebound Server",
   "repository": {
     "type": "git",
@@ -9,7 +9,10 @@
   "main": "./src/app.js",
   "scripts": {
     "dev": "npx kill-port 6001 && npx kill-port 27017 && cross-env NODE_ENV=development nodemon ./src/app.js",
+    "health:worker": "node ./src/worker/health.js",
     "live:upload": "node ./scripts/live-uploader.js",
+    "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate",
     "pretest": "npx kill-port 27019",
     "test": "cross-env NODE_ENV=test MONGOMS_PORT=27019 REBOUND_DEV_DB_PATH=./dev-test REBOUND_RESET_DEV_DB=1 mocha \"test/**/*.test.js\" --timeout 20000"
   },
@@ -20,6 +23,7 @@
   },
   "type": "module",
   "dependencies": {
+    "@prisma/client": "^7.8.0",
     "body-parser": "^2.2.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -57,6 +61,7 @@
     "chai": "^5.2.0",
     "chai-http": "^5.1.2",
     "mocha": "^11.5.0",
+    "prisma": "^7.8.0",
     "socket.io-client": "^4.8.1"
   }
 }
