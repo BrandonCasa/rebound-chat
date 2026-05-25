@@ -10,6 +10,7 @@ import morgan from "morgan";
 
 import customPassport from "./config/passport.js";
 import databaseServer from "./database/index.js";
+import { initializeEmail, verifyEmailTransport } from "./emails/email.js";
 import liveRuntime from "./live/runtime.js";
 import logger from "./logger.js";
 import routes from "./routes/index.js";
@@ -36,6 +37,7 @@ class ServerBackend {
 		this.started = false;
 
 		customPassport.setupPassport();
+		initializeEmail();
 
 		this._initMiddleware();
 		this._initRoutes();
@@ -137,6 +139,7 @@ class ServerBackend {
 		}
 
 		try {
+			await verifyEmailTransport({ required: process.env.EMAIL_REQUIRED === "true" });
 			liveRuntime.start();
 			await databaseServer.startServer();
 

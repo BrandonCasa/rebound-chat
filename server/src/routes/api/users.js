@@ -4,7 +4,6 @@ import UserModel, { hashPasswordResetToken, hashRefreshToken } from "../../model
 import { auth } from "../auth.js";
 
 import jwt from "jsonwebtoken";
-import nodemailer from "nodemailer";
 import passport from "passport";
 
 import logger from "../../logger.js";
@@ -20,6 +19,8 @@ import rateLimit from "express-rate-limit";
 
 import { buildRequestTokenDescriptor, createAuthContextMiddleware, parseCookieHeader, sanitizeIpAddress, resolveGoogleCallbackUrl } from "../../utils/auth.js";
 import { CSRF_COOKIE_NAME, CSRF_COOKIE_OPTIONS, createCsrfToken, setCsrfResponseHeaders } from "../../utils/csrf.js";
+import { getPasswordResetMailFrom, getSesMessageOptions, sendEmail } from "../../emails/email.js";
+import { renderPasswordResetEmail } from "../../emails/passwordResetEmail.js";
 
 import "dotenv/config";
 
@@ -101,53 +102,42 @@ const buildPasswordResetUrl = (req, token) => {
 	return `${base}${separator}resetToken=${encodeURIComponent(token)}`;
 };
 
-const createPasswordResetTransport = () => {
-	if (!process.env.SMTP_HOST) return null;
+const buildPasswordResetEmail = (user, resetUrl) => {
+	const sesOptions = getSesMessageOptions({ purpose: "password-reset" });
 
-	return nodemailer.createTransport({
-		host: process.env.SMTP_HOST,
-		port: Number(process.env.SMTP_PORT || 587),
-		secure: process.env.SMTP_SECURE === "true",
-		auth:
-			process.env.SMTP_USER && process.env.SMTP_PASS
-				? {
-						user: process.env.SMTP_USER,
-						pass: process.env.SMTP_PASS,
-					}
-				: undefined,
-	});
+	return {
+		from: getPasswordResetMailFrom(),
+		to: user.email,
+		subject: "Reset your Rebound password",
+		text: [
+			"We received a request to reset your Rebound password.",
+			"",
+			"Use the link below to choose a new password:",
+			resetUrl,
+			"",
+			"This link expires in one hour.",
+			"",
+			"If you did not request this password reset, you can safely ignore this email.",
+			"",
+			"- The Rebound Team",
+		].join("\n"),
+		html: renderPasswordResetEmail({
+			resetUrl,
+			year: new Date().getFullYear(),
+		}),
+		...(sesOptions ? { ses: sesOptions } : {}),
+	};
 };
-
-const escapeHtml = (value) => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-
-const buildPasswordResetEmail = (user, resetUrl) => ({
-	from: process.env.PASSWORD_RESET_FROM || process.env.SMTP_FROM || "Rebound <no-reply@rebound.nexus>",
-	to: user.email,
-	subject: "Reset your Rebound password",
-	text: [
-		"We received a request to reset your Rebound password.",
-		"",
-		`Use this secure link within one hour: ${resetUrl}`,
-		"",
-		"If you did not request this, you can ignore this email.",
-	].join("\n"),
-	html: `
-		<p>We received a request to reset your Rebound password.</p>
-		<p><a href="${escapeHtml(resetUrl)}">Reset your password</a></p>
-		<p>This link expires in one hour. If you did not request this, you can ignore this email.</p>
-	`,
-});
 
 const deliverPasswordResetToken = async (req, user, token) => {
 	const resetUrl = buildPasswordResetUrl(req, token);
-	const transport = createPasswordResetTransport();
+	const deliveryInfo = await sendEmail(buildPasswordResetEmail(user, resetUrl));
 
-	if (!transport) {
-		logger.warn(`SMTP is not configured. Password reset URL for ${user.email}: ${resetUrl}`);
+	if (!deliveryInfo) {
+		logger.warn(`Email transport is not configured. Password reset URL for ${user.email}: ${resetUrl}`);
 		return resetUrl;
 	}
 
-	await transport.sendMail(buildPasswordResetEmail(user, resetUrl));
 	logger.info(`Password reset email sent to ${user.email}.`);
 	return resetUrl;
 };

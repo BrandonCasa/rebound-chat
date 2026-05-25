@@ -58,7 +58,6 @@ const RegisterTextField = ({ field, value, label, helperText, onChange, errors =
 		<TextField
 			id={`current-${field}`}
 			data-testid="register-text-field"
-			slotProps={{ htmlInput: { "data-testid": `register-${field}-input` } }}
 			sx={{ pb: 2 }}
 			label={label}
 			variant="outlined"
@@ -69,6 +68,7 @@ const RegisterTextField = ({ field, value, label, helperText, onChange, errors =
 			type={type}
 			error={hasErrors}
 			slotProps={{
+				htmlInput: { "data-testid": `register-${field}-input` },
 				input: {
 					startAdornment: (
 						<InputAdornment position="start">

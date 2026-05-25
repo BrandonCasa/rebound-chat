@@ -20,6 +20,7 @@
   },
   "type": "module",
   "dependencies": {
+    "@aws-sdk/client-sesv2": "^3.1053.0",
     "body-parser": "^2.2.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",

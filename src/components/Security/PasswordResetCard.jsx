@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { Alert, Box, Button, Card, CardContent, CardHeader, Divider, Stack, TextField, Typography } from "@mui/material";
 import LockResetRoundedIcon from "@mui/icons-material/LockResetRounded";
 import { useDispatch, useSelector } from "react-redux";
@@ -33,7 +33,7 @@ export default function PasswordResetCard() {
 	const [errors, setErrors] = useState({});
 	const [serverError, setServerError] = useState(null);
 
-	const isSubmitDisabled = useMemo(() => passwordChanging || !loggedIn, [passwordChanging, loggedIn]);
+	const isSubmitDisabled = passwordChanging;
 
 	const updateField = (field, value) => {
 		setForm((prev) => ({ ...prev, [field]: value }));
@@ -158,7 +158,7 @@ export default function PasswordResetCard() {
 				}
 				subheader={
 					<Typography variant="body2" color="text.secondary">
-						Update your password or send a secure recovery link to your account email.
+						{loggedIn ? "Update your password for this account." : "Send a secure recovery link to your account email."}
 					</Typography>
 				}
 				sx={{ pb: 0 }}
@@ -166,162 +166,158 @@ export default function PasswordResetCard() {
 
 			<Divider flexItem />
 
-			<CardContent component="form" onSubmit={handleSubmit} data-testid="password-reset-form">
-				<Stack spacing={2}>
-					{serverError && (
-						<Alert severity="error" data-testid="password-reset-server-error">
-							{serverError}
-						</Alert>
-					)}
-					{!loggedIn && (
-						<Alert severity="info" data-testid="password-reset-login-required">
-							You need to be logged in to change your password.
-						</Alert>
-					)}
+			{loggedIn ? (
+				<CardContent component="form" onSubmit={handleSubmit} data-testid="password-reset-form">
+					<Stack spacing={2}>
+						{serverError && (
+							<Alert severity="error" data-testid="password-reset-server-error">
+								{serverError}
+							</Alert>
+						)}
 
-					<TextField
-						label="Current password"
-						type="password"
-						autoComplete="current-password"
-						required
-						value={form.currentPassword}
-						onChange={(e) => updateField("currentPassword", e.target.value)}
-						error={Boolean(errors.currentPassword)}
-						helperText={errors.currentPassword}
-						fullWidth
-						slotProps={{ htmlInput: { "data-testid": "password-reset-current-input" } }}
-					/>
-					<TextField
-						label="New password"
-						type="password"
-						autoComplete="new-password"
-						required
-						value={form.newPassword}
-						onChange={(e) => updateField("newPassword", e.target.value)}
-						error={Boolean(errors.newPassword)}
-						helperText={errors.newPassword || `At least ${MIN_PASSWORD_LENGTH} characters`}
-						fullWidth
-						slotProps={{ htmlInput: { "data-testid": "password-reset-new-input" } }}
-					/>
-					<TextField
-						label="Confirm new password"
-						type="password"
-						autoComplete="new-password"
-						required
-						value={form.confirmPassword}
-						onChange={(e) => updateField("confirmPassword", e.target.value)}
-						error={Boolean(errors.confirmPassword)}
-						helperText={errors.confirmPassword}
-						fullWidth
-						slotProps={{ htmlInput: { "data-testid": "password-reset-confirm-input" } }}
-					/>
-
-					<Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-						<Button type="submit" variant="contained" disabled={isSubmitDisabled} data-testid="password-reset-submit-button">
-							{passwordChanging ? "Updating..." : "Change password"}
-						</Button>
-					</Box>
-				</Stack>
-			</CardContent>
-
-			<Divider flexItem />
-
-			<CardContent component="form" onSubmit={handleRecoverySubmit} data-testid="password-recovery-form">
-				<Stack spacing={2}>
-					<Box>
-						<Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-							Email a password reset link
-						</Typography>
-						<Typography variant="body2" color="text.secondary">
-							We will send a recovery email with a link that expires in one hour. Use this if you forgot your password or want to reset it from another device.
-						</Typography>
-					</Box>
-
-					{resetFlow.message && (
-						<Alert severity="success" data-testid="password-recovery-message">
-							{resetFlow.message}
-						</Alert>
-					)}
-
-					{resetFlow.step === "request" && (
 						<TextField
-							label="Account email"
-							type="email"
-							autoComplete="email"
+							label="Current password"
+							type="password"
+							autoComplete="current-password"
 							required
-							value={resetFlow.form.email}
-							onChange={(e) => resetFlow.updateField("email", e.target.value)}
-							error={Boolean(resetFlow.errors.email)}
-							helperText={resetFlow.errors.email || "Enter the email address on your account."}
+							value={form.currentPassword}
+							onChange={(e) => updateField("currentPassword", e.target.value)}
+							error={Boolean(errors.currentPassword)}
+							helperText={errors.currentPassword}
 							fullWidth
-							slotProps={{ htmlInput: { "data-testid": "password-recovery-email-input" } }}
+							slotProps={{ htmlInput: { "data-testid": "password-reset-current-input" } }}
 						/>
-					)}
+						<TextField
+							label="New password"
+							type="password"
+							autoComplete="new-password"
+							required
+							value={form.newPassword}
+							onChange={(e) => updateField("newPassword", e.target.value)}
+							error={Boolean(errors.newPassword)}
+							helperText={errors.newPassword || `At least ${MIN_PASSWORD_LENGTH} characters`}
+							fullWidth
+							slotProps={{ htmlInput: { "data-testid": "password-reset-new-input" } }}
+						/>
+						<TextField
+							label="Confirm new password"
+							type="password"
+							autoComplete="new-password"
+							required
+							value={form.confirmPassword}
+							onChange={(e) => updateField("confirmPassword", e.target.value)}
+							error={Boolean(errors.confirmPassword)}
+							helperText={errors.confirmPassword}
+							fullWidth
+							slotProps={{ htmlInput: { "data-testid": "password-reset-confirm-input" } }}
+						/>
 
-					{resetFlow.step === "confirm" && (
-						<>
-							<TextField
-								label="Reset token"
-								autoComplete="one-time-code"
-								required
-								value={resetFlow.form.token}
-								onChange={(e) => resetFlow.updateField("token", e.target.value)}
-								error={Boolean(resetFlow.errors.token)}
-								helperText={resetFlow.errors.token || "Paste the token from your recovery email."}
-								fullWidth
-								slotProps={{ htmlInput: { "data-testid": "password-recovery-token-input" } }}
-							/>
-							<TextField
-								label="New password"
-								type="password"
-								autoComplete="new-password"
-								required
-								value={resetFlow.form.newPassword}
-								onChange={(e) => resetFlow.updateField("newPassword", e.target.value)}
-								error={Boolean(resetFlow.errors.newPassword)}
-								helperText={resetFlow.errors.newPassword || `At least ${MIN_PASSWORD_LENGTH} characters`}
-								fullWidth
-								slotProps={{ htmlInput: { "data-testid": "password-recovery-new-password-input" } }}
-							/>
-							<TextField
-								label="Confirm new password"
-								type="password"
-								autoComplete="new-password"
-								required
-								value={resetFlow.form.confirmPassword}
-								onChange={(e) => resetFlow.updateField("confirmPassword", e.target.value)}
-								error={Boolean(resetFlow.errors.confirmPassword)}
-								helperText={resetFlow.errors.confirmPassword}
-								fullWidth
-								slotProps={{ htmlInput: { "data-testid": "password-recovery-confirm-password-input" } }}
-							/>
-						</>
-					)}
+						<Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+							<Button type="submit" variant="contained" disabled={isSubmitDisabled} data-testid="password-reset-submit-button">
+								{passwordChanging ? "Updating..." : "Change password"}
+							</Button>
+						</Box>
+					</Stack>
+				</CardContent>
+			) : (
+				<CardContent component="form" onSubmit={handleRecoverySubmit} data-testid="password-recovery-form">
+					<Stack spacing={2}>
+						<Box>
+							<Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+								Email a password reset link
+							</Typography>
+							<Typography variant="body2" color="text.secondary">
+								We will send a recovery email with a link that expires in one hour. Use this if you forgot your password or want to reset it from another
+								device.
+							</Typography>
+						</Box>
 
-					<Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 1 }}>
-						<Button
-							type="button"
-							variant="outlined"
-							onClick={resetFlow.step === "request" ? resetFlow.switchToConfirm : resetFlow.switchToRequest}
-							data-testid="password-recovery-toggle-button">
-							{resetFlow.step === "request" ? "I have a token" : "Back to email"}
-						</Button>
-						<Button
-							type="submit"
-							variant="contained"
-							disabled={resetFlow.requestPending || resetFlow.confirmPending}
-							data-testid="password-recovery-submit-button">
-							{resetFlow.step === "request"
-								? resetFlow.requestPending
-									? "Sending..."
-									: "Send recovery email"
-								: resetFlow.confirmPending
-									? "Resetting..."
-									: "Reset password"}
-						</Button>
-					</Box>
-				</Stack>
-			</CardContent>
+						{resetFlow.message && (
+							<Alert severity="success" data-testid="password-recovery-message">
+								{resetFlow.message}
+							</Alert>
+						)}
+
+						{resetFlow.step === "request" && (
+							<TextField
+								label="Account email"
+								type="email"
+								autoComplete="email"
+								required
+								value={resetFlow.form.email}
+								onChange={(e) => resetFlow.updateField("email", e.target.value)}
+								error={Boolean(resetFlow.errors.email)}
+								helperText={resetFlow.errors.email || "Enter the email address on your account."}
+								fullWidth
+								slotProps={{ htmlInput: { "data-testid": "password-recovery-email-input" } }}
+							/>
+						)}
+
+						{resetFlow.step === "confirm" && (
+							<>
+								<TextField
+									label="Reset token"
+									autoComplete="one-time-code"
+									required
+									value={resetFlow.form.token}
+									onChange={(e) => resetFlow.updateField("token", e.target.value)}
+									error={Boolean(resetFlow.errors.token)}
+									helperText={resetFlow.errors.token || "Paste the token from your recovery email."}
+									fullWidth
+									slotProps={{ htmlInput: { "data-testid": "password-recovery-token-input" } }}
+								/>
+								<TextField
+									label="New password"
+									type="password"
+									autoComplete="new-password"
+									required
+									value={resetFlow.form.newPassword}
+									onChange={(e) => resetFlow.updateField("newPassword", e.target.value)}
+									error={Boolean(resetFlow.errors.newPassword)}
+									helperText={resetFlow.errors.newPassword || `At least ${MIN_PASSWORD_LENGTH} characters`}
+									fullWidth
+									slotProps={{ htmlInput: { "data-testid": "password-recovery-new-password-input" } }}
+								/>
+								<TextField
+									label="Confirm new password"
+									type="password"
+									autoComplete="new-password"
+									required
+									value={resetFlow.form.confirmPassword}
+									onChange={(e) => resetFlow.updateField("confirmPassword", e.target.value)}
+									error={Boolean(resetFlow.errors.confirmPassword)}
+									helperText={resetFlow.errors.confirmPassword}
+									fullWidth
+									slotProps={{ htmlInput: { "data-testid": "password-recovery-confirm-password-input" } }}
+								/>
+							</>
+						)}
+
+						<Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 1 }}>
+							<Button
+								type="button"
+								variant="outlined"
+								onClick={resetFlow.step === "request" ? resetFlow.switchToConfirm : resetFlow.switchToRequest}
+								data-testid="password-recovery-toggle-button">
+								{resetFlow.step === "request" ? "I have a token" : "Back to email"}
+							</Button>
+							<Button
+								type="submit"
+								variant="contained"
+								disabled={resetFlow.requestPending || resetFlow.confirmPending}
+								data-testid="password-recovery-submit-button">
+								{resetFlow.step === "request"
+									? resetFlow.requestPending
+										? "Sending..."
+										: "Send recovery email"
+									: resetFlow.confirmPending
+										? "Resetting..."
+										: "Reset password"}
+							</Button>
+						</Box>
+					</Stack>
+				</CardContent>
+			)}
 		</Card>
 	);
 }
