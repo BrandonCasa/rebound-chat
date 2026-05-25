@@ -7,11 +7,17 @@ import type { ReboundStackProps } from "./stack-props";
 export class FrontendStack extends Stack {
 	readonly assetBucket: s3.Bucket;
 	readonly distribution: cloudfront.Distribution;
+	readonly frontendBucketArnExportName: string;
+	readonly frontendBucketNameExportName: string;
+	readonly cloudFrontDistributionIdExportName: string;
 
 	constructor(scope: Construct, id: string, props: ReboundStackProps) {
 		super(scope, id, props);
 
 		const { config } = props;
+		this.frontendBucketArnExportName = `${Stack.of(this).stackName}:FrontendBucketArn`;
+		this.frontendBucketNameExportName = `${Stack.of(this).stackName}:FrontendBucketName`;
+		this.cloudFrontDistributionIdExportName = `${Stack.of(this).stackName}:CloudFrontDistributionId`;
 
 		this.assetBucket = new s3.Bucket(this, "FrontendAssetBucket", {
 			encryption: s3.BucketEncryption.S3_MANAGED,
@@ -50,11 +56,19 @@ export class FrontendStack extends Stack {
 		new CfnOutput(this, "FrontendBucketName", {
 			value: this.assetBucket.bucketName,
 			description: "S3 bucket backing the CloudFront-hosted frontend",
+			exportName: this.frontendBucketNameExportName,
+		});
+
+		new CfnOutput(this, "FrontendBucketArn", {
+			value: this.assetBucket.bucketArn,
+			description: "S3 bucket ARN backing the CloudFront-hosted frontend",
+			exportName: this.frontendBucketArnExportName,
 		});
 
 		new CfnOutput(this, "CloudFrontDistributionId", {
 			value: this.distribution.distributionId,
 			description: "CloudFront distribution ID for the frontend",
+			exportName: this.cloudFrontDistributionIdExportName,
 		});
 
 		new CfnOutput(this, "CloudFrontDistributionDomainName", {

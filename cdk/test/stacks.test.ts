@@ -69,9 +69,28 @@ describe("rebound aws stacks", () => {
 		Template.fromStack(stacks.api).hasOutput("WebSocketApiId", {});
 		Template.fromStack(stacks.api).hasOutput("WebSocketApiUrl", {});
 		Template.fromStack(stacks.frontend).hasOutput("FrontendBucketName", {});
+		Template.fromStack(stacks.frontend).hasOutput("FrontendBucketArn", {});
 		Template.fromStack(stacks.frontend).hasOutput("CloudFrontDistributionId", {});
 		Template.fromStack(stacks.frontend).hasOutput("CloudFrontDistributionDomainName", {});
 		Template.fromStack(stacks.pipeline).hasOutput("GitHubActionsRoleArn", {});
+	});
+
+	it("uses stable frontend export names for pipeline imports", () => {
+		const stacks = synthStacks();
+		const frontendTemplate = Template.fromStack(stacks.frontend).toJSON();
+		const pipelineTemplate = Template.fromStack(stacks.pipeline).toJSON();
+
+		expect(frontendTemplate.Outputs.FrontendBucketName.Export.Name).toBe("Rebound-dev-Frontend:FrontendBucketName");
+		expect(frontendTemplate.Outputs.FrontendBucketArn.Export.Name).toBe("Rebound-dev-Frontend:FrontendBucketArn");
+		expect(frontendTemplate.Outputs.CloudFrontDistributionId.Export.Name).toBe("Rebound-dev-Frontend:CloudFrontDistributionId");
+
+		const serializedPipeline = JSON.stringify(pipelineTemplate);
+		expect(serializedPipeline).toContain("Rebound-dev-Frontend:FrontendBucketName");
+		expect(serializedPipeline).toContain("Rebound-dev-Frontend:FrontendBucketArn");
+		expect(serializedPipeline).toContain("Rebound-dev-Frontend:CloudFrontDistributionId");
+		expect(serializedPipeline).not.toContain("ExportsOutputRefFrontendAssetBucket");
+		expect(serializedPipeline).not.toContain("ExportsOutputFnGetAttFrontendAssetBucket");
+		expect(serializedPipeline).not.toContain("ExportsOutputRefDistribution");
 	});
 
 	it("creates the environment-scoped runtime parameter contract", () => {

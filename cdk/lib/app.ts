@@ -1,3 +1,4 @@
+import { Fn } from "aws-cdk-lib";
 import type { App } from "aws-cdk-lib";
 
 import type { ReboundEnvironmentConfig } from "./config";
@@ -57,8 +58,9 @@ export const createReboundStacks = (app: App, config: ReboundEnvironmentConfig) 
 		env,
 		config,
 		repositories: compute.repositories,
-		frontendBucket: frontend.assetBucket,
-		distribution: frontend.distribution,
+		frontendBucketArn: Fn.importValue(frontend.frontendBucketArnExportName),
+		frontendBucketName: Fn.importValue(frontend.frontendBucketNameExportName),
+		cloudFrontDistributionId: Fn.importValue(frontend.cloudFrontDistributionIdExportName),
 	});
 
 	return {
