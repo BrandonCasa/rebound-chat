@@ -82,14 +82,14 @@ class Draggable extends React.Component {
 		const { snapPadding } = this.props;
 		if (!node) return pos;
 
-		const { width: vw, height: vh } = this.getViewportRect();
+		const { width: vw, height: dvh } = this.getViewportRect();
 		const nw = node.offsetWidth || 0;
 		const nh = node.offsetHeight || 0;
 
 		const xMin = snapPadding;
 		const yMin = snapPadding;
 		const xMax = vw - nw - snapPadding;
-		const yMax = vh - nh - snapPadding;
+		const yMax = dvh - nh - snapPadding;
 
 		return {
 			x: Math.min(xMax, Math.max(xMin, pos.x)),
@@ -100,7 +100,7 @@ class Draggable extends React.Component {
 	getAnchorPoints() {
 		const { snapPadding, snapAnchors } = this.props;
 		const node = this.nodeRef.current;
-		const { width: vw, height: vh } = this.getViewportRect();
+		const { width: vw, height: dvh } = this.getViewportRect();
 
 		const nw = node?.offsetWidth ?? 0;
 		const nh = node?.offsetHeight ?? 0;
@@ -110,8 +110,8 @@ class Draggable extends React.Component {
 			xCenter: (vw - nw) / 2,
 			xRight: vw - nw - snapPadding,
 			yTop: snapPadding,
-			yCenter: (vh - nh) / 2,
-			yBottom: vh - nh - snapPadding,
+			yCenter: (dvh - nh) / 2,
+			yBottom: dvh - nh - snapPadding,
 		};
 
 		const all = {

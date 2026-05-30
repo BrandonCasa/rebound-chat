@@ -310,7 +310,7 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 					visibility: attachments.length > 0 ? "visible" : "hidden",
 					overflowY: "hidden",
 					overflowX: "auto",
-					height: attachments.length > 0 ? `calc(max(200px, 15vh) + ${theme.spacing(2)})` : `0px`,
+					height: attachments.length > 0 ? `calc(max(200px, 15dvh) + ${theme.spacing(2)})` : `0px`,
 					marginTop: attachments.length > 0 ? 2 : 0,
 					transition: "visibility 0s, padding 0s, margin-top 0s, height 0.25s",
 					justifyContent: "center",
@@ -329,7 +329,7 @@ export default function ChatInput({ message, setMessage, sendMessage, users = []
 						key={index}
 						data-testid="chat-attachment-preview-item"
 						data-attachment-name={item.name || ""}
-						style={{ height: `calc(max(200px, 15vh) - ${theme.spacing(0.5)})` }}
+						style={{ height: `calc(max(200px, 15dvh) - ${theme.spacing(0.5)})` }}
 						sx={{
 							backgroundColor: darken(theme.palette.background.paper, 0.05),
 							borderRadius: theme.shape.borderRadius * 0.25,

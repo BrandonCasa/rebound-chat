@@ -1,5 +1,5 @@
 :root {
-	--app-height: 100vh;
+	--app-height: 100dvh;
 }
 
 @supports (height: 100dvh) {
@@ -8,9 +8,9 @@
 	}
 }
 
-@supports (height: 100svh) {
+@supports (height: 100dvh) {
 	:root {
-		--app-height: 100svh;
+		--app-height: 100dvh;
 	}
 }
 
